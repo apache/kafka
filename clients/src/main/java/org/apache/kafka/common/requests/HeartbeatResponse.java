@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -65,6 +66,11 @@ public class HeartbeatResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     public static HeartbeatResponse parse(ByteBuffer buffer, short version) {

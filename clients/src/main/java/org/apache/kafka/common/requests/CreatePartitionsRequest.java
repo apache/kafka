@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -223,6 +224,11 @@ public class CreatePartitionsRequest extends AbstractRequest {
         struct.set(TIMEOUT_KEY_NAME, this.timeout);
         struct.set(VALIDATE_ONLY_KEY_NAME, this.validateOnly);
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

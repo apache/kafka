@@ -25,6 +25,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
@@ -112,6 +114,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,

@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -161,6 +162,11 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         }
         struct.set(LOG_DIRS_KEY_NAME, logDirStructArray.toArray());
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

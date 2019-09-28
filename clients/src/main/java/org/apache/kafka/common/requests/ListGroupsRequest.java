@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -84,5 +85,10 @@ public class ListGroupsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -212,8 +213,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    // Visible for testing
-    UpdateMetadataRequestData data() {
+    @Override
+    protected Message data() {
         return data;
     }
 

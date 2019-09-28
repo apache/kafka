@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -144,6 +145,11 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
 
         struct.set(TXN_MARKERS_KEY_NAME, responsesArray);
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     public Map<TopicPartition, Errors> errors(long producerId) {

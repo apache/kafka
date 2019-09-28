@@ -20,6 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -129,6 +130,11 @@ public class DeleteAclsRequest extends AbstractRequest {
         }
         struct.set(FILTERS, filterStructs.toArray());
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

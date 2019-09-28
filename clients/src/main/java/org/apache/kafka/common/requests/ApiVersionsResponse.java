@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsRespon
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
@@ -51,6 +52,11 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public ApiVersionsResponse(Struct struct, short version) {
         this(new ApiVersionsResponseData(struct, version));
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

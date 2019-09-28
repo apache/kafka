@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -64,6 +65,11 @@ public class OffsetDeleteResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     @Override

@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -70,6 +71,11 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     public static SaslAuthenticateResponse parse(ByteBuffer buffer, short version) {

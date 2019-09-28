@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -210,6 +211,11 @@ public class DeleteAclsResponse extends AbstractResponse {
         }
         struct.set(FILTER_RESPONSES_KEY_NAME, responseStructs.toArray());
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

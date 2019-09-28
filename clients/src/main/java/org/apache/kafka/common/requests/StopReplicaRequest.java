@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -169,13 +170,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
     }
 
-    // Visible for testing
-    StopReplicaRequestData data() {
-        return data;
-    }
-
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 }

@@ -129,7 +129,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     */
   def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Short): Unit = {
     val header = nextRequestHeader(apiKey, apiVersion)
-    val serializedBytes = request.serialize(header).array
+    val serializedBytes = request.serializeWithHeader(header).array
     sendRequest(socket, serializedBytes)
   }
 
@@ -159,8 +159,8 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val apiKey = requestBuilder.apiKey
     val request = requestBuilder.build()
     val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response, apiKey.responseHeaderVersion(request.version()))
+    val response = requestAndReceive(socket, request.serializeWithHeader(header).array)
+    val responseBuffer = skipResponseHeader(response, apiKey.responseHeaderVersion(request.version))
     apiKey.parseResponse(request.version, responseBuffer)
   }
   

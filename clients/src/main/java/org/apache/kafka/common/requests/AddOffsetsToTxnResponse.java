@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -84,6 +85,11 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         struct.set(ERROR_CODE, error.code());
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     public static AddOffsetsToTxnResponse parse(ByteBuffer buffer, short version) {

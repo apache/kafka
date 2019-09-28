@@ -20,6 +20,7 @@ import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -50,6 +51,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
         return serialize(header.toStruct(), toStruct(version));
     }
+
+    protected abstract Message data();
 
     public abstract Map<Errors, Integer> errorCounts();
 

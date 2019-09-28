@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsRespon
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.AppInfoParser;
 
@@ -98,6 +99,11 @@ public class ApiVersionsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

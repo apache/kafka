@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -125,6 +126,11 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
         struct.set(PRODUCER_EPOCH, producerEpoch);
         struct.set(GROUP_ID, consumerGroupId);
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

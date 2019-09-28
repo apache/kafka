@@ -133,7 +133,7 @@ public class UpdateMetadataRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
+            ByteBuffer byteBuffer = request.serializeBody();
             UpdateMetadataRequest deserializedRequest = new UpdateMetadataRequest(new UpdateMetadataRequestData(
                     new ByteBufferAccessor(byteBuffer), version), version);
 
@@ -179,8 +179,7 @@ public class UpdateMetadataRequestTest {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
                 partitionStates, Collections.emptyList());
 
-        assertTrue(MessageTestUtil.messageSize(builder.build((short) 5).data(), (short) 5) <
-            MessageTestUtil.messageSize(builder.build((short) 4).data(), (short) 4));
+        assertTrue(builder.build((short) 5).sizeInBytes() <  builder.build((short) 4).sizeInBytes());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

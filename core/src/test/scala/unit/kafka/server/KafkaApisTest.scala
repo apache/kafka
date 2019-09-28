@@ -798,7 +798,7 @@ class KafkaApisTest {
       listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
-    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

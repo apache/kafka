@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -94,6 +95,11 @@ public class CreatePartitionsResponse extends AbstractResponse {
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         struct.set(TOPIC_ERRORS_KEY_NAME, topicErrors.toArray(new Object[topicErrors.size()]));
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     public Map<String, ApiError> errors() {

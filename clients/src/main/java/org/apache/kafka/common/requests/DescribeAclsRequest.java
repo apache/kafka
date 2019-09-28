@@ -20,6 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
@@ -105,6 +106,11 @@ public class DescribeAclsRequest extends AbstractRequest {
         RequestUtils.resourcePatternFilterSetStructFields(filter.patternFilter(), struct);
         RequestUtils.aceFilterSetStructFields(filter.entryFilter(), struct);
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override

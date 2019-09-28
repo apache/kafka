@@ -20,7 +20,11 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -93,15 +97,49 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     public Send toSend(String destination, RequestHeader header) {
-        return new NetworkSend(destination, serialize(header));
+        return new NetworkSend(destination, serializeWithHeader(header));
     }
 
     /**
      * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
      */
-    public ByteBuffer serialize(RequestHeader header) {
-        return serialize(header.toStruct(), toStruct());
+    public final ByteBuffer serializeWithHeader(RequestHeader header) {
+        Message data = data();
+        if (data == null)
+            return serialize(header.toStruct(), toStruct());
+
+        Struct headerStruct = header.toStruct();
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + data.size(serializationCache, version));
+        headerStruct.writeTo(buffer);
+        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
+        buffer.rewind();
+        return buffer;
     }
+
+    // Visible for testing
+    ByteBuffer serializeBody() {
+        Message data = data();
+        ByteBuffer buffer;
+        if (data == null) {
+            Struct bodyStruct = toStruct();
+            buffer = ByteBuffer.allocate(bodyStruct.sizeOf());
+            bodyStruct.writeTo(buffer);
+        } else {
+            ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+            buffer = ByteBuffer.allocate(data.size(serializationCache, version));
+            data.write(new ByteBufferAccessor(buffer), serializationCache, version);
+        }
+        buffer.rewind();
+        return buffer;
+    }
+
+    // Visible for testing
+    int sizeInBytes() {
+        return data().size(new ObjectSerializationCache(), version);
+    }
+
+    protected abstract Message data();
 
     protected abstract Struct toStruct();
 

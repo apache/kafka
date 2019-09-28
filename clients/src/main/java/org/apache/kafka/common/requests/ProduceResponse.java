@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -290,6 +291,11 @@ public class ProduceResponse extends AbstractResponse {
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
 
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     public Map<TopicPartition, PartitionResponse> responses() {

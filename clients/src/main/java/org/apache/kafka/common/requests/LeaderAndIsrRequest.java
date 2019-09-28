@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
@@ -133,6 +134,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     @Override
+    protected Message data() {
+        return data;
+    }
+
+    @Override
     public LeaderAndIsrResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         LeaderAndIsrResponseData responseData = new LeaderAndIsrResponseData();
         Errors error = Errors.forException(e);
@@ -184,11 +190,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public List<LeaderAndIsrLiveLeader> liveLeaders() {
         return Collections.unmodifiableList(data.liveLeaders());
-    }
-
-    // Visible for testing
-    LeaderAndIsrRequestData data() {
-        return data;
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {

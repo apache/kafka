@@ -129,7 +129,7 @@ class SocketServerTest {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
@@ -171,7 +171,7 @@ class SocketServerTest {
     val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
       new HashMap[TopicPartition, MemoryRecords]()).build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-    val byteBuffer = emptyRequest.serialize(emptyHeader)
+    val byteBuffer = emptyRequest.serializeWithHeader(emptyHeader)
     byteBuffer.rewind()
 
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
@@ -475,7 +475,7 @@ class SocketServerTest {
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
     def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
       server.dataPlaneRequestChannel.sendResponse(response)
@@ -692,7 +692,7 @@ class SocketServerTest {
         new HashMap[TopicPartition, MemoryRecords]()).build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
 
-      val byteBuffer = emptyRequest.serialize(emptyHeader)
+      val byteBuffer = emptyRequest.serializeWithHeader(emptyHeader)
       byteBuffer.rewind()
       val serializedBytes = new Array[Byte](byteBuffer.remaining)
       byteBuffer.get(serializedBytes)

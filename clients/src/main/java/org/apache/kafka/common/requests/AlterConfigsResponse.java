@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -113,6 +114,11 @@ public class AlterConfigsResponse extends AbstractResponse {
         }
         struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray(new Struct[0]));
         return struct;
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     public static AlterConfigsResponse parse(ByteBuffer buffer, short version) {

@@ -21,6 +21,7 @@ import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -417,6 +418,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         return toStruct(version, throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
+    }
+
+    @Override
+    protected Message data() {
+        return null;
     }
 
     @Override
