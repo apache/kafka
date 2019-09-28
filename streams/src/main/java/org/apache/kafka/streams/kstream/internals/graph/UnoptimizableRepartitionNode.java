@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
@@ -55,20 +53,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     }
 
     @Override
-    Serializer<V> getValueSerializer() {
-        return valueSerde != null ? valueSerde.serializer() : null;
-    }
-
-    @Override
-    Deserializer<V> getValueDeserializer() {
-        return valueSerde != null ? valueSerde.deserializer() : null;
-    }
-
-    @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final Serializer<K> keySerializer = getKeySerializer();
-        final Deserializer<K> keyDeserializer = getKeyDeserializer();
-
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addProcessor(
@@ -80,8 +65,8 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
         topologyBuilder.addSink(
             sinkName,
             repartitionTopic,
-            keySerializer,
-            getValueSerializer(),
+            keySerializer(),
+            valueSerializer(),
             partitioner,
             processorParameters.processorName()
         );
@@ -90,18 +75,10 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
             null,
             sourceName,
             new FailOnInvalidTimestamp(),
-            keyDeserializer,
-            getValueDeserializer(),
+            keyDeserializer(),
+            valueDeserializer(),
             repartitionTopic
         );
-    }
-
-    private Serializer<K> getKeySerializer() {
-        return keySerde != null ? keySerde.serializer() : null;
-    }
-
-    private Deserializer<K> getKeyDeserializer() {
-        return keySerde != null ? keySerde.deserializer() : null;
     }
 
     public static <K, V> UnoptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder() {

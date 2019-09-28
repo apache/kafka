@@ -1009,9 +1009,13 @@ public class InternalTopologyBuilder {
                             continue;
                         }
                         if (internalTopicNamesWithProperties.containsKey(topic)) {
-                            final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(
-                                topic,
-                                internalTopicNamesWithProperties.get(topic)
+                            // prefix the internal topic name with the application id
+                            final String internalTopic = decorateTopic(topic);
+
+                            final RepartitionTopicConfig repartitionTopicConfig = new RepartitionTopicConfig(
+                                internalTopic,
+                                internalTopicNamesWithProperties.get(topic).getNumberOfPartitions(),
+                                Collections.emptyMap()
                             );
 
                             repartitionTopics.put(repartitionTopicConfig.name(), repartitionTopicConfig);
@@ -1058,20 +1062,6 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
-    }
-
-    private RepartitionTopicConfig buildRepartitionTopicConfig(final String topic,
-                                                               final InternalTopicProperties internalTopicProperties) {
-        // prefix the internal topic name with the application id
-        final String internalTopic = decorateTopic(topic);
-
-        final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();
-
-        if (numberOfPartitions == null) {
-            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
-        }
-
-        return new RepartitionTopicConfig(internalTopic, numberOfPartitions, Collections.emptyMap());
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

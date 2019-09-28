@@ -17,9 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -59,25 +57,12 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     }
 
     @Override
-    Serializer<V> getValueSerializer() {
-        return valueSerde != null ? valueSerde.serializer() : null;
-    }
-
-    @Override
-    Deserializer<V> getValueDeserializer() {
-        return valueSerde != null ? valueSerde.deserializer() : null;
-    }
-
-    @Override
     public String toString() {
         return "OptimizableRepartitionNode{ " + super.toString() + " }";
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
-        final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
-
         topologyBuilder.addInternalTopic(repartitionTopic, InternalTopicProperties.empty());
 
         topologyBuilder.addProcessor(
@@ -89,8 +74,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         topologyBuilder.addSink(
             sinkName,
             repartitionTopic,
-            keySerializer,
-            getValueSerializer(),
+            keySerializer(),
+            valueSerializer(),
             null,
             processorParameters.processorName()
         );
@@ -99,8 +84,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             null,
             sourceName,
             new FailOnInvalidTimestamp(),
-            keyDeserializer,
-            getValueDeserializer(),
+            keyDeserializer(),
+            valueDeserializer(),
             repartitionTopic
         );
 

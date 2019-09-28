@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * RepartitionTopicConfig captures the properties required for configuring
@@ -43,7 +44,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
     }
 
     RepartitionTopicConfig(final String name,
-                           final int numberOfPartitions,
+                           final Optional<Integer> numberOfPartitions,
                            final Map<String, String> topicConfigs) {
         super(name, numberOfPartitions, topicConfigs);
     }

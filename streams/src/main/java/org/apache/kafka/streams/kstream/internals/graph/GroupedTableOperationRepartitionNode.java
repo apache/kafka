@@ -49,8 +49,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
     }
 
     @Override
-    Serializer<V> getValueSerializer() {
-        final Serializer<V> valueSerializer = valueSerde == null ? null : valueSerde.serializer();
+    Serializer<V> valueSerializer() {
+        final Serializer<V> valueSerializer = super.valueSerializer();
         return unsafeCastChangedToValueSerializer(valueSerializer);
     }
 
@@ -60,8 +60,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
     }
 
     @Override
-    Deserializer<V> getValueDeserializer() {
-        final Deserializer<? extends V> valueDeserializer = valueSerde == null ? null : valueSerde.deserializer();
+    Deserializer<V> valueDeserializer() {
+        final Deserializer<? extends V> valueDeserializer = super.valueDeserializer();
         return unsafeCastChangedToValueDeserializer(valueDeserializer);
     }
 
@@ -77,16 +77,13 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
-        final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
-
         topologyBuilder.addInternalTopic(repartitionTopic, InternalTopicProperties.empty());
 
         topologyBuilder.addSink(
             sinkName,
             repartitionTopic,
-            keySerializer,
-            getValueSerializer(),
+            keySerializer(),
+            valueSerializer(),
             null,
             parentNodeNames()
         );
@@ -95,8 +92,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             null,
             sourceName,
             new FailOnInvalidTimestamp(),
-            keyDeserializer,
-            getValueDeserializer(),
+            keyDeserializer(),
+            valueDeserializer(),
             repartitionTopic
         );
 

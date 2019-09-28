@@ -492,22 +492,46 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition() {
-        return repartition(Repartitioned.as(null));
+        return doRepartition(Repartitioned.as(null), null);
     }
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
         Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
 
-        final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+        return doRepartition(repartitioned, null);
+    }
 
-        final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder.newProcessorName(REPARTITION_NAME);
+    @Override
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
+        Objects.requireNonNull(selector, "selector parameter can't be null");
 
-        final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
+        return doRepartition(Repartitioned.as(null), selector);
+    }
 
-        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
+    @Override
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
+                                           final Repartitioned<KR, V> repartitioned) {
+        Objects.requireNonNull(selector, "selector parameter can't be null");
+        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
 
-        final UnoptimizableRepartitionNodeBuilder<K, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode.repartitionNodeBuilder();
+        return doRepartition(repartitioned, selector);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <KR> KStream<KR, V> doRepartition(final Repartitioned<KR, V> repartitioned,
+                                              final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
+        final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+
+        final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder
+            .newProcessorName(REPARTITION_NAME);
+
+        final Serde<KR> keySerde = repartitionedInternal.keySerde() == null ? (Serde<KR>) this.keySerde : repartitionedInternal.keySerde();
+
+        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? valSerde : repartitionedInternal.valueSerde();
+
+        final UnoptimizableRepartitionNodeBuilder<KR, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode
+            .repartitionNodeBuilder();
 
         final String repartitionSourceName = createUnoptimizableRepartitionSource(
             builder,
@@ -519,66 +543,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             unoptimizableRepartitionNodeBuilder
         );
 
-        final UnoptimizableRepartitionNode<K, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
-
-        builder.addGraphNode(this.streamsGraphNode, unoptimizableRepartitionNode);
-
-        return new KStreamImpl<>(
-            repartitionSourceName,
-            keySerde,
-            valueSerde,
-            sourceNodes,
-            false,
-            unoptimizableRepartitionNode,
-            builder
-        );
-    }
-
-    @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
-        return repartition(selector, Repartitioned.as(null));
-    }
-
-    @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
-                                           final Repartitioned<KR, V> repartitioned) {
-        Objects.requireNonNull(selector, "selector parameter can't be null");
-        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
-
-        final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
-
-        final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name());
-
-        final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, namedInternal);
-
-        selectKeyNode.keyChangingOperation(true);
-
-        builder.addGraphNode(this.streamsGraphNode, selectKeyNode);
-
-        final UnoptimizableRepartitionNodeBuilder<KR, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode.repartitionNodeBuilder();
-
-        final Serde<KR> keySerde = repartitionedInternal.keySerde();
-        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
-
-        final String repartitionSourceName = createUnoptimizableRepartitionSource(
-            builder,
-            keySerde,
-            valueSerde,
-            namedInternal.orElseGenerateWithPrefix(builder, REPARTITION_NAME),
-            repartitionedInternal.toInternalTopicProperties(),
-            repartitionedInternal.streamPartitioner(),
-            unoptimizableRepartitionNodeBuilder
-        );
-
         final UnoptimizableRepartitionNode<KR, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
 
-        builder.addGraphNode(selectKeyNode, unoptimizableRepartitionNode);
+        if (selector == null) {
+            builder.addGraphNode(streamsGraphNode, unoptimizableRepartitionNode);
+        } else {
+            final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name());
+
+            final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, namedInternal);
+
+            selectKeyNode.keyChangingOperation(true);
+
+            builder.addGraphNode(streamsGraphNode, selectKeyNode);
+
+            builder.addGraphNode(selectKeyNode, unoptimizableRepartitionNode);
+        }
+
+        final Set<String> sourceNodes = new HashSet<>();
+        sourceNodes.add(unoptimizableRepartitionNode.nodeName());
 
         return new KStreamImpl<>(
             repartitionSourceName,
             keySerde,
             valueSerde,
-            sourceNodes,
+            Collections.unmodifiableSet(sourceNodes),
             // explicitly set repartition required as false
             false,
             unoptimizableRepartitionNode,

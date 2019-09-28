@@ -48,9 +48,21 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
         this.processorParameters = processorParameters;
     }
 
-    abstract Serializer<V> getValueSerializer();
+    Serializer<V> valueSerializer() {
+        return valueSerde != null ? valueSerde.serializer() : null;
+    }
 
-    abstract Deserializer<V> getValueDeserializer();
+    Deserializer<V> valueDeserializer() {
+        return valueSerde != null ? valueSerde.deserializer() : null;
+    }
+
+    Serializer<K> keySerializer() {
+        return keySerde != null ? keySerde.serializer() : null;
+    }
+
+    Deserializer<K> keyDeserializer() {
+        return keySerde != null ? keySerde.deserializer() : null;
+    }
 
     @Override
     public String toString() {

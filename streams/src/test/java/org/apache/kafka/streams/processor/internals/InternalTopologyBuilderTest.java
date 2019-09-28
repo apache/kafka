@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -887,7 +888,7 @@ public class InternalTopologyBuilderTest {
             repartitionSourceTopics.get("Z-topic-1z"),
             new RepartitionTopicConfig(
                 "Z-topic-1z",
-                numberOfPartitions,
+                Optional.of(numberOfPartitions),
                 Collections.emptyMap()
             )
         );

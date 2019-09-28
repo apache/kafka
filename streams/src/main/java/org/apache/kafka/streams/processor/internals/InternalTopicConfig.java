@@ -33,18 +33,18 @@ public abstract class InternalTopicConfig {
     Optional<Integer> numberOfPartitions;
 
     InternalTopicConfig(final String name,
-                        final Integer numberOfPartitions,
+                        final Optional<Integer> numberOfPartitions,
                         final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
         this.name = name;
         this.topicConfigs = topicConfigs;
-        this.numberOfPartitions = Optional.ofNullable(numberOfPartitions);
+        this.numberOfPartitions = numberOfPartitions;
     }
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
-        this(name, null, topicConfigs);
+        this(name, Optional.empty(), topicConfigs);
     }
 
     /**

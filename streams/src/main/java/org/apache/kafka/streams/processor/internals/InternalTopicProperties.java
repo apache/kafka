@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
+
 public class InternalTopicProperties {
     private final Integer numberOfPartitions;
 
@@ -23,8 +25,8 @@ public class InternalTopicProperties {
         this.numberOfPartitions = numberOfPartitions;
     }
 
-    public Integer getNumberOfPartitions() {
-        return numberOfPartitions;
+    public Optional<Integer> getNumberOfPartitions() {
+        return Optional.ofNullable(numberOfPartitions);
     }
 
     public static InternalTopicProperties empty() {

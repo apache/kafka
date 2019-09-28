@@ -814,6 +814,10 @@ public interface KStream<K, V> {
      *
      * @param topic the topic name
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     * @see #repartition()
+     * @see #repartition(Repartitioned)
+     * @see #repartition(KeyValueMapper)
+     * @see #repartition(KeyValueMapper, Repartitioned)
      */
     KStream<K, V> through(final String topic);
 
@@ -832,6 +836,10 @@ public interface KStream<K, V> {
      * @param topic     the topic name
      * @param produced  the options to use when producing to the topic
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
+     * @see #repartition()
+     * @see #repartition(Repartitioned)
+     * @see #repartition(KeyValueMapper)
+     * @see #repartition(KeyValueMapper, Repartitioned)
      */
     KStream<K, V> through(final String topic,
                           final Produced<K, V> produced);
@@ -841,7 +849,16 @@ public interface KStream<K, V> {
      * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      *
+     * This operation is similar to {@link #through}, however, Kafka Streams manages the used topic automatically.
+     * Created topic is considered as internal topic and is meant to be used only by current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     *
      * @return {@code KStream} that contains the exact same repartitioned records as this {@code KStream}.
+     * @see #through(String)
+     * @see #through(String, Produced)
      */
     KStream<K, V> repartition();
 
@@ -850,10 +867,20 @@ public interface KStream<K, V> {
      * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
      *
+     * This operation is similar to {@link #through}, however, Kafka Streams manages the used topic automatically.
+     * Created topic is considered as internal topic and is meant to be used only by current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is either provided via {@link Repartitioned#as(String)} or an internally
+     * generated name, and "-repartition" is a fixed suffix.
+     *
      * @param repartitioned the {@link Repartitioned} instance used to specify {@link Serdes},
      *                      {@link StreamPartitioner} which determines how records are distributed among partitions of the topic,
      *                      part of the topic name, and number of partitions for a repartition topic.
      * @return a {@code KStream} that contains the exact same repartitioned records as this {@code KStream}.
+     * @see #through(String)
+     * @see #through(String, Produced)
      */
     KStream<K, V> repartition(final Repartitioned<K, V> repartitioned);
 
@@ -862,11 +889,20 @@ public interface KStream<K, V> {
      * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      *
+     * This operation is similar to {@link #through}, however, Kafka Streams manages the used topic automatically.
+     * Created topic is considered as internal topic and is meant to be used only by current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     *
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
      *
      * @param selector      a {@link KeyValueMapper} that computes a new key for each record
      * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
+     * @see #through(String)
+     * @see #through(String, Produced)
      */
     <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector);
 
@@ -874,6 +910,15 @@ public interface KStream<K, V> {
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
      * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
+     *
+     * This operation is similar to {@link #through}, however, Kafka Streams manages the used topic automatically.
+     * Created topic is considered as internal topic and is meant to be used only by current Kafka Streams instance.
+     * Similar to auto-repartitioning, the topic will be created with infinite retention time and data will be purged by Kafka Streams explicitly.
+     * The topic will be named as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is either provided via {@link Repartitioned#as(String)} or an internally
+     * generated name, and "-repartition" is a fixed suffix.
+     *
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
      *
@@ -882,6 +927,8 @@ public interface KStream<K, V> {
      *                      {@link StreamPartitioner} which determines how records are distributed among partitions of the topic,
      *                      part of the topic name, and number of partitions for a repartition topic.
      * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
+     * @see #through(String)
+     * @see #through(String, Produced)
      */
     <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
                                     final Repartitioned<KR, V> repartitioned);
