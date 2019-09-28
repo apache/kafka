@@ -448,11 +448,8 @@ public class TestUtils {
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
         Set<TopicPartition> tps = new HashSet<>();
-        Random r = new Random();
         for (int i = 0; i < numTopic; i++) {
-            byte[] array = new byte[32];
-            r.nextBytes(array);
-            String topic = new String(array);
+            String topic = randomString(32);
             for (int j = 0; j < numPartitionPerTopic; j++) {
                 tps.add(new TopicPartition(topic, j));
             }

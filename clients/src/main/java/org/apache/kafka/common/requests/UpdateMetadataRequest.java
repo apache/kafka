@@ -138,10 +138,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 if (version() == 0 && liveBroker.endpoints().isEmpty()) {
                     SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
                     liveBroker.setEndpoints(singletonList(new UpdateMetadataEndpoint()
-                            .setHost(liveBroker.v0Host())
-                            .setPort(liveBroker.v0Port())
-                            .setSecurityProtocol(securityProtocol.id)
-                            .setListener(ListenerName.forSecurityProtocol(securityProtocol).value())));
+                        .setHost(liveBroker.v0Host())
+                        .setPort(liveBroker.v0Port())
+                        .setSecurityProtocol(securityProtocol.id)
+                        .setListener(ListenerName.forSecurityProtocol(securityProtocol).value())));
                 } else {
                     for (UpdateMetadataEndpoint endpoint : liveBroker.endpoints()) {
                         // Set listener so that callers can rely on it always being present
@@ -187,7 +187,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public UpdateMetadataResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short version = version();
         if (version <= 5)
             return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.forException(e).code()));

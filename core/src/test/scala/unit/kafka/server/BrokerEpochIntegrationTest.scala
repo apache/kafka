@@ -170,20 +170,19 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
             .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 1)
             .setIsr(Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava)
             .setZkVersion(LeaderAndIsr.initialZKVersion)
-            .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
-            .setOfflineReplicas(Seq.empty.asJava))
+            .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava))
         val liveBrokers = brokerAndEpochs.map { case (broker, _) =>
           val securityProtocol = SecurityProtocol.PLAINTEXT
           val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
           val node = broker.node(listenerName)
-          val endPoints = Seq(new UpdateMetadataEndpoint()
+          val endpoints = Seq(new UpdateMetadataEndpoint()
             .setHost(node.host)
             .setPort(node.port)
             .setSecurityProtocol(securityProtocol.id)
             .setListener(listenerName.value))
           new UpdateMetadataBroker()
             .setId(broker.id)
-            .setEndpoints(endPoints.asJava)
+            .setEndpoints(endpoints.asJava)
             .setRack(broker.rack.orNull)
         }.toBuffer
         val requestBuilder = new UpdateMetadataRequest.Builder(

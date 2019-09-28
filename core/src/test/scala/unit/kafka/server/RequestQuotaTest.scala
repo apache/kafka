@@ -253,8 +253,7 @@ class RequestQuotaTest extends BaseRequestTest {
             .setLeaderEpoch(Int.MaxValue)
             .setIsr(List(brokerId).asJava)
             .setZkVersion(2)
-            .setReplicas(Seq(brokerId).asJava)
-            .setOfflineReplicas(Seq[Integer]().asJava)).asJava
+            .setReplicas(Seq(brokerId).asJava)).asJava
           val securityProtocol = SecurityProtocol.PLAINTEXT
           val brokers = Seq(new UpdateMetadataBroker()
             .setId(brokerId)

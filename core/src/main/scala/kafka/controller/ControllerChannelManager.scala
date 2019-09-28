@@ -454,11 +454,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
       case (broker, leaderAndIsrPartitionStates) =>
-        leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
-          val typeOfRequest =
-            if (broker == state.leader) "become-leader"
-            else "become-follower"
-          stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+        if (stateChangeLog.isTraceEnabled) {
+          leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
+            val typeOfRequest =
+              if (broker == state.leader) "become-leader"
+              else "become-follower"
+            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+          }
         }
         val leaderIds = leaderAndIsrPartitionStates.map(_._2.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
