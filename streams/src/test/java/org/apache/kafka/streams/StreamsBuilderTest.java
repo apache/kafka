@@ -813,6 +813,25 @@ public class StreamsBuilderTest {
                 "KSTREAM-KEY-SELECT-0000000004");
     }
 
+    @Test
+    public void shouldUseSpecifiedNameForAggregateOperationGivenTable() {
+        builder.table(STREAM_TOPIC).groupBy(KeyValue::pair, Grouped.as("group-operation")).count(Named.as(STREAM_OPERATION_NAME));
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertNamesForStateStore(
+            topology.stateStores(),
+            STREAM_TOPIC + "-STATE-STORE-0000000000",
+             "KTABLE-AGGREGATE-STATE-STORE-0000000004");
+
+        assertNamesForOperation(
+            topology,
+            "KSTREAM-SOURCE-0000000001",
+            "KTABLE-SOURCE-0000000002",
+            "group-operation",
+            STREAM_OPERATION_NAME + "-sink",
+            STREAM_OPERATION_NAME + "-source",
+            STREAM_OPERATION_NAME);
+    }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode> processors = topology.processors();
