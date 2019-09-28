@@ -17,13 +17,17 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,6 +38,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class LeaderAndIsrRequestTest {
 
@@ -117,6 +122,23 @@ public class LeaderAndIsrRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
         }
+    }
+
+    @Test
+    public void testTopicPartitionGroupingSizeReduction() {
+        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        for (TopicPartition tp : tps) {
+            partitionStates.add(new LeaderAndIsrPartitionState()
+                .setTopicName(tp.topic())
+                .setPartitionIndex(tp.partition()));
+        }
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
+            partitionStates, Collections.emptySet());
+
+        LeaderAndIsrRequest v2 = builder.build((short) 2);
+        LeaderAndIsrRequest v1 = builder.build((short) 1);
+        assertTrue("Expected v2 < v1: v2=" + v2.size() + ", v1=" + v1.size(), v2.size() < v1.size());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

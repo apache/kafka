@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
@@ -23,10 +24,12 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -37,6 +40,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class UpdateMetadataRequestTest {
 
@@ -160,6 +164,21 @@ public class UpdateMetadataRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
         }
+    }
+
+    @Test
+    public void testTopicPartitionGroupingSizeReduction() {
+        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
+        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
+        for (TopicPartition tp : tps) {
+            partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName(tp.topic())
+                .setPartitionIndex(tp.partition()));
+        }
+        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
+                partitionStates, Collections.emptyList());
+
+        assertTrue(builder.build((short) 5).size() <  builder.build((short) 4).size());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {
