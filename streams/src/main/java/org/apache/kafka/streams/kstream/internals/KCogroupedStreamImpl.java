@@ -48,6 +48,7 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
     static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
 
     final private Map<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> groupPatterns;
+    final private CogroupedStreamAggregateBuilder<K, V, T> aggregateBuilder;
 
     KCogroupedStreamImpl(final String name,
                          final Serde<K> keySerde,
@@ -57,6 +58,7 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
                          final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, sourceNodes, streamsGraphNode, builder);
         this.groupPatterns = new HashMap<>();
+        this.aggregateBuilder = new CogroupedStreamAggregateBuilder<K, V, T>(builder);
     }
 
     @Override
@@ -121,61 +123,6 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
     private KTable<K, T> doAggregate(final Initializer<T> initializer,
                                      final NamedInternal named,
                                      final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        final Collection<StreamsGraphNode> processors = new ArrayList<>();
-        boolean stateCreated = false;
-        for (final Entry<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> kGroupedStream : groupPatterns
-            .entrySet()) {
-
-            final String functionName = new NamedInternal(named)
-                .orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-            final Aggregator<? super K, ? super V, T> aggregator = kGroupedStream.getValue();
-            final KStreamAggregate<K, V, T> kStreamAggregate = new KStreamAggregate<K, V, T>(
-                materializedInternal.storeName(), initializer, aggregator);
-            final StatefulProcessorNode<K, V> statefulProcessorNode;
-            //TODO: improve
-            if (!stateCreated) {
-                statefulProcessorNode =
-                    new StatefulProcessorNode<>(
-                        functionName,
-                        new ProcessorParameters<>(kStreamAggregate, functionName),
-                        new TimestampedKeyValueStoreMaterializer<>(materializedInternal)
-                            .materialize()
-                    );
-                stateCreated = true;
-            } else {
-                statefulProcessorNode =
-                    new StatefulProcessorNode<>(
-                        functionName,
-                        new ProcessorParameters<>(kStreamAggregate, functionName),
-                        new String[]{materializedInternal.storeName()}
-                    );
-            }
-            processors.add(statefulProcessorNode);
-            builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
-        }
-        final String functionName = new NamedInternal(named)
-            .orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(
-            materializedInternal.storeName(),
-            materializedInternal
-                .queryableStoreName());
-        final StatefulProcessorNode<K, V> tableSourceNode =
-            new StatefulProcessorNode<>(
-                functionName,
-                new ProcessorParameters<>(tableSource, functionName),
-                new String[]{materializedInternal.storeName()}
-            );
-
-        builder.addGraphNode(processors, tableSourceNode);
-
-        return new KTableImpl<K, V, T>(
-            functionName,
-            materializedInternal.keySerde(),
-            materializedInternal.valueSerde(),
-            Collections.singleton(tableSourceNode.nodeName()),
-            materializedInternal.queryableStoreName(),
-            tableSource,
-            tableSourceNode,
-            builder);
+        return this.aggregateBuilder.build(groupPatterns, initializer, named, materializedInternal);
     }
 }
