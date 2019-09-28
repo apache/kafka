@@ -333,12 +333,8 @@ public class KStreamKStreamLeftJoinTest {
                                       final TopologyTestDriver driver,
                                       final MockProcessor<Integer, String> processor) {
         long time;
-
-        final TestInputTopic<Integer, String> inputTopic1 =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
-        final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer());
-
+        final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
+        final TestInputTopic<Integer, String> inputTopic2 = driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer());
         // push four items with smaller timestamp (before the window) to the primary stream; this should produce four left-join and no full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),

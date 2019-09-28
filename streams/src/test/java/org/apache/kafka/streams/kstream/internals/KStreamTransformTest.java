@@ -44,7 +44,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
-        private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
     @Test
     public void testTransform() {
