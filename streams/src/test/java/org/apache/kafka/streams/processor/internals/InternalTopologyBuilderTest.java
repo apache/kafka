@@ -35,6 +35,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -927,5 +928,20 @@ public class InternalTopologyBuilderTest {
             repartitionSourceTopics.get("Y-topic-1y"),
             new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
         );
+    }
+
+    @Test
+    public void shouldUpdateCopartitionGroups() {
+        builder.copartitionSources(mkSet("SOURCE-NODE-1", "SOURCE-NODE-2", "SOURCE-NODE-3"));
+
+        builder.addSource(null, "SOURCE-NODE-1", null, null, null, "topic-1");
+        builder.addSource(null, "OPTIMIZED-SOURCE-NODE-2", null, null, null, "topic-2");
+        builder.addSource(null, "SOURCE-NODE-3", null, null, null, "topic-3");
+
+        builder.maybeUpdateCopartitionSourceGroups("SOURCE-NODE-2", "OPTIMIZED-SOURCE-NODE-2");
+
+        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+
+        assertEquals(copartitionGroups, Collections.singletonList(mkSet("topic-1", "topic-2", "topic-3")));
     }
 }
