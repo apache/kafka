@@ -212,6 +212,60 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
+    public void shouldChooseMaxPartitionNumberFromSourceTopicsForJoinOperationWhenTopologyOptimizationIsSpecified() throws ExecutionException, InterruptedException {
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+
+        final String topicBMapperName = "topic-b-mapper";
+        final String topicB = "topic-b-" + TEST_NUM.get();
+        final int topicBNumberOfPartitions = 6;
+        final String inputTopicRepartitionName = "join-repartition-test";
+
+        final long timestamp = System.currentTimeMillis();
+
+        CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
+
+        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(2, "B")
+        );
+
+        sendEvents(inputTopic, timestamp, expectedRecords);
+        sendEvents(topicB, timestamp, expectedRecords);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
+            .<Integer, String>as(inputTopicRepartitionName)
+            .withNumberOfPartitions(2);
+
+        final KStream<Integer, String> topicBStream = builder
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .map(KeyValue::new, Named.as(topicBMapperName));
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(inputTopicRepartitioned)
+            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        final String repartitionTopicName = toRepartitionTopicName(inputTopicRepartitionName);
+        final String mapperRepartitionTopicName = toRepartitionTopicName(topicBMapperName);
+
+        final int mapperNumOfPartitions = getNumberOfPartitionsForTopic(mapperRepartitionTopicName);
+        final int repartitionTopicNumOfPartitions = getNumberOfPartitionsForTopic(repartitionTopicName);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            expectedRecords
+        );
+
+        assertEquals(topicBNumberOfPartitions, mapperNumOfPartitions);
+        assertEquals(topicBNumberOfPartitions, repartitionTopicNumOfPartitions);
+    }
+
+    @Test
     public void shouldUseStreamPartitionerForRepartitionOperation() throws ExecutionException, InterruptedException {
         final int partition = 1;
         final String repartitionName = "partitioner-test";
