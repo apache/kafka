@@ -625,6 +625,7 @@ public class InternalTopologyBuilder {
             if (copartitionSourceGroup.contains(replacedNodeName)) {
                 copartitionSourceGroup.remove(replacedNodeName);
                 copartitionSourceGroup.add(optimizedNodeName);
+                log.debug("replaced node '{}' with '{}' in copartition source group", replacedNodeName, optimizedNodeName);
             }
         }
     }
