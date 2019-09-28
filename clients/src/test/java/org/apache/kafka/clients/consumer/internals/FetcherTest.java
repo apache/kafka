@@ -1971,7 +1971,7 @@ public class FetcherTest {
 
         ByteBuffer buffer = ApiVersionsResponse.
             createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
-                serialize(ApiKeys.API_VERSIONS, 0);
+                serializeWithHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -1988,7 +1988,7 @@ public class FetcherTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             FetchResponse response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.FETCH, request.correlationId());
+            buffer = response.serializeWithHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.

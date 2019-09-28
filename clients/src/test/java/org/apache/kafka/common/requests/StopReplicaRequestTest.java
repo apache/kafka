@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 

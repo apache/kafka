@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataE
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;

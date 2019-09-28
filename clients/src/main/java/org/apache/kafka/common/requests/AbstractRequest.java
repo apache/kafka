@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -105,10 +104,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
      */
     public final ByteBuffer serializeWithHeader(RequestHeader header) {
         Message data = data();
-        if (data == null)
-            return serialize(header.toStruct(), toStruct());
-
         Struct headerStruct = header.toStruct();
+        if (data == null)
+            return serialize(headerStruct, toStruct());
+
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + data.size(serializationCache, version));
         headerStruct.writeTo(buffer);

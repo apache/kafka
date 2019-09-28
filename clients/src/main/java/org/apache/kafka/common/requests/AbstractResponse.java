@@ -19,8 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -32,24 +34,29 @@ import java.util.Map;
 public abstract class AbstractResponse extends AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
-    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(header.toStruct(), toStruct(apiVersion)));
+    protected Send toSend(String destination, ResponseHeader header, short version) {
+        return new NetworkSend(destination, serializeWithHeader(header, version));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serialize(ApiKeys apiKey, int correlationId) {
-        return serialize(apiKey, apiKey.latestVersion(), correlationId);
+    public ByteBuffer serializeWithHeader(ApiKeys apiKey, short version, int correlationId) {
+        return serializeWithHeader(new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version)), version);
     }
 
-    /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
-     */
-    public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
-        ResponseHeader header =
-            new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
-        return serialize(header.toStruct(), toStruct(version));
+    private ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
+        Struct headerStruct = header.toStruct();
+        Message data = data();
+        if (data == null)
+            return serialize(headerStruct, toStruct(version));
+
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + data.size(serializationCache, version));
+        headerStruct.writeTo(buffer);
+        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
+        buffer.rewind();
+        return buffer;
     }
 
     protected abstract Message data();

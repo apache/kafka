@@ -194,7 +194,7 @@ public class NetworkClientTest {
     }
 
     private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
-        ByteBuffer buffer = response.serialize(ApiKeys.API_VERSIONS, version, correlationId);
+        ByteBuffer buffer = response.serializeWithHeader(ApiKeys.API_VERSIONS, version, correlationId);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
