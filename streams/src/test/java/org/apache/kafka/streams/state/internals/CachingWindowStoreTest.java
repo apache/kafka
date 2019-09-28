@@ -177,7 +177,7 @@ public class CachingWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
         final long initialWallClockTime = 0L;
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, Instant.ofEpochMilli(initialWallClockTime));
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic,
             Serdes.String().serializer(),

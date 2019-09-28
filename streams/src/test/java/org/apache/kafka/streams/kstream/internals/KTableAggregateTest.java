@@ -81,7 +81,7 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
+                Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -148,7 +148,7 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
+                Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -186,7 +186,7 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
+                Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -269,7 +269,7 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
+                Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 

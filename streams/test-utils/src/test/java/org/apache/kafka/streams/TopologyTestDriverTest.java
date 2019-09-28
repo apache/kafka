@@ -55,6 +55,7 @@ import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -679,8 +680,7 @@ public class TopologyTestDriverTest {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
-            config,
-            0);
+            config, Instant.ofEpochMilli(0L));
 
         final List<Long> expectedPunctuations = new LinkedList<>();
 

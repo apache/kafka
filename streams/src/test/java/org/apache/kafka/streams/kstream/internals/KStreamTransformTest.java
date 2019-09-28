@@ -35,6 +35,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -85,7 +86,7 @@ public class KStreamTransformTest {
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test")
             )),
-            0L)) {
+            Instant.ofEpochMilli(0L))) {
             final TestInputTopic<Integer, Integer> inputTopic =
                 driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
 
@@ -144,7 +145,7 @@ public class KStreamTransformTest {
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<Integer, Integer> inputTopic =
                     driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
             for (final int expectedKey : expectedKeys) {
