@@ -22,10 +22,13 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.test.TestRecord;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -211,5 +214,26 @@ public class TestOutputTopicTest {
     public void testToString() {
         final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         assertThat(outputTopic.toString(), equalTo("TestOutputTopic{topic='output1',size=0}"));
+    }
+
+    @Test
+    public void testRecordsToList() {
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde.deserializer(), longSerde.deserializer());
+        final List<String> inputList = Arrays.asList("This", "is", "an", "example");
+        final List<KeyValue<Long, String>> input = new LinkedList<>();
+        final List<TestRecord<String, Long>> expected = new LinkedList<>();
+        long i = 0;
+        final Duration advance = Duration.ofSeconds(15);
+        Instant recordInstant = Instant.parse("2019-06-01T10:00:00Z");
+        for (final String s : inputList) {
+            input.add(new KeyValue<>(i, s));
+            expected.add(new TestRecord<>(s, i, recordInstant));
+            i++;
+            recordInstant = recordInstant.plus(advance);
+        }
+        inputTopic.pipeKeyValueList(input, Instant.parse("2019-06-01T10:00:00Z"), advance);
+        final List<TestRecord<String, Long>> output = outputTopic.readRecordsToList();
+        assertThat(output, is(equalTo(expected)));
     }
 }
