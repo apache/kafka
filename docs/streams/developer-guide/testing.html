@@ -93,7 +93,7 @@ TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
         </pre>
             <p>
                 With the test driver you can create <code>TestInputTopic</code> giving topic name and the corresponding serializers.
-                <code>TestInputTopic</code> provide various methods to pipe new message values, keys and values or list of KeyValue objects.
+                <code>TestInputTopic</code> provides various methods to pipe new message values, keys and values, or list of KeyValue objects.
             </p>
             <pre>
 TestInputTopic&lt;String, Long&gt; inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
