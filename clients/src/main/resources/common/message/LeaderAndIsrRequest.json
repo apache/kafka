@@ -30,16 +30,16 @@
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
       "about": "The current broker epoch." },
-    { "name": "PartitionStatesV0", "type": "[]LeaderAndIsrRequestPartition", "versions": "0-1",
+    { "name": "UngroupedPartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "0-1",
       "about": "The state of each partition, in a v0 or v1 message." },
     // In v0 or v1 requests, each partition is listed alongside its topic name.
     // In v2+ requests, partitions are organized by topic, so that each topic name
     // only needs to be listed once.
-    { "name": "TopicStates", "type": "[]LeaderAndIsrRequestTopicState", "versions": "2+",
+    { "name": "TopicStates", "type": "[]LeaderAndIsrTopicState", "versions": "2+",
       "about": "Each topic.", "fields": [
-      { "name": "Name", "type": "string", "versions": "2+", "entityType": "topicName",
+      { "name": "TopicName", "type": "string", "versions": "2+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "PartitionStatesV0", "type": "[]LeaderAndIsrRequestPartition", "versions": "2+",
+      { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "2+",
         "about": "The state of each partition" }
     ]},
     { "name": "LiveLeaders", "type": "[]LeaderAndIsrLiveLeader", "versions": "0+",
@@ -53,18 +53,18 @@
     ]}
   ],
   "commonStructs": [
-    { "name": "LeaderAndIsrRequestPartition", "versions": "0+", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0-1", "entityType": "topicName",
+    { "name": "LeaderAndIsrPartitionState", "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0-1", "entityType": "topicName", "ignorable": true,
         "about": "The topic name.  This is only present in v0 or v1." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0+",
         "about": "The partition index." },
       { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
         "about": "The controller epoch." },
-      { "name": "LeaderKey", "type": "int32", "versions": "0+", "entityType": "brokerId",
+      { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
         "about": "The broker ID of the leader." },
       { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
         "about": "The leader epoch." },
-      { "name": "IsrReplicas", "type": "[]int32", "versions": "0+",
+      { "name": "Isr", "type": "[]int32", "versions": "0+",
         "about": "The in-sync replica IDs." },
       { "name": "ZkVersion", "type": "int32", "versions": "0+",
         "about": "The ZooKeeper version." },

@@ -27,7 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{After, Before}
@@ -70,14 +70,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     props.put("group.id", group)
     val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
     try {
-      consumer.partitionsFor(topic).asScala.flatMap { partitionInfo =>
-        val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
-        val committed = consumer.committed(tp)
-        if (committed == null)
-          None
-        else
-          Some(tp -> committed.offset)
-      }.toMap
+      val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
+        .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
+
+      consumer.committed(partitions.asJava).asScala.mapValues(_.offset()).toMap
     } finally {
       consumer.close()
     }

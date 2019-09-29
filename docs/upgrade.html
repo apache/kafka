@@ -40,6 +40,11 @@
         it may result in uneven distribution of records across partitions in edge cases. Generally users will not be impacted, but this difference may be noticeable in tests and
         other situations producing records for a very short amount of time.
     </li>
+    <li>The blocking <code>KafkaConsumer#committed</code> methods have been extended to allow a list of partitions as input parameters rather than a single partition.
+        It enables fewer request/response iterations between clients and brokers fetching for the committed offsets for the consumer group.
+        The old overloaded functions are deprecated and we would recommend users to make their code changes to leverage the new methods (details
+        can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-520%3A+Add+overloaded+Consumer%23committed+for+batching+partitions">KIP-520</a>).
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_3_0" href="#upgrade_2_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x to 2.3.0</a></h4>
@@ -99,6 +104,7 @@
     <li> Kafka Streams DSL switches its used store types. While this change is mainly transparent to users, there are some corner cases that may require code changes.
         See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_230">Kafka Streams upgrade section</a> for more details.
     </li>
+    <li>Kafka Streams 2.3.0 requires 0.11 message format or higher and does not work with older message format.</li>
 </ul>
 
 <h4><a id="upgrade_2_2_0" href="#upgrade_2_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x to 2.2.0</a></h4>
@@ -142,6 +148,11 @@
         the newer Java clients must be used.
     </li>
 </ol>
+
+<h5><a id="upgrade_221_notable" href="#upgrade_221_notable">Notable changes in 2.2.1</a></h5>
+<ul>
+    <li>Kafka Streams 2.2.1 requires 0.11 message format or higher and does not work with older message format.</li>
+</ul>
 
 <h5><a id="upgrade_220_notable" href="#upgrade_220_notable">Notable changes in 2.2.0</a></h5>
 <ul>

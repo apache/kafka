@@ -25,6 +25,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
@@ -68,6 +69,7 @@ import org.apache.kafka.common.message.CreateDelegationTokenRequestData.Creatabl
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -85,6 +87,10 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -151,6 +157,9 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetDeleteRequest;
+import org.apache.kafka.common.requests.OffsetDeleteRequest.Builder;
+import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
@@ -1302,11 +1311,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
                     newTopic.name() + "' cannot be represented in a request."));
                 topicFutures.put(newTopic.name(), future);
@@ -1341,7 +1350,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 // Handle server responses for particular topics.
                 for (CreatableTopicResult result : response.data().topics()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(result.name());
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = topicFutures.get(result.name());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", result.name());
                     } else {
@@ -1351,13 +1360,33 @@ public class KafkaAdminClient extends AdminClient {
                         if (exception != null) {
                             future.completeExceptionally(exception);
                         } else {
-                            future.complete(null);
+                            TopicMetadataAndConfig topicMetadataAndConfig;
+                            if (result.topicConfigErrorCode() != Errors.NONE.code()) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(Errors.forCode(result.topicConfigErrorCode()).exception());
+                            } else if (result.numPartitions() == CreateTopicsResult.UNKNOWN) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(new UnsupportedVersionException(
+                                        "Topic metadata and configs in CreateTopics response not supported"));
+                            } else {
+                                List<CreatableTopicConfigs> configs = result.configs();
+                                Config topicConfig = new Config(configs.stream()
+                                        .map(config -> new ConfigEntry(config.name(),
+                                                config.value(),
+                                                configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
+                                                config.isSensitive(),
+                                                config.readOnly(),
+                                                Collections.emptyList()))
+                                        .collect(Collectors.toSet()));
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
+                                        result.replicationFactor(),
+                                        topicConfig);
+                            }
+                            future.complete(topicMetadataAndConfig);
                         }
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -3046,6 +3075,92 @@ public class KafkaAdminClient extends AdminClient {
                     return;
 
                 context.getFuture().complete(null);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
+    }
+
+    @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(
+            String groupId,
+            Set<TopicPartition> partitions,
+            DeleteConsumerGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, Errors>> future = new KafkaFutureImpl<>();
+
+        if (groupIdIsUnrepresentable(groupId)) {
+            future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
+                groupId + "' cannot be represented in a request."));
+            return new DeleteConsumerGroupOffsetsResult(future);
+        }
+
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+        ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getDeleteConsumerGroupOffsetsCall(context, partitions));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new DeleteConsumerGroupOffsetsResult(future);
+    }
+
+    private Call getDeleteConsumerGroupOffsetsCall(
+            ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
+            Set<TopicPartition> partitions) {
+        return new Call("deleteConsumerGroupOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
+
+                partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> {
+                    topics.add(
+                        new OffsetDeleteRequestTopic()
+                        .setName(topic)
+                        .setPartitions(topicPartitions.stream()
+                            .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                });
+
+                return new OffsetDeleteRequest.Builder(
+                    new OffsetDeleteRequestData()
+                        .setGroupId(context.groupId)
+                        .setTopics(topics)
+                );
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
+                    return;
+                }
+
+                // If the error is an error at the group level, the future is failed with it
+                final Errors groupError = Errors.forCode(response.data.errorCode());
+                if (handleGroupRequestError(groupError, context.getFuture()))
+                    return;
+
+                final Map<TopicPartition, Errors> partitions = new HashMap<>();
+                response.data.topics().forEach(topic -> {
+                    topic.partitions().forEach(partition -> {
+                        partitions.put(
+                            new TopicPartition(topic.name(), partition.partitionIndex()),
+                            Errors.forCode(partition.errorCode()));
+                    });
+                });
+
+                context.getFuture().complete(partitions);
             }
 
             @Override

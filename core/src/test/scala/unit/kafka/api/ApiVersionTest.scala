@@ -88,6 +88,13 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2"))
     assertEquals(KAFKA_2_2_IV0, ApiVersion("2.2-IV0"))
     assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2-IV1"))
+
+    assertEquals(KAFKA_2_3_IV1, ApiVersion("2.3"))
+    assertEquals(KAFKA_2_3_IV0, ApiVersion("2.3-IV0"))
+    assertEquals(KAFKA_2_3_IV1, ApiVersion("2.3-IV1"))
+
+    assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4"))
+    assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4-IV0"))
   }
 
   @Test
@@ -116,7 +123,22 @@ class ApiVersionTest {
   def testShortVersion(): Unit = {
     assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
     assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
+    assertEquals("0.10.0", KAFKA_0_10_0_IV1.shortVersion)
     assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV1.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV2.shortVersion)
+    assertEquals("1.0", KAFKA_1_0_IV0.shortVersion)
+    assertEquals("1.1", KAFKA_1_1_IV0.shortVersion)
+    assertEquals("2.0", KAFKA_2_0_IV0.shortVersion)
+    assertEquals("2.0", KAFKA_2_0_IV1.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV0.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV1.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV2.shortVersion)
+    assertEquals("2.2", KAFKA_2_2_IV0.shortVersion)
+    assertEquals("2.2", KAFKA_2_2_IV1.shortVersion)
+    assertEquals("2.3", KAFKA_2_3_IV0.shortVersion)
+    assertEquals("2.3", KAFKA_2_3_IV1.shortVersion)
+    assertEquals("2.4", KAFKA_2_4_IV0.shortVersion)
   }
 
   @Test

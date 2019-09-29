@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -292,15 +293,24 @@ public class TimeWindowedKStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
-            null);
+            (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+        windowedStream.reduce(
+            MockReducer.STRING_ADDER,
+            (Named) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        windowedStream.count(null);
+        windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null);
     }
 
     private void processData(final TopologyTestDriver driver) {

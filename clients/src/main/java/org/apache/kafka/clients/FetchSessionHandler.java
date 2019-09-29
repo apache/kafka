@@ -397,14 +397,15 @@ public class FetchSessionHandler {
                 nextMetadata = FetchMetadata.INITIAL;
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
-                log.debug("Node {} sent a full fetch response{}",
-                    node, responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent a full fetch response{}", node, responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
             } else {
                 // The server created a new incremental fetch session.
-                log.debug("Node {} sent a full fetch response that created a new incremental " +
-                    "fetch session {}{}", node, response.sessionId(), responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent a full fetch response that created a new incremental " +
+                            "fetch session {}{}", node, response.sessionId(), responseDataToLogString(response));
                 nextMetadata = FetchMetadata.newIncremental(response.sessionId());
                 return true;
             }
@@ -416,14 +417,16 @@ public class FetchSessionHandler {
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
                 // The incremental fetch session was closed by the server.
-                log.debug("Node {} sent an incremental fetch response closing session {}{}",
-                    node, nextMetadata.sessionId(), responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent an incremental fetch response closing session {}{}",
+                            node, nextMetadata.sessionId(), responseDataToLogString(response));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
             } else {
                 // The incremental fetch session was continued by the server.
-                log.debug("Node {} sent an incremental fetch response for session {}{}",
-                    node, response.sessionId(), responseDataToLogString(response));
+                if (log.isDebugEnabled())
+                    log.debug("Node {} sent an incremental fetch response for session {}{}",
+                            node, response.sessionId(), responseDataToLogString(response));
                 nextMetadata = nextMetadata.nextIncremental();
                 return true;
             }

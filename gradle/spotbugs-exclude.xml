@@ -156,6 +156,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="org.apache.kafka.jmh.common.generated"/>
             <Package name="org.apache.kafka.jmh.record.generated"/>
             <Package name="org.apache.kafka.jmh.producer.generated"/>
+            <Package name="org.apache.kafka.jmh.partition.generated"/>
         </Or>
     </Match>
 
@@ -214,6 +215,25 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
         <Class name="org.apache.kafka.common.utils.Utils"/>
         <Method name="murmur2"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3$IncrementalHash32"/>
         <Or>
             <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
             <Bug pattern="SF_SWITCH_FALLTHROUGH"/>

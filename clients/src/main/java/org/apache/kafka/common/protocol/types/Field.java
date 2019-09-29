@@ -75,6 +75,16 @@ public class Field {
         }
     }
 
+    public static class UUID extends Field {
+        public UUID(String name, String docString) {
+            super(name, Type.UUID, docString, false, null);
+        }
+
+        public UUID(String name, String docString, UUID defaultValue) {
+            super(name, Type.UUID, docString, true, defaultValue);
+        }
+    }
+
     public static class Int16 extends Field {
         public Int16(String name, String docString) {
             super(name, Type.INT16, docString, false, null);

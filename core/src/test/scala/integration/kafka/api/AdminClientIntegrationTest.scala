@@ -33,6 +33,7 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -43,11 +44,8 @@ import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.KafkaFutureImpl
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -169,19 +167,37 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new NewTopic("mytopic2", 3, 3.toShort),
       new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
     )
-    client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
+    val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
+    validateResult.all.get()
     waitForTopics(client, List(), topics)
 
-    client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, topics, List())
+    def validateMetadataAndConfigs(result: CreateTopicsResult): Unit = {
+      assertEquals(2, result.numPartitions("mytopic").get())
+      assertEquals(2, result.replicationFactor("mytopic").get())
+      assertEquals(3, result.numPartitions("mytopic2").get())
+      assertEquals(3, result.replicationFactor("mytopic2").get())
+      assertEquals(configs.head.numPartitions, result.numPartitions("mytopic3").get())
+      assertEquals(configs.head.defaultReplicationFactor, result.replicationFactor("mytopic3").get())
+      assertFalse(result.config("mytopic").get().entries.isEmpty)
+    }
+    validateMetadataAndConfigs(validateResult)
 
-    val results = client.createTopics(newTopics.asJava).values()
+    val createResult = client.createTopics(newTopics.asJava)
+    createResult.all.get()
+    waitForTopics(client, topics, List())
+    validateMetadataAndConfigs(createResult)
+
+    val failedCreateResult = client.createTopics(newTopics.asJava)
+    val results = failedCreateResult.values()
     assertTrue(results.containsKey("mytopic"))
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic3"))
     assertFutureExceptionTypeEquals(results.get("mytopic3"), classOf[TopicExistsException])
+    assertFutureExceptionTypeEquals(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
+    assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
+    assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
 
     val topicToDescription = client.describeTopics(topics.asJava).all.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
@@ -1056,6 +1072,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
+  private def subscribeAndWaitForRecords(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records" )
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topicPartition: TopicPartition): Unit = {
@@ -1264,7 +1288,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             val part = new TopicPartition(testTopicName, 0)
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
-
+          
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
           var removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
@@ -1282,8 +1306,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _ =>
-                fail("Should have caught exception in getting member future")
+              case t: Throwable =>
+                fail(s"Should have caught exception in getting member future: $t")
             }
           }
 
@@ -1317,8 +1341,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _ =>
-                fail("Should have caught exception in getting member future")
+              case t: Throwable =>
+                fail(s"Should have caught exception in getting member future: $t")
             }
           }
 
@@ -1346,6 +1370,77 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       } finally {
         Utils.closeQuietly(consumer, "consumer")
       }
+    } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
+  def testDeleteConsumerGroupOffsets(): Unit = {
+    val config = createConfig()
+    client = AdminClient.create(config)
+    try {
+      val testTopicName = "test_topic"
+      val testGroupId = "test_group_id"
+      val testClientId = "test_client_id"
+      val fakeGroupId = "fake_group_id"
+
+      val tp1 = new TopicPartition(testTopicName, 0)
+      val tp2 = new TopicPartition("foo", 0)
+
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, 1, 1.toShort))).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      // Increase timeouts to avoid having a rebalance during the test
+      newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
+      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
+      val consumer = createConsumer(configOverrides = newConsumerConfig)
+
+      try {
+        subscribeAndWaitForRecords(testTopicName, consumer)
+        consumer.commitSync()
+
+        // Test offset deletion while consuming
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+
+        assertNull(offsetDeleteResult.all().get())
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
+          classOf[GroupSubscribedToTopicException])
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+          classOf[UnknownTopicOrPartitionException])
+
+        // Test the fake group ID
+        val fakeDeleteResult = client.deleteConsumerGroupOffsets(fakeGroupId, Set(tp1, tp2).asJava)
+
+        assertFutureExceptionTypeEquals(fakeDeleteResult.all(), classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp1),
+          classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp2),
+          classOf[GroupIdNotFoundException])
+
+      } finally {
+        Utils.closeQuietly(consumer, "consumer")
+      }
+
+      // Test offset deletion when group is empty
+      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+
+      assertNull(offsetDeleteResult.all().get())
+      assertNull(offsetDeleteResult.partitionResult(tp1).get())
+      assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+        classOf[UnknownTopicOrPartitionException])
+
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
