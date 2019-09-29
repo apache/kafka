@@ -228,7 +228,7 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("WeakerAccess")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
-        this(topology, config, System.currentTimeMillis());
+        this(topology, config, (Instant) null);
     }
 
     /**
