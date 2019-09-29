@@ -63,8 +63,7 @@ public class OffsetSync {
 
     @Override
     public String toString() {
-        return String.format("OffsetSync{topicPartition=%s, upstreamOffset=%d, downstreamOffset=%d,"
-            + "metatadata=%s}",
+        return String.format("OffsetSync{topicPartition=%s, upstreamOffset=%d, downstreamOffset=%d}",
             topicPartition, upstreamOffset, downstreamOffset);
     }
 

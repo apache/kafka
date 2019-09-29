@@ -30,13 +30,18 @@ public class Heartbeat {
     public static final String SOURCE_CLUSTER_ALIAS_KEY = "sourceClusterAlias";
     public static final String TARGET_CLUSTER_ALIAS_KEY = "targetClusterAlias";
     public static final String TIMESTAMP_KEY = "timestamp";
+    public static final String VERSION_KEY = "version";
+    public static final short VERSION = 0;
 
-    public static final Schema VALUE_SCHEMA = new Schema(
+    public static final Schema VALUE_SCHEMA_V0 = new Schema(
             new Field(TIMESTAMP_KEY, Type.INT64));
 
     public static final Schema KEY_SCHEMA = new Schema(
             new Field(SOURCE_CLUSTER_ALIAS_KEY, Type.STRING),
             new Field(TARGET_CLUSTER_ALIAS_KEY, Type.STRING));
+
+    public static final Schema HEADER_SCHEMA = new Schema(
+            new Field(VERSION_KEY, Type.INT16));
 
     private String sourceClusterAlias;
     private String targetClusterAlias;
@@ -66,10 +71,13 @@ public class Heartbeat {
             sourceClusterAlias, targetClusterAlias, timestamp);
     }
 
-    ByteBuffer serializeValue() {
-        Struct struct = valueStruct();
-        ByteBuffer buffer = ByteBuffer.allocate(VALUE_SCHEMA.sizeOf(struct));
-        VALUE_SCHEMA.write(buffer, struct);
+    ByteBuffer serializeValue(short version) {
+        Schema valueSchema = valueSchema(version);
+        Struct header = headerStruct(version);
+        Struct value = valueStruct(valueSchema);
+        ByteBuffer buffer = ByteBuffer.allocate(HEADER_SCHEMA.sizeOf(header) + valueSchema.sizeOf(value));
+        HEADER_SCHEMA.write(buffer, header);
+        valueSchema.write(buffer, value);
         buffer.flip();
         return buffer;
     }
@@ -83,18 +91,25 @@ public class Heartbeat {
     }
 
     public static Heartbeat deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
+        ByteBuffer value = ByteBuffer.wrap(record.value());
+        Struct headerStruct = HEADER_SCHEMA.read(value);
+        short version = headerStruct.getShort(VERSION_KEY);
+        Struct valueStruct = valueSchema(version).read(value);
+        long timestamp = valueStruct.getLong(TIMESTAMP_KEY);
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String sourceClusterAlias = keyStruct.getString(SOURCE_CLUSTER_ALIAS_KEY);
-        String targetClusterAlias = keyStruct.getString(TARGET_CLUSTER_ALIAS_KEY);
-        
-        Struct valueStruct = VALUE_SCHEMA.read(ByteBuffer.wrap(record.value()));
-        long timestamp = valueStruct.getLong(TIMESTAMP_KEY);
-    
+        String targetClusterAlias = keyStruct.getString(TARGET_CLUSTER_ALIAS_KEY); 
         return new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);    
     } 
 
-    private Struct valueStruct() {
-        Struct struct = new Struct(VALUE_SCHEMA);
+    private Struct headerStruct(short version) {
+        Struct struct = new Struct(HEADER_SCHEMA);
+        struct.set(VERSION_KEY, version);
+        return struct;
+    }
+
+    private Struct valueStruct(Schema schema) {
+        Struct struct = new Struct(schema);
         struct.set(TIMESTAMP_KEY, timestamp);
         return struct;
     }
@@ -118,7 +133,12 @@ public class Heartbeat {
     }
 
     byte[] recordValue() {
-        return serializeValue().array();
+        return serializeValue(VERSION).array();
+    }
+
+    private static Schema valueSchema(short version) {
+        assert version == 0;
+        return VALUE_SCHEMA_V0;
     }
 };
 

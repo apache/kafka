@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.protocol.types.SchemaException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,9 +136,13 @@ public class MirrorClient implements AutoCloseable {
             while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                    if (checkpoint.consumerGroupId().equals(consumerGroupId)) {
-                        offsets.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+                    try {
+                        Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                        if (checkpoint.consumerGroupId().equals(consumerGroupId)) {
+                            offsets.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+                        }
+                    } catch (SchemaException e) {
+                        log.info("Could not deserialize record. Skipping.", e);
                     }
                 }
             }

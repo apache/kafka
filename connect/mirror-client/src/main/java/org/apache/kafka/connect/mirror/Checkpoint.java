@@ -35,8 +35,10 @@ public class Checkpoint {
     public static final String UPSTREAM_OFFSET_KEY = "upstreamOffset";
     public static final String DOWNSTREAM_OFFSET_KEY = "offset";
     public static final String METADATA_KEY = "metadata";
+    public static final String VERSION_KEY = "version";
+    public static final short VERSION = 0;
 
-    public static final Schema VALUE_SCHEMA = new Schema(
+    public static final Schema VALUE_SCHEMA_V0 = new Schema(
             new Field(UPSTREAM_OFFSET_KEY, Type.INT64),
             new Field(DOWNSTREAM_OFFSET_KEY, Type.INT64),
             new Field(METADATA_KEY, Type.STRING));
@@ -45,6 +47,9 @@ public class Checkpoint {
             new Field(CONSUMER_GROUP_ID_KEY, Type.STRING),
             new Field(TOPIC_KEY, Type.STRING),
             new Field(PARTITION_KEY, Type.INT32));
+
+    public static final Schema HEADER_SCHEMA = new Schema(
+            new Field(VERSION_KEY, Type.INT16));
 
     private String consumerGroupId;
     private TopicPartition topicPartition;
@@ -92,10 +97,13 @@ public class Checkpoint {
             consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
     }
 
-    ByteBuffer serializeValue() {
-        Struct struct = valueStruct();
-        ByteBuffer buffer = ByteBuffer.allocate(VALUE_SCHEMA.sizeOf(struct));
-        VALUE_SCHEMA.write(buffer, struct);
+    ByteBuffer serializeValue(short version) {
+        Struct header = headerStruct(version);
+        Schema valueSchema = valueSchema(version);
+        Struct valueStruct = valueStruct(valueSchema);
+        ByteBuffer buffer = ByteBuffer.allocate(HEADER_SCHEMA.sizeOf(header) + valueSchema.sizeOf(valueStruct));
+        HEADER_SCHEMA.write(buffer, header);
+        valueSchema.write(buffer, valueStruct);
         buffer.flip();
         return buffer;
     }
@@ -109,22 +117,29 @@ public class Checkpoint {
     }
 
     public static Checkpoint deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
+        ByteBuffer value = ByteBuffer.wrap(record.value());
+        Struct header = HEADER_SCHEMA.read(value);
+        short version = header.getShort(VERSION_KEY);
+        Schema valueSchema = valueSchema(version);
+        Struct valueStruct = valueSchema.read(value);
+        long upstreamOffset = valueStruct.getLong(UPSTREAM_OFFSET_KEY);
+        long downstreamOffset = valueStruct.getLong(DOWNSTREAM_OFFSET_KEY);
+        String metadata = valueStruct.getString(METADATA_KEY);
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String group = keyStruct.getString(CONSUMER_GROUP_ID_KEY);
         String topic = keyStruct.getString(TOPIC_KEY);
         int partition = keyStruct.getInt(PARTITION_KEY);
-        
-        Struct valueStruct = VALUE_SCHEMA.read(ByteBuffer.wrap(record.value()));
-        long upstreamOffset = valueStruct.getLong(UPSTREAM_OFFSET_KEY);
-        long downstreamOffset = valueStruct.getLong(DOWNSTREAM_OFFSET_KEY);
-        String metadata = valueStruct.getString(METADATA_KEY);
-        
         return new Checkpoint(group, new TopicPartition(topic, partition), upstreamOffset,
             downstreamOffset, metadata);
-    } 
+    }
 
-    private Struct valueStruct() {
-        Struct struct = new Struct(VALUE_SCHEMA);
+    private static Schema valueSchema(short version) {
+        assert version == 0;
+        return VALUE_SCHEMA_V0;
+    }
+
+    private Struct valueStruct(Schema schema) {
+        Struct struct = new Struct(schema);
         struct.set(UPSTREAM_OFFSET_KEY, upstreamOffset);
         struct.set(DOWNSTREAM_OFFSET_KEY, downstreamOffset);
         struct.set(METADATA_KEY, metadata);
@@ -136,6 +151,12 @@ public class Checkpoint {
         struct.set(CONSUMER_GROUP_ID_KEY, consumerGroupId);
         struct.set(TOPIC_KEY, topicPartition.topic());
         struct.set(PARTITION_KEY, topicPartition.partition());
+        return struct;
+    }
+
+    private Struct headerStruct(short version) {
+        Struct struct = new Struct(HEADER_SCHEMA);
+        struct.set(VERSION_KEY, version);
         return struct;
     }
 
@@ -156,7 +177,7 @@ public class Checkpoint {
     }
 
     byte[] recordValue() {
-        return serializeValue().array();
+        return serializeValue(VERSION).array();
     }
 };
 
