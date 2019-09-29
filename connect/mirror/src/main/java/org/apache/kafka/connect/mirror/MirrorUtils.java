@@ -98,7 +98,7 @@ final class MirrorUtils {
         return compilePatternList(Arrays.asList(fields.split("\\W*,\\W*")));
     }
 
-    static void createTopic(String topicName, short partitions, short replicationFactor, Map<String, Object> adminProps) {
+    static void createCompactedTopic(String topicName, short partitions, short replicationFactor, Map<String, Object> adminProps) {
         NewTopic topicDescription = TopicAdmin.defineTopic(topicName).
                 compacted().
                 partitions(partitions).
@@ -110,7 +110,7 @@ final class MirrorUtils {
         }
     }
 
-    static void createSinglePartitionTopic(String topicName, short replicationFactor, Map<String, Object> adminProps) {
-        createTopic(topicName, (short) 1, replicationFactor, adminProps);
+    static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Map<String, Object> adminProps) {
+        createCompactedTopic(topicName, (short) 1, replicationFactor, adminProps);
     }
 }

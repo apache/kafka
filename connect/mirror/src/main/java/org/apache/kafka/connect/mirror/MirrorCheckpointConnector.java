@@ -142,7 +142,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     private void createInternalTopics() {
-        MirrorUtils.createSinglePartitionTopic(config.checkpointsTopic(),
+        MirrorUtils.createSinglePartitionCompactedTopic(config.checkpointsTopic(),
             config.checkpointsTopicReplicationFactor(), config.targetAdminConfig());
     } 
 
