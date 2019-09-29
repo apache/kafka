@@ -56,7 +56,8 @@ public class MirrorConnectorsIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorConnectorsIntegrationTest.class);
 
-    private static final int NUM_RECORDS_PRODUCED = 1_000;  // to save trees
+    private static final int NUM_RECORDS_PRODUCED = 100;  // to save trees
+    private static final int NUM_PARTITIONS = 10;
     private static final int RECORD_TRANSFER_DURATION_MS = 10_000;
     private static final int CHECKPOINT_DURATION_MS = 20_000;
 
@@ -113,16 +114,16 @@ public class MirrorConnectorsIntegrationTest {
         backup.start();
 
         // create these topics before starting the connectors so we don't need to wait for discovery
-        primary.kafka().createTopic("test-topic-1", 1);
+        primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
         primary.kafka().createTopic("backup.test-topic-1", 1);
         primary.kafka().createTopic("heartbeats", 1);
-        backup.kafka().createTopic("test-topic-1", 1);
+        backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS);
         backup.kafka().createTopic("primary.test-topic-1", 1);
         backup.kafka().createTopic("heartbeats", 1);
 
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            primary.kafka().produce("test-topic-1", 0, "key", "message-1-" + i);
-            backup.kafka().produce("test-topic-1", 0, "key", "message-2-" + i);
+            primary.kafka().produce("test-topic-1", i % NUM_PARTITIONS, "key", "message-1-" + i);
+            backup.kafka().produce("test-topic-1", i % NUM_PARTITIONS, "key", "message-2-" + i);
         }
 
         // create consumers before starting the connectors so we don't need to wait for discovery
@@ -280,8 +281,8 @@ public class MirrorConnectorsIntegrationTest {
             backup.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1", "test-topic-1").count());
        
         // create more matching topics
-        primary.kafka().createTopic("test-topic-2", 1);
-        backup.kafka().createTopic("test-topic-3", 1);
+        primary.kafka().createTopic("test-topic-2", NUM_PARTITIONS);
+        backup.kafka().createTopic("test-topic-3", NUM_PARTITIONS);
 
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
             primary.kafka().produce("test-topic-2", 0, "key", "message-2-" + i);
