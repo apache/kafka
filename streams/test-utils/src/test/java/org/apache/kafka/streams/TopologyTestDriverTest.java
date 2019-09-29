@@ -94,12 +94,20 @@ public class TopologyTestDriverTest {
     private final byte[] key1 = new byte[0];
     private final byte[] value1 = new byte[0];
     private final long timestamp1 = 42L;
-    private final TestRecord<byte[], byte[]> consumerRecord1 = new TestRecord<>(key1, value1, headers, timestamp1);
+    private final TestRecord<byte[], byte[]> testRecord1 = new TestRecord<>(key1, value1, headers, timestamp1);
 
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
     private final long timestamp2 = 43L;
-    private final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
+    private final TestRecord<byte[], byte[]> testRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
+
+    //Factary and records for testing already deprecated methods
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+            new ByteArraySerializer(),
+            new ByteArraySerializer());
+    private final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, headers, timestamp1);
+    private final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
 
     private TopologyTestDriver testDriver;
     private final Properties config = mkProperties(mkMap(
@@ -400,11 +408,30 @@ public class TopologyTestDriverTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    //Testing already deprecatd methods until methods removed
+    @Test
+    public void shouldThrowForUnknownTopicDeprecated() {
+        final String unknownTopic = "unknownTopic";
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+                "unknownTopic",
+                new ByteArraySerializer(),
+                new ByteArraySerializer());
+
+        testDriver = new TopologyTestDriver(new Topology(), config);
+        try {
+            testDriver.pipeInput(consumerRecordFactory.create((byte[]) null));
+            fail("Should have throw IllegalArgumentException");
+        } catch (final IllegalArgumentException exception) {
+            assertEquals("Unknown topic: " + unknownTopic, exception.getMessage());
+        }
+    }
+
     @Test
     public void shouldProcessRecordForTopic() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
         final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
 
         assertEquals(key1, outputRecord.key());
@@ -416,18 +443,18 @@ public class TopologyTestDriverTest {
     public void shouldSetRecordMetadata() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        final Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
+        final Record expectedResult = new Record(SOURCE_TOPIC_1, testRecord1, 0L);
 
         assertThat(record, equalTo(expectedResult));
     }
 
-    private void pipeInput(final TestRecord<byte[], byte[]> record) {
+    private void pipeInputTopic1(final TestRecord<byte[], byte[]> record) {
         pipeRecord(SOURCE_TOPIC_1, record);
     }
 
@@ -440,31 +467,93 @@ public class TopologyTestDriverTest {
     }
 
 
+    @SuppressWarnings("deprecation")
+    //Testing already deprecatd methods until methods removed
+    //Test not migrated to non-depreacted methods, topic handling not based on record any more
     @Test
-    public void shouldSendRecordViaCorrectSourceTopic() {
-        //TODO Is this test needed any more
+    public void shouldSendRecordViaCorrectSourceTopicDeprecated() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
 
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
-        pipeInput(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
-        pipeInputTopic2(consumerRecord2);
+        testDriver.pipeInput(consumerRecord2);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
         record = processedRecords2.get(0);
-        expectedResult = new Record(SOURCE_TOPIC_2, consumerRecord2, 0L);
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
+    }
+
+    @SuppressWarnings("deprecation")
+    //Testing already deprecatd methods until methods removed
+    @Test
+    public void shouldUseSourceSpecificDeserializersDeprecated() {
+        final Topology topology = new Topology();
+
+        final String sourceName1 = "source-1";
+        final String sourceName2 = "source-2";
+        final String processor = "processor";
+
+        topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
+        topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
+        topology.addProcessor(processor, new MockProcessorSupplier(), sourceName1, sourceName2);
+        topology.addSink(
+            "sink",
+            SINK_TOPIC_1,
+            (topic, data) -> {
+                if (data instanceof Long) {
+                    return Serdes.Long().serializer().serialize(topic, (Long) data);
+                }
+                return Serdes.Integer().serializer().serialize(topic, (Integer) data);
+            },
+            (topic, data) -> {
+                if (data instanceof String) {
+                    return Serdes.String().serializer().serialize(topic, (String) data);
+                }
+                return Serdes.Double().serializer().serialize(topic, (Double) data);
+            },
+            processor);
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<Long, String> source1Factory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+            SOURCE_TOPIC_1,
+            Serdes.Long().serializer(),
+            Serdes.String().serializer());
+        final org.apache.kafka.streams.test.ConsumerRecordFactory<Integer, Double> source2Factory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
+            SOURCE_TOPIC_2,
+            Serdes.Integer().serializer(),
+            Serdes.Double().serializer());
+
+        final Long source1Key = 42L;
+        final String source1Value = "anyString";
+        final Integer source2Key = 73;
+        final Double source2Value = 3.14;
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = source1Factory.create(source1Key, source1Value);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = source2Factory.create(source2Key, source2Value);
+
+        testDriver.pipeInput(consumerRecord1);
+        final ProducerRecord<Long, String> record1 = testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
+        assertThat(record1.key(), equalTo(source1Key));
+        assertThat(record1.value(), equalTo(source1Value));
+
+        testDriver.pipeInput(consumerRecord2);
+        final ProducerRecord<Integer, Double> record2 = testDriver.readOutput(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
+        assertThat(record2.key(), equalTo(source2Key));
+        assertThat(record2.value(), equalTo(source2Value));
     }
 
     @Test
@@ -569,6 +658,9 @@ public class TopologyTestDriverTest {
         assertThat(result2.getValue(), equalTo(source2Value));
     }
 
+    @SuppressWarnings("deprecation")
+    //Testing already deprecatd methods until methods removed
+    //Test not migrated to non-depreacted methods, List processing now in TestInputTopic
     @Test
     public void shouldProcessConsumerRecordList() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
@@ -576,18 +668,21 @@ public class TopologyTestDriverTest {
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
-        pipeInput(consumerRecord1);
-        pipeInputTopic2(consumerRecord2);
+        final List<ConsumerRecord<byte[], byte[]>> testRecords = new ArrayList<>(2);
+        testRecords.add(consumerRecord1);
+        testRecords.add(consumerRecord2);
+
+        testDriver.pipeInput(testRecords);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         record = processedRecords2.get(0);
-        expectedResult = new Record(SOURCE_TOPIC_2, consumerRecord2, 0L);
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -595,7 +690,7 @@ public class TopologyTestDriverTest {
     public void shouldForwardRecordsFromSubtopologyToSubtopology() {
         testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies(), config);
 
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
 
         ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
@@ -616,13 +711,13 @@ public class TopologyTestDriverTest {
         Assert.assertNotNull(globalStore);
         Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
 
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        final Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
+        final Record expectedResult = new Record(SOURCE_TOPIC_1, testRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -672,6 +767,37 @@ public class TopologyTestDriverTest {
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         pipeRecord(SOURCE_TOPIC_1, new TestRecord<byte[], byte[]>(key1, value1, null, 102L));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+    }
+
+    @SuppressWarnings("deprecation")
+    //Testing already deprecatd methods until methods removed
+    @Test
+    public void shouldPunctuateOnWallClockTimeDeprecated() {
+        final MockPunctuator mockPunctuator = new MockPunctuator();
+        testDriver = new TopologyTestDriver(
+            setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
+            config,
+            0);
+
+        final List<Long> expectedPunctuations = new LinkedList<>();
+
+        testDriver.advanceWallClockTime(5L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        expectedPunctuations.add(14L);
+        testDriver.advanceWallClockTime(9L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        testDriver.advanceWallClockTime(1L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        expectedPunctuations.add(35L);
+        testDriver.advanceWallClockTime(20L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        expectedPunctuations.add(40L);
+        testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
@@ -1294,13 +1420,13 @@ public class TopologyTestDriverTest {
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
         final Record record1 = processedRecords1.get(0);
-        final Record expectedResult1 = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
+        final Record expectedResult1 = new Record(SOURCE_TOPIC_1, testRecord1, 0L);
         assertThat(record1, equalTo(expectedResult1));
 
         pipeRecord(consumerTopic2, consumerRecord2);
@@ -1324,7 +1450,7 @@ public class TopologyTestDriverTest {
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
         testDriver = new TopologyTestDriver(topology, config);
-        pipeInput(consumerRecord1);
+        pipeInputTopic1(testRecord1);
 
         final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
@@ -1344,7 +1470,7 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(topology, config);
         try {
-            pipeInput(consumerRecord1);
+            pipeInputTopic1(testRecord1);
         } catch (final TopologyException exception) {
             final String str =
                     String.format(
