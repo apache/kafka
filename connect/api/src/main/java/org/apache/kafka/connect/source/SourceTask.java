@@ -102,4 +102,18 @@ public abstract class SourceTask implements Task {
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
     }
+
+    /**
+     * <p>
+     * This task has stopped and can safely release resources.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality. This hook is provided
+     * for systems that have resources such as network connections that need to be
+     * released safely once the SourceTask has indeed stopped.
+     * </p>
+     */
+    public void stopped() {
+        // This space intentionally left blank.
+    }
 }

@@ -92,6 +92,7 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
+    private boolean finishedInitialize = false;
     private boolean finishedStart = false;
     private boolean startedShutdownBeforeStartCompleted = false;
     private boolean stopped = false;
@@ -169,6 +170,13 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void releaseResources() {
+        if (finishedInitialize) {
+            try {
+                task.stopped();
+            } catch (Throwable t) {
+                log.warn("Could not signal stopped to task", t);
+            }
+        }
         sourceTaskMetricsGroup.close();
     }
 
@@ -199,6 +207,7 @@ class WorkerSourceTask extends WorkerTask {
     public void execute() {
         try {
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
+            finishedInitialize = true;
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
