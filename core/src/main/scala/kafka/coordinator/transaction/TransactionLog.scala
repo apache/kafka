@@ -222,6 +222,10 @@ object TransactionLog {
   /**
     * Decodes the transaction log messages' payload and retrieves the transaction metadata from it
     *
+    * If the payload was written using an IBP prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be
+    * present in the log. The effect of this is that, if an InitProducerId request is retried after a coordinator
+    * change, the retry will fail due to the missing values. We expect this to be a rare case.
+    *
     * @return a transaction metadata object from the message
     */
   def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): TransactionMetadata = {

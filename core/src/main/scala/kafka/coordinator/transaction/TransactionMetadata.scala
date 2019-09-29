@@ -237,6 +237,8 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           // If the expected epoch matches the previous epoch, it is a retry of a successful call, so just return the
           // current epoch without bumping. There is no danger of this producer being fenced, because a new producer
           // calling InitProducerId would have caused the last epoch to be set to -1.
+          // Note that if the IBP is prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be written to
+          // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
           Right(producerEpoch, lastProducerEpoch)
         else {
           // Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_EPOCH error
