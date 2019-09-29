@@ -29,14 +29,14 @@
       "about": "The broker epoch." },
     { "name": "DeletePartitions", "type": "bool", "versions": "0+",
       "about": "Whether these partitions should be deleted." },
-    { "name": "PartitionsV0", "type": "[]StopReplicaRequestPartitionV0", "versions": "0",
+    { "name": "UngroupedPartitions", "type": "[]StopReplicaPartitionV0", "versions": "0",
       "about": "The partitions to stop.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0",
         "about": "The partition index." }
     ]},
-    { "name": "Topics", "type": "[]StopReplicaRequestTopic", "versions": "1+",
+    { "name": "Topics", "type": "[]StopReplicaTopic", "versions": "1+",
       "about": "The topics to stop.", "fields": [
       { "name": "Name", "type": "string", "versions": "1+", "entityType": "topicName",
         "about": "The topic name." },

@@ -22,7 +22,7 @@ import java.time.Duration
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.network.SocketServer
-import kafka.security.auth.{ResourceType => AuthResourceType, SimpleAclAuthorizer, Topic}
+import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthResourceType}
 import kafka.security.authorizer.AuthorizerUtils.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -49,11 +49,15 @@ import org.apache.kafka.common.message.HeartbeatRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -200,8 +204,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
-    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
-    ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
+    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => Errors.forCode(
+      resp.partitions.asScala.find(p => p.topicName == tp.topic && p.partitionIndex == tp.partition).get.errorCode)),
+    ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => Errors.forCode(
+      resp.partitionErrors.asScala.find(pe => pe.topicName == tp.topic && pe.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => Errors.forCode(resp.data.topics.find(createTopic).errorCode())),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => Errors.forCode(resp.data.responses.find(deleteTopic).errorCode())),
@@ -353,14 +359,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createUpdateMetadataRequest = {
-    val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
-      Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
+    val partitionStates = Seq(new UpdateMetadataPartitionState()
+      .setTopicName(tp.topic)
+      .setPartitionIndex(tp.partition)
+      .setControllerEpoch(Int.MaxValue)
+      .setLeader(brokerId)
+      .setLeaderEpoch(Int.MaxValue)
+      .setIsr(List(brokerId).asJava)
+      .setZkVersion(2)
+      .setReplicas(Seq(brokerId).asJava)).asJava
     val securityProtocol = SecurityProtocol.PLAINTEXT
-    val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
-      Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
-        ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
+    val brokers = Seq(new UpdateMetadataBroker()
+      .setId(brokerId)
+      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+        .setHost("localhost")
+        .setPort(0)
+        .setSecurityProtocol(securityProtocol.id)
+        .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers).build()
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers).build()
   }
 
   private def createJoinGroupRequest = {
@@ -442,7 +459,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-      Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, false)).asJava,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp.topic)
+        .setPartitionIndex(tp.partition)
+        .setControllerEpoch(Int.MaxValue)
+        .setLeader(brokerId)
+        .setLeaderEpoch(Int.MaxValue)
+        .setIsr(List(brokerId).asJava)
+        .setZkVersion(2)
+        .setReplicas(Seq(brokerId).asJava)
+        .setIsNew(false)).asJava,
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 
@@ -532,7 +558,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       List(new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
         .setName(topic)
         .setPartitionIndexes(
-          List(new Integer(tp.partition)).asJava
+          List(Integer.valueOf(tp.partition)).asJava
         )).asJava
     )
   ).build()
@@ -569,12 +595,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
       ApiKeys.ADD_PARTITIONS_TO_TXN -> addPartitionsToTxnRequest,
       ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
-      // Check StopReplica last since some APIs depend on replica availability
-      ApiKeys.STOP_REPLICA -> stopReplicaRequest,
       ApiKeys.ELECT_LEADERS -> electLeadersRequest,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS -> incrementalAlterConfigsRequest,
       ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> alterPartitionReassignmentsRequest,
-      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest
+      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest,
+      // Check StopReplica last since some APIs depend on replica availability
+      ApiKeys.STOP_REPLICA -> stopReplicaRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {

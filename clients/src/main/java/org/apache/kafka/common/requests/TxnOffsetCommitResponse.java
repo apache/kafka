@@ -88,7 +88,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors());
+        return errorCounts(errors().values());
     }
 
     public Map<TopicPartition, Errors> errors() {
