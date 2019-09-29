@@ -431,7 +431,7 @@ public class TopologyTestDriverTest {
     public void shouldProcessRecordForTopic() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
         final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
 
         assertEquals(key1, outputRecord.key());
@@ -443,7 +443,7 @@ public class TopologyTestDriverTest {
     public void shouldSetRecordMetadata() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
@@ -452,14 +452,6 @@ public class TopologyTestDriverTest {
         final Record expectedResult = new Record(SOURCE_TOPIC_1, testRecord1, 0L);
 
         assertThat(record, equalTo(expectedResult));
-    }
-
-    private void pipeInputTopic1(final TestRecord<byte[], byte[]> record) {
-        pipeRecord(SOURCE_TOPIC_1, record);
-    }
-
-    private void pipeInputTopic2(final TestRecord<byte[], byte[]> record) {
-        pipeRecord(SOURCE_TOPIC_2, record);
     }
 
     private void pipeRecord(final String topic, final TestRecord<byte[], byte[]> record) {
@@ -690,7 +682,7 @@ public class TopologyTestDriverTest {
     public void shouldForwardRecordsFromSubtopologyToSubtopology() {
         testDriver = new TopologyTestDriver(setupTopologyWithTwoSubtopologies(), config);
 
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
@@ -711,7 +703,7 @@ public class TopologyTestDriverTest {
         Assert.assertNotNull(globalStore);
         Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
 
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
@@ -1420,7 +1412,7 @@ public class TopologyTestDriverTest {
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
@@ -1450,7 +1442,7 @@ public class TopologyTestDriverTest {
         topology.addSink("sink", SINK_TOPIC_1, sourceName);
 
         testDriver = new TopologyTestDriver(topology, config);
-        pipeInputTopic1(testRecord1);
+        pipeRecord(SOURCE_TOPIC_1, testRecord1);
 
         final ProducerRecord outputRecord = testDriver.readRecord(SINK_TOPIC_1);
         assertEquals(key1, outputRecord.key());
@@ -1470,7 +1462,7 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(topology, config);
         try {
-            pipeInputTopic1(testRecord1);
+            pipeRecord(SOURCE_TOPIC_1, testRecord1);
         } catch (final TopologyException exception) {
             final String str =
                     String.format(
