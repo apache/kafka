@@ -612,7 +612,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             int consumerTaskIndex = 0;
 
-            for (final String consumer : consumers.keySet()) {
+            for (final Map.Entry<String, Integer> consumerSubscriptionVersion : consumers.entrySet()) {
+                final String consumer = consumerSubscriptionVersion.getKey();
+                final int consumerVersion = consumerSubscriptionVersion.getValue();
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final List<AssignedPartition> assignedPartitions = new ArrayList<>();
 
@@ -643,7 +645,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
                 final int assignmentVersion = sendLatestVersionToAllClients ?
                     minSupportedMetadataVersion :
-                    consumers.get(consumer);
+                    consumerVersion;
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(
@@ -674,7 +676,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // assign previously assigned tasks to "old consumers"
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             final Map<String, Integer> consumers = clientMetadata.consumers;
-            for (final String consumerId : consumers.keySet()) {
+            for (final Map.Entry<String, Integer> consumerSubscriptionVersion : consumers.entrySet()) {
+                final String consumerId = consumerSubscriptionVersion.getKey();
+                final int consumerVersion = consumerSubscriptionVersion.getValue();
 
                 if (futureConsumers.contains(consumerId)) {
                     continue;
@@ -696,7 +700,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 assignment.put(consumerId, new Assignment(
                     assignedPartitions,
                     new AssignmentInfo(
-                        consumers.get(consumerId),
+                        consumerVersion,
                         activeTasks,
                         standbyTasks,
                         partitionsByHostState,
