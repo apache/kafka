@@ -621,7 +621,7 @@ public class InternalTopologyBuilder {
 
     public synchronized void maybeUpdateCopartitionSourceGroups(final String replacedNodeName,
                                                                 final String optimizedNodeName) {
-        for (Set<String> copartitionSourceGroup : copartitionSourceGroups) {
+        for (final Set<String> copartitionSourceGroup : copartitionSourceGroups) {
             if (copartitionSourceGroup.contains(replacedNodeName)) {
                 copartitionSourceGroup.remove(replacedNodeName);
                 copartitionSourceGroup.add(optimizedNodeName);
