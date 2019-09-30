@@ -41,6 +41,7 @@ import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.Pool;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
@@ -98,7 +99,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ReplicaFetcherThreadBenchmark {
     @Param({"100", "500", "1000", "5000"})
-    private static String partitionCount;
+    private int partitionCount;
 
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
@@ -137,12 +138,19 @@ public class ReplicaFetcherThreadBenchmark {
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, OffsetAndEpoch> offsetAndEpochs = new scala.collection.mutable.HashMap<>();
-        for (int i = 0; i < Integer.parseInt(partitionCount); i++) {
+        for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
             List<Integer> replicas = Arrays.asList(0, 1, 2);
-            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState(
-                    0, 0, 0, replicas, 1, replicas, true);
+            LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+                    .setControllerEpoch(0)
+                    .setLeader(0)
+                    .setLeaderEpoch(0)
+                    .setIsr(replicas)
+                    .setZkVersion(1)
+                    .setReplicas(replicas)
+                    .setIsNew(true);
+
             PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
             Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
