@@ -229,7 +229,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // outstanding data to be applied.
     private volatile long offset;
     // The most recently read session key, to use for validating internal REST requests.
-    private SessionKey sessionKey;
+    private volatile SessionKey sessionKey;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
     private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();

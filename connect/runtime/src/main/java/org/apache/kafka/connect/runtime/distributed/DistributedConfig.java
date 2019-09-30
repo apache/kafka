@@ -185,17 +185,17 @@ public class DistributedConfig extends WorkerConfig {
                     GROUP_ID_DOC)
             .define(SESSION_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    10000,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(10)),
                     ConfigDef.Importance.HIGH,
                     SESSION_TIMEOUT_MS_DOC)
             .define(REBALANCE_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    60000,
+                    Math.toIntExact(TimeUnit.MINUTES.toMillis(1)),
                     ConfigDef.Importance.HIGH,
                     REBALANCE_TIMEOUT_MS_DOC)
             .define(HEARTBEAT_INTERVAL_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    3000,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(3)),
                     ConfigDef.Importance.HIGH,
                     HEARTBEAT_INTERVAL_MS_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
@@ -229,7 +229,7 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
             .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    1000L,
+                    TimeUnit.SECONDS.toMillis(1),
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
@@ -241,14 +241,14 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    40 * 1000,
+                    Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
                     atLeast(0),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
                     /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
             .define(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    9 * 60 * 1000,
+                    TimeUnit.MINUTES.toMillis(9),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             // security support
@@ -334,47 +334,41 @@ public class DistributedConfig extends WorkerConfig {
                     SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC)
             .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
                     ConfigDef.Type.INT,
-                INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
+                    INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
-                INTER_WORKER_KEY_TTL_MS_MS_DOC)
+                    INTER_WORKER_KEY_TTL_MS_MS_DOC)
             .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> validateKeyAlgorithm(name, (String) value),
                         () -> "Any KeyGenerator algorithm supported by the worker JVM"
                     ),
                     ConfigDef.Importance.LOW,
-                INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
             .define(INTER_WORKER_KEY_SIZE_CONFIG,
                     ConfigDef.Type.INT,
-                INTER_WORKER_KEY_SIZE_DEFAULT,
+                    INTER_WORKER_KEY_SIZE_DEFAULT,
                     ConfigDef.Importance.LOW,
-                INTER_WORKER_KEY_SIZE_DOC)
+                    INTER_WORKER_KEY_SIZE_DOC)
             .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
+                    INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> validateSignatureAlgorithm(name, (String) value),
                         () -> "Any MAC algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
-                INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
+                    INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
             .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
                     ConfigDef.Type.LIST,
-                INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
                     ConfigDef.LambdaValidator.with(
-                        (name, value) -> {
-                            List<String> algorithms = (List<String>) value;
-                            if (algorithms.isEmpty()) {
-                                throw new ConfigException(name, value, "At least one signature verification algorithm must be provided");
-                            }
-                            algorithms.forEach(algorithm -> validateSignatureAlgorithm(name, algorithm));
-                        },
+                        (name, value) -> validateSignatureAlgorithms(name, (List<String>) value),
                         () -> "A list of one or more MAC algorithms, each supported by the worker JVM"
                     ),
                     ConfigDef.Importance.LOW,
-                INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
 
     @Override
     public Integer getRebalanceTimeout() {
@@ -416,6 +410,17 @@ public class DistributedConfig extends WorkerConfig {
                 String.format("Key generation algorithm must be present in %s list", INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG)
             );
         }
+    }
+
+    private static void validateSignatureAlgorithms(String configName, List<String> algorithms) {
+        if (algorithms.isEmpty()) {
+            throw new ConfigException(
+                configName,
+                algorithms,
+                "At least one signature verification algorithm must be provided"
+            );
+        }
+        algorithms.forEach(algorithm -> validateSignatureAlgorithm(configName, algorithm));
     }
 
     private static void validateSignatureAlgorithm(String configName, String algorithm) {

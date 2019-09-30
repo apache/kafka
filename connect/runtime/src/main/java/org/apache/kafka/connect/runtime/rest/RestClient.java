@@ -112,7 +112,7 @@ public class RestClient {
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
-                if (sessionKey != null) {
+                if (sessionKey != null && requestSignatureAlgorithm != null) {
                     InternalRequestSignature.addToRequest(
                         sessionKey,
                         serializedBody.getBytes(StandardCharsets.UTF_8),

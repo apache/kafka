@@ -99,8 +99,8 @@ public class ClusterConfigState {
     }
 
     /**
-     * Get the latest session key from the config state; may be null if no key has been read yet
-     * @return the {@link SessionKey session key}
+     * Get the latest session key from the config state
+     * @return the {@link SessionKey session key}; may be null if no key has been read yet
      */
     public SessionKey sessionKey() {
         return sessionKey;

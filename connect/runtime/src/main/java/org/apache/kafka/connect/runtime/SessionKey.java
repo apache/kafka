@@ -47,6 +47,8 @@ public class SessionKey {
     }
 
     /**
+     * Get the time at which the key was generated.
+     *
      * @return the time at which the key was generated
      */
     public long creationTimestamp() {

@@ -317,7 +317,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         long now = time.milliseconds();
 
-        if (checkAndMaybeRotateSessionKey(now)) {
+        if (checkForKeyRotation(now)) {
             keyExpiration = Long.MAX_VALUE;
             configBackingStore.putSessionKey(new SessionKey(
                 keyGenerator.generateKey(),
@@ -411,7 +411,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private synchronized boolean checkAndMaybeRotateSessionKey(long now) {
+    private synchronized boolean checkForKeyRotation(long now) {
         if (internalRequestValidationEnabled()) {
             if (isLeader()) {
                 if (sessionKey == null) {
@@ -835,8 +835,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 requestValidationError = new BadRequestException("Internal request missing required signature");
             } else if (!keySignatureVerificationAlgorithms.contains(requestSignature.keyAlgorithm())) {
                 requestValidationError = new BadRequestException(String.format(
-                    "The key signing algorithm '%s' is not allowed for this worker; the permitted algorithms are: %s. "
-                        + "This worker should be reconfigured to use a permitted signature algorithm and then restarted.",
+                    "This worker does not support the '%s' key signing algorithm used by other workers. " 
+                        + "This worker is currently configured to use: %s. " 
+                        + "Check that all workers' configuration files permit the same set of signature algorithms, " 
+                        + "and correct any misconfigured worker and restart it.",
                     requestSignature.keyAlgorithm(),
                     keySignatureVerificationAlgorithms
                 ));
@@ -1228,9 +1230,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // never makes progress. The retry has to run through a DistributedHerderRequest since this callback could be happening
                 // from the HTTP request forwarding thread.
                 if (error != null) {
-                    if (error instanceof ConnectRestException
-                        && ((ConnectRestException) error).statusCode() == Response.Status.FORBIDDEN.getStatusCode()
-                        && initialRequestTime <= time.milliseconds() + TimeUnit.MINUTES.toMillis(1)) {
+                    if (isPossibleExpiredKeyException(initialRequestTime, error)) {
                         log.debug("Failed to reconfigure connector's tasks, possibly due to expired session key. Retrying after backoff");
                     } else {
                         log.error("Failed to reconfigure connector's tasks, retrying after backoff:", error);
@@ -1253,6 +1253,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
             }
         });
+    }
+
+    boolean isPossibleExpiredKeyException(long initialRequestTime, Throwable error) {
+        if (error instanceof ConnectRestException) {
+            ConnectRestException connectError = (ConnectRestException) error;
+            return connectError.statusCode() == Response.Status.FORBIDDEN.getStatusCode()
+                && initialRequestTime + TimeUnit.MINUTES.toMillis(1) >= time.milliseconds();
+        }
+        return false;
     }
 
     // Updates configurations for a connector by requesting them from the connector, filling in parameters provided
@@ -1310,7 +1319,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     return;
                                 }
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl, "/connectors/" + connName + "/tasks");
-                                log.info("Forwarding task configurations for connector {} to leader", connName);
+                                log.trace("Forwarding task configurations for connector {} to leader", connName);
                                 RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config, sessionKey, requestSignatureAlgorithm);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
@@ -1430,6 +1439,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.sessionKey = sessionKey.key();
+                // Track the expiration of the key if and only if this worker is the leader
+                // Followers will receive rotated keys from the follower and won't be responsible for
+                // tracking expiration and distributing new keys themselves
                 if (isLeader() && keyRotationIntervalMs > 0) {
                     DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
                 }

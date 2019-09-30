@@ -38,6 +38,13 @@ public class InternalRequestSignature {
     private final Mac mac;
     private final byte[] requestSignature;
 
+    /**
+     * Add a signature to a request.
+     * @param key the key to sign the request with; may not be null
+     * @param requestBody the body of the request; may not be null
+     * @param signatureAlgorithm the algorithm to use to sign the request; may not be null
+     * @param request the request to add the signature to; may not be null
+     */
     public static void addToRequest(SecretKey key, byte[] requestBody, String signatureAlgorithm, Request request) {
         Mac mac;
         try {
@@ -50,6 +57,13 @@ public class InternalRequestSignature {
                .header(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER, signatureAlgorithm);
     }
 
+    /**
+     * Extract a signature from a request.
+     * @param requestBody the body of the request; may not be null
+     * @param headers the headers for the request; may be null
+     * @return the signature extracted from the request, or null if one or more request signature
+     * headers was not present
+     */
     public static InternalRequestSignature fromHeaders(byte[] requestBody, HttpHeaders headers) {
         if (headers == null) {
             return null;

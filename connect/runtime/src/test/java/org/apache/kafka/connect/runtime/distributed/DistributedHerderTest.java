@@ -85,6 +85,7 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNE
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1734,6 +1735,26 @@ public class DistributedHerderTest {
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testKeyExceptionDetection() {
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new RuntimeException()
+        ));
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new BadRequestException("")
+        ));
+        assertFalse(herder.isPossibleExpiredKeyException(
+            time.milliseconds() - TimeUnit.MINUTES.toMillis(2),
+            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+        ));
+        assertTrue(herder.isPossibleExpiredKeyException(
+            time.milliseconds(),
+            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+        ));
     }
 
     @Test
