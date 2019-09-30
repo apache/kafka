@@ -59,8 +59,6 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         return buffer;
     }
 
-    protected abstract Message data();
-
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {

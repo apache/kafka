@@ -138,8 +138,6 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         return data().size(new ObjectSerializationCache(), version);
     }
 
-    protected abstract Message data();
-
     protected abstract Struct toStruct();
 
     public String toString(boolean verbose) {
