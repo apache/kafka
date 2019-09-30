@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.Test
 import org.junit.Assert._
 
-class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
+class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupCommandTest {
 
   def getArgs(group: String, topic: String): Array[String] = {
     Array(
@@ -50,9 +50,7 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
   def testDeleteOffsetsNonExistingGroup(): Unit = {
     val group = "missing.group"
     val topic = "foo:1"
-
     val service = getConsumerGroupService(getArgs(group, topic))
-
     try {
       service.deleteOffsets(group, List(topic))
       fail("GroupIdNotFoundException should have been raised")
@@ -64,100 +62,116 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteOffsetsWithTopicPartition(): Unit = {
+  def testDeleteOffsetsOfSableConsumerGroupWithTopicPartition(): Unit = {
+    testWithStableConsumerGroup(topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
+  }
+
+  @Test
+  def testDeleteOffsetsOfSableConsumerGroupWithTopicOnly(): Unit = {
+    testWithStableConsumerGroup(topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
+  }
+
+  @Test
+  def testDeleteOffsetsOfSableConsumerGroupWithUnknownTopicPartition(): Unit = {
+    testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  @Test
+  def testDeleteOffsetsOfSableConsumerGroupWithUnknownTopicOnly(): Unit = {
+    testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  @Test
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(): Unit = {
+    testWithEmptyConsumerGroup(topic, 0, 0, Errors.NONE)
+  }
+
+  @Test
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(): Unit = {
+    testWithEmptyConsumerGroup(topic, -1, 0, Errors.NONE)
+  }
+
+  @Test
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(): Unit = {
+    testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  @Test
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(): Unit = {
+    testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  private def testWithStableConsumerGroup(inputTopic: String,
+                                          inputPartition: Int,
+                                          expectedPartition: Int,
+                                          expectedError: Errors): Unit = {
+    testWithConsumerGroup(
+      withStableConsumerGroup,
+      inputTopic,
+      inputPartition,
+      expectedPartition,
+      expectedError)
+  }
+
+  private def testWithEmptyConsumerGroup(inputTopic: String,
+                                         inputPartition: Int,
+                                         expectedPartition: Int,
+                                         expectedError: Errors): Unit = {
+    testWithConsumerGroup(
+      withEmptyConsumerGroup,
+      inputTopic,
+      inputPartition,
+      expectedPartition,
+      expectedError)
+  }
+
+  private def testWithConsumerGroup(withConsumerGroup: (=> Unit) => Unit,
+                                    inputTopic: String,
+                                    inputPartition: Int,
+                                    expectedPartition: Int,
+                                    expectedError: Errors): Unit = {
+    produceRecord()
+    withConsumerGroup {
+      val topic = if (inputPartition >= 0) inputTopic + ":" + inputPartition else inputTopic
+      val service = getConsumerGroupService(getArgs(group, topic))
+      val partitions = service.deleteOffsets(group, List(topic))
+      val tp = new TopicPartition(inputTopic, expectedPartition)
+      if (expectedError == Errors.NONE)
+        assertNull(partitions(tp))
+      else
+        assertEquals(expectedError.exception, partitions(tp).getCause)
+    }
+  }
+
+  private def produceRecord(): Unit = {
     val producer = createProducer()
     try {
       producer.send(new ProducerRecord(topic, 0, null, null)).get()
     } finally {
       Utils.closeQuietly(producer, "producer")
     }
+  }
 
+  private def withStableConsumerGroup(body: => Unit): Unit = {
     val consumer = createConsumer()
     try {
       TestUtils.subscribeAndWaitForRecords(this.topic, consumer)
       consumer.commitSync()
-
-      val topic = this.topic + ":0"
-
-      val service = getConsumerGroupService(getArgs(group, topic))
-
-      val partitions = service.deleteOffsets(group, List(topic))
-      // Unknown because the consumer has not committed any offsets yet.
-      assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(this.topic, 0)).getCause)
+      body
     } finally {
       Utils.closeQuietly(consumer, "consumer")
     }
   }
 
-  @Test
-  def testDeleteOffsetsWithTopic(): Unit = {
-    val producer = createProducer()
-    try {
-      producer.send(new ProducerRecord(topic, 0, null, null)).get()
-    } finally {
-      Utils.closeQuietly(producer, "producer")
-    }
-
-    val consumer = createConsumer()
-    try {
-      TestUtils.subscribeAndWaitForRecords(topic, consumer)
-      consumer.commitSync()
-
-      val service = getConsumerGroupService(getArgs(group, topic))
-
-      val partitions = service.deleteOffsets(group, List(topic))
-      assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(topic, 0)).getCause)
-    } finally {
-      Utils.closeQuietly(consumer, "consumer")
-    }
-  }
-
-  @Test
-  def testDeleteOffsetsWithTopicEmpty(): Unit = {
-    val producer = createProducer()
-    try {
-      producer.send(new ProducerRecord(topic, 0, null, null)).get()
-    } finally {
-      Utils.closeQuietly(producer, "producer")
-    }
-
-    val consumer = createConsumer()
-    try {
-      TestUtils.subscribeAndWaitForRecords(topic, consumer)
-      consumer.commitSync()
-    } finally {
-      Utils.closeQuietly(consumer, "consumer")
-    }
-
-    val service = getConsumerGroupService(getArgs(group, topic))
-
-    val partitions = service.deleteOffsets(group, List(topic))
-    assertNull(partitions(new TopicPartition(topic, 0)))
-  }
-
-  @Test
-  def testDeleteOffsetsWithUnknownTopic(): Unit = {
-    val producer = createProducer()
-    try {
-      producer.send(new ProducerRecord(topic, 0, null, null)).get()
-    } finally {
-      Utils.closeQuietly(producer, "producer")
-    }
-
+  private def withEmptyConsumerGroup(body: => Unit): Unit = {
     val consumer = createConsumer()
     try {
       TestUtils.subscribeAndWaitForRecords(this.topic, consumer)
       consumer.commitSync()
-
-      val topic = "foobar"
-
-      val service = getConsumerGroupService(getArgs(group, topic))
-
-      val partitions = service.deleteOffsets(group, List(topic))
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception, partitions(new TopicPartition(topic, -1)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")
     }
+    body
   }
 
   private def createProducer(config: Properties = new Properties()): KafkaProducer[Array[Byte], Array[Byte]] = {
