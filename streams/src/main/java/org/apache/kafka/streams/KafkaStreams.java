@@ -141,7 +141,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
-    private final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread;
+    private ScheduledExecutorService rocksDBMetricsRecordingTriggerThread;
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
 
@@ -763,11 +763,19 @@ public class KafkaStreams implements AutoCloseable {
             return thread;
         });
 
-        rocksDBMetricsRecordingTriggerThread = Executors.newSingleThreadScheduledExecutor(r -> {
-            final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
-            thread.setDaemon(true);
-            return thread;
-        });
+        rocksDBMetricsRecordingTriggerThread = maybeGetRocksDBMetricsRecordingTriggerThread(clientId, config);
+    }
+
+    private static ScheduledExecutorService maybeGetRocksDBMetricsRecordingTriggerThread(final String clientId,
+                                                                                         final StreamsConfig config) {
+        if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+            return Executors.newSingleThreadScheduledExecutor(r -> {
+                final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
+                thread.setDaemon(true);
+                return thread;
+            });
+        }
+        return null;
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
@@ -921,6 +929,9 @@ public class KafkaStreams implements AutoCloseable {
                 setState(State.NOT_RUNNING);
             }, "kafka-streams-close-thread");
 
+            if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+                rocksDBMetricsRecordingTriggerThread.shutdownNow();
+            }
             shutdownThread.setDaemon(true);
             shutdownThread.start();
         }

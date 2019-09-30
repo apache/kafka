@@ -23,6 +23,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -104,8 +105,6 @@ public class KafkaStreamsTest {
     private StreamThread streamThreadTwo;
     @Mock
     private GlobalStreamThread globalStreamThread;
-    @Mock
-    private ScheduledExecutorService cleanupSchedule;
     @Mock
     private Metrics metrics;
 
@@ -672,32 +671,84 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsDebug() {
+        PowerMock.mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = EasyMock.niceMock(ScheduledExecutorService.class);
+        final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread =
+            EasyMock.mock(ScheduledExecutorService.class);
+        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
+            anyObject(ThreadFactory.class)
+        )).andReturn(cleanupSchedule);
+        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
+            anyObject(ThreadFactory.class)
+        )).andReturn(rocksDBMetricsRecordingTriggerThread);
+        EasyMock.expect(rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
+            EasyMock.anyObject(RocksDBMetricsRecordingTrigger.class),
+            EasyMock.eq(0L),
+            EasyMock.eq(1L),
+            EasyMock.eq(TimeUnit.MINUTES)
+        )).andReturn(null);
+        EasyMock.expect(rocksDBMetricsRecordingTriggerThread.shutdownNow()).andReturn(null);
+        PowerMock.replay(Executors.class);
+        PowerMock.replay(rocksDBMetricsRecordingTriggerThread);
+        PowerMock.replay(cleanupSchedule);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("topic", Materialized.as("store"));
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.DEBUG.name());
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+        }
+
+        PowerMock.verify(Executors.class);
+        PowerMock.verify(rocksDBMetricsRecordingTriggerThread);
+    }
+
+    @Test
+    public void shouldNotTriggerRecordingOfRocksDBMetricsIfRecordingLevelIsInfo() {
+        PowerMock.mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = EasyMock.niceMock(ScheduledExecutorService.class);
+        final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread =
+            EasyMock.mock(ScheduledExecutorService.class);
+        EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
+            anyObject(ThreadFactory.class)
+        )).andReturn(cleanupSchedule);
+        PowerMock.replay(Executors.class, rocksDBMetricsRecordingTriggerThread, cleanupSchedule);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table("topic", Materialized.as("store"));
+        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, RecordingLevel.INFO.name());
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+        }
+
+        PowerMock.verify(Executors.class, rocksDBMetricsRecordingTriggerThread);
+    }
+
+    @Test
     public void shouldCleanupOldStateDirs() throws Exception {
         PowerMock.mockStatic(Executors.class);
+        final ScheduledExecutorService cleanupSchedule = EasyMock.mock(ScheduledExecutorService.class);
         EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
             anyObject(ThreadFactory.class)
         )).andReturn(cleanupSchedule).anyTimes();
-
-        cleanupSchedule.scheduleAtFixedRate(
+        EasyMock.expect(cleanupSchedule.scheduleAtFixedRate(
             EasyMock.anyObject(Runnable.class),
             EasyMock.eq(1L),
             EasyMock.eq(1L),
             EasyMock.eq(TimeUnit.MILLISECONDS)
-        );
-        EasyMock.expectLastCall().andReturn(null);
-        cleanupSchedule.shutdownNow();
-        EasyMock.expectLastCall().andReturn(null);
-
+        )).andReturn(null);
+        EasyMock.expect(cleanupSchedule.shutdownNow()).andReturn(null);
         PowerMock.expectNew(StateDirectory.class,
             anyObject(StreamsConfig.class),
             anyObject(Time.class),
             EasyMock.eq(true)
         ).andReturn(stateDirectory);
-
         PowerMock.replayAll(Executors.class, cleanupSchedule, stateDirectory);
 
         props.setProperty(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG, "1");
-
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table("topic", Materialized.as("store"));
 
@@ -705,7 +756,7 @@ public class KafkaStreamsTest {
             streams.start();
         }
 
-        PowerMock.verifyAll();
+        PowerMock.verify(Executors.class, cleanupSchedule);
     }
 
     @Test
