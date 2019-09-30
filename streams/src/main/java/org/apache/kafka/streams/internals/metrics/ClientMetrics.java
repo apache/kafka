@@ -41,7 +41,9 @@ public class ClientMetrics {
 
     static {
         final Properties props = new Properties();
-        try (InputStream resourceStream = ClientMetrics.class.getResourceAsStream("/kafka/kafka-version.properties")) {
+        try (InputStream resourceStream = ClientMetrics.class.getResourceAsStream(
+            "/kafka/kafka-streams-version.properties")) {
+
             props.load(resourceStream);
         } catch (final Exception exception) {
             log.warn("Error while loading kafka-streams-version.properties: {}", exception.getMessage());

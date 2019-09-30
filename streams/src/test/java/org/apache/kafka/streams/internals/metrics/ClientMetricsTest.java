@@ -43,6 +43,10 @@ public class ClientMetricsTest {
         void addMetric(final StreamsMetricsImpl streamsMetrics, final String value);
     }
 
+    /*
+     * This test may fail when executed from a IDE since it expects the /kafka/kafka-streams-version.properties on the
+     * class path.
+     */
     @Test
     public void shouldAddVersionMetric() {
         final String name = "version";
@@ -50,6 +54,10 @@ public class ClientMetricsTest {
         setUpAndVerifyMetricOneParam(name, description, ClientMetrics::addVersionMetric);
     }
 
+    /*
+     * This test may fail when executed from a IDE since it expects the /kafka/kafka-streams-version.properties on the
+     * class path.
+     */
     @Test
     public void shouldAddCommitIdMetric() {
         final String name = "commit-id";
