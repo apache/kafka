@@ -65,6 +65,8 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
+
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
  */
@@ -134,7 +136,7 @@ public class RestServer {
 
         if (adminListeners != null && !adminListeners.isEmpty()) {
             for (String adminListener : adminListeners) {
-                Connector conn = createConnector(adminListener, ADMIN_SERVER_CONNECTOR_NAME);
+                Connector conn = createConnector(adminListener, true);
                 jettyServer.addConnector(conn);
                 log.info("Added admin connector for {}", adminListener);
             }
@@ -142,16 +144,16 @@ public class RestServer {
     }
 
     /**
-     * Creates Jetty connector according to configuration
+     * Creates regular (non-admin) Jetty connector according to configuration
      */
     public Connector createConnector(String listener) {
-        return createConnector(listener, null);
+        return createConnector(listener, false);
     }
 
     /**
      * Creates Jetty connector according to configuration
      */
-    public Connector createConnector(String listener, String name) {
+    public Connector createConnector(String listener, boolean isAdmin) {
         Matcher listenerMatcher = LISTENER_PATTERN.matcher(listener);
 
         if (!listenerMatcher.matches())
@@ -168,16 +170,25 @@ public class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
+            SslContextFactory ssl;
+            if (isAdmin) {
+                ssl = SSLUtils.createServerSideSslContextFactory(config, ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
+            } else {
+                ssl = SSLUtils.createServerSideSslContextFactory(config);
+            }
             connector = new ServerConnector(jettyServer, ssl);
-            if (name == null) connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
+            if (!isAdmin) {
+                connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
+            }
         } else {
             connector = new ServerConnector(jettyServer);
-            if (name == null) connector.setName(String.format("%s_%s%d", PROTOCOL_HTTP, hostname, port));
+            if (!isAdmin) {
+                connector.setName(String.format("%s_%s%d", PROTOCOL_HTTP, hostname, port));
+            }
         }
 
-        if (name != null) {
-            connector.setName(name);
+        if (isAdmin) {
+            connector.setName(ADMIN_SERVER_CONNECTOR_NAME);
         }
 
         if (!hostname.isEmpty())
@@ -228,14 +239,14 @@ public class RestServer {
         if (adminListeners == null) {
             log.info("Adding admin resources to main listener");
             adminResourceConfig = resourceConfig;
-            addAdminResources(adminResourceConfig);
+            adminResourceConfig.register(new LoggingResource());
         } else if (adminListeners.size() > 0) {
             // TODO: we need to check if these listeners are same as 'listeners'
             // TODO: the following code assumes that they are different
             log.info("Adding admin resources to admin listener");
             adminResourceConfig = new ResourceConfig();
             adminResourceConfig.register(new JacksonJsonProvider());
-            addAdminResources(adminResourceConfig);
+            adminResourceConfig.register(new LoggingResource());
             adminResourceConfig.register(ConnectExceptionMapper.class);
         } else {
             log.info("Skipping adding admin resources");
@@ -245,16 +256,22 @@ public class RestServer {
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
+        List<Handler> contextHandlers = new ArrayList<>();
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         context.setContextPath("/");
         context.addServlet(servletHolder, "/*");
+        contextHandlers.add(context);
 
-        ServletContextHandler adminContext = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        ServletHolder adminServletHolder = new ServletHolder(new ServletContainer(adminResourceConfig));
-        adminContext.setContextPath("/");
-        adminContext.addServlet(adminServletHolder, "/*");
-        adminContext.setVirtualHosts(new String[]{"@Admin"});
+        ServletContextHandler adminContext = null;
+        if (adminResourceConfig != resourceConfig) {
+            adminContext = new ServletContextHandler(ServletContextHandler.SESSIONS);
+            ServletHolder adminServletHolder = new ServletHolder(new ServletContainer(adminResourceConfig));
+            adminContext.setContextPath("/");
+            adminContext.addServlet(adminServletHolder, "/*");
+            adminContext.setVirtualHosts(new String[]{"@" + ADMIN_SERVER_CONNECTOR_NAME});
+            contextHandlers.add(adminContext);
+        }
 
         String allowedOrigins = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG);
         if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
@@ -274,7 +291,10 @@ public class RestServer {
         CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
         requestLogHandler.setRequestLog(requestLog);
 
-        handlers.setHandlers(new Handler[]{context, adminContext, new DefaultHandler(), requestLogHandler});
+        contextHandlers.add(new DefaultHandler());
+        contextHandlers.add(requestLogHandler);
+
+        handlers.setHandlers(contextHandlers.toArray(new Handler[]{}));
         try {
             context.start();
         } catch (Exception e) {
@@ -283,6 +303,7 @@ public class RestServer {
 
         if (adminResourceConfig != resourceConfig) {
             try {
+                log.debug("Starting admin context");
                 adminContext.start();
             } catch (Exception e) {
                 throw new ConnectException("Unable to initialize Admin REST resources", e);
@@ -290,10 +311,6 @@ public class RestServer {
         }
 
         log.info("REST resources initialized; server is started and ready to handle requests");
-    }
-
-    private void addAdminResources(ResourceConfig resourceConfig) {
-        resourceConfig.register(new LoggingResource());
     }
 
     public URI serverUrl() {

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.admin;
 
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -32,7 +33,6 @@ import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,20 +56,18 @@ public class LoggingResource {
      */
     @GET
     @Path("/")
+    @SuppressWarnings("unchecked")
     public Response listLoggers() {
-        Enumeration en = LogManager.getCurrentLoggers();
         Map<String, Map<String, String>> loggers = new TreeMap<>();
-        while (en.hasMoreElements()) {
-            Logger current = (Logger) en.nextElement();
-            // exclude loggers that do not have a specific level set
-            if (current.getLevel() != null) {
-                loggers.put(current.getName(), levelToMap(current.getLevel()));
-            }
-        }
+        Enumeration<Logger> enumeration = LogManager.getCurrentLoggers();
+        Collections.list(enumeration)
+                .stream()
+                .filter(logger -> logger.getLevel() != null)
+                .forEach(logger -> loggers.put(logger.getName(), levelToMap(logger)));
 
         Logger root = LogManager.getRootLogger();
         if (root.getLevel() != null) {
-            loggers.put(ROOT_LOGGER_NAME, levelToMap(root.getLevel()));
+            loggers.put(ROOT_LOGGER_NAME, levelToMap(root));
         }
 
         return Response.ok(loggers).build();
@@ -88,6 +86,7 @@ public class LoggingResource {
 
         Enumeration en = LogManager.getCurrentLoggers();
         Logger logger = null;
+        // search within existing loggers for the given name.
         while (en.hasMoreElements()) {
             Logger l = (Logger) en.nextElement();
             if (namedLogger.equals(l.getName())) {
@@ -98,17 +97,7 @@ public class LoggingResource {
         if (logger == null) {
             throw new NotFoundException("logger " + namedLogger + " not found.");
         } else {
-            Map<String, String> levelMap = new HashMap<>();
-
-            String level;
-            if (logger.getLevel() == null) {
-                level = String.valueOf(logger.getEffectiveLevel());
-            } else {
-                level = String.valueOf(logger.getLevel());
-            }
-
-            levelMap.put("level", level);
-            return Response.ok(levelMap).build();
+            return Response.ok(effLevelToMap(logger)).build();
         }
     }
 
@@ -127,7 +116,9 @@ public class LoggingResource {
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");
-        Objects.requireNonNull(desiredLevelStr, "desired level was not specified in PUT request.");
+        if (desiredLevelStr == null) {
+            throw new BadRequestException("Desired 'level' parameter was not specified in request.");
+        }
 
         Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
         if (level == null) {
@@ -167,7 +158,29 @@ public class LoggingResource {
         return Response.ok(modifiedLoggerNames).build();
     }
 
-    private static Map<String, String> levelToMap(Level level) {
+    /**
+     *
+     * Map representation of a logger's effective log level.
+     *
+     * @param logger a non-null log4j logger
+     * @return a singleton map whose key is level and the value is the string representation of the logger's effective log level.
+     */
+    private static Map<String, String> effLevelToMap(Logger logger) {
+        Level level = logger.getLevel();
+        if (level == null) {
+            level = logger.getEffectiveLevel();
+        }
         return Collections.singletonMap("level", String.valueOf(level));
+    }
+
+    /**
+     *
+     * Map representation of a logger's log level.
+     *
+     * @param logger a non-null log4j logger
+     * @return a singleton map whose key is level and the value is the string representation of the logger's log level.
+     */
+    private static Map<String, String> levelToMap(Logger logger) {
+        return Collections.singletonMap("level", String.valueOf(logger.getLevel()));
     }
 }

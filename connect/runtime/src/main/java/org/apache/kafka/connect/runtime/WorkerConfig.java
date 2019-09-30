@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -191,6 +192,8 @@ public class WorkerConfig extends AbstractConfig {
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
             " The default behavior is to use the regular listener (specified by the 'listeners' property).";
+    protected static final List<String> ADMIN_LISTENERS_DEFAULT = null;
+    public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
     protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
@@ -305,7 +308,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
                         Importance.LOW, REST_EXTENSION_CLASSES_DOC)
                 .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
-                        Importance.LOW, ADMIN_LISTENERS_DOC)
+                        new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
     }
@@ -381,6 +384,33 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
+    }
+
+    private static class AdminListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+
+            if (!(value instanceof List)) {
+                throw new ConfigException("Invalid value type (list expected).");
+            }
+
+            List items = (List) value;
+            if (items.isEmpty()) {
+                return;
+            }
+
+            for (Object item: items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for admin listener (expected String).");
+                }
+                if (((String) item).length() == 0) {
+                    throw new ConfigException("Empty listener found when parsing list.");
+                }
+            }
+        }
     }
 
 }
