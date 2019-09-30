@@ -39,6 +39,30 @@ public class JsonConverterConfig extends ConverterConfig {
     private static final String SCHEMAS_CACHE_SIZE_DOC = "The maximum number of schemas that can be cached in this converter instance.";
     private static final String SCHEMAS_CACHE_SIZE_DISPLAY = "Schema Cache Size";
 
+    public static final String JSON_FIELD_ORDER_CONFIG = "json.field.order";
+    public static final String JSON_FIELD_ORDER_DEFAULT = "none";
+    private static final String JSON_FIELD_ORDER_DOC = "The order to apply to output fields in json structures. Options are 'none' or "
+            + "'retained'. Default 'none'. If 'retained' the order of json fields on the incoming messages is retained through "
+            + "output. This may be important for some downstream json parsers.";
+    private static final String JSON_FIELD_ORDER_DISPLAY = "JSON Field Order";
+
+    public enum JsonFieldOrder {
+        NONE, RETAINED;
+
+
+        public static JsonFieldOrder maybeValueOf(String string) {
+            if (string != null) {
+                for (JsonFieldOrder value : values()) {
+                    if (string.toUpperCase().equals(value.name())) {
+                        return value;
+                    }
+                }
+            }
+
+            return null;
+        }
+    }
+
     private final static ConfigDef CONFIG;
 
     static {
@@ -49,6 +73,10 @@ public class JsonConverterConfig extends ConverterConfig {
                       orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
+
+
+        CONFIG.define(JSON_FIELD_ORDER_CONFIG, Type.STRING, JSON_FIELD_ORDER_DEFAULT, Importance.HIGH, JSON_FIELD_ORDER_DOC, "Output",
+                      0, Width.MEDIUM, JSON_FIELD_ORDER_DISPLAY);
     }
 
     public static ConfigDef configDef() {
