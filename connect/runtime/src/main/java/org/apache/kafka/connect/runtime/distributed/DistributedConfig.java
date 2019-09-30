@@ -200,7 +200,7 @@ public class DistributedConfig extends WorkerConfig {
                     HEARTBEAT_INTERVAL_MS_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
-                    5 * 60 * 1000,
+                    TimeUnit.MINUTES.toMillis(5),
                     atLeast(0),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METADATA_MAX_AGE_DOC)

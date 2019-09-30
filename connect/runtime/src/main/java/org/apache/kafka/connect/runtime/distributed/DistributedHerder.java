@@ -253,7 +253,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (!internalRequestValidationEnabled(currentProtocolVersion)) {
             log.warn(
                 "Internal request verification will be disabled for this cluster as this worker's {} configuration has been set to '{}'. "
-                    + "If this is not intentional, either remove the {} configuration from the worker config file or change its value "
+                    + "If this is not intentional, either remove the '{}' configuration from the worker config file or change its value "
                     + "to '{}'. If this configuration is left as-is, the cluster will be insecure; for more information, see KIP-507: "
                     + "https://cwiki.apache.org/confluence/display/KAFKA/KIP-507%3A+Securing+Internal+Connect+REST+Endpoints",
                 DistributedConfig.CONNECT_PROTOCOL_CONFIG,
@@ -836,7 +836,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else if (!keySignatureVerificationAlgorithms.contains(requestSignature.keyAlgorithm())) {
                 requestValidationError = new BadRequestException(String.format(
                     "The key signing algorithm '%s' is not allowed for this worker; the permitted algorithms are: %s. "
-                        + "The worker should be reconfigured to use a permitted signature algorithm and then restarted.",
+                        + "This worker should be reconfigured to use a permitted signature algorithm and then restarted.",
                     requestSignature.keyAlgorithm(),
                     keySignatureVerificationAlgorithms
                 ));

@@ -38,7 +38,9 @@ public class SessionKey {
     }
 
     /**
-     * @return the actual cryptographic key to use for request validation; may not be null
+     * Get the cryptographic key to use for request validation.
+     *
+     * @return the cryptographic key; may not be null
      */
     public SecretKey key() {
         return key;
