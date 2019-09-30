@@ -29,6 +29,7 @@ import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
@@ -273,17 +274,17 @@ class ReplicaManager(val config: KafkaConfig,
     }
   )
 
-  private val fetcherLagStats = new FollowerLagStats()
+  private val followerReassignmentLagStats = new FollowerLagStats()
   val reassignmentMaxLagOnLeader = newGauge(
     "ReassignmentMaxLagOnLeader",
     new Gauge[Long] {
-      def value = fetcherLagStats.maxLag()
+      def value = followerReassignmentLagStats.maxLag()
     }
   )
 
   // Visible for testing
   def fetchersMaxLag(): Long = {
-    fetcherLagStats.maxLag()
+    followerReassignmentLagStats.maxLag()
   }
 
   def reassigningPartitionsCount(): Int = {
@@ -1175,7 +1176,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         val deletedPartitions = metadataCache.updateMetadata(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
-        fetcherLagStats.removeStats(deletedPartitions)
+        followerReassignmentLagStats.removeStats(deletedPartitions)
         deletedPartitions
       }
     }
@@ -1288,8 +1289,10 @@ class ReplicaManager(val config: KafkaConfig,
         leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
 
         // remove reassignment lag stats from old leaders and followers
-        fetcherLagStats.removeStats((partitionsBecomeFollower ++ partitionsBecomeLeader)
-          .filter(!_.isReassigning)
+        followerReassignmentLagStats.removeStats(allPartitions.flatMap(f => f._2 match {
+          case Online(partition) => Some(partition)
+          case _ => None
+        }).filter(!_.isReassigning)
           .map(_.topicPartition))
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
@@ -1590,7 +1593,7 @@ class ReplicaManager(val config: KafkaConfig,
               followerFetchTimeMs = readResult.fetchTimeMs,
               leaderEndOffset = readResult.leaderLogEndOffset)) {
               if (partition.isAddingReplica(followerId)) {
-                fetcherLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
+                followerReassignmentLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
               }
               readResult
             } else {

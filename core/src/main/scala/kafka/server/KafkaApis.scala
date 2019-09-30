@@ -736,9 +736,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
           // record any outgoing reassignment rate if the fetch request came from an addingReplica of the partition
           if (fetchRequest.isFromFollower) {
-            val receiverPartition = replicaManager.getPartitionOrException(topicPartition, expectLeader = false)
-            if (receiverPartition.isAddingReplica(fetchRequest.replicaId))
-              brokerTopicStats.updateReassignmentBytesOut(data.records.sizeInBytes, topicPartition)
+            replicaManager.getPartition(topicPartition) match {
+              case HostedPartition.Online(p) => if (p.isAddingReplica(fetchRequest.replicaId))
+                brokerTopicStats.updateReassignmentBytesOut(data.records.sizeInBytes)
+              case _ =>
+            }
           }
         }
         response

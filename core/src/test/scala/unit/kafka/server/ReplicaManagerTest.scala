@@ -21,7 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.api.Request
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
@@ -43,7 +43,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, IsolationLevel, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -1503,7 +1503,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testReassignmentMetricsRecordedCorrectly(): Unit = {
+  def testReassignmentLagStatRemovedWhenReassignmentFinishes(): Unit = {
     val controllerEpoch = 0
     var leaderEpoch = 0
     val leaderEpochIncrement = 1
@@ -1512,19 +1512,28 @@ class ReplicaManagerTest {
     val (rm0, rm1) = prepareDifferentReplicaManagers()
 
     try {
-      // make broker 0 the leader of partition 0
+      // we'll simulate a [0] -> [1,0] reassignment and test
+      // if the fetcher lag stats are removed when the reassignment
+      // completes
       val tp0 = new TopicPartition(topic, 0)
       val partition0Replicas0 = Seq[Integer](0).asJava
       val partition0Replicas01 = Seq[Integer](0, 1).asJava
       val partition0Replicas10 = Seq[Integer](1, 0).asJava
       val partition0Replicas1 = Seq[Integer](1).asJava
 
+      // make broker 0 the leader of partition 0
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
         controllerId, 0, brokerEpoch,
-        collection.immutable.Map(
-          tp0 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 0, leaderEpoch,
-            partition0Replicas0, 0, partition0Replicas0, true)
-        ).asJava,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic())
+          .setPartitionIndex(tp0.partition())
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(0)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(partition0Replicas0)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas0)
+          .setIsNew(true)).asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
@@ -1541,10 +1550,17 @@ class ReplicaManagerTest {
       leaderEpoch += leaderEpochIncrement
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId,
         controllerEpoch, brokerEpoch,
-        collection.immutable.Map(
-          tp0 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 0, leaderEpoch,
-            partition0Replicas0, 1, partition0Replicas01, partition0Replicas1, partition0Replicas0, true)
-        ).asJava,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic())
+          .setPartitionIndex(tp0.partition())
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(0)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(partition0Replicas0)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas01)
+          .setAddingReplicas(partition0Replicas1)
+          .setIsNew(true)).asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
@@ -1557,7 +1573,7 @@ class ReplicaManagerTest {
       assertEquals(0L, rm0.fetchersMaxLag())
       assertEquals(0L, rm1.fetchersMaxLag())
 
-      // there should be no under-replicated partition
+      // there should be no under-replicated partitions
       assertEquals(0, rm0.underReplicatedPartitionCount)
       assertEquals(0, rm1.underReplicatedPartitionCount)
 
@@ -1570,14 +1586,20 @@ class ReplicaManagerTest {
       }
       assertEquals(2, rm0.fetchersMaxLag())
 
-      // simulate that reassignment is complete
+      // simulate that replicas are in ISR and the leader is 1 and the follower is 0
       leaderEpoch += leaderEpochIncrement
       val leaderAndIsrRequest3 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId,
         controllerEpoch, brokerEpoch,
-        collection.immutable.Map(
-          tp0 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 1, leaderEpoch,
-            partition0Replicas10, 2, partition0Replicas10, true)
-        ).asJava,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic())
+          .setPartitionIndex(tp0.partition())
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(1)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(partition0Replicas10)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas10)
+          .setIsNew(true)).asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest3, (_, _) => ())
@@ -1590,6 +1612,95 @@ class ReplicaManagerTest {
       rm0.shutdown()
       rm1.shutdown()
     }
+  }
+
+  @Test
+  def fetcherReassignmentLagStatsRemovedWhenReplicaIsRemoved(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("log0.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
+    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
+    val tp0 = new TopicPartition(topic, 0)
+
+    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+    EasyMock.expect(metadataCache.updateMetadata(EasyMock.anyInt(), EasyMock.anyObject()))
+      .andReturn(List(tp0))
+    EasyMock.replay(metadataCache)
+
+    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""),
+      new BrokerTopicStats, metadataCache, new LogDirFailureChannel(config.logDirs.size))
+
+    val controllerEpoch = 0
+    var leaderEpoch = 0
+    val leaderEpochIncrement = 1
+    val correlationId = 0
+    val controllerId = 0
+
+    val partition0Replicas0 = Seq[Integer](0).asJava
+    val partition0Replicas01 = Seq[Integer](0, 1).asJava
+    val partition0Replicas1 = Seq[Integer](1).asJava
+
+    // make broker 0 the leader of partition 0
+    val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+      controllerId, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic())
+        .setPartitionIndex(tp0.partition())
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(partition0Replicas0)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas0)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
+
+    rm.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
+
+    // Append a couple of messages.
+    for (i <- 1 to 2) {
+      appendRecords(rm, tp0, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+    }
+
+    // put rm0 and rm1 into reassignment state
+    leaderEpoch += leaderEpochIncrement
+    val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId,
+      controllerEpoch, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic())
+        .setPartitionIndex(tp0.partition())
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(0)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(partition0Replicas0)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas01)
+        .setAddingReplicas(partition0Replicas1)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
+
+    rm.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
+
+    // after the fetch the lag should be increased to 2 as 2 messages have been produced
+    val fetchResult = fetchAsFollower(rm, tp0, new PartitionData(0, 0, Int.MaxValue, Optional.empty()))
+    var timeout = 1000L
+    while (!fetchResult.isFired && timeout > 0) {
+      wait(100L)
+      timeout -= 100
+    }
+    assertEquals(2, rm.fetchersMaxLag())
+
+    // we have the lag now and let's simulate that the reassignment ended where tp0 is deleted
+    // so we can remove the lag stats
+    rm.maybeUpdateMetadataCache(0, new UpdateMetadataRequest.Builder(0,0,0,0,
+      Collections.emptyList(), Collections.emptyList()).build(ApiKeys.UPDATE_METADATA.latestVersion()))
+
+    assertEquals(0, rm.fetchersMaxLag())
   }
 
   private def prepareDifferentReplicaManagers(): (ReplicaManager, ReplicaManager) = {

@@ -270,8 +270,8 @@ class Partition(val topicPartition: TopicPartition,
   )
 
   def isUnderReplicated: Boolean = assignmentState match {
-    case OngoingReassignmentState(_, _, originalReplicas, _, isr) => (originalReplicas.size - isr.size) > 0
-    case SimpleAssignmentState(replicas, isr) => (replicas.size - isr.size) > 0
+    case OngoingReassignmentState(_, _, originalReplicas, _, isr) => isLeader && (originalReplicas.size - isr.size) > 0
+    case SimpleAssignmentState(replicas, isr) => isLeader && (replicas.size - isr.size) > 0
   }
 
   def isUnderMinIsr: Boolean = {

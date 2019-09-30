@@ -310,7 +310,7 @@ class BrokerTopicStats {
     }
   }
 
-  def updateReassignmentBytesOut(value: Long, topicPartition: TopicPartition): Unit = {
+  def updateReassignmentBytesOut(value: Long): Unit = {
     allTopicsStats.reassignmentBytesOutPerSec.foreach { metric =>
       metric.mark(value)
     }
