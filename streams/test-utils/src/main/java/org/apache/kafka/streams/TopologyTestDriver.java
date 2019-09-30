@@ -234,6 +234,8 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Create a new test diver instance.
      *
+     * @deprecated use {@link #TopologyTestDriver(Topology, Properties, Instant)}
+     *
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
@@ -427,6 +429,8 @@ public class TopologyTestDriver implements Closeable {
      * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then
      * commit the messages.
      *
+     * @deprecated use methods of {@link TestInputTopic} instead
+     *
      * @param consumerRecord the record to be processed
      */
     @SuppressWarnings("WeakerAccess")
@@ -534,6 +538,8 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Send input messages to the topology and then commit each message individually.
      *
+     * @deprecated use methods of {@link TestInputTopic} instead
+     *
      * @param records a list of records to be processed
      */
     @SuppressWarnings("WeakerAccess")
@@ -548,6 +554,8 @@ public class TopologyTestDriver implements Closeable {
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
      * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
+     *
+     * @deprecated use {@link #advanceWallClockTime(Duration)} instead
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
@@ -579,6 +587,8 @@ public class TopologyTestDriver implements Closeable {
      * Read the next record from the given topic.
      * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
      *
+     * @deprecated use methods of {@link TestOutputTopic} instead
+     *
      * @param topic the name of the topic
      * @return the next record on that topic, or {@code null} if there is no record available
      */
@@ -595,6 +605,8 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Read the next record from the given topic.
      * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
+     *
+     * @deprecated use methods of {@link TestOutputTopic} instead
      *
      * @param topic             the name of the topic
      * @param keyDeserializer   the deserializer for the key type
