@@ -305,6 +305,7 @@ public class StreamsUpgradeTest {
         private FutureAssignmentInfo(final boolean bumpUsedVersion,
                                      final boolean bumpSupportedVersion,
                                      final ByteBuffer bytes) {
+            super(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION);
             this.bumpUsedVersion = bumpUsedVersion;
             this.bumpSupportedVersion = bumpSupportedVersion;
             originalUserMetadata = bytes;

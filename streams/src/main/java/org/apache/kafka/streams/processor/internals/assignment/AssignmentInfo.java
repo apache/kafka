@@ -50,12 +50,20 @@ public class AssignmentInfo {
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-    // used for decoding; don't apply version checks
-    private AssignmentInfo(final int version,
-                           final int latestSupportedVersion) {
-        this.usedVersion = version;
-        this.latestSupportedVersion = latestSupportedVersion;
-        this.errCode = 0;
+    // used for decoding and "future consumer" assignments during version probing
+    public AssignmentInfo(final int version,
+                          final int latestSupportedVersion) {
+        this(version,
+            latestSupportedVersion,
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            0);
+
+        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
+                + "; was: " + version);
+        }
     }
 
     // for testing only
@@ -63,15 +71,6 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, 0);
-    }
-
-    // creates an empty assignment
-    public AssignmentInfo() {
-        this(LATEST_SUPPORTED_VERSION,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            0);
     }
 
     public AssignmentInfo(final int version,
@@ -86,13 +85,12 @@ public class AssignmentInfo {
         }
     }
 
-    // for testing only; don't apply version checks
-    AssignmentInfo(final int version,
-                   final int latestSupportedVersion,
-                   final List<TaskId> activeTasks,
-                   final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                   final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
-                   final int errCode) {
+    public AssignmentInfo(final int version,
+                          final int latestSupportedVersion,
+                          final List<TaskId> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                          final int errCode) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.activeTasks = activeTasks;
