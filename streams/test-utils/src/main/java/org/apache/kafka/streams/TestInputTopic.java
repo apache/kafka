@@ -35,7 +35,7 @@ import java.util.Objects;
  * <pre>{@code
  *     private TestInputTopic<Long, String> inputTopic;
  *     ...
- *     inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde);
+ *     inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerializer, stringSerializer);
  *     ...
  *     inputTopic.pipeInput("Hello");
  * }</pre>
@@ -66,9 +66,9 @@ public class TestInputTopic<K, V> {
      * @param valueSerializer the value serializer
      */
     TestInputTopic(final TopologyTestDriver driver,
-                          final String topicName,
-                           final Serializer<K> keySerializer,
-                           final Serializer<V> valueSerializer) {
+                   final String topicName,
+                   final Serializer<K> keySerializer,
+                   final Serializer<V> valueSerializer) {
         this(driver, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
     }
 
@@ -84,11 +84,11 @@ public class TestInputTopic<K, V> {
      * @param autoAdvance the time increment per record
      */
     TestInputTopic(final TopologyTestDriver driver,
-                             final String topicName,
-                             final Serializer<K> keySerializer,
-                             final Serializer<V> valueSerializer,
-                             final Instant startTimestamp,
-                             final Duration autoAdvance) {
+                   final String topicName,
+                   final Serializer<K> keySerializer,
+                   final Serializer<V> valueSerializer,
+                   final Instant startTimestamp,
+                   final Duration autoAdvance) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         Objects.requireNonNull(keySerializer, "keySerializer cannot be null");

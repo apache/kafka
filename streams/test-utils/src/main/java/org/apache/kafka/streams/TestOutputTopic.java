@@ -39,7 +39,7 @@ import java.util.Objects;
  * <pre>{@code
  *     private TestOutputTopic<String, Long> outputTopic;
  *      ...
- *     outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, longSerde);
+ *     outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringDeserializer, longDeserializer);
  *     ...
  *     assertThat(outputTopic.readValue()).isEqual(1);
  * }</pre>
@@ -63,9 +63,9 @@ public class TestOutputTopic<K, V> {
      * @param valueDeserializer the value deserializer
      */
     TestOutputTopic(final TopologyTestDriver driver,
-                           final String topicName,
-                           final Deserializer<K> keyDeserializer,
-                           final Deserializer<V> valueDeserializer) {
+                    final String topicName,
+                    final Deserializer<K> keyDeserializer,
+                    final Deserializer<V> valueDeserializer) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         this.driver = driver;
@@ -174,10 +174,20 @@ public class TestOutputTopic<K, V> {
         return output;
     }
 
+    /**
+     * Get size of unread record in the topic queue.
+     *
+     * @return size of topic queue
+     */
     public final long getQueueSize() {
         return driver.getQueueSize(topic);
     }
 
+    /**
+     * Verify if the topic queue is empty.
+     *
+     * @return true if no more record in the topic queue
+     */
     public final boolean isEmpty() {
         return driver.isEmpty(topic);
     }

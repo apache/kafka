@@ -169,18 +169,30 @@ public class TestRecord<K, V> {
         return this.recordTime == null ? null : this.recordTime.toEpochMilli();
     }
 
+    /**
+     * @return The headers
+     */
     public Headers getHeaders() {
         return headers;
     }
 
+    /**
+     * @return The key (or null if no key is specified)
+     */
     public K getKey() {
         return key;
     }
 
+    /**
+     * @return The value
+     */
     public V getValue() {
         return value;
     }
 
+    /**
+     * @return The recordTime as Instant
+     */
     public Instant getRecordTime() {
         return recordTime;
     }

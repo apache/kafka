@@ -144,7 +144,7 @@ import java.util.regex.Pattern;
  * Here's an example of an input message on the topic named {@code input-topic}:
  *
  * <pre>{@code
- * TestInputTopic<String, String> inputTopic = driver.createInputTopic("input-topic", stringSerde, stringSerde);
+ * TestInputTopic<String, String> inputTopic = driver.createInputTopic("input-topic", stringSerdeSerializer, stringSerializer);
  * inputTopic.pipeInput("key1", "value1");
  * }</pre>
  *
@@ -157,8 +157,8 @@ import java.util.regex.Pattern;
  * {@link TestOutputTopic#readKeyValue()}  method:
  *
  * <pre>{@code
- * TestOutputTopic<String, String> outputTopic1 = driver.createOutputTopic("output-topic-1", stringSerde, stringSerde);
- * TestOutputTopic<String, String> outputTopic2 = driver.createOutputTopic("output-topic-2", stringSerde, stringSerde);
+ * TestOutputTopic<String, String> outputTopic1 = driver.createOutputTopic("output-topic-1", stringDeserializer, stringDeserializer);
+ * TestOutputTopic<String, String> outputTopic2 = driver.createOutputTopic("output-topic-2", stringDeserializer, stringDeserializer);
  *
  * KeyValue<String, String> record1 = outputTopic1.readKeyValue();
  * KeyValue<String, String> record2 = outputTopic1.readKeyValue();
@@ -616,7 +616,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
 
-    final private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
+    private final Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
         if (outputRecords == null) {
             if (!processorTopology.sinkTopics().contains(topicName)) {
@@ -755,6 +755,12 @@ public class TopologyTestDriver implements Closeable {
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
+    /**
+     * Get size of unread record in the topic queue.
+     *
+     * @param topic
+     * @return size of topic queue
+     */
     final long getQueueSize(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> queue = getRecordsQueue(topic);
         if (queue == null) {
@@ -764,6 +770,12 @@ public class TopologyTestDriver implements Closeable {
         return queue.size();
     }
 
+    /**
+     * Verify if the topic queue is empty.
+     *
+     * @param topic
+     * @return true if no more record in the topic queue
+     */
     final boolean isEmpty(final String topic) {
         return getQueueSize(topic) == 0;
     }
