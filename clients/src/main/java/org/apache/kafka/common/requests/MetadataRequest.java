@@ -125,7 +125,7 @@ public class MetadataRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         MetadataResponseData responseData = new MetadataResponseData();
         if (topics() != null) {
-            for (String topic :topics())
+            for (String topic : topics())
                 responseData.topics().add(new MetadataResponseData.MetadataResponseTopic()
                     .setName(topic)
                     .setErrorCode(error.code())
