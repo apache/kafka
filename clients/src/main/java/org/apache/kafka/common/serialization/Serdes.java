@@ -126,8 +126,9 @@ public class Serdes {
         }
     }
 
-    public static <T> Serde<List<T>> ListSerde(Class listClass, Serde<T> innerSerde) {
-        return new ListSerde<T>(listClass, innerSerde);
+    @SuppressWarnings("unchecked")
+    public static <T> Serde<List<T>> ListSerde(Class<? extends List> listClass, Serde<T> innerSerde) {
+        return new ListSerde<>(listClass, innerSerde);
     }
 
     @SuppressWarnings("unchecked")
@@ -271,15 +272,15 @@ public class Serdes {
         return new VoidSerde();
     }
 
-    static public final class ListSerde<T> extends WrapperSerde<List<T>> {
+    static public final class ListSerde<L extends List<T>, T> extends WrapperSerde<List<T>> {
 
         public ListSerde() {
             super(new ListSerializer<>(), new ListDeserializer<>());
         }
 
-        @SuppressWarnings(value = "unchecked")
-        public ListSerde(Class listClass, Serde<T> serde) {
-            super(new ListSerializer(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
+        @SuppressWarnings("unchecked")
+        public ListSerde(Class<L> listClass, Serde<T> serde) {
+            super(new ListSerializer<>(serde.serializer()), (Deserializer<List<T>>) new ListDeserializer<>(listClass, serde.deserializer()));
         }
 
     }

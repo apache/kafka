@@ -29,31 +29,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@SuppressWarnings(value = "unchecked")
-public class ListDeserializer<T> implements Deserializer<List<T>> {
+public class ListDeserializer<L extends List<T>, T> implements Deserializer<L> {
 
     private Deserializer<T> inner;
-    private Class listClass;
+    private Class<L> listClass;
     private Integer primitiveSize;
 
-    private Map<Class, Integer> fixedLengthDeserializers = new HashMap<Class, Integer>() {{
-            put(ShortDeserializer.class, 2);
-            put(IntegerDeserializer.class, 4);
-            put(FloatDeserializer.class, 4);
-            put(LongDeserializer.class, 8);
-            put(DoubleDeserializer.class, 8);
-            put(UUIDDeserializer.class, 16);
+    static private Map<Class<? extends Deserializer>, Integer> fixedLengthDeserializers =
+            new HashMap<Class<? extends Deserializer>, Integer>() {{
+                put(ShortDeserializer.class, 2);
+                put(IntegerDeserializer.class, 4);
+                put(FloatDeserializer.class, 4);
+                put(LongDeserializer.class, 8);
+                put(DoubleDeserializer.class, 8);
+                put(UUIDDeserializer.class, 16);
         }};
 
     public ListDeserializer() {
     }
 
-    public ListDeserializer(Class listClass, Deserializer<T> deserializer) {
+    public ListDeserializer(Class<L> listClass, Deserializer<T> deserializer) {
         this.listClass = listClass;
         this.inner = deserializer;
         this.primitiveSize = fixedLengthDeserializers.get(deserializer.getClass());
     }
 
+    @SuppressWarnings(value = "unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
@@ -62,7 +63,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             String listType = (String) configs.get(listTypePropertyName);
             String innerSerde = (String) configs.get(innerSerdePropertyName);
             try {
-                listClass = Class.forName(listType);
+                listClass = (Class<L>) Class.forName(listType);
             } catch (ClassNotFoundException e) {
                 throw new ConfigException(listTypePropertyName, listType, "List type class " + listType + " could not be found.");
             }
@@ -75,15 +76,15 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
         }
     }
 
-    private List<T> getListInstance(int listSize) {
+    private L getListInstance(int listSize) {
         try {
-            Constructor<?> listConstructor;
+            Constructor<L> listConstructor;
             try {
                 listConstructor = listClass.getConstructor(Integer.TYPE);
-                return (List<T>) listConstructor.newInstance(listSize);
+                return listConstructor.newInstance(listSize);
             } catch (NoSuchMethodException e) {
                 listConstructor = listClass.getConstructor();
-                return (List<T>) listConstructor.newInstance();
+                return listConstructor.newInstance();
             }
         } catch (Exception e) {
             throw new RuntimeException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
@@ -91,13 +92,13 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
     }
 
     @Override
-    public List<T> deserialize(String topic, byte[] data) {
+    public L deserialize(String topic, byte[] data) {
         if (data == null) {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             final int size = dis.readInt();
-            List<T> deserializedList = getListInstance(size);
+            L deserializedList = getListInstance(size);
             for (int i = 0; i < size; i++) {
                 byte[] payload;
                 payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];

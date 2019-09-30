@@ -28,12 +28,12 @@ import java.util.List;
 import java.util.Map;
 
 @SuppressWarnings(value = "unchecked")
-public class ListSerializer<T> implements Serializer<List<T>> {
+public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
 
     private Serializer<T> inner;
     private boolean isFixedLength;
 
-    private List<Class> fixedLengthSerializers = Arrays.asList(
+    static private List<Class<? extends Serializer>> fixedLengthSerializers = Arrays.asList(
             ShortSerializer.class,
             IntegerSerializer.class,
             FloatSerializer.class,
@@ -70,7 +70,7 @@ public class ListSerializer<T> implements Serializer<List<T>> {
     }
 
     @Override
-    public byte[] serialize(String topic, List<T> data) {
+    public byte[] serialize(String topic, L data) {
         if (data == null) {
             return null;
         }
