@@ -574,20 +574,20 @@ class StreamsUpgradeTest(Test):
                                               err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
 
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                     else:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Setting subscription metadata to leaders supported version 5 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
-                                                       timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
-                                                        timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(second_other_node.account))
 
+                        first_other_monitor.wait_until("Sent a version 4 subscription and group's latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.",
+                                                       timeout_sec=60,
+                                                       err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Sent a version 4 subscription and group's latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.",
+                                                        timeout_sec=60,
+                                                        err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(second_other_node.account))
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,
                                            err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
