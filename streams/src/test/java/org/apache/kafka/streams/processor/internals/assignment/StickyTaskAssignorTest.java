@@ -209,7 +209,7 @@ public class StickyTaskAssignorTest {
         final ClientState client1 = createClient(p1, 1);
         client1.addPreviousStandbyTasks("consumer", Utils.mkSet(task02));
         final ClientState client2 = createClient(p2, 1);
-        client2.addPreviousStandbyTasks("consumer",Utils.mkSet(task01));
+        client2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01));
         final ClientState client3 = createClient(p3, 1);
         client3.addPreviousStandbyTasks("consumer", Utils.mkSet(task00));
 

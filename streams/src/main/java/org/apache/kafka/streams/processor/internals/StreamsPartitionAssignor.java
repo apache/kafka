@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -613,27 +614,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             int consumerTaskIndex = 0;
 
             for (final String consumer : consumers) {
+                final List<TaskId> activeTasks = interleavedActive.get(consumerTaskIndex);
+
+                // These will be filled in by buildAssignedActiveTaskAndPartitionsList below
+                final List<TopicPartition> activePartitionsList = new ArrayList<>();
+                final List<TaskId> assignedActiveList = new ArrayList<>();
+
+                buildAssignedActiveTaskAndPartitionsList(activeTasks, activePartitionsList, assignedActiveList, partitionsForTask);
+
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
-                final List<AssignedPartition> assignedPartitions = new ArrayList<>();
-
-                final List<TaskId> assignedActiveList = interleavedActive.get(consumerTaskIndex);
-
-                // Build up list of all assigned partition-task pairs
-                for (final TaskId taskId : assignedActiveList) {
-                    for (final TopicPartition partition : partitionsForTask.get(taskId)) {
-                        assignedPartitions.add(new AssignedPartition(taskId, partition));
-                    }
-                }
-
-                // Add one copy of a task for each corresponding partition so the receiver can determine the mapping
-                Collections.sort(assignedPartitions);
-                final List<TaskId> active = new ArrayList<>();
-                final List<TopicPartition> activePartitions = new ArrayList<>();
-                for (final AssignedPartition partition : assignedPartitions) {
-                    active.add(partition.taskId);
-                    activePartitions.add(partition.partition);
-                }
-
                 if (!state.standbyTasks().isEmpty()) {
                     final List<TaskId> assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
                     for (final TaskId taskId : assignedStandbyList) {
@@ -647,11 +636,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 assignment.put(
                     consumer,
                     new Assignment(
-                        activePartitions,
+                        activePartitionsList,
                         new AssignmentInfo(
                             minUserMetadataVersion,
                             minSupportedMetadataVersion,
-                            active,
+                            assignedActiveList,
                             standby,
                             partitionsByHostState,
                             0
@@ -681,25 +670,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 }
 
                 // Return the same active tasks that were claimed in the subscription
-                final List<TaskId> assignedActiveList = new ArrayList<>(clientMetadata.state.prevActiveTasksForConsumer(consumerId));
+                final List<TaskId> activeTasks = new ArrayList<>(clientMetadata.state.prevActiveTasksForConsumer(consumerId));
 
-                final List<AssignedPartition> assignedPartitions = new ArrayList<>();
+                // These will be filled in by buildAssignedActiveTaskAndPartitionsList below
+                final List<TopicPartition> activePartitionsList = new ArrayList<>();
+                final List<TaskId> assignedActiveList = new ArrayList<>();
 
-                // Build up list of all assigned partition-task pairs
-                for (final TaskId taskId : assignedActiveList) {
-                    for (final TopicPartition partition : partitionsForTask.get(taskId)) {
-                        assignedPartitions.add(new AssignedPartition(taskId, partition));
-                    }
-                }
-
-                // Add one copy of a task for each corresponding partition so the receiver can determine the mapping
-                Collections.sort(assignedPartitions);
-                final List<TaskId> active = new ArrayList<>();
-                final List<TopicPartition> activePartitions = new ArrayList<>();
-                for (final AssignedPartition partition : assignedPartitions) {
-                    active.add(partition.taskId);
-                    activePartitions.add(partition.partition);
-                }
+                buildAssignedActiveTaskAndPartitionsList(activeTasks, activePartitionsList, assignedActiveList, partitionsForTask);
 
                 // Return the same standby tasks that were claimed in the subscription
                 final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
@@ -708,11 +685,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 }
 
                 assignment.put(consumerId, new Assignment(
-                    activePartitions,
+                    activePartitionsList,
                     new AssignmentInfo(
                         minUserMetadataVersion,
                         minSupportedMetadataVersion,
-                        active,
+                        assignedActiveList,
                         standbyTasks,
                         partitionsByHostState,
                         0)
@@ -730,6 +707,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         return assignment;
+    }
+
+    private static void buildAssignedActiveTaskAndPartitionsList(final List<TaskId> activeTasks,
+                                                                 final List<TopicPartition> activePartitionsList,
+                                                                 final List<TaskId> assignedActiveList,
+                                                                 final Map<TaskId, Set<TopicPartition>> partitionsForTask) {
+        final List<AssignedPartition> assignedPartitions = new ArrayList<>();
+
+        // Build up list of all assigned partition-task pairs
+        for (final TaskId taskId : activeTasks) {
+            for (final TopicPartition partition : partitionsForTask.get(taskId)) {
+                assignedPartitions.add(new AssignedPartition(taskId, partition));
+            }
+        }
+
+        // Add one copy of a task for each corresponding partition, so the receiver can determine the task <-> tp mapping
+        Collections.sort(assignedPartitions);
+        for (final AssignedPartition partition : assignedPartitions) {
+            assignedActiveList.add(partition.taskId);
+            activePartitionsList.add(partition.partition);
+        }
     }
 
     // visible for testing
@@ -758,7 +756,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {
             log.error("Leader sent back an assignment with version {} which was greater than our used version {}",
                 receivedAssignmentMetadataVersion, usedSubscriptionMetadataVersion);
-            throw new IllegalStateException(
+            throw new TaskAssignmentException(
                 "Sent a version " + usedSubscriptionMetadataVersion
                     + " subscription but got an assignment with higher version "
                     + receivedAssignmentMetadataVersion + "."
@@ -766,45 +764,49 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         if (latestCommonlySupportedVersion > LATEST_SUPPORTED_VERSION) {
-            log.error("Leader sent back assignment with commonly supported version {} that is greater than our"
+            log.error("Leader sent back assignment with commonly supported version {} that is greater than our "
                 + "actual latest supported version {}", latestCommonlySupportedVersion, LATEST_SUPPORTED_VERSION);
-            throw new IllegalStateException("Can't upgrade to metadata version greater than we support");
+            throw new TaskAssignmentException("Can't upgrade to metadata version greater than we support");
+        }
+
+        if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION) {
+            log.error("Leader sent back assignment with version {} which is less than the earliest probeable version {}. " +
+                "To do a rolling upgrade from a version earlier than {} you must set the {} config",
+                receivedAssignmentMetadataVersion, EARLIEST_PROBEABLE_VERSION, EARLIEST_PROBEABLE_VERSION,
+                StreamsConfig.UPGRADE_FROM_CONFIG);
+            throw new IllegalStateException("Can't use version probing with versions less than " + EARLIEST_PROBEABLE_VERSION);
         }
     }
 
     // Returns true if subscription version was changed, indicating version probing and need to rebalance again
-    private boolean maybeUpdateSubscriptionVersion(final int receivedAssignmentMetadataVersion,
-                                                   final int latestCommonlySupportedVersion) {
+    protected boolean maybeUpdateSubscriptionVersion(final int receivedAssignmentMetadataVersion,
+                                                     final int latestCommonlySupportedVersion) {
+        // If the latest commonly supported version is now greater than our used version, this indicates we have just
+        // completed the rolling upgrade and can now update our subscription version for the final rebalance
+        if (latestCommonlySupportedVersion > usedSubscriptionMetadataVersion) {
+            log.info(
+                "Sent a version {} subscription and group's latest commonly supported version is {} (successful " +
+                    "version probing and end of rolling upgrade). Upgrading subscription metadata version to " +
+                    "{} for next rebalance.",
+                usedSubscriptionMetadataVersion,
+                latestCommonlySupportedVersion,
+                latestCommonlySupportedVersion
+            );
+            usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
+            return true;
+        }
 
-        if (receivedAssignmentMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
-
-            // If the latest commonly supported version is now greater than our used version, this indicates we have just
-            // completed the rolling upgrade and can now update our subscription version for the final rebalance
-            if (latestCommonlySupportedVersion > usedSubscriptionMetadataVersion) {
-                log.info(
-                    "Sent a version {} subscription and group's latest commonly supported version is {} (successful" +
-                        "version probing and end of rolling upgrade). Upgrading subscription metadata version to " +
-                        "{} for next rebalance.",
-                    usedSubscriptionMetadataVersion,
-                    latestCommonlySupportedVersion,
-                    latestCommonlySupportedVersion
-                );
-                usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
-                return true;
-            }
-
-            // If we received a lower version than we sent, someone else in the group still hasn't upgraded. We
-            // should downgrade our subscription until everyone is on the latest version
-            if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion) {
-                log.info(
-                     "Sent a version {} subscription and got version {} assignment back (successful version probing). " +
-                         "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
-                     usedSubscriptionMetadataVersion,
-                     receivedAssignmentMetadataVersion
-                );
-                usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
-                return true;
-            }
+        // If we received a lower version than we sent, someone else in the group still hasn't upgraded. We
+        // should downgrade our subscription until everyone is on the latest version
+        if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion) {
+            log.info(
+                "Sent a version {} subscription and got version {} assignment back (successful version probing). " +
+                    "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
+                usedSubscriptionMetadataVersion,
+                receivedAssignmentMetadataVersion
+            );
+            usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
+            return true;
         }
 
         return false;
@@ -821,17 +823,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != AssignorError.NONE.code()) {
             // set flag to shutdown streams app
-            assignmentErrorCode.set(info.errCode());
+            setAssignmentErrorCode(info.errCode());
             return;
         }
+        /*
+         * latestCommonlySupportedVersion belongs to [usedSubscriptionMetadataVersion, LATEST_SUPPORTED_VERSION]
+         * receivedAssignmentMetadataVersion belongs to [EARLIEST_PROBEABLE_VERSION, usedSubscriptionMetadataVersion]
+         *
+         * usedSubscriptionMetadataVersion will be downgraded to receivedAssignmentMetadataVersion during a rolling
+         * bounce upgrade with version probing.
+         *
+         * usedSubscriptionMetadataVersion will be upgraded to latestCommonlySupportedVersion when all members have
+         * been bounced and it is safe to use the latest version.
+         */
         final int receivedAssignmentMetadataVersion = info.version();
-        final int latestCommonlySupportedVersion = info.latestSupportedVersion();
+        final int latestCommonlySupportedVersion = info.commonlySupportedVersion();
 
         validateMetadataVersions(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion);
 
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
-            assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
+            setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
             return;
         }
 
@@ -958,6 +970,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         for (final Set<String> copartitionGroup : copartitionGroups) {
             copartitionedTopicsEnforcer.enforce(copartitionGroup, allRepartitionTopicsNumPartitions, metadata);
         }
+    }
+
+    protected void setAssignmentErrorCode(final Integer errorCode) {
+        assignmentErrorCode.set(errorCode);
     }
 
 

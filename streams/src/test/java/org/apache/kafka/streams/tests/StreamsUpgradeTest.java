@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
 
@@ -166,6 +167,11 @@ public class StreamsUpgradeTest {
 
             final AssignmentInfo info = AssignmentInfo.decode(
                 assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
+
+            if (super.maybeUpdateSubscriptionVersion(info.version(), info.commonlySupportedVersion())) {
+                setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+                return;
+            }
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
             partitions.sort(PARTITION_COMPARATOR);
