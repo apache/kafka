@@ -384,12 +384,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
                                 for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    final int numPartitionsCandidate;
+                                    int numPartitionsCandidate = 0;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
-                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)
-                                        && repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
-                                        numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
+                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
+                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
+                                            numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
+                                        }
                                     } else {
                                         final Integer count = metadata.partitionCountForTopic(sourceTopicName);
                                         if (count == null) {
