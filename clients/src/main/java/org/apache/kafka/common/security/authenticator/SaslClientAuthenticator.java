@@ -381,13 +381,16 @@ public class SaslClientAuthenticator implements Authenticator {
             byte[] saslToken = createSaslToken(serverToken, isInitial);
             if (saslToken != null) {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
-                if (saslAuthenticateVersion != DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
+                Send send;
+                if (saslAuthenticateVersion == DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
+                    send = new NetworkSend(node, tokenBuf);
+                } else {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
                             .setAuthBytes(tokenBuf.array());
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
-                    tokenBuf = request.serializeWithHeader(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
+                    send = request.toSend(node, nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
-                send(new NetworkSend(node, tokenBuf));
+                send(send);
                 return true;
             }
         }
