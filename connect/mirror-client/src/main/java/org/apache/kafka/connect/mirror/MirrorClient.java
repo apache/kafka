@@ -42,6 +42,17 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 
+/** Interprets MM2's internal topics (checkpoints, heartbeats) on a given cluster.
+ *   
+ *  Given a top-level "mm2.properties" configuration file, MirrorClients can be constructed
+ *  for individual clusters as follows:
+ *
+ *  <pre>
+ *    MirrorMakerConfig mmConfig = new MirrorMakerConfig(props);
+ *    MirrorClientConfig mmClientConfig = mmConfig.clientConfig("some-cluster");
+ *    MirrorClient mmClient = new Mirrorclient(mmClientConfig);
+ *  </pre>
+ */
 public class MirrorClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MirrorClient.class);
 
@@ -52,7 +63,7 @@ public class MirrorClient implements AutoCloseable {
     public MirrorClient(Map<String, Object> props) {
         this(new MirrorClientConfig(props));
     }
-       
+
     public MirrorClient(MirrorClientConfig config) {
         adminClient = AdminClient.create(config.adminConfig());
         consumerConfig = config.consumerConfig();
@@ -75,6 +86,10 @@ public class MirrorClient implements AutoCloseable {
         return replicationPolicy;
     }
 
+    /** Compute shortest number of hops from an upstream source cluster.
+     *  For example, given replication flow A->B->C, there are two hops from A to C.
+     *  Returns -1 if upstream cluster is unreachable.
+     */
     public int replicationHops(String upstreamClusterAlias) throws InterruptedException {
         return heartbeatTopics().stream()
             .map(x -> countHopsForTopic(x, upstreamClusterAlias))
@@ -84,19 +99,21 @@ public class MirrorClient implements AutoCloseable {
             .orElse(-1);
     }
 
+    /** Find all heartbeat topics on this cluster. Heartbeat topics are replicated from other clusters. */
     public Set<String> heartbeatTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
             .collect(Collectors.toSet());
     }
 
+    /** Find all checkpoint topics on this cluster. */
     public Set<String> checkpointTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isCheckpointTopic)
             .collect(Collectors.toSet());
     }
 
-    /** Finds upstream clusters, which may be multiple hops away, based on incoming heartbeats. */
+    /** Find upstream clusters, which may be multiple hops away, based on incoming heartbeats. */
     public Set<String> upstreamClusters() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
@@ -105,12 +122,14 @@ public class MirrorClient implements AutoCloseable {
             .collect(Collectors.toSet());
     }
 
+    /** Find all remote topics on this cluster. This does not include internal topics (heartbeats, checkpoints). */
     public Set<String> remoteTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isRemoteTopic)
             .collect(Collectors.toSet());
     }
 
+    /** Find all remote topics that have been replicated directly from the given source cluster. */
     public Set<String> remoteTopics(String source) throws InterruptedException {
         return listTopics().stream()
             .filter(this::isRemoteTopic)
@@ -119,6 +138,12 @@ public class MirrorClient implements AutoCloseable {
             .collect(Collectors.toSet());
     }
 
+    /** Translate a remote consumer group's offsets into corresponding local offsets. Topics are automatically
+     *  renamed according to the ReplicationPolicy.
+     *  @param consumerGroupId group ID of remote consumer group
+     *  @param remoteClusterAlias alias of remote cluster
+     *  @param timeout timeout
+     */
     public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId,
             String remoteClusterAlias, Duration timeout) {
         long deadline = System.currentTimeMillis() + timeout.toMillis();

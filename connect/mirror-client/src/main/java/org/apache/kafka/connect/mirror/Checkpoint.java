@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.nio.ByteBuffer;
 
+/** Checkpoint records emitted from MirrorCheckpointConnector. Encodes remote consumer group state. */
 public class Checkpoint {
     public static final String TOPIC_KEY = "topic";
     public static final String PARTITION_KEY = "partition";

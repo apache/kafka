@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.nio.ByteBuffer;
 
+/** Heartbeat message sent from MirrorHeartbeatTask to target cluster. Heartbeats are always replicated. */
 public class Heartbeat {
     public static final String SOURCE_CLUSTER_ALIAS_KEY = "sourceClusterAlias";
     public static final String TARGET_CLUSTER_ALIAS_KEY = "targetClusterAlias";

@@ -28,13 +28,27 @@ import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
  
-/** Convenience methods for multi-cluster environments. */
+/** Convenience methods for multi-cluster environments. Wraps MirrorClient (@see MirrorClient).
+ *  <p>
+ *  Properties passed to these methods are used to construct internal Admin and Consumer clients.
+ *  Sub-configs like "admin.xyz" are also supported. For example:
+ *  </p>
+ *  <pre>
+ *      bootstrap.servers = host1:9092
+ *      consumer.client.id = mm2-client
+ *  </pre>
+ *  <p>
+ *  @see MirrorClientConfig for additional properties used by the internal MirrorClient.
+ *  </p>
+ */
 public final class RemoteClusterUtils {
     private static final Logger log = LoggerFactory.getLogger(RemoteClusterUtils.class);
 
     // utility class
     private RemoteClusterUtils() {}
 
+    /** Find shortest number of hops from an upstream cluster.
+     *  Returns -1 if the cluster is unreachable */ 
     public static int replicationHops(Map<String, Object> properties, String upstreamClusterAlias)
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
@@ -42,6 +56,7 @@ public final class RemoteClusterUtils {
         }
     }
 
+    /** Find all heartbeat topics */
     public static Set<String> heartbeatTopics(Map<String, Object> properties)
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
@@ -49,6 +64,7 @@ public final class RemoteClusterUtils {
         }
     }
 
+    /** Find all checkpoint topics */
     public static Set<String> checkpointTopics(Map<String, Object> properties)
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
@@ -56,6 +72,7 @@ public final class RemoteClusterUtils {
         }
     }
 
+    /** Find all upstream clusters */
     public static Set<String> upstreamClusters(Map<String, Object> properties)
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
@@ -63,11 +80,18 @@ public final class RemoteClusterUtils {
         }
     }
 
+    /** Translate a remote consumer group's offsets into corresponding local offsets. Topics are automatically
+     *  renamed according to the ReplicationPolicy.
+     *  @param properties @see MirrorClientConfig
+     *  @param consumerGroupId group ID of remote consumer group
+     *  @param remoteClusterAlias alias of remote cluster
+     *  @param timeout timeout
+     */
     public static Map<TopicPartition, OffsetAndMetadata> translateOffsets(Map<String, Object> properties,
-            String targetClusterAlias, String consumerGroupId, Duration timeout)
+            String remoteClusterAlias, String consumerGroupId, Duration timeout)
             throws InterruptedException, TimeoutException {
         try (MirrorClient client = new MirrorClient(properties)) {
-            return client.remoteConsumerOffsets(consumerGroupId, targetClusterAlias, timeout);
+            return client.remoteConsumerOffsets(consumerGroupId, remoteClusterAlias, timeout);
         }
     }
 }

@@ -25,6 +25,25 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import java.util.Map;
 import java.util.HashMap;
 
+/** Configuration required for MirrorClient to talk to a given target cluster.
+ *  <p>
+ *  Generally, these properties come from an mm2.properties configuration file
+ *  (@see MirrorMakerConfig.clientConfig):
+ *  </p>
+ *  <pre>
+ *    MirrorMakerConfig mmConfig = new MirrorMakerConfig(props);
+ *    MirrorClientConfig mmClientConfig = mmConfig.clientConfig("some-cluster");
+ *  </pre>
+ *  <p>
+ *  In addition to the properties defined here, sub-configs are supported for Admin, Consumer, and Producer clients.
+ *  For example:
+ *  </p>
+ *  <pre>
+ *      bootstrap.servers = host1:9092
+ *      consumer.client.id = mm2-client
+ *      replication.policy.separator = __
+ *  </pre>
+ */
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
     private static final String REPLICATION_POLICY_CLASS_DOC = "Class which defines the remote topic naming convention.";
@@ -49,14 +68,17 @@ public class MirrorClientConfig extends AbstractConfig {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
+    /** Sub-config for Admin clients. */
     public Map<String, Object> adminConfig() {
         return clientConfig(ADMIN_CLIENT_PREFIX);
     }
 
+    /** Sub-config for Consumer clients. */
     public Map<String, Object> consumerConfig() {
         return clientConfig(CONSUMER_CLIENT_PREFIX);
     }
 
+    /** Sub-config for Producer clients. */
     public Map<String, Object> producerConfig() {
         return clientConfig(PRODUCER_CLIENT_PREFIX);
     }

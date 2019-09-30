@@ -27,22 +27,22 @@ public interface ReplicationPolicy {
     String formatRemoteTopic(String sourceClusterAlias, String topic);
 
     /** Source cluster alias of given remote topic, e.g. "us-west" for "us-west.topic1".
-        Returns null if not a remote topic.
-    */
+     *  Returns null if not a remote topic.
+     */
     String topicSource(String topic);
 
     /** Name of topic on the source cluster, e.g. "topic1" for "us-west.topic1".
-
-        Topics may be replicated multiple hops, so the immediately upstream topic
-        may itself be a remote topic.
-
-        Returns null if not a remote topic.
-    */
+     *
+     *  Topics may be replicated multiple hops, so the immediately upstream topic
+     *  may itself be a remote topic.
+     *
+     *  Returns null if not a remote topic.
+     */
     String upstreamTopic(String topic); 
 
     /** The name of the original source-topic, which may have been replicated multiple hops.
-        Returns the topic if it is not a remote topic.
-    */
+     *  Returns the topic if it is not a remote topic.
+     */
     default String originalTopic(String topic) {
         String upstream = upstreamTopic(topic);
         if (upstream == null) {
