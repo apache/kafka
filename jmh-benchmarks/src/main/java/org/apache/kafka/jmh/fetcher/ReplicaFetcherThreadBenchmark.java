@@ -108,7 +108,7 @@ public class ReplicaFetcherThreadBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
-        if (logDir.mkdir())
+        if (!logDir.mkdir())
             throw new IOException("error creating test directory");
 
         scheduler.startup();
