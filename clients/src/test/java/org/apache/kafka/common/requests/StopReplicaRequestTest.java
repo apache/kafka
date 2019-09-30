@@ -16,25 +16,21 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.List;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.test.TestUtils;
+import org.junit.Test;
 
-// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
-public class BasePartitionState {
+import java.util.Set;
 
-    public final int controllerEpoch;
-    public final int leader;
-    public final int leaderEpoch;
-    public final List<Integer> isr;
-    public final int zkVersion;
-    public final List<Integer> replicas;
+import static org.junit.Assert.assertTrue;
 
-    BasePartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
-        this.controllerEpoch = controllerEpoch;
-        this.leader = leader;
-        this.leaderEpoch = leaderEpoch;
-        this.isr = isr;
-        this.zkVersion = zkVersion;
-        this.replicas = replicas;
+public class StopReplicaRequestTest {
+
+    @Test
+    public void testStopReplicaRequestNormalization() {
+        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
+        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
+        assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
     }
 
 }

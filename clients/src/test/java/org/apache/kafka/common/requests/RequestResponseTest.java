@@ -76,6 +76,8 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -97,7 +99,12 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -237,6 +244,8 @@ public class RequestResponseTest {
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
         checkErrorResponse(createLeaderAndIsrRequest(1), new UnknownServerException(), false);
+        checkRequest(createLeaderAndIsrRequest(2), true);
+        checkErrorResponse(createLeaderAndIsrRequest(2), new UnknownServerException(), false);
         checkResponse(createLeaderAndIsrResponse(), 0, true);
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException(), true);
@@ -1115,9 +1124,14 @@ public class RequestResponseTest {
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new StopReplicaResponse(Errors.NONE, responses);
+        List<StopReplicaResponseData.StopReplicaPartitionError> partitions = new ArrayList<>();
+        partitions.add(new StopReplicaResponseData.StopReplicaPartitionError()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new StopReplicaResponse(new StopReplicaResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
@@ -1155,15 +1169,39 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
-        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
-        partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, replicas, false));
-        partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, replicas, false));
-        partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, replicas, false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(105)
+            .setControllerEpoch(0)
+            .setLeader(2)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeader(1)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic20")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeader(0)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
 
         Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
@@ -1173,49 +1211,97 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new LeaderAndIsrResponse(Errors.NONE, responses);
+        List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
-        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
+        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         List<Integer> offlineReplicas = asList();
-        partitionStates.put(new TopicPartition("topic5", 105),
-            new UpdateMetadataRequest.PartitionState(0, 2, 1, isr, 2, replicas, offlineReplicas));
-        partitionStates.put(new TopicPartition("topic5", 1),
-            new UpdateMetadataRequest.PartitionState(1, 1, 1, isr, 2, replicas, offlineReplicas));
-        partitionStates.put(new TopicPartition("topic20", 1),
-            new UpdateMetadataRequest.PartitionState(1, 0, 1, isr, 2, replicas, offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(105)
+            .setControllerEpoch(0)
+            .setLeader(2)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setOfflineReplicas(offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName("topic5")
+                .setPartitionIndex(1)
+                .setControllerEpoch(1)
+                .setLeader(1)
+                .setLeaderEpoch(1)
+                .setIsr(isr)
+                .setZkVersion(2)
+                .setReplicas(replicas)
+                .setOfflineReplicas(offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName("topic20")
+                .setPartitionIndex(1)
+                .setControllerEpoch(1)
+                .setLeader(0)
+                .setLeaderEpoch(1)
+                .setIsr(isr)
+                .setZkVersion(2)
+                .setReplicas(replicas)
+                .setOfflineReplicas(offlineReplicas));
 
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
-        List<UpdateMetadataRequest.EndPoint> endPoints1 = new ArrayList<>();
-        endPoints1.add(new UpdateMetadataRequest.EndPoint("host1", 1223, plaintext,
-                ListenerName.forSecurityProtocol(plaintext)));
+        List<UpdateMetadataEndpoint> endpoints1 = new ArrayList<>();
+        endpoints1.add(new UpdateMetadataEndpoint()
+            .setHost("host1")
+            .setPort(1223)
+            .setSecurityProtocol(plaintext.id)
+            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
 
-        List<UpdateMetadataRequest.EndPoint> endPoints2 = new ArrayList<>();
-        endPoints2.add(new UpdateMetadataRequest.EndPoint("host1", 1244, plaintext,
-                ListenerName.forSecurityProtocol(plaintext)));
+        List<UpdateMetadataEndpoint> endpoints2 = new ArrayList<>();
+        endpoints2.add(new UpdateMetadataEndpoint()
+            .setHost("host1")
+            .setPort(1244)
+            .setSecurityProtocol(plaintext.id)
+            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
         if (version > 0) {
             SecurityProtocol ssl = SecurityProtocol.SSL;
-            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1234, ssl,
-                    ListenerName.forSecurityProtocol(ssl)));
-            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1334, ssl,
-                    new ListenerName("CLIENT")));
+            endpoints2.add(new UpdateMetadataEndpoint()
+                .setHost("host2")
+                .setPort(1234)
+                .setSecurityProtocol(ssl.id)
+                .setListener(ListenerName.forSecurityProtocol(ssl).value()));
+            endpoints2.add(new UpdateMetadataEndpoint()
+                .setHost("host2")
+                .setPort(1334)
+                .setSecurityProtocol(ssl.id));
+            if (version >= 3)
+                endpoints2.get(1).setListener("CLIENT");
         }
 
-        Set<UpdateMetadataRequest.Broker> liveBrokers = Utils.mkSet(
-                new UpdateMetadataRequest.Broker(0, endPoints1, rack),
-                new UpdateMetadataRequest.Broker(1, endPoints2, rack)
+        List<UpdateMetadataBroker> liveBrokers = Arrays.asList(
+            new UpdateMetadataBroker()
+                .setId(0)
+                .setEndpoints(endpoints1)
+                .setRack(rack),
+            new UpdateMetadataBroker()
+                .setId(1)
+                .setEndpoints(endpoints2)
+                .setRack(rack)
         );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
-                liveBrokers).build();
+            liveBrokers).build();
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {
-        return new UpdateMetadataResponse(Errors.NONE);
+        return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code()));
     }
 
     private SaslHandshakeRequest createSaslHandshakeRequest() {

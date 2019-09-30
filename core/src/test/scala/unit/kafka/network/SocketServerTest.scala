@@ -32,7 +32,7 @@ import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.{Endpoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState

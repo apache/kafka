@@ -910,16 +910,14 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
-          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
-          partitionStateOpt match {
-            case None => false
-            case Some(partitionState) =>
-              leader = partitionState.basePartitionState.leader
-              result && Request.isValidBrokerId(leader)
-          }
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
+            leader = partitionState.leader
+            true
+          case _ => false
+        }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
