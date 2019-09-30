@@ -107,8 +107,10 @@ public class ReplicaFetcherThreadBenchmark {
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
 
     @Setup(Level.Trial)
-    public void setup() {
-        logDir.mkdir();
+    public void setup() throws IOException {
+        if (logDir.mkdir())
+            throw new IOException("error creating test directory");
+
         scheduler.startup();
         Properties props = new Properties();
         props.put("zookeeper.connect", "127.0.0.1:9999");
