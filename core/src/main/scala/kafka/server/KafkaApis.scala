@@ -56,7 +56,6 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicR
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
