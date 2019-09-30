@@ -416,7 +416,7 @@ class KafkaApisTest {
       ))
 
       val capturedResponse = expectNoThrottling()
-      EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(mutable.MutableList())))
+      EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
         .andReturn((Errors.NONE, Map.empty))
       EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
 
@@ -445,7 +445,7 @@ class KafkaApisTest {
     ))
 
     val capturedResponse = expectNoThrottling()
-    EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(mutable.MutableList())))
+    EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
       .andReturn((Errors.GROUP_ID_NOT_FOUND, Map.empty))
     EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
 
