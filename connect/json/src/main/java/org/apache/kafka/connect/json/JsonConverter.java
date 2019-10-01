@@ -205,7 +205,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     case BASE64:
                         return JsonNodeFactory.instance.binaryNode(Decimal.fromLogical(schema, decimal));
                     default:
-                        throw new DataException("Unexpected decimal.format " + config.decimalFormat());
+                        throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
                 }
             }
 
@@ -215,7 +215,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                 if (value.isBinary() || value.isTextual()) {
                     try {
                         return Decimal.toLogical(schema, value.binaryValue());
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         throw new DataException("Invalid bytes for Decimal field", e);
                     }
                 }

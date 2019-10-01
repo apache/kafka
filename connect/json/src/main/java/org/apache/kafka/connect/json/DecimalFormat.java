@@ -30,7 +30,7 @@ public enum DecimalFormat {
 
     /**
      * Serializes the JSON Decimal as a JSON number. For example, serializing the value
-     * `10.2345` withe the NUMERIC setting will result in `10.2345`.
+     * `10.2345` with the NUMERIC setting will result in `10.2345`.
      */
     NUMERIC
 }
