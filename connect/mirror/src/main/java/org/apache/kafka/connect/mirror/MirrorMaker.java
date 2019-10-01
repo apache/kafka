@@ -59,9 +59,31 @@ import java.util.stream.Collectors;
 import java.io.File;
 
 /**
- * A set of Connect Herders for replicating between multiple Kafka clusters.
- *
- * Each Herder represents a separate source->target replication flow.
+ *  Entry point for "MirrorMaker 2.0".
+ *  <p>
+ *  MirrorMaker runs a set of Connectors between multiple clusters, in order to replicate data, configuration,
+ *  ACL rules, and consumer group state.
+ *  </p>
+ *  <p>
+ *  Configuration is via a top-level "mm2.properties" file, which supports per-cluster and per-replication
+ *  sub-configs. Each source->target replication must be explicitly enabled. For example:
+ *  </p>
+ *  <pre>
+ *    clusters = primary, backup
+ *    primary.bootstrap.servers = vip1:9092
+ *    backup.bootstrap.servers = vip2:9092
+ *    primary->backup.enabled = true
+ *    backup->primary.enabled = true
+ *  </pre>
+ *  <p>
+ *  Run as follows:
+ *  </p>
+ *  <pre>
+ *    ./bin/connect-mirror-maker.sh mm2.properties
+ *  </pre>
+ *  <p>
+ *  Additional information and example configurations are provided in ./connect/mirror/README.md
+ *  </p>
  */
 public class MirrorMaker {
     private static final Logger log = LoggerFactory.getLogger(MirrorMaker.class);

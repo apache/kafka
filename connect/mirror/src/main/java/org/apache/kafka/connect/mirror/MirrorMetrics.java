@@ -53,13 +53,13 @@ class MirrorMetrics implements AutoCloseable {
             "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_MAX = new MetricNameTemplate(
             "record-age-ms-max", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
+            "The max age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_MIN = new MetricNameTemplate(
             "record-age-ms-min", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
+            "The min age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_AVG = new MetricNameTemplate(
             "record-age-ms-avg", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
+            "The average age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
             "byte-rate", SOURCE_CONNECTOR_GROUP,
             "Average number of bytes replicated per second.", PARTITION_TAGS);
@@ -68,26 +68,26 @@ class MirrorMetrics implements AutoCloseable {
             "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_MAX = new MetricNameTemplate(
             "replication-latency-ms-max", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
+            "Max time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_MIN = new MetricNameTemplate(
             "replication-latency-ms-min", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
+            "Min time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_AVG = new MetricNameTemplate(
             "replication-latency-ms-avg", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
+            "Average time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
 
     private static final MetricNameTemplate CHECKPOINT_LATENCY = new MetricNameTemplate(
             "checkpoint-latency-ms", CHECKPOINT_CONNECTOR_GROUP,
             "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
     private static final MetricNameTemplate CHECKPOINT_LATENCY_MAX = new MetricNameTemplate(
             "checkpoint-latency-ms-max", CHECKPOINT_CONNECTOR_GROUP,
-            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+            "Max time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
     private static final MetricNameTemplate CHECKPOINT_LATENCY_MIN = new MetricNameTemplate(
             "checkpoint-latency-ms-min", CHECKPOINT_CONNECTOR_GROUP,
-            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+            "Min time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
     private static final MetricNameTemplate CHECKPOINT_LATENCY_AVG = new MetricNameTemplate(
             "checkpoint-latency-ms-avg", CHECKPOINT_CONNECTOR_GROUP,
-            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+            "Average time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
 
 
     private final Metrics metrics; 

@@ -30,6 +30,32 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.time.Duration;
 
+/** Shared config properties used by MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector.
+ *  <p>
+ *  Generally, these properties are filled-in automatically by MirrorMaker based on a top-level mm2.properties file.
+ *  However, when running MM2 connectors as plugins on a Connect-as-a-Service cluster, these properties must be configured manually,
+ *  e.g. via the Connect REST API.
+ *  </p>
+ *  <p>
+ *  An example configuration when running on Connect (not via MirrorMaker driver):
+ *  </p>
+ *  <pre>
+ *      {
+ *        "name": "MirrorSourceConnector",
+ *        "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+ *        "replication.factor": "1",
+ *        "source.cluster.alias": "backup",
+ *        "target.cluster.alias": "primary",
+ *        "source.cluster.bootstrap.servers": "vip1:9092",
+ *        "target.cluster.bootstrap.servers": "vip2:9092",
+ *        "topics": ".*test-topic-.*",
+ *        "groups": "consumer-group-.*",
+ *        "emit.checkpoints.interval.seconds": "1",
+ *        "emit.heartbeats.interval.seconds": "1",
+ *        "sync.topic.acls.enabled": "false"
+ *      }
+ *  </pre>
+ */
 public class MirrorConnectorConfig extends AbstractConfig {
 
     protected static final String ENABLED_SUFFIX = ".enabled";

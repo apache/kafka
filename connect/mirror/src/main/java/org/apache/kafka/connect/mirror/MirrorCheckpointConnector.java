@@ -35,6 +35,10 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+/** Replicate consumer group state between clusters. Emits checkpoint records.
+ *
+ *  @see MirrorConnectorConfig for supported config properties.
+ */
 public class MirrorCheckpointConnector extends SourceConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorCheckpointConnector.class);

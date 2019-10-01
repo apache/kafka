@@ -55,6 +55,10 @@ import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Replicate data, configuration, and ACLs between clusters.
+ *
+ *  @see MirrorConnectorConfig for supported config properties.
+ */
 public class MirrorSourceConnector extends SourceConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceConnector.class);
