@@ -583,10 +583,10 @@ class StreamsUpgradeTest(Test):
                         log_monitor.wait_until("Sent a version 6 subscription and got version 5 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 5 subscription and group's latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
+                        first_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
                                                        timeout_sec=60,
                                                        err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 5 subscription and group's latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
+                        second_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
                                                         timeout_sec=60,
                                                         err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(second_other_node.account))
 
