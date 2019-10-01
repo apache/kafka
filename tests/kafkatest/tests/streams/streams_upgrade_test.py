@@ -258,7 +258,7 @@ class StreamsUpgradeTest(Test):
         for p in self.processors:
             self.leader_counter[p] = 2
 
-        self.update_leader(true)
+        self.update_leader(False)
         for p in self.processors:
             self.leader_counter[p] = 0
         self.leader_counter[self.leader] = 3
@@ -289,14 +289,14 @@ class StreamsUpgradeTest(Test):
 
         self.driver.stop()
 
-    def update_leader(self, allow_leader_to_change):
+    def update_leader(self, require_unique_leader):
         self.leader = None
         retries = 10
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
                 if len(found) >= self.leader_counter[p] + 1:
-                    if self.leader is not None and not allow_leader_to_change:
+                    if self.leader is not None and require_unique_leader:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
                     self.leader_counter[p] = self.leader_counter[p] + 1
@@ -491,7 +491,7 @@ class StreamsUpgradeTest(Test):
                                                     err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(second_other_node.account))
 
                     if processor == self.leader:
-                        self.update_leader(false)
+                        self.update_leader(True)
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
@@ -540,7 +540,7 @@ class StreamsUpgradeTest(Test):
                                                err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(p.node.account))
 
                     if processor == self.leader:
-                        self.update_leader(false)
+                        self.update_leader(True)
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
