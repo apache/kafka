@@ -20,6 +20,7 @@ import java.util.Optional
 
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogManager}
+import kafka.server.AbstractFetcherThread.Fetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -524,7 +525,7 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> PartitionFetchState(160, leaderEpoch, state = Fetching)))
 
     assertTrue(fetchRequestOpt.isDefined)
-    val fetchRequest = fetchRequestOpt.get
+    val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
     val request = fetchRequest.build()
@@ -577,9 +578,9 @@ class ReplicaAlterLogDirsThreadTest {
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
-    assertFalse(fetchRequest.fetchData.isEmpty)
+    assertFalse(fetchRequest.partitionData.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
-    val fetchInfos = fetchRequest.build().fetchData.asScala.toSeq
+    val fetchInfos = fetchRequest.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals("Expected fetch request for non-truncating partition", t1p0, fetchInfos.head._1)
     assertEquals(150, fetchInfos.head._2.fetchOffset)
@@ -591,9 +592,9 @@ class ReplicaAlterLogDirsThreadTest {
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
-    assertFalse(fetchRequest2.fetchData.isEmpty)
+    assertFalse(fetchRequest2.partitionData.isEmpty)
     assertFalse(partitionsWithError2.nonEmpty)
-    val fetchInfos2 = fetchRequest2.build().fetchData.asScala.toSeq
+    val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData.asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals("Expected fetch request for non-delayed partition", t1p0, fetchInfos2.head._1)
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
