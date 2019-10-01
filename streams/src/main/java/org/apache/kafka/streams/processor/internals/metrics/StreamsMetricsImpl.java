@@ -135,7 +135,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String GROUP_SUFFIX = "-metrics";
     public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
     public static final String CLIENT_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
-    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
@@ -230,7 +229,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public Map<String, String> threadLevelTagMap(final String threadId, final String... tags) {
+    private Map<String, String> threadLevelTagMap(final String threadId, final String... tags) {
         final Map<String, String> tagMap = threadLevelTagMap(threadId);
         return addTags(tagMap, tags);
     }
@@ -258,7 +257,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         tagMap.put(TASK_ID_TAG, taskId);
         return tagMap;
     }
-
 
     public Map<String, String> nodeLevelTagMap(final String threadId,
                                                final String taskName,
@@ -576,7 +574,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return SENSOR_EXTERNAL_LABEL + SENSOR_PREFIX_DELIMITER + threadId + SENSOR_NAME_DELIMITER + operationName;
     }
 
-    private static void addAvgAndMaxToSensor(final Sensor sensor,
+    public static void addAvgAndMaxToSensor(final Sensor sensor,
                                              final String group,
                                              final Map<String, String> tags,
                                              final String operation,
@@ -658,8 +656,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                          final String group,
                                                          final Map<String, String> tags,
                                                          final String operation,
-                                                         final String descriptionOfInvocation,
-                                                         final String descriptionOfRate) {
+                                                         final String descriptionOfRate,
+                                                         final String descriptionOfInvocation) {
         sensor.add(
             new MetricName(
                 operation + TOTAL_SUFFIX,
@@ -689,8 +687,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             group,
             tags,
             operation,
-            "The total number of " + operation,
-            "The average per-second number of " + operation
+            "The average per-second number of " + operation,
+            "The total number of " + operation
         );
     }
 

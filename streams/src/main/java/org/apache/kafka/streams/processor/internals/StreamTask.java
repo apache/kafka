@@ -54,7 +54,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -109,7 +111,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final String group = "stream-task-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
-            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, metrics);
+            final Sensor[] parent = ThreadMetrics.commitOverTasksSensor(threadId, metrics)
+                .map(Arrays::asList).orElse(Collections.emptyList()).toArray(new Sensor[0]);
 
             // add the operation metrics with additional tags
             final Map<String, String> tagMap = metrics.taskLevelTagMap(threadId, taskName);

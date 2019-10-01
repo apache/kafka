@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
@@ -84,7 +85,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
@@ -109,7 +110,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                skippedRecordsSensor.ifPresent(Sensor::record);
                 return;
             }
 
