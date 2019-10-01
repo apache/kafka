@@ -25,7 +25,7 @@ import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipa
 import kafka.security.auth.{Operation, PermissionType}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, CreateAclsResult}
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateAclsResult}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
@@ -265,7 +265,9 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
   }
 
   private def createAdminClient: AdminClient = {
-    val client = AdminClient.create(createConfig())
+    val config = createConfig()
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "40000")
+    val client = AdminClient.create(config)
     adminClients += client
     client
   }
