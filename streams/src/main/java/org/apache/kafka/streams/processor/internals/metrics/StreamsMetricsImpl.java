@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
@@ -156,7 +155,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
+        if (builtInMetricsVersion.equals("latest")) {
             return Version.LATEST;
         } else {
             return Version.FROM_100_TO_23;

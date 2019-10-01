@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.easymock.EasyMock;
@@ -439,12 +438,12 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void shouldGetCacheLevelTagMapForBuiltInMetricsLatestVersion() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_LATEST);
+        shouldGetCacheLevelTagMap("latest");
     }
 
     @Test
     public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To23() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+        shouldGetCacheLevelTagMap("0.10.0-2.3");
     }
 
     private void shouldGetCacheLevelTagMap(final String builtInMetricsVersion) {
@@ -458,7 +457,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         assertThat(tagMap.size(), equalTo(3));
         assertThat(
             tagMap.get(
-                builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? StreamsMetricsImpl.THREAD_ID_TAG
+                builtInMetricsVersion.equals("latest") ? StreamsMetricsImpl.THREAD_ID_TAG
                     : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23),
             equalTo(THREAD_ID)
         );

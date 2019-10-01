@@ -162,7 +162,7 @@ public class StandbyTaskTest {
 
     private final String threadName = "threadName";
     private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
+        new StreamsMetricsImpl(new Metrics(), threadName, "latest");
 
     @Before
     public void setup() throws Exception {
