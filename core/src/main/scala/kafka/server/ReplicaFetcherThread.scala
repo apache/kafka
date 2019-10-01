@@ -244,7 +244,7 @@ class ReplicaFetcherThread(name: String,
   override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    val builder = fetchSessionHandler.newBuilder()
+    val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
     partitionMap.foreach { case (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
