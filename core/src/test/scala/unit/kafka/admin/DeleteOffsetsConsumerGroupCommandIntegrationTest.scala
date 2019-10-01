@@ -62,22 +62,22 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
   }
 
   @Test
-  def testDeleteOffsetsOfSableConsumerGroupWithTopicPartition(): Unit = {
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(): Unit = {
     testWithStableConsumerGroup(topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
   @Test
-  def testDeleteOffsetsOfSableConsumerGroupWithTopicOnly(): Unit = {
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(): Unit = {
     testWithStableConsumerGroup(topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
   @Test
-  def testDeleteOffsetsOfSableConsumerGroupWithUnknownTopicPartition(): Unit = {
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(): Unit = {
     testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
   @Test
-  def testDeleteOffsetsOfSableConsumerGroupWithUnknownTopicOnly(): Unit = {
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(): Unit = {
     testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
