@@ -20,7 +20,7 @@ import java.util.Optional
 
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogManager}
-import kafka.server.AbstractFetcherThread.Fetch
+import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -521,8 +521,8 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
 
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-      t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
-      t1p1 -> PartitionFetchState(160, leaderEpoch, state = Fetching)))
+      t1p0 -> PartitionFetchState(150, None, leaderEpoch, None, state = Fetching),
+      t1p1 -> PartitionFetchState(160, None, leaderEpoch, None, state = Fetching)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get.fetchRequest
@@ -573,8 +573,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // one partition is ready and one is truncating
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, state = Truncating)))
+        t1p0 -> PartitionFetchState(150, None, leaderEpoch, state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, state = Truncating)))
 
     assertTrue(fetchRequestOpt.isDefined)
     val fetchRequest = fetchRequestOpt.get
@@ -587,8 +587,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, leaderEpoch, state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
+        t1p0 -> PartitionFetchState(140, None, leaderEpoch, state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -601,8 +601,8 @@ class ReplicaAlterLogDirsThreadTest {
 
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
+        t1p0 -> PartitionFetchState(140, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching),
+        t1p1 -> PartitionFetchState(160, None, leaderEpoch, delay = Some(new DelayedItem(5000)), state = Fetching)))
     assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3Opt.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }

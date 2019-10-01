@@ -23,7 +23,7 @@ import java.util.Optional
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.server.AbstractFetcherThread.Fetch
+import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
@@ -223,7 +223,7 @@ class ReplicaAlterLogDirsThread(name: String,
     nextPartitionOpt
   }
 
-  private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[Fetch]] = {
+  private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[ReplicaFetch]] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
@@ -243,13 +243,13 @@ class ReplicaAlterLogDirsThread(name: String,
       // Set maxWait and minBytes to 0 because the response should return immediately if
       // the future log has caught up with the current log of the partition
       val requestBuilder = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 0, requestMap).setMaxBytes(maxBytes)
-      Some(Fetch(requestMap, requestBuilder))
+      Some(ReplicaFetch(requestMap, requestBuilder))
     }
 
     ResultWithPartitions(fetchRequestOpt, partitionsWithError)
   }
 
-  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[Fetch]] = {
+  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
     // Only include replica in the fetch request if it is not throttled.
     if (quota.isQuotaExceeded) {
       ResultWithPartitions(None, Set.empty)
