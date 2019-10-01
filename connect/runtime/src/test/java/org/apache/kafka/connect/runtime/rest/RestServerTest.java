@@ -309,9 +309,6 @@ public class RestServerTest {
 
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
-        LoggerFactory.getLogger("a.b.c.p.X");
-        LoggerFactory.getLogger("a.b.c.p.Y");
-        LoggerFactory.getLogger("a.b.c.p.Z");
 
         server = new RestServer(workerConfig);
         server.initializeServer();
@@ -323,41 +320,13 @@ public class RestServerTest {
         int port = server.advertisedUrl().getPort();
 
         executePut(host, port, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
-        executePut(host, port, "/admin/loggers/a.b.c.p.X", "{\"level\": \"INFO\"}");
-        executePut(host, port, "/admin/loggers/a.b.c.p.Y", "{\"level\": \"INFO\"}");
-        executePut(host, port, "/admin/loggers/a.b.c.p.Z", "{\"level\": \"INFO\"}");
 
         String responseStr = executeGet(host, port, "/admin/loggers");
         Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
         });
         assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
-        assertTrue("expect at least 4 loggers. instead found " + prettyPrint(loggers), loggers.size() >= 4);
+        assertTrue("expect at least 1 logger. instead found " + prettyPrint(loggers), loggers.size() >= 1);
         assertEquals("expected to find logger a.b.c.s.W set to INFO level", loggers.get("a.b.c.s.W").get("level"), "INFO");
-        assertEquals("expected to find logger a.b.c.p.X set to INFO level", loggers.get("a.b.c.p.X").get("level"), "INFO");
-        assertEquals("expected to find logger a.b.c.p.Y set to INFO level", loggers.get("a.b.c.p.Y").get("level"), "INFO");
-        assertEquals("expected to find logger a.b.c.p.Z set to INFO level", loggers.get("a.b.c.p.Z").get("level"), "INFO");
-
-        String rspList = executePut(host, port, "/admin/loggers/a.b.c.p", "{\"level\": \"DEBUG\"}");
-        List<String> changedLoggers = mapper.readValue(rspList, new TypeReference<List<String>>() {
-        });
-        assertEquals(Arrays.asList("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), changedLoggers);
-
-        responseStr = executeGet(host, port, "/admin/loggers");
-        loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
-        });
-        assertEquals("expected to find logger a.b.c.s.W set to INFO level", "INFO", loggers.get("a.b.c.s.W").get("level"));
-        assertEquals("expected to find logger a.b.c.p.X set to DEBUG level", "DEBUG", loggers.get("a.b.c.p.X").get("level"));
-        assertEquals("expected to find logger a.b.c.p.Y set to DEBUG level", "DEBUG", loggers.get("a.b.c.p.Y").get("level"));
-        assertEquals("expected to find logger a.b.c.p.Z set to DEBUG level", "DEBUG", loggers.get("a.b.c.p.Z").get("level"));
-
-        executePut(host, port, "/admin/loggers/a.b.c", "{\"level\": \"ERROR\"}");
-        responseStr = executeGet(host, port, "/admin/loggers");
-        loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
-        });
-        assertEquals("expected to find logger a.b.c.s.W set to ERROR level", "ERROR", loggers.get("a.b.c.s.W").get("level"));
-        assertEquals("expected to find logger a.b.c.p.X set to ERROR level", "ERROR", loggers.get("a.b.c.p.X").get("level"));
-        assertEquals("expected to find logger a.b.c.p.Y set to ERROR level", "ERROR", loggers.get("a.b.c.p.Y").get("level"));
-        assertEquals("expected to find logger a.b.c.p.Z set to ERROR level", "ERROR", loggers.get("a.b.c.p.Z").get("level"));
     }
 
     @Test
