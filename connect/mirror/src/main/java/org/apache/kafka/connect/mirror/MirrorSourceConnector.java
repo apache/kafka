@@ -111,6 +111,7 @@ public class MirrorSourceConnector extends SourceConnector {
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
+        scheduler.execute(this::refreshKnownTargetTopics, "refreshing known target topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
             "syncing topic configs");
@@ -196,6 +197,11 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         knownTopicPartitions = findTopicPartitions();
         knownTargetTopics = findExistingTargetTopics(); 
+    }
+
+    private void refreshKnownTargetTopics()
+            throws InterruptedException, ExecutionException {
+        knownTargetTopics = findExistingTargetTopics();
     }
 
     private Set<String> findExistingTargetTopics()
