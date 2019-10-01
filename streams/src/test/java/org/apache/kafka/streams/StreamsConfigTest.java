@@ -32,6 +32,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,9 +53,10 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -632,7 +634,6 @@ public class StreamsConfigTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -700,6 +701,23 @@ public class StreamsConfigTest {
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION, "maybe");
         new StreamsConfig(props);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldLogWarningWhenPartitionGrouperIsUsed() {
+        props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, org.apache.kafka.streams.processor.DefaultPartitionGrouper.class);
+
+        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        new StreamsConfig(props);
+
+        LogCaptureAppender.unregister(appender);
+
+        assertThat(
+            appender.getMessages(),
+            hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG + "` is deprecated and will be removed in 3.0.0 release."));
     }
 
     static class MisconfiguredSerde implements Serde {
