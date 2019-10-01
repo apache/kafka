@@ -59,6 +59,10 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
   }
 
+  override protected def logStartOffset(topicPartition: TopicPartition): Long = {
+    replicaMgr.futureLocalLogOrException(topicPartition).logStartOffset
+  }
+
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
     replicaMgr.futureLocalLogOrException(topicPartition).logEndOffset
   }

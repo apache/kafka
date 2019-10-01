@@ -83,6 +83,8 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def latestEpoch(topicPartition: TopicPartition): Option[Int]
 
+  protected def logStartOffset(topicPartition: TopicPartition): Long
+
   protected def logEndOffset(topicPartition: TopicPartition): Long
 
   protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch]
