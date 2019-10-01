@@ -474,7 +474,8 @@ public class RequestResponseTest {
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
             Struct struct = req.toStruct();
-            AbstractRequest deserialized = AbstractRequest.parseRequest(req.api, req.version(), struct);
+            ByteBuffer serializedBytes = req.serializeBody();
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.api, req.version(), serializedBytes).request;
             Struct struct2 = deserialized.toStruct();
             if (checkEqualityAndHashCode) {
                 assertEquals(struct, struct2);

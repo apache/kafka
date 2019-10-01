@@ -22,12 +22,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class DescribeDelegationTokenRequest extends AbstractRequest {
-
-    private final DescribeDelegationTokenRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<DescribeDelegationTokenRequest> {
         private final DescribeDelegationTokenRequestData data;
@@ -53,6 +52,8 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
             return data.toString();
         }
     }
+
+    private final DescribeDelegationTokenRequestData data;
 
     public DescribeDelegationTokenRequest(Struct struct, short version) {
         super(ApiKeys.DESCRIBE_DELEGATION_TOKEN, version);
@@ -80,5 +81,9 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new DescribeDelegationTokenResponse(throttleTimeMs, Errors.forException(e));
+    }
+
+    public static DescribeDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeDelegationTokenRequest(ApiKeys.EXPIRE_DELEGATION_TOKEN.parseRequest(version, buffer), version);
     }
 }

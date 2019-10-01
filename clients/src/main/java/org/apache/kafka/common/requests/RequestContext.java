@@ -62,9 +62,7 @@ public class RequestContext implements AuthorizableRequestContext {
             ApiKeys apiKey = header.apiKey();
             try {
                 short apiVersion = header.apiVersion();
-                Struct struct = apiKey.parseRequest(apiVersion, buffer);
-                AbstractRequest body = AbstractRequest.parseRequest(apiKey, apiVersion, struct);
-                return new RequestAndSize(body, struct.sizeOf());
+                return AbstractRequest.parseRequest(apiKey, apiVersion, buffer);
             } catch (Throwable ex) {
                 throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
                         ", apiVersion: " + header.apiVersion() +
