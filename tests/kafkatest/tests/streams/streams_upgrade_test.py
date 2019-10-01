@@ -258,7 +258,7 @@ class StreamsUpgradeTest(Test):
         for p in self.processors:
             self.leader_counter[p] = 2
 
-        self.update_leader()
+        self.update_leader(true)
         for p in self.processors:
             self.leader_counter[p] = 0
         self.leader_counter[self.leader] = 3
@@ -289,17 +289,17 @@ class StreamsUpgradeTest(Test):
 
         self.driver.stop()
 
-    def update_leader(self):
+    def update_leader(self, allow_leader_to_change):
         self.leader = None
         retries = 10
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
-                    if self.leader is not None:
+                if len(found) >= self.leader_counter[p] + 1:
+                    if self.leader is not None and not allow_leader_to_change:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
-                    self.leader_counter[p] = len(found)
+                    self.leader_counter[p] = self.leader_counter[p] + 1
 
             if self.leader is None:
                 retries = retries - 1
@@ -491,7 +491,7 @@ class StreamsUpgradeTest(Test):
                                                     err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(second_other_node.account))
 
                     if processor == self.leader:
-                        self.update_leader()
+                        self.update_leader(false)
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
@@ -540,7 +540,7 @@ class StreamsUpgradeTest(Test):
                                                err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(p.node.account))
 
                     if processor == self.leader:
-                        self.update_leader()
+                        self.update_leader(false)
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
