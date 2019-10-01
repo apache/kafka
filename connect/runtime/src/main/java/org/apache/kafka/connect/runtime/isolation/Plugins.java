@@ -81,9 +81,9 @@ public class Plugins {
 
     @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClassFromConfig(
-        AbstractConfig config,
-        String propertyName,
-        Class<U> pluginClass
+            AbstractConfig config,
+            String propertyName,
+            Class<U> pluginClass
     ) throws ClassNotFoundException {
         Class<?> klass = config.getClass(propertyName);
         if (pluginClass.isAssignableFrom(klass)) {
@@ -233,7 +233,6 @@ public class Plugins {
             return null;
         }
         Converter plugin = null;
-        ClassLoader savedLoader = null;
         Class<? extends Converter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -269,7 +268,7 @@ public class Plugins {
             throw new ConnectException("Unable to initialize the Converter specified in '" + classPropertyName + "'");
         }
 
-        savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
 
@@ -314,7 +313,6 @@ public class Plugins {
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
         HeaderConverter plugin = null;
-        ClassLoader savedLoader = null;
         Class<? extends HeaderConverter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -362,7 +360,7 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
-        savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig);
