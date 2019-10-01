@@ -14,27 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.List;
+public enum AssignorError {
+    NONE(0),
+    INCOMPLETE_SOURCE_TOPIC_METADATA(1),
+    VERSION_PROBING(2);
 
-// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
-public class BasePartitionState {
+    private final int code;
 
-    public final int controllerEpoch;
-    public final int leader;
-    public final int leaderEpoch;
-    public final List<Integer> isr;
-    public final int zkVersion;
-    public final List<Integer> replicas;
+    AssignorError(final int code) {
+        this.code = code;
+    }
 
-    BasePartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
-        this.controllerEpoch = controllerEpoch;
-        this.leader = leader;
-        this.leaderEpoch = leaderEpoch;
-        this.isr = isr;
-        this.zkVersion = zkVersion;
-        this.replicas = replicas;
+    public int code() {
+        return code;
     }
 
 }

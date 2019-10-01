@@ -18,6 +18,7 @@
 package org.apache.kafka.common.protocol;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 public interface Readable {
     byte readByte();
@@ -53,5 +54,12 @@ public interface Readable {
         byte[] arr = new byte[length];
         readArray(arr);
         return arr;
+    }
+
+    /**
+     * Read a UUID with the most significant digits first.
+     */
+    default UUID readUUID() {
+        return new UUID(readLong(), readLong());
     }
 }

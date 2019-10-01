@@ -19,16 +19,19 @@ package kafka.security.auth
 import java.util
 
 import kafka.network.RequestChannel.Session
+import kafka.security.auth.SimpleAclAuthorizer.BaseAuthorizer
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.utils._
 import kafka.zk.ZkVersion
 import org.apache.kafka.common.acl.{AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.resource.{PatternType, ResourcePatternFilter}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
 object SimpleAclAuthorizer {
@@ -48,6 +51,22 @@ object SimpleAclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
+
+  private[auth] class BaseAuthorizer extends AclAuthorizer {
+    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
+      val principal = requestContext.principal
+      val host = requestContext.clientAddress.getHostAddress
+      val operation = Operation.fromJava(action.operation)
+      val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
+      def logMessage: String = {
+        val authResult = if (authorized) "Allowed" else "Denied"
+        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
+      }
+
+      if (authorized) authorizerLogger.debug(logMessage)
+      else authorizerLogger.info(logMessage)
+    }
+  }
 }
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
@@ -124,16 +143,16 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def createAcls(bindings: Set[AclBinding]): Unit = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
-    val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
+    val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala.map(_.toCompletableFuture.get)
+    results.foreach { result => result.exception.asScala.foreach(throwException) }
   }
 
   private def deleteAcls(filters: Set[AclBindingFilter]): Boolean = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
-    val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
-    results.flatMap(_.aclBindingDeleteResults.asScala).find(_.exception != null).foreach { r => throw r.exception }
-    results.exists(r => r.aclBindingDeleteResults.asScala.exists(_.deleted))
+    val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala.map(_.toCompletableFuture.get)
+    results.foreach { result => result.exception.asScala.foreach(throwException) }
+    results.flatMap(_.aclBindingDeleteResults.asScala).foreach { result => result.exception.asScala.foreach(e => throw e) }
+    results.exists(r => r.aclBindingDeleteResults.asScala.exists(d => !d.exception.isPresent))
   }
 
   private def acls(filter: AclBindingFilter): Map[Resource, Set[Acl]] = {
@@ -146,19 +165,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     result.mapValues(_.toSet).toMap
   }
 
-  class BaseAuthorizer extends AclAuthorizer {
-    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
-      val principal = requestContext.principal
-      val host = requestContext.clientAddress.getHostAddress
-      val operation = Operation.fromJava(action.operation)
-      val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
-      def logMessage: String = {
-        val authResult = if (authorized) "Allowed" else "Denied"
-        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
-      }
-
-      if (authorized) authorizerLogger.debug(logMessage)
-      else authorizerLogger.info(logMessage)
-    }
+  // To retain the same exceptions as in previous versions, throw the underlying exception when the exception
+  // was wrapped by AclAuthorizer in an ApiException
+  private def throwException(e: ApiException): Unit = {
+    if (e.getCause != null)
+      throw e.getCause
+    else
+      throw e
   }
 }

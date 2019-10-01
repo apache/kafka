@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -277,14 +278,20 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        stream.reduce(MockReducer.STRING_ADDER,
-                      null);
+        stream.reduce(MockReducer.STRING_ADDER, (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+        stream.reduce(MockReducer.STRING_ADDER, (Named) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        stream.count(null);
+        stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null);
     }
 
     private void processData(final TopologyTestDriver driver) {

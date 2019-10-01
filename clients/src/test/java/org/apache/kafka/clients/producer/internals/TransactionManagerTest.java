@@ -2826,9 +2826,9 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
-            assertEquals(producerId, txnOffsetCommitRequest.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.producerEpoch());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }

@@ -154,12 +154,24 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#committed(TopicPartition)
      */
+    @Deprecated
     OffsetAndMetadata committed(TopicPartition partition);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition, Duration)
      */
+    @Deprecated
     OffsetAndMetadata committed(TopicPartition partition, final Duration timeout);
+
+    /**
+     * @see KafkaConsumer#committed(Set)
+     */
+    Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#committed(Set, Duration)
+     */
+    Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
 
     /**
      * @see KafkaConsumer#metrics()

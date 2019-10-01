@@ -19,7 +19,7 @@ package kafka.server
 
 import java.{lang, util}
 import java.util.Properties
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
@@ -332,13 +332,13 @@ class DynamicBrokerConfigTest {
 
     class TestAuthorizer extends Authorizer with Reconfigurable {
       @volatile var superUsers = ""
-      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
-      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = Map.empty.asJava
-      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = null
-      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = null
+      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
       override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
-      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
+      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
+      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
       override def close(): Unit = {}
+      override def configure(configs: util.Map[String, _]): Unit = {}
       override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
       override def reconfigure(configs: util.Map[String, _]): Unit = {

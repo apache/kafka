@@ -188,6 +188,12 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.INT64";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UUID";
         } else if (type instanceof FieldType.StringFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";

@@ -648,7 +648,7 @@ public class ConfigDefTest {
             // of the aliasing logic to suffice for this test.
             Thread.currentThread().setContextClassLoader(new ClassLoader(originalClassLoader) {
                 @Override
-                public Class loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                     if (alias.equals(name)) {
                         return NestedClass.class;
                     } else {
