@@ -950,12 +950,12 @@ public class ConfigDef {
 
     public static class CaseInsensitiveValidString implements Validator {
 
-        final List<String> validStrings;
+        final Set<String> validStrings;
 
         private CaseInsensitiveValidString(List<String> validStrings) {
             this.validStrings = validStrings.stream()
                 .map(s -> s.toUpperCase(Locale.ROOT))
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
         }
 
         public static CaseInsensitiveValidString in(String... validStrings) {
@@ -971,7 +971,7 @@ public class ConfigDef {
         }
 
         public String toString() {
-            return "[" + Utils.join(validStrings, ", ") + "]";
+            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
         }
     }
 

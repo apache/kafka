@@ -72,8 +72,16 @@ public class JsonConverterConfig extends ConverterConfig {
         return CONFIG;
     }
 
+    // cached config values
+    private final boolean schemasEnabled;
+    private final int schemaCacheSize;
+    private final DecimalFormat decimalFormat;
+
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
+        this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);
+        this.schemaCacheSize = getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+        this.decimalFormat = DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -82,7 +90,7 @@ public class JsonConverterConfig extends ConverterConfig {
      * @return true if enabled, or false otherwise
      */
     public boolean schemasEnabled() {
-        return getBoolean(SCHEMAS_ENABLE_CONFIG);
+        return schemasEnabled;
     }
 
     /**
@@ -91,7 +99,7 @@ public class JsonConverterConfig extends ConverterConfig {
      * @return the cache size
      */
     public int schemaCacheSize() {
-        return getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+        return schemaCacheSize;
     }
 
     /**
@@ -100,7 +108,7 @@ public class JsonConverterConfig extends ConverterConfig {
      * @return the decimal serialization format
      */
     public DecimalFormat decimalFormat() {
-        return DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
+        return decimalFormat;
     }
 
 }
