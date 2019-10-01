@@ -106,9 +106,9 @@ public class TaskManager {
 
         addStreamTasks(assignment);
         addStandbyTasks();
-        // Pause all the partitions until the underlying state store is ready for all the active tasks.
-        log.trace("Pausing partitions: {}", assignment);
-        consumer.pause(assignment);
+
+        // Pause all the new partitions until the underlying state store is ready for all the active tasks.
+        pausePartitions();
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
@@ -315,6 +315,11 @@ public class TaskManager {
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
         this.consumer = consumer;
+    }
+
+    void pausePartitions() {
+        log.trace("Pausing partitions: {}", consumer.assignment());
+        consumer.pause(consumer.assignment());
     }
 
     /**

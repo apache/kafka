@@ -352,7 +352,7 @@ class StreamsUpgradeTest(Test):
                     if self.leader is not None:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
-                    self.leader_counter[p] = self.leader_counter[p] + 1
+                    self.leader_counter[p] = len(found)
 
             if self.leader is None:
                 retries = retries - 1
