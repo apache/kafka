@@ -168,7 +168,7 @@ public class StreamsUpgradeTest {
             final AssignmentInfo info = AssignmentInfo.decode(
                 assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
 
-            if (super.maybeUpdateSubscriptionVersion(info.version(), info.commonlySupportedVersion())) {
+            if (super.maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
                 setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
                 return;
             }

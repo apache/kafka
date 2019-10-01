@@ -358,7 +358,7 @@ class StreamsUpgradeTest(Test):
                     if self.leader is not None:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
-                    self.leader_counter[p] = self.leader_counter[p] + 1
+                    self.leader_counter[p] = len(found)
 
             if self.leader is None:
                 retries = retries - 1
@@ -585,10 +585,10 @@ class StreamsUpgradeTest(Test):
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
                         first_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(first_other_node.account))
+                                                       err_msg="Never saw output 'Upgrade metadata to version 6' on" + str(first_other_node.account))
                         second_other_monitor.wait_until("Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.",
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(second_other_node.account))
+                                                        err_msg="Never saw output 'Upgrade metadata to version 6' on" + str(second_other_node.account))
 
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,

@@ -129,8 +129,7 @@ public class TaskManager {
         }
 
         // Pause all the new partitions until the underlying state store is ready for all the active tasks.
-        log.trace("Pausing partitions: {}", assignment);
-        consumer.pause(assignment);
+        pausePartitions();
     }
 
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
@@ -364,6 +363,11 @@ public class TaskManager {
 
     InternalTopologyBuilder builder() {
         return taskCreator.builder();
+    }
+
+    void pausePartitions() {
+        log.trace("Pausing partitions: {}", consumer.assignment());
+        consumer.pause(consumer.assignment());
     }
 
     /**
