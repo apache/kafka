@@ -267,7 +267,7 @@ public class StreamThreadTest {
     public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final String defaultGroupName = "stream-metrics";
-        final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
+        final Map<String, String> defaultTags = Collections.singletonMap("thread-id", thread.getName());
         final String descriptionIsNotVerified = "";
 
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -317,7 +317,7 @@ public class StreamThreadTest {
 
         final String taskGroupName = "stream-task-metrics";
         final Map<String, String> taskTags =
-            mkMap(mkEntry("task-id", "all"), mkEntry("client-id", thread.getName()));
+            mkMap(mkEntry("task-id", "all"), mkEntry("thread-id", thread.getName()));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -328,10 +328,10 @@ public class StreamThreadTest {
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertEquals(CLIENT_ID + "-StreamThread-1", thread.getName());
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,thread-id=%s",
                    defaultGroupName, 
                    thread.getName())));
-        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=" + thread.getName() + ",task-id=all"));
+        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,thread-id=" + thread.getName() + ",task-id=all"));
     }
 
     @Test
@@ -1527,11 +1527,11 @@ public class StreamThreadTest {
         final MetricName skippedTotalMetric = metrics.metricName(
             "skipped-records-total",
             "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
+            Collections.singletonMap("thread-id", thread.getName()));
         final MetricName skippedRateMetric = metrics.metricName(
             "skipped-records-rate",
             "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
+            Collections.singletonMap("thread-id", thread.getName()));
         assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
         assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
@@ -1600,11 +1600,11 @@ public class StreamThreadTest {
         final MetricName skippedTotalMetric = metrics.metricName(
             "skipped-records-total",
             "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
+            Collections.singletonMap("thread-id", thread.getName()));
         final MetricName skippedRateMetric = metrics.metricName(
             "skipped-records-rate",
             "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
+            Collections.singletonMap("thread-id", thread.getName()));
         assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
         assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 

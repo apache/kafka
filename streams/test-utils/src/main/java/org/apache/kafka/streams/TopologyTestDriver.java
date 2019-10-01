@@ -315,12 +315,12 @@ public class TopologyTestDriver implements Closeable {
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
                                                 threadLevelGroup,
                                                 "The average per-second number of skipped records",
-                                                streamsMetrics.tagMap(threadId)),
+                                                streamsMetrics.threadLevelTagMap(threadId)),
                                  new Rate(TimeUnit.SECONDS, new WindowedCount()));
         skippedRecordsSensor.add(new MetricName("skipped-records-total",
                                                 threadLevelGroup,
                                                 "The total number of skipped records",
-                                                streamsMetrics.tagMap(threadId)),
+                                                streamsMetrics.threadLevelTagMap(threadId)),
                                  new CumulativeSum());
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),

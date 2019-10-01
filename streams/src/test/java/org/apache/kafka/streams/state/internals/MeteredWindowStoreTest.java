@@ -96,9 +96,9 @@ public class MeteredWindowStoreTest {
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         final String threadId = Thread.currentThread().getName();
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", threadId, context.taskId().toString(), "scope", "mocked-store")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", threadId, context.taskId().toString(), "scope", "all")));
     }
 

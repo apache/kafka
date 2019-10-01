@@ -902,9 +902,9 @@ public abstract class WindowBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The total number of occurrence of expired-window-record-drop operations.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
+                mkEntry(metricScope + "-state-id", windowStore.name())
             )
         ));
 
@@ -913,9 +913,9 @@ public abstract class WindowBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
+                mkEntry(metricScope + "-state-id", windowStore.name())
             )
         ));
 

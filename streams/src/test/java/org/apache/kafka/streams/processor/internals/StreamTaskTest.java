@@ -418,12 +418,12 @@ public class StreamTaskTest {
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
-            "kafka.streams:type=stream-task-metrics,client-id=%s,task-id=%s",
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=%s",
             threadId,
             task.id.toString()
         )));
         assertTrue(reporter.containsMbean(String.format(
-            "kafka.streams:type=stream-task-metrics,client-id=%s,task-id=all",
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=all",
             threadId
         )));
     }
@@ -433,7 +433,7 @@ public class StreamTaskTest {
             String.format(nameFormat, "commit"),
             "stream-task-metrics",
             String.format(descriptionFormat, "commit"),
-            mkMap(mkEntry("task-id", taskId), mkEntry("client-id", Thread.currentThread().getName()))
+            mkMap(mkEntry("task-id", taskId), mkEntry("thread-id", Thread.currentThread().getName()))
         ));
     }
 
@@ -771,7 +771,7 @@ public class StreamTaskTest {
         final MetricName enforcedProcessMetric = metrics.metricName(
             "enforced-processing-total",
             "stream-task-metrics",
-            mkMap(mkEntry("client-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
         );
 
         assertFalse(task.isProcessable(0L));
