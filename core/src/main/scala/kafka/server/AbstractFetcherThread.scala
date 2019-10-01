@@ -358,7 +358,7 @@ abstract class AbstractFetcherThread(name: String,
 
                 case Errors.UNKNOWN_LEADER_EPOCH =>
                   debug(s"Remote broker has a smaller leader epoch for partition $topicPartition than " +
-                    s"this replica's current leader epoch of ${fetchPartitionData.currentLeaderEpoch}.")
+                    s"this replica's current leader epoch of ${currentFetchState.currentLeaderEpoch}.")
                   partitionsWithError += topicPartition
 
                 case Errors.FENCED_LEADER_EPOCH =>
