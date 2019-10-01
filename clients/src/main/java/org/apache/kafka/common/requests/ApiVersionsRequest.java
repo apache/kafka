@@ -56,7 +56,7 @@ public class ApiVersionsRequest extends AbstractRequest {
         }
     }
 
-    private static final Pattern SOFTWARE_NAME_VERSION_PATTERN = Pattern.compile("(?:[a-zA-Z0-9\\-.])+");
+    private static final Pattern SOFTWARE_NAME_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9](?:[a-zA-Z0-9\\-.]*[a-zA-Z0-9])?");
 
     private final Short unsupportedRequestVersion;
 

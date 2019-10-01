@@ -731,7 +731,7 @@ public class SaslAuthenticatorTest {
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, header.headerVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
         assertEquals(Errors.INVALID_REQUEST.code(), response.data.errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
@@ -762,7 +762,7 @@ public class SaslAuthenticatorTest {
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, header.headerVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
         assertEquals(Errors.NONE.code(), response.data.errorCode());
 
         // Test that client can authenticate successfully

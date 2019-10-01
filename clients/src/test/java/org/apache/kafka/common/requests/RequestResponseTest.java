@@ -106,6 +106,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -783,34 +784,33 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testApiVersionsRequestV3() {
+    public void testValidApiVersionsRequestV3() {
         ApiVersionsRequest request;
 
-        // Valid Case
         request = new ApiVersionsRequest.Builder().build();
         assertTrue(request.isValid());
 
-        // Valid Case
         request = new ApiVersionsRequest(new ApiVersionsRequestData()
-            .setClientSoftwareName("apache-kafka-java")
+            .setClientSoftwareName("apache-kafka.java")
             .setClientSoftwareVersion("0.0.0-SNAPSHOT"),
-            (short) 3
+            ApiKeys.API_VERSIONS.latestVersion()
         );
         assertTrue(request.isValid());
+    }
 
-        // Invalid Case
-        request = new ApiVersionsRequest(new ApiVersionsRequestData()
-            .setClientSoftwareName("java@apache_kafka")
-            .setClientSoftwareVersion("0.0.0-SNAPSHOT"),
-            (short) 3
-        );
-        assertFalse(request.isValid());
+    @Test
+    public void testInvalidApiVersionsRequestV3() {
+        testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
+        testInvalidCase("apache-kafka-java", "0.0.0@java");
+        testInvalidCase("-apache-kafka-java", "0.0.0");
+        testInvalidCase("apache-kafka-java.", "0.0.0");
+    }
 
-        // Invalid Case
-        request = new ApiVersionsRequest(new ApiVersionsRequestData()
-            .setClientSoftwareName("apache-kafka-java")
-            .setClientSoftwareVersion("0.0.0@java"),
-            (short) 3
+    private void testInvalidCase(String name, String version) {
+        ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData()
+            .setClientSoftwareName(name)
+            .setClientSoftwareVersion(version),
+            ApiKeys.API_VERSIONS.latestVersion()
         );
         assertFalse(request.isValid());
     }
@@ -836,6 +836,28 @@ public class RequestResponseTest {
 
         assertEquals(response.data.errorCode(), Errors.INVALID_REQUEST.code());
         assertTrue(response.data.apiKeys().isEmpty());
+    }
+
+    @Test
+    public void testApiVersionResponseStructParsingFallback() {
+        Struct struct = ApiVersionsResponse.defaultApiVersionsResponse().toStruct((short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
+    }
+
+    @Test(expected = SchemaException.class)
+    public void testApiVersionResponseStructParsingFallbackException() {
+        short version = 0;
+        ApiVersionsResponse.apiVersionsResponse(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
+    }
+
+    @Test
+    public void testApiVersionResponseStructParsing() {
+        Struct struct = ApiVersionsResponse.defaultApiVersionsResponse().toStruct(ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
     private ResponseHeader createResponseHeader(short headerVersion) {

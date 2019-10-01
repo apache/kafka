@@ -84,7 +84,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
         // using a version higher than that supported by the broker, a version 0 response is sent
         // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
-        // fails back while parsing it into a Struct which means that the version received by this
+        // falls back while parsing it into a Struct which means that the version received by this
         // method is not necessary the real one. It may be version 0 as well.
         try {
             return new ApiVersionsResponse(struct, version);
