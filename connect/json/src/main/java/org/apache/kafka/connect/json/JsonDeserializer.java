@@ -19,6 +19,8 @@ package org.apache.kafka.connect.json;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -33,11 +35,18 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        // this ensures that the JsonDeserializer maintains full precision on
-        // floating point numbers that cannot fit into float64
-        objectMapper.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+        this(Collections.emptySet());
     }
 
+    /**
+     * A constructor that additionally specifies some {@link DeserializationFeature}
+     * for the deserializer
+     *
+     * @param deserializationFeatures the specified deserialization features
+     */
+    JsonDeserializer(final Set<DeserializationFeature> deserializationFeatures) {
+        deserializationFeatures.forEach(objectMapper::enable);
+    }
 
     @Override
     public JsonNode deserialize(String topic, byte[] bytes) {

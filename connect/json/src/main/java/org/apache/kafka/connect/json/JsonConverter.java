@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.connect.json;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
@@ -275,7 +278,15 @@ public class JsonConverter implements Converter, HeaderConverter {
     private Cache<JsonNode, Schema> toConnectSchemaCache;
 
     private final JsonSerializer serializer = new JsonSerializer();
-    private final JsonDeserializer deserializer = new JsonDeserializer();
+    private final JsonDeserializer deserializer;
+
+    public JsonConverter() {
+        // this ensures that the JsonDeserializer maintains full precision on
+        // floating point numbers that cannot fit into float64
+        final Set<DeserializationFeature> deserializationFeatures = new HashSet<>();
+        deserializationFeatures.add(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+        deserializer = new JsonDeserializer(deserializationFeatures);
+    }
 
     @Override
     public ConfigDef config() {
