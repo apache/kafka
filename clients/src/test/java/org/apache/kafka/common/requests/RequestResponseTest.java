@@ -233,6 +233,7 @@ public class RequestResponseTest {
         checkRequest(createProduceRequest(3), true);
         checkErrorResponse(createProduceRequest(3), new UnknownServerException(), true);
         checkResponse(createProduceResponse(), 2, true);
+        checkResponse(createProduceResponseWithErrorMessage(), 8, true);
         checkRequest(createStopReplicaRequest(0, true), true);
         checkRequest(createStopReplicaRequest(0, false), true);
         checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException(), true);
@@ -1115,6 +1116,13 @@ public class RequestResponseTest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
                 10000, RecordBatch.NO_TIMESTAMP, 100));
+        return new ProduceResponse(responseData, 0);
+    }
+
+    private ProduceResponse createProduceResponseWithErrorMessage() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
+                10000, RecordBatch.NO_TIMESTAMP, 100, Collections.singletonMap(0, "error message"), "global error message"));
         return new ProduceResponse(responseData, 0);
     }
 

@@ -505,6 +505,78 @@ public final class MessageTest {
         }
     }
 
+    @Test
+    public void testProduceResponseVersions() throws Exception {
+        String topicName = "topic";
+        int partitionIndex = 0;
+        short errorCode = Errors.INVALID_TOPIC_EXCEPTION.code();
+        long baseOffset = 12L;
+        int throttleTimeMs = 1234;
+        long logAppendTimeMs = 1234L;
+        long logStartOffset = 1234L;
+        int relativeOffset = 0;
+        String relativeOffsetErrorMessage = "error message";
+        String errorMessage = "global error message";
+
+        testAllMessageRoundTrips(new ProduceResponseData()
+                                     .setResponses(singletonList(
+                                         new ProduceResponseData.TopicProduceResponse()
+                                             .setName(topicName)
+                                             .setPartitions(singletonList(
+                                                 new ProduceResponseData.PartitionProduceResponse()
+                                                     .setPartitionIndex(partitionIndex)
+                                                     .setErrorCode(errorCode)
+                                                     .setBaseOffset(baseOffset))))));
+
+        Supplier<ProduceResponseData> response =
+            () -> new ProduceResponseData()
+                      .setResponses(singletonList(
+                            new ProduceResponseData.TopicProduceResponse()
+                                .setName(topicName)
+                                .setPartitions(singletonList(
+                                     new ProduceResponseData.PartitionProduceResponse()
+                                         .setPartitionIndex(partitionIndex)
+                                         .setErrorCode(errorCode)
+                                         .setBaseOffset(baseOffset)
+                                         .setLogAppendTimeMs(logAppendTimeMs)
+                                         .setLogStartOffset(logStartOffset)
+                                         .setErrorRecords(singletonList(
+                                             new ProduceResponseData.RelativeOffsetAndErrorMessage()
+                                                 .setRelativeOffset(relativeOffset)
+                                                 .setRelativeOffsetErrorMessage(relativeOffsetErrorMessage)))
+                                         .setErrorMessage(errorMessage)))))
+                      .setThrottleTimeMs(throttleTimeMs);
+
+        for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
+            ProduceResponseData responseData = response.get();
+
+            if (version < 8) {
+                responseData.responses().get(0).partitions().get(0).setErrorRecords(Collections.emptyList());
+                responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
+            }
+
+            if (version < 5) {
+                responseData.responses().get(0).partitions().get(0).setLogStartOffset(-1);
+            }
+
+            if (version < 2) {
+                responseData.responses().get(0).partitions().get(0).setLogAppendTimeMs(-1);
+            }
+
+            if (version < 1) {
+                responseData.setThrottleTimeMs(0);
+            }
+
+            if (version >= 3 && version <= 4) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 4, responseData, responseData);
+            } else if (version >= 6 && version <= 7) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 7, responseData, responseData);
+            } else {
+                testEquivalentMessageRoundTrip(version, responseData);
+            }
+        }
+    }
+
     private void testAllMessageRoundTrips(Message message) throws Exception {
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
     }
