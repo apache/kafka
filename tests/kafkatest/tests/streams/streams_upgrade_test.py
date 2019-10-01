@@ -314,7 +314,7 @@ class StreamsUpgradeTest(Test):
         for p in self.processors:
             self.leader_counter[p] = 2
 
-        self.update_leader(False)
+        self.update_leader()
         for p in self.processors:
             self.leader_counter[p] = 0
         self.leader_counter[self.leader] = 3
@@ -342,15 +342,13 @@ class StreamsUpgradeTest(Test):
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
-    def update_leader(self, require_unique_leader):
+    def update_leader(self):
         self.leader = None
         retries = 10
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
                 if len(found) >= self.leader_counter[p] + 1:
-                    if self.leader is not None and require_unique_leader:
-                        raise Exception("Could not uniquely identify leader")
                     self.leader = p
                     self.leader_counter[p] = self.leader_counter[p] + 1
 
@@ -543,7 +541,7 @@ class StreamsUpgradeTest(Test):
                                            err_msg="Could not detect FutureStreamsPartitionAssignor in " + str(node.account))
 
                     if processor == self.leader:
-                        self.update_leader(True)
+                        self.update_leader()
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
@@ -614,7 +612,7 @@ class StreamsUpgradeTest(Test):
                         raise Exception("Never saw all three processors have the synchronized generation number")
 
                     if processor == self.leader:
-                        self.update_leader(True)
+                        self.update_leader()
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
