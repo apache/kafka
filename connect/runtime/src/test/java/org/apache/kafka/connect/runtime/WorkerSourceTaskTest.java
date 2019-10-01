@@ -789,6 +789,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
             expectTaskCommitRecord(anyTimes, commitSuccess);
+        }
+        if (commitSuccess) {
             expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
         }
 
