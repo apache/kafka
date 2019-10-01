@@ -163,6 +163,7 @@ public class AbstractCoordinatorTest {
         assertNotNull(getMetric("sync-total"));
         assertNotNull(getMetric("rebalance-latency-avg"));
         assertNotNull(getMetric("rebalance-latency-max"));
+        assertNotNull(getMetric("rebalance-latency-total"));
         assertNotNull(getMetric("rebalance-rate-per-hour"));
         assertNotNull(getMetric("rebalance-total"));
         assertNotNull(getMetric("last-rebalance-seconds-ago"));
@@ -207,6 +208,7 @@ public class AbstractCoordinatorTest {
 
         assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
+        assertEquals(9.0d, getMetric("rebalance-latency-total").metricValue());
         assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("rebalance-total").metricValue());
 
