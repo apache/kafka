@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -52,25 +53,15 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
     }
 
     private final AlterPartitionReassignmentsRequestData data;
-    private final short version;
 
     private AlterPartitionReassignmentsRequest(AlterPartitionReassignmentsRequestData data, short version) {
         super(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, version);
         this.data = data;
-        this.version = version;
-    }
-
-    AlterPartitionReassignmentsRequest(Struct struct, short version) {
-        super(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, version);
-        this.data = new AlterPartitionReassignmentsRequestData(struct, version);
-        this.version = version;
     }
 
     public static AlterPartitionReassignmentsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterPartitionReassignmentsRequest(
-                ApiKeys.ALTER_PARTITION_REASSIGNMENTS.parseRequest(version, buffer),
-                version
-        );
+        return new AlterPartitionReassignmentsRequest(new AlterPartitionReassignmentsRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public AlterPartitionReassignmentsRequestData data() {
@@ -82,7 +73,7 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
      */
     @Override
     public Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     @Override

@@ -26,29 +26,20 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 public class ElectLeadersResponse extends AbstractResponse {
 
-    private final short version;
     private final ElectLeadersResponseData data;
 
-    public ElectLeadersResponse(Struct struct) {
-        this(struct, ApiKeys.ELECT_LEADERS.latestVersion());
-    }
-
     public ElectLeadersResponse(Struct struct, short version) {
-        this.version = version;
-        this.data = new ElectLeadersResponseData(struct, version);
+        this(new ElectLeadersResponseData(struct, version));
     }
 
-    public ElectLeadersResponse(
-            int throttleTimeMs,
-            short errorCode,
-            List<ReplicaElectionResult> electionResults) {
-        this(throttleTimeMs, errorCode, electionResults, ApiKeys.ELECT_LEADERS.latestVersion());
+    public ElectLeadersResponse(ElectLeadersResponseData data) {
+        this.data = data;
     }
 
     public ElectLeadersResponse(
@@ -56,25 +47,15 @@ public class ElectLeadersResponse extends AbstractResponse {
             short errorCode,
             List<ReplicaElectionResult> electionResults,
             short version) {
-
-        this.version = version;
         this.data = new ElectLeadersResponseData();
-
         data.setThrottleTimeMs(throttleTimeMs);
-
-        if (version >= 1) {
+        if (version >= 1)
             data.setErrorCode(errorCode);
-        }
-
         data.setReplicaElectionResults(electionResults);
     }
 
     public ElectLeadersResponseData data() {
         return data;
-    }
-
-    public short version() {
-        return version;
     }
 
     @Override
@@ -100,7 +81,7 @@ public class ElectLeadersResponse extends AbstractResponse {
     }
 
     public static ElectLeadersResponse parse(ByteBuffer buffer, short version) {
-        return new ElectLeadersResponse(ApiKeys.ELECT_LEADERS.responseSchema(version).read(buffer), version);
+        return new ElectLeadersResponse(new ElectLeadersResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

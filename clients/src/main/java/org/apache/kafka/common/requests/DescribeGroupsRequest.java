@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -46,18 +47,14 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     private final DescribeGroupsRequestData data;
-    private final short version;
 
     private DescribeGroupsRequest(DescribeGroupsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_GROUPS, version);
         this.data = data;
-        this.version = version;
     }
 
     public DescribeGroupsRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_GROUPS, version);
-        this.data = new DescribeGroupsRequestData(struct, version);
-        this.version = version;
+        this(new DescribeGroupsRequestData(struct, version), version);
     }
 
     public DescribeGroupsRequestData data() {
@@ -66,12 +63,12 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        if (version == 0) {
+        if (version() == 0) {
             return DescribeGroupsResponse.fromError(DEFAULT_THROTTLE_TIME, Errors.forException(e), data.groups());
         } else {
             return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
@@ -79,6 +76,6 @@ public class DescribeGroupsRequest extends AbstractRequest {
     }
 
     public static DescribeGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsRequest(ApiKeys.DESCRIBE_GROUPS.parseRequest(version, buffer), version);
+        return new DescribeGroupsRequest(new DescribeGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

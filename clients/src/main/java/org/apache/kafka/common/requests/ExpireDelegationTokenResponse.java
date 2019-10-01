@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -39,7 +39,8 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
     }
 
     public static ExpireDelegationTokenResponse parse(ByteBuffer buffer, short version) {
-        return new ExpireDelegationTokenResponse(ApiKeys.EXPIRE_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
+        return new ExpireDelegationTokenResponse(new ExpireDelegationTokenResponseData(new ByteBufferAccessor(buffer),
+            version));
     }
 
     public Errors error() {

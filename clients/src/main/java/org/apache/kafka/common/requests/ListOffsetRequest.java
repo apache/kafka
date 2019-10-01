@@ -218,7 +218,6 @@ public class ListOffsetRequest extends AbstractRequest {
     /**
      * Private constructor with a specified version.
      */
-    @SuppressWarnings("unchecked")
     private ListOffsetRequest(int replicaId,
                               Map<TopicPartition, PartitionData> targetTimes,
                               IsolationLevel isolationLevel,

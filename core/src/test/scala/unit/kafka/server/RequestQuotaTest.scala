@@ -513,7 +513,7 @@ class RequestQuotaTest extends BaseRequestTest {
   case class Client(clientId: String, apiKey: ApiKeys) {
     var correlationId: Int = 0
     val builder = requestBuilder(apiKey)
-    def runUntil(until: (Struct) => Boolean): Boolean = {
+    def runUntil(until: Struct => Boolean): Boolean = {
       val startMs = System.currentTimeMillis
       var done = false
       val socket = connect()
@@ -561,56 +561,50 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def responseThrottleTime(apiKey: ApiKeys, response: Struct): Int = {
+  private def responseThrottleTime(apiKey: ApiKeys, responseStruct: Struct): Int = {
+    val apiVersion = apiKey.latestVersion
     apiKey match {
-      case ApiKeys.PRODUCE => new ProduceResponse(response).throttleTimeMs
-      case ApiKeys.FETCH => FetchResponse.parse(response).throttleTimeMs
-      case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
-      case ApiKeys.METADATA =>
-        new MetadataResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
-      case ApiKeys.OFFSET_COMMIT =>
-        new OffsetCommitResponse(response, ApiKeys.OFFSET_COMMIT.latestVersion).throttleTimeMs
-      case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response, ApiKeys.OFFSET_FETCH.latestVersion).throttleTimeMs
-      case ApiKeys.FIND_COORDINATOR =>
-        new FindCoordinatorResponse(response, ApiKeys.FIND_COORDINATOR.latestVersion).throttleTimeMs
-      case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
-      case ApiKeys.HEARTBEAT => new HeartbeatResponse(response, ApiKeys.HEARTBEAT.latestVersion).throttleTimeMs
-      case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response).throttleTimeMs
-      case ApiKeys.SYNC_GROUP => new SyncGroupResponse(response).throttleTimeMs
-      case ApiKeys.DESCRIBE_GROUPS =>
-        new DescribeGroupsResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
-      case ApiKeys.LIST_GROUPS => new ListGroupsResponse(response, ApiKeys.LIST_GROUPS.latestVersion).throttleTimeMs
-      case ApiKeys.API_VERSIONS => new ApiVersionsResponse(response).throttleTimeMs
-      case ApiKeys.CREATE_TOPICS =>
-        new CreateTopicsResponse(response, ApiKeys.CREATE_TOPICS.latestVersion).throttleTimeMs
-      case ApiKeys.DELETE_TOPICS =>
-        new DeleteTopicsResponse(response, ApiKeys.DELETE_TOPICS.latestVersion).throttleTimeMs
-      case ApiKeys.DELETE_RECORDS => new DeleteRecordsResponse(response).throttleTimeMs
-      case ApiKeys.INIT_PRODUCER_ID => new InitProducerIdResponse(response, ApiKeys.INIT_PRODUCER_ID.latestVersion).throttleTimeMs
-      case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(response).throttleTimeMs
-      case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(response).throttleTimeMs
-      case ApiKeys.END_TXN => new EndTxnResponse(response).throttleTimeMs
-      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response, ApiKeys.TXN_OFFSET_COMMIT.latestVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
-      case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
-      case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
-      case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
-      case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
-      case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
-      case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
-      case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
-      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response, ApiKeys.CREATE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response, ApiKeys.DESCRIBE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response, ApiKeys.RENEW_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response, ApiKeys.EXPIRE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
-      case ApiKeys.OFFSET_FOR_LEADER_EPOCH => new OffsetsForLeaderEpochResponse(response).throttleTimeMs
-      case ApiKeys.ELECT_LEADERS => new ElectLeadersResponse(response).throttleTimeMs
-      case ApiKeys.INCREMENTAL_ALTER_CONFIGS =>
-        new IncrementalAlterConfigsResponse(response, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion()).throttleTimeMs
-      case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(response).throttleTimeMs
-      case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(response).throttleTimeMs
-      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(response).throttleTimeMs()
+      case ApiKeys.PRODUCE => new ProduceResponse(responseStruct).throttleTimeMs
+      case ApiKeys.FETCH => FetchResponse.parse(responseStruct).throttleTimeMs
+      case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(responseStruct).throttleTimeMs
+      case ApiKeys.METADATA => new MetadataResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.JOIN_GROUP => new JoinGroupResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.HEARTBEAT => new HeartbeatResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.SYNC_GROUP => new SyncGroupResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DESCRIBE_GROUPS => new DescribeGroupsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.LIST_GROUPS => new ListGroupsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.API_VERSIONS => new ApiVersionsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.CREATE_TOPICS => new CreateTopicsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DELETE_TOPICS => new DeleteTopicsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DELETE_RECORDS => new DeleteRecordsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.INIT_PRODUCER_ID => new InitProducerIdResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(responseStruct).throttleTimeMs
+      case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(responseStruct).throttleTimeMs
+      case ApiKeys.END_TXN => new EndTxnResponse(responseStruct).throttleTimeMs
+      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.CREATE_ACLS => new CreateAclsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(responseStruct).throttleTimeMs
+      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.OFFSET_FOR_LEADER_EPOCH => new OffsetsForLeaderEpochResponse(responseStruct).throttleTimeMs
+      case ApiKeys.ELECT_LEADERS => new ElectLeadersResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.INCREMENTAL_ALTER_CONFIGS => new IncrementalAlterConfigsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(responseStruct, apiVersion).throttleTimeMs
+      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(responseStruct, apiVersion).throttleTimeMs()
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }
@@ -621,10 +615,9 @@ class RequestQuotaTest extends BaseRequestTest {
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
 
-    val throttled = client.runUntil(response => {
+    val throttled = client.runUntil { response =>
       responseThrottleTime(apiKey, response) > 0
     }
-    )
 
     assertTrue(s"Response not throttled: $client", throttled)
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)

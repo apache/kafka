@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -212,7 +212,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(ApiKeys.METADATA.responseSchema(version).read(buffer), version);
+        return new MetadataResponse(new MetadataResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static class TopicMetadata {

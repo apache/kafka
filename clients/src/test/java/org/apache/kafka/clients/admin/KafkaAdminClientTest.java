@@ -80,6 +80,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.ApiError;
@@ -756,7 +757,8 @@ public class KafkaAdminClientTest {
 
                 electionResults.add(electionResult);
 
-                env.kafkaClient().prepareResponse(new ElectLeadersResponse(0, Errors.NONE.code(), electionResults));
+                env.kafkaClient().prepareResponse(new ElectLeadersResponse(0, Errors.NONE.code(),
+                        electionResults, ApiKeys.ELECT_LEADERS.latestVersion()));
                 ElectLeadersResult results = env.adminClient().electLeaders(
                         electionType,
                         new HashSet<>(asList(topic1, topic2)));
@@ -769,7 +771,8 @@ public class KafkaAdminClientTest {
                 partition2Result.setErrorCode(ApiError.NONE.error().code());
                 partition2Result.setErrorMessage(ApiError.NONE.message());
 
-                env.kafkaClient().prepareResponse(new ElectLeadersResponse(0, Errors.NONE.code(), electionResults));
+                env.kafkaClient().prepareResponse(new ElectLeadersResponse(0, Errors.NONE.code(), electionResults,
+                        ApiKeys.ELECT_LEADERS.latestVersion()));
                 results = env.adminClient().electLeaders(electionType, new HashSet<>(asList(topic1, topic2)));
                 assertFalse(results.partitions().get().get(topic1).isPresent());
                 assertFalse(results.partitions().get().get(topic2).isPresent());

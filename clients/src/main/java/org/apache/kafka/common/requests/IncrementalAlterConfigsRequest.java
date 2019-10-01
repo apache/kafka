@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterC
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -56,14 +57,9 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         this.version = version;
     }
 
-    IncrementalAlterConfigsRequest(final Struct struct, final short version) {
-        super(ApiKeys.INCREMENTAL_ALTER_CONFIGS, version);
-        this.data = new IncrementalAlterConfigsRequestData(struct, version);
-        this.version = version;
-    }
-
     public static IncrementalAlterConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new IncrementalAlterConfigsRequest(ApiKeys.INCREMENTAL_ALTER_CONFIGS.parseRequest(version, buffer), version);
+        return new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public IncrementalAlterConfigsRequestData data() {

@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -57,7 +57,7 @@ public class ListGroupsResponse extends AbstractResponse {
     }
 
     public static ListGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new ListGroupsResponse(ApiKeys.LIST_GROUPS.responseSchema(version).read(buffer), version);
+        return new ListGroupsResponse(new ListGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

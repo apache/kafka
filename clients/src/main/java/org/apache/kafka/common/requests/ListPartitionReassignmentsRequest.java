@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -52,24 +53,15 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
     }
 
     private ListPartitionReassignmentsRequestData data;
-    private final short version;
 
     private ListPartitionReassignmentsRequest(ListPartitionReassignmentsRequestData data, short version) {
         super(ApiKeys.LIST_PARTITION_REASSIGNMENTS, version);
         this.data = data;
-        this.version = version;
-    }
-
-    ListPartitionReassignmentsRequest(Struct struct, short version) {
-        super(ApiKeys.LIST_PARTITION_REASSIGNMENTS, version);
-        this.data = new ListPartitionReassignmentsRequestData(struct, version);
-        this.version = version;
     }
 
     public static ListPartitionReassignmentsRequest parse(ByteBuffer buffer, short version) {
-        return new ListPartitionReassignmentsRequest(
-                ApiKeys.LIST_PARTITION_REASSIGNMENTS.parseRequest(version, buffer), version
-        );
+        return new ListPartitionReassignmentsRequest(new ListPartitionReassignmentsRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public ListPartitionReassignmentsRequestData data() {
@@ -81,7 +73,7 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
      */
     @Override
     public Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     @Override

@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -64,7 +64,7 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
-        return new StopReplicaResponse(ApiKeys.STOP_REPLICA.parseResponse(version, buffer), version);
+        return new StopReplicaResponse(new StopReplicaResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

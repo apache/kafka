@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
@@ -49,7 +49,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     public DescribeGroupsResponse(Struct struct, short version) {
-        this.data = new DescribeGroupsResponseData(struct, version);
+        this(new DescribeGroupsResponseData(struct, version));
     }
 
     public static DescribedGroupMember groupMember(
@@ -147,8 +147,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsResponse(
-                ApiKeys.DESCRIBE_GROUPS.responseSchema(version).read(buffer), version);
+        return new DescribeGroupsResponse(new DescribeGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

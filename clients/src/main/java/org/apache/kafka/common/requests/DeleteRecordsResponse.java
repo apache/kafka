@@ -125,9 +125,6 @@ public class DeleteRecordsResponse extends AbstractResponse {
         }
     }
 
-    /**
-     * Constructor for version 0.
-     */
     public DeleteRecordsResponse(int throttleTimeMs, Map<TopicPartition, PartitionResponse> responses) {
         this.throttleTimeMs = throttleTimeMs;
         this.responses = responses;

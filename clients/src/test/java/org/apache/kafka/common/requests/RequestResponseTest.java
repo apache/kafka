@@ -770,7 +770,7 @@ public class RequestResponseTest {
     public void testJoinGroupRequestVersion0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
-        JoinGroupRequest jgr2 = new JoinGroupRequest(jgr.toStruct(), version);
+        JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serializeBody(), version);
         assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
     }
 
@@ -1427,7 +1427,7 @@ public class RequestResponseTest {
 
     private SaslAuthenticateRequest createSaslAuthenticateRequest() {
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(new byte[0]);
-        return new SaslAuthenticateRequest(data);
+        return new SaslAuthenticateRequest(data, ApiKeys.SASL_AUTHENTICATE.latestVersion());
     }
 
     private SaslAuthenticateResponse createSaslAuthenticateResponse() {
@@ -1857,7 +1857,7 @@ public class RequestResponseTest {
         partitionResult.setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
         electionResult.partitionResult().add(partitionResult);
 
-        return new ElectLeadersResponse(200, Errors.NONE.code(), electionResults);
+        return new ElectLeadersResponse(200, Errors.NONE.code(), electionResults, ApiKeys.ELECT_LEADERS.latestVersion());
     }
 
     private IncrementalAlterConfigsRequest createIncrementalAlterConfigsRequest() {

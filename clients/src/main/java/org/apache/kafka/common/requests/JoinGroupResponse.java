@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -35,11 +35,6 @@ public class JoinGroupResponse extends AbstractResponse {
 
     public JoinGroupResponse(JoinGroupResponseData data) {
         this.data = data;
-    }
-
-    public JoinGroupResponse(Struct struct) {
-        short latestVersion = (short) (JoinGroupResponseData.SCHEMAS.length - 1);
-        this.data = new JoinGroupResponseData(struct, latestVersion);
     }
 
     public JoinGroupResponse(Struct struct, short version) {
@@ -68,8 +63,8 @@ public class JoinGroupResponse extends AbstractResponse {
         return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
     }
 
-    public static JoinGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(versionId, buffer), versionId);
+    public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
+        return new JoinGroupResponse(new JoinGroupResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

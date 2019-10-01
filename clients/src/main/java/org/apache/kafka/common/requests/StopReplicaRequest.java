@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopic;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -99,10 +100,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
         this.data = data;
     }
 
-    public StopReplicaRequest(Struct struct, short version) {
-        this(new StopReplicaRequestData(struct, version), version);
-    }
-
     @Override
     public StopReplicaResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
@@ -167,7 +164,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
-        return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
+        return new StopReplicaRequest(new StopReplicaRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

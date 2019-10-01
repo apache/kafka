@@ -20,7 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -93,7 +93,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     }
 
     public static IncrementalAlterConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new IncrementalAlterConfigsResponse(
-                ApiKeys.INCREMENTAL_ALTER_CONFIGS.responseSchema(version).read(buffer), version);
+        return new IncrementalAlterConfigsResponse(new IncrementalAlterConfigsResponseData(
+            new ByteBufferAccessor(buffer), version));
     }
 }

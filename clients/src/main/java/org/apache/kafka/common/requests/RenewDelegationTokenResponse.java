@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -35,11 +35,12 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     }
 
     public RenewDelegationTokenResponse(Struct struct, short version) {
-        data = new RenewDelegationTokenResponseData(struct, version);
+        this(new RenewDelegationTokenResponseData(struct, version));
     }
 
     public static RenewDelegationTokenResponse parse(ByteBuffer buffer, short version) {
-        return new RenewDelegationTokenResponse(ApiKeys.RENEW_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
+        return new RenewDelegationTokenResponse(new RenewDelegationTokenResponseData(
+            new ByteBufferAccessor(buffer), version));
     }
 
     @Override

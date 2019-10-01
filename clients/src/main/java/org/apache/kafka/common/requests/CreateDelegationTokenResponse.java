@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -39,7 +39,8 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     }
 
     public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
-        return new CreateDelegationTokenResponse(ApiKeys.CREATE_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
+        return new CreateDelegationTokenResponse(
+            new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int throttleTimeMs,

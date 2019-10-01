@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -44,11 +44,6 @@ public class DeleteGroupsResponse extends AbstractResponse {
 
     public DeleteGroupsResponse(DeleteGroupsResponseData data) {
         this.data = data;
-    }
-
-    public DeleteGroupsResponse(Struct struct) {
-        short latestVersion = (short) (DeleteGroupsResponseData.SCHEMAS.length - 1);
-        this.data = new DeleteGroupsResponseData(struct, latestVersion);
     }
 
     public DeleteGroupsResponse(Struct struct, short version) {
@@ -92,7 +87,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     }
 
     public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer), version);
+        return new DeleteGroupsResponse(new DeleteGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

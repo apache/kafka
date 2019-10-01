@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -74,11 +74,6 @@ public class LeaveGroupResponse extends AbstractResponse {
         if (version >= 1) {
             this.data.setThrottleTimeMs(throttleTimeMs);
         }
-    }
-
-    public LeaveGroupResponse(Struct struct) {
-        short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
-        this.data = new LeaveGroupResponseData(struct, latestVersion);
     }
 
     public LeaveGroupResponse(Struct struct, short version) {
@@ -145,8 +140,8 @@ public class LeaveGroupResponse extends AbstractResponse {
         return data;
     }
 
-    public static LeaveGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer), versionId);
+    public static LeaveGroupResponse parse(ByteBuffer buffer, short version) {
+        return new LeaveGroupResponse(new LeaveGroupResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

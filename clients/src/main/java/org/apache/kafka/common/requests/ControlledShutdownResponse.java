@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -45,7 +45,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     public ControlledShutdownResponse(Struct struct, short version) {
-        this.data = new ControlledShutdownResponseData(struct, version);
+        this(new ControlledShutdownResponseData(struct, version));
     }
 
     public Errors error() {
@@ -58,7 +58,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN.parseResponse(version, buffer), version);
+        return new ControlledShutdownResponse(new ControlledShutdownResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

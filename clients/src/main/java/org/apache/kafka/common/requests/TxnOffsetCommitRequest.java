@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -65,11 +66,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public TxnOffsetCommitRequest(TxnOffsetCommitRequestData data, short version) {
         super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.data = data;
-    }
-
-    public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(ApiKeys.TXN_OFFSET_COMMIT, version);
-        this.data = new TxnOffsetCommitRequestData(struct, version);
     }
 
     public Map<TopicPartition, CommittedOffset> offsets() {
@@ -149,7 +145,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitRequest(ApiKeys.TXN_OFFSET_COMMIT.parseRequest(version, buffer), version);
+        return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public static class CommittedOffset {

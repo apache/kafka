@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -53,13 +53,8 @@ public class OffsetDeleteResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public OffsetDeleteResponse(Struct struct) {
-        short latestVersion = (short) (OffsetDeleteResponseData.SCHEMAS.length - 1);
-        this.data = new OffsetDeleteResponseData(struct, latestVersion);
-    }
-
     public OffsetDeleteResponse(Struct struct, short version) {
-        this.data = new OffsetDeleteResponseData(struct, version);
+        this(new OffsetDeleteResponseData(struct, version));
     }
 
     @Override
@@ -86,7 +81,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
     }
 
     public static OffsetDeleteResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetDeleteResponse(ApiKeys.OFFSET_DELETE.parseResponse(version, buffer));
+        return new OffsetDeleteResponse(new OffsetDeleteResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

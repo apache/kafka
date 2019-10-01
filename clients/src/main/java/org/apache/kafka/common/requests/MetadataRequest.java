@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -102,18 +103,10 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     private final MetadataRequestData data;
-    private final short version;
 
     public MetadataRequest(MetadataRequestData data, short version) {
         super(ApiKeys.METADATA, version);
         this.data = data;
-        this.version = version;
-    }
-
-    public MetadataRequest(Struct struct, short version) {
-        super(ApiKeys.METADATA, version);
-        this.data = new MetadataRequestData(struct, version);
-        this.version = version;
     }
 
     public MetadataRequestData data() {
@@ -155,7 +148,7 @@ public class MetadataRequest extends AbstractRequest {
 
     public boolean isAllTopics() {
         return (data.topics() == null) ||
-            (data.topics().isEmpty() && version == 0); //In version 0, an empty topic list indicates
+            (data.topics().isEmpty() && version() == 0); //In version 0, an empty topic list indicates
                                                          // "request metadata for all topics."
     }
 
@@ -174,7 +167,7 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, short version) {
-        return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
+        return new MetadataRequest(new MetadataRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {
@@ -185,6 +178,6 @@ public class MetadataRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 }

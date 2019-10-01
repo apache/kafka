@@ -167,7 +167,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     val firstTopic = topics(0).asInstanceOf[Struct]
     firstTopic.set("num_partitions", 1)
     firstTopic.set("replication_factor", 1.toShort)
-    new CreateTopicsRequest(struct, request.version)
+    new CreateTopicsRequest(new CreateTopicsRequestData(struct, request.version), request.version)
   }
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,

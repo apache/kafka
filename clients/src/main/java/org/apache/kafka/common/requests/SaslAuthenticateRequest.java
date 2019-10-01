@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -56,22 +57,10 @@ public class SaslAuthenticateRequest extends AbstractRequest {
     }
 
     private final SaslAuthenticateRequestData data;
-    private final short version;
-
-    public SaslAuthenticateRequest(SaslAuthenticateRequestData data) {
-        this(data, ApiKeys.SASL_AUTHENTICATE.latestVersion());
-    }
 
     public SaslAuthenticateRequest(SaslAuthenticateRequestData data, short version) {
         super(ApiKeys.SASL_AUTHENTICATE, version);
         this.data = data;
-        this.version = version;
-    }
-
-    public SaslAuthenticateRequest(Struct struct, short version) {
-        super(ApiKeys.SASL_AUTHENTICATE, version);
-        this.data = new SaslAuthenticateRequestData(struct, version);
-        this.version = version;
     }
 
     public SaslAuthenticateRequestData data() {
@@ -87,12 +76,13 @@ public class SaslAuthenticateRequest extends AbstractRequest {
     }
 
     public static SaslAuthenticateRequest parse(ByteBuffer buffer, short version) {
-        return new SaslAuthenticateRequest(ApiKeys.SASL_AUTHENTICATE.parseRequest(version, buffer), version);
+        return new SaslAuthenticateRequest(new SaslAuthenticateRequestData(new ByteBufferAccessor(buffer), version),
+            version);
     }
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 }
 

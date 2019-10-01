@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -109,11 +110,6 @@ public class OffsetFetchRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public OffsetFetchRequest(Struct struct, short version) {
-        super(ApiKeys.OFFSET_FETCH, version);
-        this.data = new OffsetFetchRequestData(struct, version);
-    }
-
     public OffsetFetchResponse getErrorResponse(Errors error) {
         return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error);
     }
@@ -148,7 +144,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchRequest(ApiKeys.OFFSET_FETCH.parseRequest(version, buffer), version);
+        return new OffsetFetchRequest(new OffsetFetchRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public boolean isAllPartitions() {
