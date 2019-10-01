@@ -22,7 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
@@ -108,8 +108,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
+  private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
   def close(): Unit = {
+    alterAclsPurgatory.shutdown()
     info("Shutdown complete.")
   }
 
@@ -2207,15 +2209,19 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else
               true
           }
-        val createResults = auth.createAcls(request.context, validBindings.asJava)
 
-        val aclCreationResults = aclBindings.map { acl =>
-          val result = errorResults.getOrElse(acl, createResults.get(validBindings.indexOf(acl)).toCompletableFuture.get)
-          new AclCreationResponse(result.exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE))
+        val createResults = auth.createAcls(request.context, validBindings.asJava)
+          .asScala.map(_.toCompletableFuture).toList
+        def sendResponseCallback(): Unit = {
+          val aclCreationResults = aclBindings.map { acl =>
+            val result = errorResults.getOrElse(acl, createResults(validBindings.indexOf(acl)).get)
+            new AclCreationResponse(result.exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE))
+          }
+          sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new CreateAclsResponse(requestThrottleMs, aclCreationResults.asJava))
         }
 
-        sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new CreateAclsResponse(requestThrottleMs, aclCreationResults.asJava))
+        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, createResults, sendResponseCallback)
     }
   }
 
@@ -2229,17 +2235,24 @@ class KafkaApis(val requestChannel: RequestChannel,
             new SecurityDisabledException("No Authorizer is configured on the broker.")))
       case Some(auth) =>
 
-        val results = auth.deleteAcls(request.context, deleteAclsRequest.filters)
+        val deleteResults = auth.deleteAcls(request.context, deleteAclsRequest.filters)
+          .asScala.map(_.toCompletableFuture).toList
+
         def toErrorCode(exception: Optional[ApiException]): ApiError = {
           exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE)
         }
-        val filterResponses = results.asScala.map(_.toCompletableFuture.get).map { result =>
-          val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>
-            new AclDeletionResult(toErrorCode(deletionResult.exception), deletionResult.aclBinding)
+
+        def sendResponseCallback(): Unit = {
+          val filterResponses = deleteResults.map(_.get).map { result =>
+            val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>
+              new AclDeletionResult(toErrorCode(deletionResult.exception), deletionResult.aclBinding)
+            }.asJava
+            new AclFilterResponse(toErrorCode(result.exception), deletions)
           }.asJava
-          new AclFilterResponse(toErrorCode(result.exception), deletions)
-        }.asJava
-        sendResponseMaybeThrottle(request, requestThrottleMs => new DeleteAclsResponse(requestThrottleMs, filterResponses))
+          sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new DeleteAclsResponse(requestThrottleMs, filterResponses))
+        }
+        alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
     }
   }
 
