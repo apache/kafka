@@ -31,7 +31,7 @@ import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 
-import scala.collection.{Map, Seq, Set, mutable}
+import scala.collection.{mutable, Map, Seq, Set}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -615,7 +615,7 @@ abstract class AbstractFetcherThread(name: String,
         Option(partitionStates.stateValue(partition)).foreach { currentFetchState =>
           if (!currentFetchState.isDelayed) {
             partitionStates.updateAndMoveToEnd(partition, PartitionFetchState(currentFetchState.fetchOffset,
-              currentFetchState.currentLeaderEpoch, new DelayedItem(delay), currentFetchState.state))
+              currentFetchState.currentLeaderEpoch, Some(new DelayedItem(delay)), currentFetchState.state))
           }
         }
       }
@@ -757,7 +757,7 @@ case object Fetching extends ReplicaState
 
 object PartitionFetchState {
   def apply(offset: Long, currentLeaderEpoch: Int, state: ReplicaState): PartitionFetchState = {
-    PartitionFetchState(offset, currentLeaderEpoch, new DelayedItem(0), state)
+    PartitionFetchState(offset, currentLeaderEpoch, None, state)
   }
 }
 
@@ -771,20 +771,20 @@ object PartitionFetchState {
  */
 case class PartitionFetchState(fetchOffset: Long,
                                currentLeaderEpoch: Int,
-                               delay: DelayedItem,
+                               delay: Option[DelayedItem],
                                state: ReplicaState) {
 
   def isReadyForFetch: Boolean = state == Fetching && !isDelayed
 
   def isTruncating: Boolean = state == Truncating && !isDelayed
 
-  def isDelayed: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) > 0
+  def isDelayed: Boolean = delay.exists(_.getDelay(TimeUnit.MILLISECONDS) > 0)
 
   override def toString: String = {
     s"FetchState(fetchOffset=$fetchOffset" +
       s", currentLeaderEpoch=$currentLeaderEpoch" +
       s", state=$state" +
-      s", delay=${delay.delayMs}ms" +
+      s", delay=${delay.map(_.delayMs).getOrElse(0)}ms" +
       s")"
   }
 }
