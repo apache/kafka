@@ -21,6 +21,7 @@ import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -56,16 +57,15 @@ public class LoggingResource {
      */
     @GET
     @Path("/")
-    @SuppressWarnings("unchecked")
     public Response listLoggers() {
         Map<String, Map<String, String>> loggers = new TreeMap<>();
-        Enumeration<Logger> enumeration = LogManager.getCurrentLoggers();
+        Enumeration<Logger> enumeration = currentLoggers();
         Collections.list(enumeration)
                 .stream()
                 .filter(logger -> logger.getLevel() != null)
                 .forEach(logger -> loggers.put(logger.getName(), levelToMap(logger)));
 
-        Logger root = LogManager.getRootLogger();
+        Logger root = rootLogger();
         if (root.getLevel() != null) {
             loggers.put(ROOT_LOGGER_NAME, levelToMap(root));
         }
@@ -84,11 +84,12 @@ public class LoggingResource {
     public Response getLogger(final @PathParam("logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
-        Enumeration en = LogManager.getCurrentLoggers();
+        Enumeration<Logger> en = currentLoggers();
         Logger logger = null;
         // search within existing loggers for the given name.
+        // using LogManger.getLogger() will create a logger if it doesn't exist (potential leak since these don't get cleaned up).
         while (en.hasMoreElements()) {
-            Logger l = (Logger) en.nextElement();
+            Logger l = en.nextElement();
             if (namedLogger.equals(l.getName())) {
                 logger = l;
                 break;
@@ -127,12 +128,12 @@ public class LoggingResource {
 
         List<Logger> childLoggers;
         if (ROOT_LOGGER_NAME.equals(namedLogger)) {
-            childLoggers = Collections.list((Enumeration<Logger>) LogManager.getCurrentLoggers());
-            childLoggers.add(LogManager.getRootLogger());
+            childLoggers = Collections.list(currentLoggers());
+            childLoggers.add(rootLogger());
         } else {
             childLoggers = new ArrayList<>();
-            Logger ancestorLogger = LogManager.getLogger(namedLogger);
-            Enumeration en = LogManager.getCurrentLoggers();
+            Logger ancestorLogger = lookupLogger(namedLogger);
+            Enumeration en = currentLoggers();
             boolean present = false;
             while (en.hasMoreElements()) {
                 Logger current = (Logger) en.nextElement();
@@ -156,6 +157,19 @@ public class LoggingResource {
         Collections.sort(modifiedLoggerNames);
 
         return Response.ok(modifiedLoggerNames).build();
+    }
+
+    protected Logger lookupLogger(String namedLogger) {
+        return LogManager.getLogger(namedLogger);
+    }
+
+    @SuppressWarnings("unchecked")
+    protected Enumeration<Logger> currentLoggers() {
+        return LogManager.getCurrentLoggers();
+    }
+
+    protected Logger rootLogger() {
+        return LogManager.getRootLogger();
     }
 
     /**
