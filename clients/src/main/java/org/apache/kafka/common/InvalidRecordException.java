@@ -18,16 +18,40 @@ package org.apache.kafka.common;
 
 import org.apache.kafka.common.errors.ApiException;
 
+import java.util.Collections;
+import java.util.Map;
+
 public class InvalidRecordException extends ApiException {
 
     private static final long serialVersionUID = 1;
+
+    // Relative offset of the record that throws this exception
+    private Map<Integer, String> errorRecords = Collections.emptyMap();
 
     public InvalidRecordException(String s) {
         super(s);
     }
 
+    public InvalidRecordException(String s, Map<Integer, String> errorRecords) {
+        super(s);
+        this.errorRecords = errorRecords;
+    }
+
     public InvalidRecordException(String message, Throwable cause) {
         super(message, cause);
+    }
+
+    public InvalidRecordException(String message, Throwable cause, Map<Integer, String> errorRecords) {
+        super(message, cause);
+        this.errorRecords = errorRecords;
+    }
+
+    public void setErrorRecords(Map<Integer, String> errorRecords) {
+        this.errorRecords = errorRecords;
+    }
+
+    public Map<Integer, String> getErrorRecords() {
+        return errorRecords;
     }
 
 }

@@ -32,9 +32,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{ElectionType, InvalidRecordException, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -500,7 +498,7 @@ class ReplicaManager(val config: KafkaConfig,
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
                   new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime,
-                    result.info.logStartOffset, result.info.errorRecords.map(Int.box).asJava, result.info.errorMessage)) // response status
+                    result.info.logStartOffset, result.info.errorRecords.asJava, result.info.errorMessage)) // response status
       }
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
@@ -798,7 +796,14 @@ class ReplicaManager(val config: KafkaConfig,
             brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
             brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
             error(s"Error processing append operation on partition $topicPartition", t)
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, List(), ""), Some(t)))
+
+            val errorRecords: Map[java.lang.Integer, String] = t match {
+              case ire: InvalidRecordException => ire.getErrorRecords.asScala
+              case ite: InvalidTimestampException => ite.getErrorRecords.asScala
+              case _ => Map.empty[java.lang.Integer, String]
+            }
+
+            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, errorRecords, ""), Some(t)))
         }
       }
     }

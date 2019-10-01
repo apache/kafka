@@ -52,7 +52,7 @@ object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
-  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, errorRecords: List[Int], errorMessage: String): LogAppendInfo =
+  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, errorRecords: scala.collection.Map[java.lang.Integer, String], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L, errorRecords, errorMessage)
@@ -90,7 +90,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
                          lastOffsetOfFirstBatch: Long,
-                         errorRecords: List[Int] = List(),
+                         errorRecords: scala.collection.Map[java.lang.Integer, String] = scala.collection.Map.empty[java.lang.Integer, String],
                          errorMessage: String = "") {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch

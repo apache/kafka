@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+import java.util.Collections;
+import java.util.Map;
+
 /**
  * Indicate the timestamp of a record is invalid.
  */
@@ -23,11 +26,33 @@ public class InvalidTimestampException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
+    // Relative offset of the record that throws this exception
+    private Map<Integer, String> errorRecords = Collections.emptyMap();
+
     public InvalidTimestampException(String message) {
         super(message);
+    }
+
+    public InvalidTimestampException(String message, Map<Integer, String> errorRecords) {
+        super(message);
+        this.errorRecords = errorRecords;
     }
 
     public InvalidTimestampException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    public InvalidTimestampException(String message, Throwable cause, Map<Integer, String> errorRecords) {
+        super(message, cause);
+        this.errorRecords = errorRecords;
+    }
+
+    public Map<Integer, String> getErrorRecords() {
+        return errorRecords;
+    }
+
+    public void setErrorRecords(Map<Integer, String> errorRecords) {
+        this.errorRecords = errorRecords;
+    }
+
 }
