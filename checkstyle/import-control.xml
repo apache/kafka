@@ -346,6 +346,7 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
+      <allow pkg="javax.crypto"/>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -363,6 +364,10 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.maven.artifact.versioning" />
       </subpackage>
+
+      <subpackage name="distributed">
+        <allow pkg="javax.ws.rs.core" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="cli">
@@ -376,6 +381,7 @@
     <subpackage name="storage">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.common.serialization" />
+      <allow pkg="javax.crypto.spec"/>
     </subpackage>
 
     <subpackage name="util">

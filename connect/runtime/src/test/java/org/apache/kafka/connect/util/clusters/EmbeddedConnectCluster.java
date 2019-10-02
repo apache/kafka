@@ -384,6 +384,28 @@ public class EmbeddedConnectCluster {
         return httpCon.getResponseCode();
     }
 
+    public int executePost(String url, String body, Map<String, String> headers) throws IOException {
+        log.debug("Executing POST request to URL={}. Payload={}", url, body);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestProperty("Content-Type", "application/json");
+        headers.forEach(httpCon::setRequestProperty);
+        httpCon.setRequestMethod("POST");
+        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
+            out.write(body);
+        }
+        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
+            try (InputStream is = httpCon.getInputStream()) {
+                log.info("POST response for URL={} is {}", url, responseToString(is));
+            }
+        } else {
+            try (InputStream is = httpCon.getErrorStream()) {
+                log.info("POST error response for URL={} is {}", url, responseToString(is));
+            }
+        }
+        return httpCon.getResponseCode();
+    }
+
     /**
      * Execute a GET request on the given URL.
      *
