@@ -857,7 +857,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             log.error("Leader sent back assignment with commonly supported version {} that is greater than our"
                     + "actual latest supported version {}", latestCommonlySupportedVersion,
                 SubscriptionInfo.LATEST_SUPPORTED_VERSION);
-            throw new IllegalStateException("Can't upgrade to metadata version greater than we support");
+            throw new TaskAssignmentException("Can't upgrade to metadata version greater than we support");
         }
 
         if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION) {
