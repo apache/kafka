@@ -94,7 +94,7 @@ public class Worker {
     private final Plugins plugins;
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
-    private final ConnectorStatusMetricsGroup connectorStatusMetricsGroup;
+    private ConnectorStatusMetricsGroup connectorStatusMetricsGroup;
     private final WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
@@ -134,7 +134,6 @@ public class Worker {
         this.config = config;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
-        this.connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
 
         // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
@@ -185,6 +184,8 @@ public class Worker {
 
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
+
+        connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
 
         log.info("Worker started");
     }

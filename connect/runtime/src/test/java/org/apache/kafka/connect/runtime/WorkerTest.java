@@ -610,7 +610,7 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(1);
+        EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
         PowerMock.expectNew(WorkerSourceTask.class, EasyMock.eq(TASK_ID),
             EasyMock.eq(task),
             anyObject(TaskStatus.Listener.class),
@@ -655,10 +655,10 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
             .andReturn(pluginLoader);
         EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader)
-            .times(1);
+            .times(2);
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
-            .times(1);
+            .times(2);
         plugins.connectorClass(WorkerTestConnector.class.getName());
         EasyMock.expectLastCall().andReturn(WorkerTestConnector.class);
 
@@ -686,6 +686,11 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall()
             .andReturn(new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg"));
 
+        // Called when we stop the worker
+        EasyMock.expect(workerTask.loader()).andReturn(pluginLoader);
+        workerTask.stop();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         worker = new Worker(WORKER_ID,
@@ -702,7 +707,8 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(TASK_ID,
+        worker.startTask(
+            TASK_ID,
             ClusterConfigState.EMPTY,
             anyConnectorConfigMap(),
             origProps,
