@@ -141,7 +141,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
-    private final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread;
+    private final ScheduledExecutorService rocksDBMetricsRecordingService;
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
 
@@ -763,11 +763,19 @@ public class KafkaStreams implements AutoCloseable {
             return thread;
         });
 
-        rocksDBMetricsRecordingTriggerThread = Executors.newSingleThreadScheduledExecutor(r -> {
-            final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
-            thread.setDaemon(true);
-            return thread;
-        });
+        rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,
+                                                                                      final StreamsConfig config) {
+        if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+            return Executors.newSingleThreadScheduledExecutor(r -> {
+                final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
+                thread.setDaemon(true);
+                return thread;
+            });
+        }
+        return null;
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
@@ -825,8 +833,8 @@ public class KafkaStreams implements AutoCloseable {
 
             final long recordingDelay = 0;
             final long recordingInterval = 1;
-            if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
-                rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
+            if (rocksDBMetricsRecordingService != null) {
+                rocksDBMetricsRecordingService.scheduleAtFixedRate(
                     rocksDBMetricsRecordingTrigger,
                     recordingDelay,
                     recordingInterval,
@@ -881,6 +889,9 @@ public class KafkaStreams implements AutoCloseable {
             log.info("Already in the pending shutdown state, wait to complete shutdown");
         } else {
             stateDirCleaner.shutdownNow();
+            if (rocksDBMetricsRecordingService != null) {
+                rocksDBMetricsRecordingService.shutdownNow();
+            }
 
             // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
