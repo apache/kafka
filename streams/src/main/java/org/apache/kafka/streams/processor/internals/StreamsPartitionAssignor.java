@@ -72,7 +72,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
-    private static Logger log;
+    private Logger log;
     private String logPrefix;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
@@ -927,7 +927,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return taskIdsForConsumerAssignment;
     }
 
-    private static void buildAssignedActiveTaskAndPartitionsList(final String consumer,
+    private void buildAssignedActiveTaskAndPartitionsList(final String consumer,
                                                                  final ClientState clientState,
                                                                  final List<TaskId> activeTasksForConsumer,
                                                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
@@ -1195,7 +1195,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private int updateMinReceivedVersion(final int usedVersion, final int minReceivedMetadataVersion) {
-        return usedVersion < minReceivedMetadataVersion ? usedVersion: minReceivedMetadataVersion;
+        return usedVersion < minReceivedMetadataVersion ? usedVersion : minReceivedMetadataVersion;
     }
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {

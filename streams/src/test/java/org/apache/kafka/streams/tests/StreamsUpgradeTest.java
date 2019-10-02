@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
