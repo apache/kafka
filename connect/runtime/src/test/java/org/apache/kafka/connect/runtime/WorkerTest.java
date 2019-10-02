@@ -76,6 +76,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 
 import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
@@ -721,6 +723,43 @@ public class WorkerTest extends ThreadedTest {
         assertStatusMetrics(0L, "connector-unassigned-task-count");
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorStatusMetricsGroup_taskStatusCounter() {
+        ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+        tasks.put(new ConnectorTaskId("c1", 0), workerTask);
+        tasks.put(new ConnectorTaskId("c1", 1), workerTask);
+        tasks.put(new ConnectorTaskId("c2", 0), workerTask);
+
+
+        expectConverters();
+
+        expectStartStorage();
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader);
+        EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader);
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
+
+        taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        worker = new Worker(WORKER_ID,
+            new MockTime(),
+            plugins,
+            config,
+            offsetBackingStore,
+            noneConnectorClientConfigOverridePolicy);
+
+        Worker.ConnectorStatusMetricsGroup metricGroup = new Worker.ConnectorStatusMetricsGroup(
+            worker.metrics(), tasks, herder
+        );
+        assertEquals(2L, (long) metricGroup.taskCounter("c1").metricValue(0L));
+        assertEquals(1L, (long) metricGroup.taskCounter("c2").metricValue(0L));
+        assertEquals(0L, (long) metricGroup.taskCounter("fakeConnector").metricValue(0L));
     }
 
     @Test

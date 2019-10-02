@@ -855,14 +855,14 @@ public class Worker {
         }
 
         protected ConnectMetrics.LiteralSupplier<Long> taskCounter(String connName) {
-            return (now) -> tasks.values()
+            return now -> tasks.keySet()
                 .stream()
-                .filter(task -> task.id().connector().equals(connName))
+                .filter(taskId -> taskId.connector().equals(connName))
                 .count();
         }
 
         protected ConnectMetrics.LiteralSupplier<Long> taskStatusCounter(String connName, TaskStatus.State state) {
-            return (now) -> tasks.values()
+            return now -> tasks.values()
                 .stream()
                 .filter(task ->
                     task.id().connector().equals(connName) &&
