@@ -19,10 +19,12 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -117,6 +119,32 @@ public class LeaveGroupResponseTest {
             assertEquals(primaryResponse, secondaryResponse);
             assertEquals(primaryResponse.hashCode(), secondaryResponse.hashCode());
 
+        }
+    }
+
+    @Test
+    public void testParse() {
+        Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
+
+        LeaveGroupResponseData data = new LeaveGroupResponseData()
+            .setErrorCode(Errors.NOT_COORDINATOR.code())
+            .setThrottleTimeMs(throttleTimeMs);
+
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+            ByteBuffer buffer = ByteBuffer.allocate(data.size(version));
+            data.write(new ByteBufferAccessor(buffer), version);
+            buffer.rewind();
+            LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
+
+            assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
+
+            if (version >= 1) {
+                assertEquals(throttleTimeMs, leaveGroupResponse.throttleTimeMs());
+            } else {
+                assertEquals(DEFAULT_THROTTLE_TIME, leaveGroupResponse.throttleTimeMs());
+            }
+
+            assertEquals(Errors.NOT_COORDINATOR, leaveGroupResponse.error());
         }
     }
 
