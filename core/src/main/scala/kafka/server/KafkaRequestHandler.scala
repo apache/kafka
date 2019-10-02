@@ -327,14 +327,17 @@ class BrokerTopicStats {
       topicMetrics.closeMetric(BrokerTopicStats.TotalProduceRequestsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
     }
   }
 
   // This method only removes metrics only used for follower
   def removeOldFollowerMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
-    if (topicMetrics != null)
+    if (topicMetrics != null) {
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesInPerSec)
+    }
   }
 
   def removeMetrics(topic: String): Unit = {
