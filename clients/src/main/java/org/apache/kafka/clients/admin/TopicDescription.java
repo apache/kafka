@@ -33,7 +33,7 @@ public class TopicDescription {
     private final String name;
     private final boolean internal;
     private final List<TopicPartitionInfo> partitions;
-    private Set<AclOperation> authorizedOperations;
+    private final Set<AclOperation> authorizedOperations;
 
     @Override
     public boolean equals(final Object o) {
