@@ -866,7 +866,7 @@
         <td></td>
       </tr>
       <tr>
-        <td># of under replicated partitions (|ISR| &lt |all replicas|)</td>
+        <td># of under replicated partitions (|original replicas| - |ISR| &gt 0)</td>
         <td>kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions</td>
         <td>0</td>
       </tr>
@@ -1068,6 +1068,31 @@
         <td>Avg time to load transaction metadata</td>
         <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
         <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Number of reassigning partitions</td>
+        <td>kafka.server:type=ReplicaManager,name=ReassigningPartitions</td>
+        <td>The number of reassigning leader partitions on a broker.</td>
+      </tr>
+      <tr>
+        <td>Maximum reassignment lag on leader side</td>
+        <td>kafka.server:type=ReplicaManager,name=ReassignmentMaxLagOnLeader</td>
+        <td>Zero if there is no reassignment but should converge to zero if there is an ongoing reassignment.</td>
+      </tr>
+      <tr>
+        <td>Maximum reassignment lag on follower side</td>
+        <td>kafka.server:type=ReplicaManager,name=ReassignmentMaxLagOnFollower</td>
+        <td>Zero if there is no reassignment but should converge to zero if there is an ongoing reassignment.</td>
+      </tr>
+      <tr>
+        <td>Outgoing rate of reassignment</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Incoming rate of reassignment</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
+        <td></td>
       </tr>
   </tbody></table>
 
