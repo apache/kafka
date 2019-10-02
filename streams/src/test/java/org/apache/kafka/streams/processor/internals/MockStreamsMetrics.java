@@ -22,6 +22,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 public class MockStreamsMetrics extends StreamsMetricsImpl {
 
     public MockStreamsMetrics(final Metrics metrics) {
-        super(metrics, "test", "latest");
+        super(metrics, "test", StreamsMetricsImpl.METRICS_LATEST);
     }
 }

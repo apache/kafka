@@ -60,7 +60,7 @@ public class MeteredTimestampedWindowStoreTest {
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", "latest");
+            new StreamsMetricsImpl(metrics, "test", StreamsMetricsImpl.METRICS_LATEST);
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),

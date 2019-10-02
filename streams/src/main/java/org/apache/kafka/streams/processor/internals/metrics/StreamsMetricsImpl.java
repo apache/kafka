@@ -52,6 +52,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         FROM_100_TO_23
     }
 
+    // Temporarily moved from StreamsConfig to here to hide the built-in metrics version config
+    /**
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.3
+     */
+    public static final String METRICS_0100_TO_23 = "0.10.0-2.3";
+
+    /**
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
+     */
+    public static final String METRICS_LATEST = "latest";
+
+
     static class ImmutableMetricValue<T> implements Gauge<T> {
         private final T value;
 
@@ -81,7 +93,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             return Objects.hash(value);
         }
     }
-
+    
     private final Metrics metrics;
     private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;
@@ -155,7 +167,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
-        if (builtInMetricsVersion.equals("latest")) {
+        if (builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST)) {
             return Version.LATEST;
         } else {
             return Version.FROM_100_TO_23;

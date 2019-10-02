@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -293,7 +294,7 @@ public class MetricsIntegrationTest {
 
     @Test
     public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To23() throws Exception {
-        shouldAddMetricsOnAllLevels("0.10.0-2.3");
+        shouldAddMetricsOnAllLevels(StreamsMetricsImpl.METRICS_0100_TO_23);
     }
 
     private void shouldAddMetricsOnAllLevels(final String builtInMetricsVersion) throws Exception {
@@ -587,18 +588,18 @@ public class MetricsIntegrationTest {
             .collect(Collectors.toList());
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals("latest") ? HIT_RATIO_AVG : HIT_RATIO_AVG_BEFORE_24,
-            builtInMetricsVersion.equals("latest") ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_AVG : HIT_RATIO_AVG_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals("latest") ? HIT_RATIO_MIN : HIT_RATIO_MIN_BEFORE_24,
-            builtInMetricsVersion.equals("latest") ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_MIN : HIT_RATIO_MIN_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals("latest") ? HIT_RATIO_MAX : HIT_RATIO_MAX_BEFORE_24,
-            builtInMetricsVersion.equals("latest") ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_MAX : HIT_RATIO_MAX_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
     }
 

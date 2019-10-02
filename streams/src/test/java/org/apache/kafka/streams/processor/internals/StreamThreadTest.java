@@ -345,7 +345,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 1);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -473,7 +473,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, "latest");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -508,7 +508,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 2, 1);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, "latest");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -663,7 +663,7 @@ public class StreamThreadTest {
         EasyMock.replay(taskManager, consumer);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -697,7 +697,7 @@ public class StreamThreadTest {
         EasyMock.replay(taskManager, consumer);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -775,7 +775,7 @@ public class StreamThreadTest {
         taskManager.setPartitionsToTaskId(Collections.emptyMap());
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -810,7 +810,7 @@ public class StreamThreadTest {
         EasyMock.replay(taskManager, consumer);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -1232,7 +1232,7 @@ public class StreamThreadTest {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
             internalTopologyBuilder,
             config,
@@ -1678,7 +1678,7 @@ public class StreamThreadTest {
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, "latest");
+            new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -1717,7 +1717,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, "latest");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId, StreamsMetricsImpl.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
