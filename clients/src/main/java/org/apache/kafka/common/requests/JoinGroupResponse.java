@@ -37,10 +37,6 @@ public class JoinGroupResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public JoinGroupResponse(Struct struct, short version) {
-        this.data = new JoinGroupResponseData(struct, version);
-    }
-
     public JoinGroupResponseData data() {
         return data;
     }

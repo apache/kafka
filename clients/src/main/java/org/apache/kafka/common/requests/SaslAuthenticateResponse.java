@@ -39,10 +39,6 @@ public class SaslAuthenticateResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public SaslAuthenticateResponse(Struct struct, short version) {
-        this.data = new SaslAuthenticateResponseData(struct, version);
-    }
-
     /**
      * Possible error codes:
      *   SASL_AUTHENTICATION_FAILED(57) : Authentication failed
@@ -71,6 +67,11 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override

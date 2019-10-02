@@ -157,6 +157,11 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     }
 
     @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
+    @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Map<TopicPartition, Errors> allErrors : errors.values()) {

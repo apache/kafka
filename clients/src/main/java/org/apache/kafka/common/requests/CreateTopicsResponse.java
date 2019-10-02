@@ -50,10 +50,6 @@ public class CreateTopicsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public CreateTopicsResponse(Struct struct, short version) {
-        this.data = new CreateTopicsResponseData(struct, version);
-    }
-
     public CreateTopicsResponseData data() {
         return data;
     }

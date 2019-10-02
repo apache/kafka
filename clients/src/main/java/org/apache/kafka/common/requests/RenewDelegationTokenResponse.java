@@ -34,10 +34,6 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public RenewDelegationTokenResponse(Struct struct, short version) {
-        this(new RenewDelegationTokenResponseData(struct, version));
-    }
-
     public static RenewDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new RenewDelegationTokenResponse(new RenewDelegationTokenResponseData(
             new ByteBufferAccessor(buffer), version));

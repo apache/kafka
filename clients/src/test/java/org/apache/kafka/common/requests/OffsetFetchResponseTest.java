@@ -103,7 +103,8 @@ public class OffsetFetchResponseTest {
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             Struct struct = latestResponse.data.toStruct(version);
 
-            OffsetFetchResponse oldResponse =  new OffsetFetchResponse(struct, version);
+            OffsetFetchResponse oldResponse = new OffsetFetchResponse(new OffsetFetchResponseData(struct, version),
+                version);
 
             if (version <= 1) {
                 assertFalse(struct.hasField(ERROR_CODE));
@@ -139,9 +140,7 @@ public class OffsetFetchResponseTest {
             Map<TopicPartition, PartitionData> responseData = oldResponse.responseData();
             assertEquals(expectedDataMap, responseData);
 
-            responseData.forEach(
-                (tp, data) -> assertTrue(data.hasError())
-            );
+            responseData.forEach((tp, data) -> assertTrue(data.hasError()));
         }
     }
 

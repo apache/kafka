@@ -33,10 +33,6 @@ public class UpdateMetadataResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public UpdateMetadataResponse(Struct struct, short version) {
-        this(new UpdateMetadataResponseData(struct, version));
-    }
-
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -44,6 +40,11 @@ public class UpdateMetadataResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(error());
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static UpdateMetadataResponse parse(ByteBuffer buffer, short version) {

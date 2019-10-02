@@ -33,10 +33,6 @@ public class ListGroupsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public ListGroupsResponse(Struct struct, short version) {
-        this.data = new ListGroupsResponseData(struct, version);
-    }
-
     public ListGroupsResponseData data() {
         return data;
     }

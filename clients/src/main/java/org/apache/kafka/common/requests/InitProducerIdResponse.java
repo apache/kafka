@@ -40,10 +40,6 @@ public class InitProducerIdResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public InitProducerIdResponse(Struct struct, short version) {
-        this.data = new InitProducerIdResponseData(struct, version);
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

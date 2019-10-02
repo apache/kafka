@@ -29,7 +29,7 @@ import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 abstract class BaseRequestTest extends IntegrationTestHarness {
@@ -155,13 +155,14 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   /**
    * Sends a request built by the builder, waits for the response and parses it 
    */
-  def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
+  def requestResponse(socket: Socket, clientId: String, correlationId: Int,
+                      requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     val apiKey = requestBuilder.apiKey
     val request = requestBuilder.build()
     val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
     val response = requestAndReceive(socket, request.serializeWithHeader(header).array)
     val responseBuffer = skipResponseHeader(response, apiKey.responseHeaderVersion(request.version))
-    apiKey.parseResponse(request.version, responseBuffer)
+    AbstractResponse.parseResponse(apiKey, responseBuffer, request.version)
   }
   
   /**

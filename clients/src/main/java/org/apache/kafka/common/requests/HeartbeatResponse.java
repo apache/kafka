@@ -44,10 +44,6 @@ public class HeartbeatResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public HeartbeatResponse(Struct struct, short version) {
-        this.data = new HeartbeatResponseData(struct, version);
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

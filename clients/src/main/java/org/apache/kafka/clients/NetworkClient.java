@@ -31,8 +31,6 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.CommonFields;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -698,22 +696,21 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-    public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
-        Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
-        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct,
-                requestHeader.apiVersion());
+    public static AbstractResponse parseResponse(RequestHeader requestHeader, ByteBuffer responseBuffer) {
+        return parseResponse(requestHeader, responseBuffer, null, 0);
     }
 
-    private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
-                                                                    Sensor throttleTimeSensor, long now) {
+    private static AbstractResponse parseResponse(RequestHeader requestHeader, ByteBuffer responseBuffer,
+                                                  Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
             requestHeader.apiKey().responseHeaderVersion(requestHeader.apiVersion()));
         // Always expect the response version id to be the same as the request version id
-        Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
+        AbstractResponse response = AbstractResponse.parseResponse(requestHeader.apiKey(), responseBuffer,
+            requestHeader.apiVersion());
         correlate(requestHeader, responseHeader);
-        if (throttleTimeSensor != null && responseBody.hasField(CommonFields.THROTTLE_TIME_MS))
-            throttleTimeSensor.record(responseBody.get(CommonFields.THROTTLE_TIME_MS), now);
-        return responseBody;
+        if (throttleTimeSensor != null && response.throttleTimeMs() != AbstractResponse.DEFAULT_THROTTLE_TIME)
+            throttleTimeSensor.record(response.throttleTimeMs(), now);
+        return response;
     }
 
     /**
@@ -833,22 +830,19 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
-                throttleTimeSensor, now);
+            AbstractResponse responseBody = parseResponse(req.header, receive.payload(), throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
                 log.trace("Completed receive from node {} for {} with correlation id {}, received {}", req.destination,
-                    req.header.apiKey(), req.header.correlationId(), responseStruct);
+                    req.header.apiKey(), req.header.correlationId(), responseBody);
             }
             // If the received response includes a throttle delay, throttle the connection.
-            AbstractResponse body = AbstractResponse.
-                    parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
-            maybeThrottle(body, req.header.apiVersion(), req.destination, now);
-            if (req.isInternalRequest && body instanceof MetadataResponse)
-                metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
-            else if (req.isInternalRequest && body instanceof ApiVersionsResponse)
-                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) body);
+            maybeThrottle(responseBody, req.header.apiVersion(), req.destination, now);
+            if (req.isInternalRequest && responseBody instanceof MetadataResponse)
+                metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) responseBody);
+            else if (req.isInternalRequest && responseBody instanceof ApiVersionsResponse)
+                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) responseBody);
             else
-                responses.add(req.completed(body, now));
+                responses.add(req.completed(responseBody, now));
         }
     }
 

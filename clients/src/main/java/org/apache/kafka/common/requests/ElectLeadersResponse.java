@@ -34,10 +34,6 @@ public class ElectLeadersResponse extends AbstractResponse {
 
     private final ElectLeadersResponseData data;
 
-    public ElectLeadersResponse(Struct struct, short version) {
-        this(new ElectLeadersResponseData(struct, version));
-    }
-
     public ElectLeadersResponse(ElectLeadersResponseData data) {
         this.data = data;
     }

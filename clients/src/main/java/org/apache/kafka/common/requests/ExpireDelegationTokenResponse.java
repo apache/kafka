@@ -34,10 +34,6 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public ExpireDelegationTokenResponse(Struct struct, short version) {
-        this.data = new ExpireDelegationTokenResponseData(struct, version);
-    }
-
     public static ExpireDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new ExpireDelegationTokenResponse(new ExpireDelegationTokenResponseData(new ByteBufferAccessor(buffer),
             version));

@@ -32,10 +32,6 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
 
     private final AlterPartitionReassignmentsResponseData data;
 
-    public AlterPartitionReassignmentsResponse(Struct struct, short version) {
-        this(new AlterPartitionReassignmentsResponseData(struct, version));
-    }
-
     public AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
         this.data = data;
     }

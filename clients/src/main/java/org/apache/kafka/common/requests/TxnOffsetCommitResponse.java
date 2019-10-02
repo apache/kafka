@@ -51,10 +51,6 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public TxnOffsetCommitResponse(Struct struct, short version) {
-        this.data = new TxnOffsetCommitResponseData(struct, version);
-    }
-
     public TxnOffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
         Map<String, TxnOffsetCommitResponseTopic> responseTopicDataMap = new HashMap<>();
 

@@ -44,10 +44,6 @@ public class ControlledShutdownResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public ControlledShutdownResponse(Struct struct, short version) {
-        this(new ControlledShutdownResponseData(struct, version));
-    }
-
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -55,6 +51,11 @@ public class ControlledShutdownResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(error(), 1);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {

@@ -76,10 +76,6 @@ public class LeaveGroupResponse extends AbstractResponse {
         }
     }
 
-    public LeaveGroupResponse(Struct struct, short version) {
-        this.data = new LeaveGroupResponseData(struct, version);
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

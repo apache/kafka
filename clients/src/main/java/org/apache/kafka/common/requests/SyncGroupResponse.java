@@ -34,10 +34,6 @@ public class SyncGroupResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public SyncGroupResponse(Struct struct, short version) {
-        this.data = new SyncGroupResponseData(struct, version);
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

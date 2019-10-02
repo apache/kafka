@@ -59,29 +59,6 @@ public class LeaveGroupResponseTest {
     }
 
     @Test
-    public void testConstructorWithStruct() {
-        Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
-
-        LeaveGroupResponseData responseData = new LeaveGroupResponseData()
-                                                  .setErrorCode(Errors.NOT_COORDINATOR.code())
-                                                  .setThrottleTimeMs(throttleTimeMs);
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
-
-            assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
-
-            if (version >= 1) {
-                assertEquals(throttleTimeMs, leaveGroupResponse.throttleTimeMs());
-            } else {
-                assertEquals(DEFAULT_THROTTLE_TIME, leaveGroupResponse.throttleTimeMs());
-            }
-
-            assertEquals(Errors.NOT_COORDINATOR, leaveGroupResponse.error());
-        }
-    }
-
-
-    @Test
     public void testConstructorWithMemberResponses() {
         Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
@@ -130,9 +107,11 @@ public class LeaveGroupResponseTest {
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(throttleTimeMs);
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            LeaveGroupResponse primaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
+            LeaveGroupResponse primaryResponse = new LeaveGroupResponse(
+                new LeaveGroupResponseData(responseData.toStruct(version), version));
 
-            LeaveGroupResponse secondaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
+            LeaveGroupResponse secondaryResponse = new LeaveGroupResponse(
+                new LeaveGroupResponseData(responseData.toStruct(version), version));
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);

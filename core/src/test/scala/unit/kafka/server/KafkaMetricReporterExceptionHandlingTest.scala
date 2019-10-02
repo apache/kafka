@@ -69,9 +69,8 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     try {
       TestUtils.retry(10000) {
-        val error = new ListGroupsResponse(
-          requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder(new ListGroupsRequestData)), ApiKeys.LIST_GROUPS.latestVersion)
-          .errorCounts()
+        val error = requestResponse(socket, "clientId", 0,
+          new ListGroupsRequest.Builder(new ListGroupsRequestData)).errorCounts()
         assertEquals(Collections.singletonMap(Errors.NONE, 1), error)
         assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)

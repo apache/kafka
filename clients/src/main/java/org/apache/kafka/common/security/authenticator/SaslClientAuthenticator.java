@@ -514,7 +514,7 @@ public class SaslClientAuthenticator implements Authenticator {
             if (responseBytes == null)
                 return null;
             else {
-                AbstractResponse response = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), currentRequestHeader);
+                AbstractResponse response = NetworkClient.parseResponse(currentRequestHeader, ByteBuffer.wrap(responseBytes));
                 currentRequestHeader = null;
                 return response;
             }

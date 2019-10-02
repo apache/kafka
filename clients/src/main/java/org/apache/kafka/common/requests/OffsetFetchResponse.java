@@ -174,10 +174,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         return Errors.NONE;
     }
 
-    public OffsetFetchResponse(Struct struct, short version) {
-        this(new OffsetFetchResponseData(struct, version), version);
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();

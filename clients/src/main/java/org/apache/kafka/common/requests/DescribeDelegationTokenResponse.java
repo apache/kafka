@@ -68,10 +68,6 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public DescribeDelegationTokenResponse(Struct struct, short version) {
-        this(new DescribeDelegationTokenResponseData(struct, version));
-    }
-
     public static DescribeDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new DescribeDelegationTokenResponse(new DescribeDelegationTokenResponseData(
             new ByteBufferAccessor(buffer), version));

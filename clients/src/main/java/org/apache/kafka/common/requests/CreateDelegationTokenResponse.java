@@ -34,10 +34,6 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public CreateDelegationTokenResponse(Struct struct, short version) {
-        this.data = new CreateDelegationTokenResponseData(struct, version);
-    }
-
     public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
         return new CreateDelegationTokenResponse(
             new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));

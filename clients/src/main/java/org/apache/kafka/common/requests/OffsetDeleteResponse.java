@@ -53,10 +53,6 @@ public class OffsetDeleteResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public OffsetDeleteResponse(Struct struct, short version) {
-        this(new OffsetDeleteResponseData(struct, version));
-    }
-
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);

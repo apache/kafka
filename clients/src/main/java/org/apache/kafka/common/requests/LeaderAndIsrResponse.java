@@ -43,10 +43,6 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public LeaderAndIsrResponse(Struct struct, short version) {
-        this.data = new LeaderAndIsrResponseData(struct, version);
-    }
-
     public List<LeaderAndIsrPartitionError> partitions() {
         return data.partitionErrors();
     }
@@ -62,6 +58,11 @@ public class LeaderAndIsrResponse extends AbstractResponse {
             // Minor optimization since the top-level error applies to all partitions
             return Collections.singletonMap(error, data.partitionErrors().size());
         return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())).collect(Collectors.toList()));
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {

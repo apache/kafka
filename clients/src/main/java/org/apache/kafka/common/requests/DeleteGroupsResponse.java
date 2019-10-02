@@ -46,10 +46,6 @@ public class DeleteGroupsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public DeleteGroupsResponse(Struct struct, short version) {
-        this.data = new DeleteGroupsResponseData(struct, version);
-    }
-
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);

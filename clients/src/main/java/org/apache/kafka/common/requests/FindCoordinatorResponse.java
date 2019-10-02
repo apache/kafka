@@ -45,10 +45,6 @@ public class FindCoordinatorResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public FindCoordinatorResponse(Struct struct, short version) {
-        this.data = new FindCoordinatorResponseData(struct, version);
-    }
-
     public FindCoordinatorResponseData data() {
         return data;
     }

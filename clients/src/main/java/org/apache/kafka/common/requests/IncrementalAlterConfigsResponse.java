@@ -59,10 +59,6 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public IncrementalAlterConfigsResponse(final Struct struct, final short version) {
-        this.data = new IncrementalAlterConfigsResponseData(struct, version);
-    }
-
     public IncrementalAlterConfigsResponseData data() {
         return data;
     }

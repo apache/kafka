@@ -48,10 +48,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public DescribeGroupsResponse(Struct struct, short version) {
-        this(new DescribeGroupsResponseData(struct, version));
-    }
-
     public static DescribedGroupMember groupMember(
         final String memberId,
         final String groupInstanceId,

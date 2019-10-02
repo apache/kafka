@@ -34,7 +34,6 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
@@ -513,7 +512,7 @@ class RequestQuotaTest extends BaseRequestTest {
   case class Client(clientId: String, apiKey: ApiKeys) {
     var correlationId: Int = 0
     val builder = requestBuilder(apiKey)
-    def runUntil(until: Struct => Boolean): Boolean = {
+    def runUntil(until: AbstractResponse => Boolean): Boolean = {
       val startMs = System.currentTimeMillis
       var done = false
       val socket = connect()
@@ -521,7 +520,7 @@ class RequestQuotaTest extends BaseRequestTest {
         while (!done && System.currentTimeMillis < startMs + 10000) {
           correlationId += 1
           val response = requestResponse(socket, clientId, correlationId, builder)
-          done = until.apply(response)
+          done = until(response)
         }
       } finally {
         socket.close()
@@ -561,73 +560,20 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def responseThrottleTime(apiKey: ApiKeys, responseStruct: Struct): Int = {
-    val apiVersion = apiKey.latestVersion
-    apiKey match {
-      case ApiKeys.PRODUCE => new ProduceResponse(responseStruct).throttleTimeMs
-      case ApiKeys.FETCH => FetchResponse.parse(responseStruct).throttleTimeMs
-      case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(responseStruct).throttleTimeMs
-      case ApiKeys.METADATA => new MetadataResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.JOIN_GROUP => new JoinGroupResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.HEARTBEAT => new HeartbeatResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.SYNC_GROUP => new SyncGroupResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_GROUPS => new DescribeGroupsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.LIST_GROUPS => new ListGroupsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.API_VERSIONS => new ApiVersionsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.CREATE_TOPICS => new CreateTopicsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DELETE_TOPICS => new DeleteTopicsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DELETE_RECORDS => new DeleteRecordsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.INIT_PRODUCER_ID => new InitProducerIdResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(responseStruct).throttleTimeMs
-      case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(responseStruct).throttleTimeMs
-      case ApiKeys.END_TXN => new EndTxnResponse(responseStruct).throttleTimeMs
-      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.CREATE_ACLS => new CreateAclsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(responseStruct).throttleTimeMs
-      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.OFFSET_FOR_LEADER_EPOCH => new OffsetsForLeaderEpochResponse(responseStruct).throttleTimeMs
-      case ApiKeys.ELECT_LEADERS => new ElectLeadersResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.INCREMENTAL_ALTER_CONFIGS => new IncrementalAlterConfigsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(responseStruct, apiVersion).throttleTimeMs
-      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(responseStruct, apiVersion).throttleTimeMs()
-      case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
-    }
-  }
-
   private def checkRequestThrottleTime(apiKey: ApiKeys): Unit = {
-
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
-
-    val throttled = client.runUntil { response =>
-      responseThrottleTime(apiKey, response) > 0
-    }
+    val throttled = client.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $client", throttled)
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
   }
 
   private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys): Unit = {
-
     // Request until throttled using client-id with default small producer quota
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
-    val throttled = smallQuotaProducerClient.runUntil(response => responseThrottleTime(apiKey, response) > 0)
+    val throttled = smallQuotaProducerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $smallQuotaProducerClient", throttled)
     assertTrue(s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient",
@@ -637,10 +583,9 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys): Unit = {
-
     // Request until throttled using client-id with default small consumer quota
     val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, apiKey)
-    val throttled = smallQuotaConsumerClient.runUntil(response => responseThrottleTime(apiKey, response) > 0)
+    val throttled = smallQuotaConsumerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
     assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient",
@@ -650,10 +595,9 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def checkUnthrottledClient(apiKey: ApiKeys): Unit = {
-
     // Test that request from client with large quota is not throttled
     val unthrottledClient = Client(unthrottledClientId, apiKey)
-    unthrottledClient.runUntil(response => responseThrottleTime(apiKey, response) <= 0.0)
+    unthrottledClient.runUntil(_.throttleTimeMs <= 0)
     assertEquals(1, unthrottledClient.correlationId)
     assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
   }

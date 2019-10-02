@@ -80,15 +80,6 @@ public class OffsetCommitResponse extends AbstractResponse {
         this(DEFAULT_THROTTLE_TIME, responseData);
     }
 
-    public OffsetCommitResponse(Struct struct) {
-        short latestVersion = (short) (OffsetCommitResponseData.SCHEMAS.length - 1);
-        this.data = new OffsetCommitResponseData(struct, latestVersion);
-    }
-
-    public OffsetCommitResponse(Struct struct, short version) {
-        this.data = new OffsetCommitResponseData(struct, version);
-    }
-
     public OffsetCommitResponseData data() {
         return data;
     }

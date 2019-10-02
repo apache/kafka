@@ -43,10 +43,6 @@ public class StopReplicaResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public StopReplicaResponse(Struct struct, short version) {
-        data = new StopReplicaResponseData(struct, version);
-    }
-
     public List<StopReplicaPartitionError> partitionErrors() {
         return data.partitionErrors();
     }
@@ -70,6 +66,11 @@ public class StopReplicaResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override

@@ -33,10 +33,6 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
         this.data = responseData;
     }
 
-    public ListPartitionReassignmentsResponse(Struct struct, short version) {
-        this(new ListPartitionReassignmentsResponseData(struct, version));
-    }
-
     public static ListPartitionReassignmentsResponse parse(ByteBuffer buffer, short version) {
         return new ListPartitionReassignmentsResponse(new ListPartitionReassignmentsResponseData(
             new ByteBufferAccessor(buffer), version));

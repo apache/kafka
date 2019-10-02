@@ -66,10 +66,6 @@ public class MetadataResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public MetadataResponse(Struct struct, short version) {
-        this(new MetadataResponseData(struct, version));
-    }
-
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);

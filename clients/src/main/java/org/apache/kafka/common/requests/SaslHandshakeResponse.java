@@ -39,10 +39,6 @@ public class SaslHandshakeResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public SaslHandshakeResponse(Struct struct, short version) {
-        this.data = new SaslHandshakeResponseData(struct, version);
-    }
-
     /*
     * Possible error codes:
     *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
@@ -60,6 +56,11 @@ public class SaslHandshakeResponse extends AbstractResponse {
     @Override
     public Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     @Override

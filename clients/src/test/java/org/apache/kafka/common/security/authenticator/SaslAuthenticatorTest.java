@@ -2020,7 +2020,7 @@ public class SaslAuthenticatorTest {
         Send send = request.toSend(node, header);
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
-        return NetworkClient.parseResponse(responseBuffer, header);
+        return NetworkClient.parseResponse(header, responseBuffer);
     }
 
     private SaslHandshakeResponse sendHandshakeRequestReceiveResponse(String node, short version) throws Exception {
