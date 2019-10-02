@@ -90,7 +90,9 @@ object ApiVersion {
     // Introduced static membership.
     KAFKA_2_3_IV0,
     // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
-    KAFKA_2_3_IV1
+    KAFKA_2_3_IV1,
+    // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
+    KAFKA_2_4_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -314,6 +316,13 @@ case object KAFKA_2_3_IV1 extends DefaultApiVersion {
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 23
+}
+
+case object KAFKA_2_4_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "2.4"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 24
 }
 
 object ApiVersionValidator extends Validator {

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -182,14 +183,20 @@ public class GlobalStreamThread extends Thread {
                               final Metrics metrics,
                               final Time time,
                               final String threadClientId,
-                              final StateRestoreListener stateRestoreListener) {
+                              final StateRestoreListener stateRestoreListener,
+                              final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger) {
         super(threadClientId);
         this.time = time;
         this.config = config;
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
+        streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            threadClientId,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());

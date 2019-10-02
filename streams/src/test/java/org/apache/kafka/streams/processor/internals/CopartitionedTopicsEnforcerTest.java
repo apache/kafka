@@ -21,20 +21,21 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class CopartitionedTopicsValidatorTest {
+public class CopartitionedTopicsEnforcerTest {
 
-    private final StreamsPartitionAssignor.CopartitionedTopicsValidator validator =
-        new StreamsPartitionAssignor.CopartitionedTopicsValidator("thread");
+    private final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer("thread");
     private final Map<TopicPartition, PartitionInfo> partitions = new HashMap<>();
     private final Cluster cluster = Cluster.empty();
 
@@ -56,17 +57,17 @@ public class CopartitionedTopicsValidatorTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
-        validator.validate(Collections.singleton("topic"),
-                           Collections.emptyMap(),
-                           cluster);
+        validator.enforce(Collections.singleton("topic"),
+                          Collections.emptyMap(),
+                          cluster);
     }
 
     @Test(expected = TopologyException.class)
     public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         partitions.remove(new TopicPartition("second", 0));
-        validator.validate(Utils.mkSet("first", "second"),
-                           Collections.emptyMap(),
-                           cluster.withPartitions(partitions));
+        validator.enforce(Utils.mkSet("first", "second"),
+                          Collections.emptyMap(),
+                          cluster.withPartitions(partitions));
     }
 
 
@@ -74,11 +75,11 @@ public class CopartitionedTopicsValidatorTest {
     public void shouldEnforceCopartitioningOnRepartitionTopics() {
         final InternalTopicConfig config = createTopicConfig("repartitioned", 10);
 
-        validator.validate(Utils.mkSet("first", "second", config.name()),
-                           Collections.singletonMap(config.name(), config),
-                           cluster.withPartitions(partitions));
+        validator.enforce(Utils.mkSet("first", "second", config.name()),
+                          Collections.singletonMap(config.name(), config),
+                          cluster.withPartitions(partitions));
 
-        assertThat(config.numberOfPartitions(), equalTo(2));
+        assertThat(config.numberOfPartitions(), equalTo(Optional.of(2)));
     }
 
 
@@ -93,16 +94,16 @@ public class CopartitionedTopicsValidatorTest {
         repartitionTopicConfig.put(two.name(), two);
         repartitionTopicConfig.put(three.name(), three);
 
-        validator.validate(Utils.mkSet(one.name(),
-                                       two.name(),
-                                       three.name()),
-                           repartitionTopicConfig,
-                           cluster
+        validator.enforce(Utils.mkSet(one.name(),
+                                      two.name(),
+                                      three.name()),
+                          repartitionTopicConfig,
+                          cluster
         );
 
-        assertThat(one.numberOfPartitions(), equalTo(15));
-        assertThat(two.numberOfPartitions(), equalTo(15));
-        assertThat(three.numberOfPartitions(), equalTo(15));
+        assertThat(one.numberOfPartitions(), equalTo(Optional.of(15)));
+        assertThat(two.numberOfPartitions(), equalTo(Optional.of(15)));
+        assertThat(three.numberOfPartitions(), equalTo(Optional.of(15)));
     }
 
     private InternalTopicConfig createTopicConfig(final String repartitionTopic,

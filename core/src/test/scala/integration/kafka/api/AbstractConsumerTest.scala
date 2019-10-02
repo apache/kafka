@@ -334,7 +334,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     @volatile var thrownException: Option[Throwable] = None
     @volatile var receivedMessages = 0
 
-    @volatile private var partitionAssignment: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
+    private val partitionAssignment = mutable.Set[TopicPartition]()
     @volatile private var subscriptionChanged = false
     private var topicsSubscription = topicsToSubscribe
 
@@ -424,7 +424,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     }
 
     // make sure that sum of all partitions to all consumers equals total number of partitions
-    val totalPartitionsInAssignments = (0 /: assignments) (_ + _.size)
+    val totalPartitionsInAssignments = assignments.foldLeft(0)(_ + _.size)
     if (totalPartitionsInAssignments != partitions.size) {
       // either same partitions got assigned to more than one consumer or some
       // partitions were not assigned
@@ -434,7 +434,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     // The above checks could miss the case where one or more partitions were assigned to more
     // than one consumer and the same number of partitions were missing from assignments.
     // Make sure that all unique assignments are the same as 'partitions'
-    val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
+    val uniqueAssignedPartitions = assignments.foldLeft(Set.empty[TopicPartition])(_ ++ _)
     uniqueAssignedPartitions == partitions
   }
 

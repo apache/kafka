@@ -42,9 +42,11 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -71,43 +73,46 @@ public class StreamThread extends Thread {
      * The expected state transitions with the following defined states is:
      *
      * <pre>
-     *                +-------------+
-     *          +<--- | Created (0) |
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +<--- | Starting (1)|
-     *          |     +-----+-------+
-     *          |           |
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +<--- | Partitions  |
-     *          |     | Revoked (2) | <----+
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
-     *          |     | Partitions  |      |
-     *          +<--- | Assigned (3)| ---->+
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
-     *          |     | Running (4) | ---->+
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +---> | Pending     |
-     *                | Shutdown (5)|
-     *                +-----+-------+
-     *                      |
-     *                      v
-     *                +-----+-------+
-     *                | Dead (6)    |
-     *                +-------------+
+     *                 +-------------+
+     *          +<---- | Created (0) |
+     *          |      +-----+-------+
+     *          |            |
+     *          |            v
+     *          |      +-----+-------+
+     *          +<---- | Starting (1)|----->+
+     *          |      +-----+-------+      |
+     *          |            |              |
+     *          |            |              |
+     *          |            v              |
+     *          |      +-----+-------+      |
+     *          +<---- | Partitions  |      |
+     *          |      | Revoked (2) | <----+
+     *          |      +-----+-------+      |
+     *          |           |  ^            |
+     *          |           |  |            |
+     *          |           v  |            |
+     *          |      +-----+-------+      |
+     *          +<---- | Partitions  |      |
+     *          |      | Assigned (3)| <----+
+     *          |      +-----+-------+      |
+     *          |            |              |
+     *          |            |              |
+     *          |            v              |
+     *          |      +-----+-------+      |
+     *          |      | Running (4) | ---->+
+     *          |      +-----+-------+
+     *          |            |
+     *          |            |
+     *          |            v
+     *          |      +-----+-------+
+     *          +----> | Pending     |
+     *                 | Shutdown (5)|
+     *                 +-----+-------+
+     *                       |
+     *                       v
+     *                 +-----+-------+
+     *                 | Dead (6)    |
+     *                 +-------------+
      * </pre>
      *
      * Note the following:
@@ -122,15 +127,20 @@ public class StreamThread extends Thread {
      *         State PARTITIONS_REVOKED may want transit to itself indefinitely, in the corner case when
      *         the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *         Also during streams instance start up PARTITIONS_REVOKED may want to transit to itself as well.
-     *         In this case we will forbid the transition but will not treat as an error.
+     *         In this case we will allow the transition but it will be a no-op as the set of revoked partitions
+     *         should be empty.
      *     </li>
      * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
-        // TODO: the current transitions from other states directly to PARTITIONS_REVOKED is due to
-        //       the fact that onPartitionsRevoked may not be triggered. we need to refactor the
-        //       state diagram more thoroughly after we refactor StreamsPartitionAssignor to support COOPERATIVE
-        CREATED(1, 5), STARTING(2, 3, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 3, 4, 5), RUNNING(2, 3, 5), PENDING_SHUTDOWN(6), DEAD;
+
+        CREATED(1, 5),                   // 0
+        STARTING(2, 3, 5),               // 1
+        PARTITIONS_REVOKED(3, 5),        // 2
+        PARTITIONS_ASSIGNED(2, 3, 4, 5), // 3
+        RUNNING(2, 3, 5),                // 4
+        PENDING_SHUTDOWN(6),             // 5
+        DEAD;                            // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -204,12 +214,6 @@ public class StreamThread extends Thread {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return null;
-            } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
-                log.debug("Ignoring request to transit from PARTITIONS_REVOKED to PARTITIONS_REVOKED: " +
-                              "self transition is not allowed");
-                // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
-                // refused but we do not throw exception here
-                return null;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
@@ -243,104 +247,12 @@ public class StreamThread extends Thread {
         }
     }
 
-    static class RebalanceListener implements ConsumerRebalanceListener {
-        private final Time time;
-        private final TaskManager taskManager;
-        private final StreamThread streamThread;
-        private final Logger log;
+    int getAssignmentErrorCode() {
+        return assignmentErrorCode.get();
+    }
 
-        RebalanceListener(final Time time,
-                          final TaskManager taskManager,
-                          final StreamThread streamThread,
-                          final Logger log) {
-            this.time = time;
-            this.taskManager = taskManager;
-            this.streamThread = streamThread;
-            this.log = log;
-        }
-
-        @Override
-        public void onPartitionsAssigned(final Collection<TopicPartition> assignment) {
-            log.debug("at state {}: partitions {} assigned at the end of consumer rebalance.\n" +
-                    "\tcurrent suspended active tasks: {}\n" +
-                    "\tcurrent suspended standby tasks: {}\n",
-                streamThread.state,
-                assignment,
-                taskManager.suspendedActiveTaskIds(),
-                taskManager.suspendedStandbyTaskIds());
-
-            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-                log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
-                streamThread.shutdown();
-                return;
-            }
-            final long start = time.milliseconds();
-            try {
-                if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    log.debug(
-                        "Skipping task creation in rebalance because we are already in {} state.",
-                        streamThread.state()
-                    );
-                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
-                    log.debug(
-                        "Encountered assignment error during partition assignment: {}. Skipping task initialization",
-                        streamThread.assignmentErrorCode
-                    );
-                } else {
-                    log.debug("Creating tasks based on assignment.");
-                    taskManager.createTasks(assignment);
-                }
-            } catch (final Throwable t) {
-                log.error(
-                    "Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance", t);
-                streamThread.setRebalanceException(t);
-            } finally {
-                log.info("partition assignment took {} ms.\n" +
-                        "\tcurrent active tasks: {}\n" +
-                        "\tcurrent standby tasks: {}\n" +
-                        "\tprevious active tasks: {}\n",
-                    time.milliseconds() - start,
-                    taskManager.activeTaskIds(),
-                    taskManager.standbyTaskIds(),
-                    taskManager.prevActiveTaskIds());
-            }
-        }
-
-        @Override
-        public void onPartitionsRevoked(final Collection<TopicPartition> assignment) {
-            log.debug("at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
-                    "\tcurrent assigned active tasks: {}\n" +
-                    "\tcurrent assigned standby tasks: {}\n",
-                streamThread.state,
-                assignment,
-                taskManager.activeTaskIds(),
-                taskManager.standbyTaskIds());
-
-            if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
-                final long start = time.milliseconds();
-                try {
-                    // suspend active tasks
-                    taskManager.suspendTasksAndState();
-                } catch (final Throwable t) {
-                    log.error(
-                        "Error caught during partition revocation, " +
-                            "will abort the current process and re-throw at the end of rebalance: {}",
-                        t
-                    );
-                    streamThread.setRebalanceException(t);
-                } finally {
-                    streamThread.clearStandbyRecords();
-
-                    log.info("partition revocation took {} ms.\n" +
-                            "\tsuspended active tasks: {}\n" +
-                            "\tsuspended standby tasks: {}",
-                        time.milliseconds() - start,
-                        taskManager.suspendedActiveTaskIds(),
-                        taskManager.suspendedStandbyTaskIds());
-                }
-            }
-        }
+    void setRebalanceException(final Throwable rebalanceException) {
+        this.rebalanceException = rebalanceException;
     }
 
     static abstract class AbstractTaskCreator<T extends Task> {
@@ -595,7 +507,11 @@ public class StreamThread extends Thread {
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            threadClientId,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
@@ -699,7 +615,7 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log);
         this.taskManager = taskManager;
         this.producer = producer;
         this.restoreConsumer = restoreConsumer;
@@ -743,6 +659,10 @@ public class StreamThread extends Thread {
         return clientId + "-admin";
     }
 
+    public void setRocksDBMetricsRecordingTrigger(final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger) {
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
+    }
+
     /**
      * Execute the stream processors
      *
@@ -774,10 +694,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void setRebalanceException(final Throwable rebalanceException) {
-        this.rebalanceException = rebalanceException;
-    }
-
     /**
      * Main event loop for polling, and processing records through topologies.
      *
@@ -790,9 +706,9 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 runOnce();
-                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
-                    assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
+                    assignmentErrorCode.set(AssignorError.NONE.code());
                     enforceRebalance();
                 }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
@@ -1221,8 +1137,10 @@ public class StreamThread extends Thread {
         log.info("Shutdown complete");
     }
 
-    private void clearStandbyRecords() {
-        standbyRecords.clear();
+    void clearStandbyRecords(final List<TopicPartition> partitions) {
+        for (final TopicPartition tp : partitions) {
+            standbyRecords.remove(tp);
+        }
     }
 
     /**
@@ -1329,7 +1247,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> adminClientMetrics() {
-        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.getAdminClient().metrics();
+        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.adminClient().metrics();
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         result.putAll(adminClientMetrics);
         return result;

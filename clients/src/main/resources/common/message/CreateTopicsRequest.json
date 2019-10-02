@@ -19,7 +19,8 @@
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
-  "validVersions": "0-4",
+  // Version 5 returns topic configs in the response (KIP-525).
+  "validVersions": "0-5",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [

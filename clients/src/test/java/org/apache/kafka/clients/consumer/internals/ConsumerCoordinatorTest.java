@@ -49,7 +49,9 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -198,6 +200,58 @@ public class ConsumerCoordinatorTest {
     public void teardown() {
         this.metrics.close();
         this.coordinator.close(time.timer(0));
+    }
+
+    @Test
+    public void testMetrics() {
+        assertNotNull(getMetric("commit-latency-avg"));
+        assertNotNull(getMetric("commit-latency-max"));
+        assertNotNull(getMetric("commit-rate"));
+        assertNotNull(getMetric("commit-total"));
+        assertNotNull(getMetric("partition-revoked-latency-avg"));
+        assertNotNull(getMetric("partition-revoked-latency-max"));
+        assertNotNull(getMetric("partition-assigned-latency-avg"));
+        assertNotNull(getMetric("partition-assigned-latency-max"));
+        assertNotNull(getMetric("partition-lost-latency-avg"));
+        assertNotNull(getMetric("partition-lost-latency-max"));
+        assertNotNull(getMetric("assigned-partitions"));
+
+        metrics.sensor("commit-latency").record(1.0d);
+        metrics.sensor("commit-latency").record(6.0d);
+        metrics.sensor("commit-latency").record(2.0d);
+
+        assertEquals(3.0d, getMetric("commit-latency-avg").metricValue());
+        assertEquals(6.0d, getMetric("commit-latency-max").metricValue());
+        assertEquals(0.1d, getMetric("commit-rate").metricValue());
+        assertEquals(3.0d, getMetric("commit-total").metricValue());
+
+        metrics.sensor("partition-revoked-latency").record(1.0d);
+        metrics.sensor("partition-revoked-latency").record(2.0d);
+        metrics.sensor("partition-assigned-latency").record(1.0d);
+        metrics.sensor("partition-assigned-latency").record(2.0d);
+        metrics.sensor("partition-lost-latency").record(1.0d);
+        metrics.sensor("partition-lost-latency").record(2.0d);
+
+        assertEquals(1.5d, getMetric("partition-revoked-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-revoked-latency-max").metricValue());
+        assertEquals(1.5d, getMetric("partition-assigned-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-assigned-latency-max").metricValue());
+        assertEquals(1.5d, getMetric("partition-lost-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-lost-latency-max").metricValue());
+
+        assertEquals(0.0d, getMetric("assigned-partitions").metricValue());
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        assertEquals(1.0d, getMetric("assigned-partitions").metricValue());
+        subscriptions.assignFromUser(Utils.mkSet(t1p, t2p));
+        assertEquals(2.0d, getMetric("assigned-partitions").metricValue());
+    }
+
+    private KafkaMetric getMetric(final String name) {
+        return metrics.metrics().get(metrics.metricName(name, "consumer" + groupId + "-coordinator-metrics"));
+    }
+
+    private Sensor getSensor(final String name) {
+        return metrics.sensor(name);
     }
 
     @Test

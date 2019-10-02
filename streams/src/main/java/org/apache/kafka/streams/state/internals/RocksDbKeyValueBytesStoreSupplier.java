@@ -45,6 +45,6 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public String metricsScope() {
-        return "rocksdb-state";
+        return "rocksdb";
     }
 }

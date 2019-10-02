@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
@@ -38,6 +39,8 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
+  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+
   @Test
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -53,6 +56,7 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
       assertEquals(-1, partitionResponse.logAppendTime)
+      assertTrue(partitionResponse.errorRecords.isEmpty)
       partitionResponse
     }
 
@@ -114,6 +118,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
   @Test

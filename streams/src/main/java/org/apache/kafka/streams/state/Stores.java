@@ -135,7 +135,7 @@ public final class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-state";
+                return "in-memory";
             }
         };
     }
@@ -169,7 +169,7 @@ public final class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-lru-state";
+                return "in-memory-lru";
             }
         };
     }

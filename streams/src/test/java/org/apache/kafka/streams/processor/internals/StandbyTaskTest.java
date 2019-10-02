@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -158,7 +160,8 @@ public class StandbyTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     private final String threadName = "threadName";
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), threadName);
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
     @Before
     public void setup() throws Exception {
@@ -552,6 +555,94 @@ public class StandbyTaskTest {
             integerSerializer.serialize(null, key),
             integerSerializer.serialize(null, 100)
         );
+    }
+
+    @Test
+    public void shouldNotGetConsumerCommittedOffsetIfThereAreNoRecordUpdates() throws IOException {
+        final AtomicInteger committedCallCount = new AtomicInteger();
+
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                committedCallCount.getAndIncrement();
+                return super.committed(partitions);
+            }
+        };
+
+        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
+
+        task = new StandbyTask(
+            taskId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            changelogReader,
+            createConfig(baseDir),
+            streamsMetrics,
+            stateDirectory
+        );
+        task.initializeStateStores();
+        assertThat(committedCallCount.get(), equalTo(0));
+
+        task.update(globalTopicPartition, Collections.emptyList());
+        // We should not make a consumer.committed() call because there are no new records.
+        assertThat(committedCallCount.get(), equalTo(0));
+    }
+
+    @Test
+    public void shouldGetConsumerCommittedOffsetsOncePerCommit() throws IOException {
+        final AtomicInteger committedCallCount = new AtomicInteger();
+
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                committedCallCount.getAndIncrement();
+                return super.committed(partitions);
+            }
+        };
+
+        consumer.assign(Collections.singletonList(globalTopicPartition));
+        consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
+
+        task = new StandbyTask(
+            taskId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            changelogReader,
+            createConfig(baseDir),
+            streamsMetrics,
+            stateDirectory
+        );
+        task.initializeStateStores();
+
+        task.update(
+            globalTopicPartition,
+            Collections.singletonList(
+                makeConsumerRecord(globalTopicPartition, 1, 1)
+            )
+        );
+        assertThat(committedCallCount.get(), equalTo(1));
+
+        task.update(
+            globalTopicPartition,
+            Collections.singletonList(
+                makeConsumerRecord(globalTopicPartition, 1, 1)
+            )
+        );
+        // We should not make another consumer.committed() call until we commit
+        assertThat(committedCallCount.get(), equalTo(1));
+
+        task.commit();
+        task.update(
+            globalTopicPartition,
+            Collections.singletonList(
+                makeConsumerRecord(globalTopicPartition, 1, 1)
+            )
+        );
+        // We committed so we're allowed to make another consumer.committed() call
+        assertThat(committedCallCount.get(), equalTo(2));
     }
 
     @Test

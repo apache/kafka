@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import kafka.controller.PartitionReplicaAssignment
 import kafka.network.SocketServer
 import org.junit.Assert._
 import kafka.utils.TestUtils._
@@ -38,24 +39,24 @@ class AddPartitionsTest extends BaseRequestTest {
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0->Seq(0,1))
+  val topic1Assignment = Map(0 -> PartitionReplicaAssignment(Seq(0,1), List(), List()))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0->Seq(1,2))
+  val topic2Assignment = Map(0 -> PartitionReplicaAssignment(Seq(1,2), List(), List()))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0->Seq(2,3,0,1))
+  val topic3Assignment = Map(0 -> PartitionReplicaAssignment(Seq(2,3,0,1), List(), List()))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0->Seq(0,3))
+  val topic4Assignment = Map(0 -> PartitionReplicaAssignment(Seq(0,3), List(), List()))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1->Seq(0,1))
+  val topic5Assignment = Map(1 -> PartitionReplicaAssignment(Seq(0,1), List(), List()))
 
   @Before
   override def setUp(): Unit = {
     super.setUp()
 
-    createTopic(topic1, partitionReplicaAssignment = topic1Assignment)
-    createTopic(topic2, partitionReplicaAssignment = topic2Assignment)
-    createTopic(topic3, partitionReplicaAssignment = topic3Assignment)
-    createTopic(topic4, partitionReplicaAssignment = topic4Assignment)
+    createTopic(topic1, partitionReplicaAssignment = topic1Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic2, partitionReplicaAssignment = topic2Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic3, partitionReplicaAssignment = topic3Assignment.mapValues(_.replicas).toMap)
+    createTopic(topic4, partitionReplicaAssignment = topic4Assignment.mapValues(_.replicas).toMap)
   }
 
   @Test

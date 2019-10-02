@@ -104,8 +104,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBConfigSetter configSetter;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private boolean closeMetricsRecorder = false;
-    private boolean removeStatisticsFromMetricsRecorder = false;
+    private boolean isStatisticsRegistered = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -117,7 +116,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     RocksDBStore(final String name,
                  final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
-        closeMetricsRecorder = true;
     }
 
     RocksDBStore(final String name,
@@ -190,26 +188,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
-        setUpMetrics(context, configs);
+        maybeSetUpMetricsRecorder(context, configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
     }
 
-    private void setUpMetrics(final ProcessorContext context, final Map<String, Object> configs) {
+    private void maybeSetUpMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
+            isStatisticsRegistered = true;
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
-            metricsRecorder.addStatistics(
-                name,
-                statistics,
-                (StreamsMetricsImpl) context.metrics(),
-                context.taskId()
-            );
-            removeStatisticsFromMetricsRecorder = true;
+            metricsRecorder.addStatistics(name, statistics, (StreamsMetricsImpl) context.metrics(), context.taskId());
         }
     }
 
@@ -434,7 +427,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter = null;
         }
 
-        closeOrUpdateMetricsRecorder();
+        maybeRemoveStatisticsFromMetricsRecorder();
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -455,6 +448,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         cache = null;
     }
 
+    private void maybeRemoveStatisticsFromMetricsRecorder() {
+        if (isStatisticsRegistered) {
+            metricsRecorder.removeStatistics(name);
+            isStatisticsRegistered = false;
+        }
+    }
+
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
         synchronized (openIterators) {
@@ -465,14 +465,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {
                 iterator.close();
             }
-        }
-    }
-
-    private void closeOrUpdateMetricsRecorder() {
-        if (closeMetricsRecorder) {
-            metricsRecorder.close();
-        } else if (removeStatisticsFromMetricsRecorder) {
-            metricsRecorder.removeStatistics(name);
         }
     }
 

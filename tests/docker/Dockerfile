@@ -68,7 +68,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-1.1.1-test.jar" -o /opt/kafka-1.1.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.0.1-test.jar" -o /opt/kafka-2.0.1/libs/kafka-streams-2.0.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.1.1-test.jar" -o /opt/kafka-2.1.1/libs/kafka-streams-2.1.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.2.1-test.jar" -o /opt/kafka-2.2.1/libs/kafka-streams-2.2.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.0-test.jar" -o /opt/kafka-2.2.0/libs/kafka-streams-2.3.0-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.0-test.jar" -o /opt/kafka-2.3.0/libs/kafka-streams-2.3.0-test.jar
 
 # The version of Kibosh to use for testing.
 # If you update this, also update vagrant/base.sy

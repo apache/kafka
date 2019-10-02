@@ -25,6 +25,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 import static org.junit.Assert.assertEquals;
 
 public class SubscriptionInfoTest {
@@ -42,7 +44,7 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {
         final SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks, "localhost:80");
-        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION, info.version());
+        assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -52,49 +54,49 @@ public class SubscriptionInfoTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowForUnknownVersion2() {
-        new SubscriptionInfo(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, processId, activeTasks, standbyTasks, "localhost:80");
+        new SubscriptionInfo(LATEST_SUPPORTED_VERSION + 1, processId, activeTasks, standbyTasks, "localhost:80");
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion1() {
         final SubscriptionInfo info = new SubscriptionInfo(1, processId, activeTasks, standbyTasks, IGNORED_USER_ENDPOINT);
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(1, SubscriptionInfo.UNKNOWN, processId, activeTasks, standbyTasks, null);
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(1, UNKNOWN, processId, activeTasks, standbyTasks, null);
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion2() {
         final SubscriptionInfo info = new SubscriptionInfo(2, processId, activeTasks, standbyTasks, "localhost:80");
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(2, SubscriptionInfo.UNKNOWN, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(2, UNKNOWN, processId, activeTasks, standbyTasks, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion3() {
         final SubscriptionInfo info = new SubscriptionInfo(3, processId, activeTasks, standbyTasks, "localhost:80");
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(3, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(3, LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion4() {
         final SubscriptionInfo info = new SubscriptionInfo(4, processId, activeTasks, standbyTasks, "localhost:80");
-        final SubscriptionInfo expectedInfo = new SubscriptionInfo(4, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(4, LATEST_SUPPORTED_VERSION, processId, activeTasks, standbyTasks, "localhost:80");
         assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldAllowToDecodeFutureSupportedVersion() {
         final SubscriptionInfo info = SubscriptionInfo.decode(encodeFutureVersion());
-        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.version());
-        assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.latestSupportedVersion());
+        assertEquals(LATEST_SUPPORTED_VERSION + 1, info.version());
+        assertEquals(LATEST_SUPPORTED_VERSION + 1, info.latestSupportedVersion());
     }
 
     private ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
                                                    + 4 /* supported version */);
-        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
-        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
+        buf.putInt(LATEST_SUPPORTED_VERSION + 1);
+        buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         return buf;
     }
 

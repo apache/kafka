@@ -233,6 +233,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * directly. They are provided both old and new configs.
    */
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
+    kafkaServer.authorizer match {
+      case Some(authz: Reconfigurable) => addReconfigurable(authz)
+      case _ =>
+    }
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 

@@ -446,6 +446,17 @@ public class TestUtils {
         return buffer;
     }
 
+    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
+        Set<TopicPartition> tps = new HashSet<>();
+        for (int i = 0; i < numTopic; i++) {
+            String topic = randomString(32);
+            for (int j = 0; j < numPartitionPerTopic; j++) {
+                tps.add(new TopicPartition(topic, j));
+            }
+        }
+        return tps;
+    }
+
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {

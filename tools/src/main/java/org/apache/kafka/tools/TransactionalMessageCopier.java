@@ -195,13 +195,13 @@ public class TransactionalMessageCopier {
     }
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
-        for (TopicPartition topicPartition : consumer.assignment()) {
-            OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition);
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
+        committed.forEach((tp, offsetAndMetadata) -> {
             if (offsetAndMetadata != null)
-                consumer.seek(topicPartition, offsetAndMetadata.offset());
+                consumer.seek(tp, offsetAndMetadata.offset());
             else
-                consumer.seekToBeginning(singleton(topicPartition));
-        }
+                consumer.seekToBeginning(singleton(tp));
+        });
     }
 
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {

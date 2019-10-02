@@ -705,7 +705,7 @@ public class NetworkClient implements KafkaClient {
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
                                                                     Sensor throttleTimeSensor, long now) {
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, requestHeader.headerVersion());
         // Always expect the response version id to be the same as the request version id
         Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
