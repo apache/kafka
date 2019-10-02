@@ -122,7 +122,7 @@ public class ProcessorNode<K, V> {
             throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
                     + "input types match the deserialized types? Check the serde setup and change the default serdes in "
                     + "StreamConfig or provide correct serdes via method parameters. Make sure the Processor can accept "
-                    + "the deserialized input of type key: %s, and value: %s.\n"
+                    + "the deserialized input of type key: %s, and value: %s.%n"
                     + "Note that also although wrong serdes are a common cause of error, the cast exception might have "
                     + "another cause (in user code, for example). For example, if a processor wires in a store, but casts "
                     + "the generics incorrectly, a class cast exception could be raiused during processing, but the "
