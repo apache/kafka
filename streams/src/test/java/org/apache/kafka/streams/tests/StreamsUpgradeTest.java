@@ -163,6 +163,11 @@ public class StreamsUpgradeTest {
             final AssignmentInfo info = AssignmentInfo.decode(
                 assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
 
+            if (super.maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
+                setAssignmentErrorCode(Error.VERSION_PROBING.code());
+                return;
+            }
+
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
             partitions.sort(PARTITION_COMPARATOR);
 
@@ -292,6 +297,7 @@ public class StreamsUpgradeTest {
         private FutureAssignmentInfo(final boolean bumpUsedVersion,
                                      final boolean bumpSupportedVersion,
                                      final ByteBuffer bytes) {
+            super(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION);
             this.bumpUsedVersion = bumpUsedVersion;
             this.bumpSupportedVersion = bumpSupportedVersion;
             originalUserMetadata = bytes;
