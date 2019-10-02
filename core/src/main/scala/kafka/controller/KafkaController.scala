@@ -883,21 +883,23 @@ class KafkaController(val config: KafkaConfig,
     */
   private def initializePartitionReassignment(): Unit = {
     val partitionsBeingReassigned = zkClient.getPartitionReassignment
-    info(s"DEPRECATED: Partitions being reassigned through ZooKeeper: $partitionsBeingReassigned")
+    if (partitionsBeingReassigned.nonEmpty) {
+      info(s"DEPRECATED: Partitions being reassigned through ZooKeeper: $partitionsBeingReassigned")
 
-    partitionsBeingReassigned.foreach {
-      case (tp, newReplicas) =>
-        val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, tp)
-        val assignment = controllerContext.partitionFullReplicaAssignment(tp)
-        val ongoingReassignmentOption = if (assignment.isBeingReassigned)
-          Some(assignment)
-        else
-          None
+      partitionsBeingReassigned.foreach {
+        case (tp, newReplicas) =>
+          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, tp)
+          val assignment = controllerContext.partitionFullReplicaAssignment(tp)
+          val ongoingReassignmentOption = if (assignment.isBeingReassigned)
+            Some(assignment)
+          else
+            None
 
-        controllerContext.partitionsBeingReassigned += (
-          tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
-            persistedInZk = true,
-            ongoingReassignmentOpt = ongoingReassignmentOption))
+          controllerContext.partitionsBeingReassigned += (
+            tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
+              persistedInZk = true,
+              ongoingReassignmentOpt = ongoingReassignmentOption))
+      }
     }
   }
 
