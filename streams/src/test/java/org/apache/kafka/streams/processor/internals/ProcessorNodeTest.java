@@ -166,7 +166,7 @@ public class ProcessorNodeTest {
             .flatMapValues(value -> {
                 return Arrays.asList("");
             });
-        Topology topology = builder.build();
+        final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
         final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
@@ -174,8 +174,8 @@ public class ProcessorNodeTest {
 
         try {
             testDriver.pipeInput(consumerRecord);
-        } catch (StreamsException s) {
-            String msg = s.getMessage();
+        } catch (final StreamsException s) {
+            final String msg = s.getMessage();
             assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
             assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
             throw s;
@@ -196,7 +196,7 @@ public class ProcessorNodeTest {
                 return Arrays.asList("");
             });
 
-        Topology topology = builder.build();
+        final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
         final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
@@ -204,17 +204,17 @@ public class ProcessorNodeTest {
 
         try {
             testDriver.pipeInput(consumerRecord);
-        } catch (StreamsException s) {
-            String msg = s.getMessage();
+        } catch (final StreamsException s) {
+            final String msg = s.getMessage();
             assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
             assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
             throw s;
         }
     }
 
-    private static class ClassCastProcessor extends ExceptionalProcessor{
+    private static class ClassCastProcessor extends ExceptionalProcessor {
         @Override
-        public void process(Object key, Object value) {
+        public void process(final Object key, final Object value) {
             throw new ClassCastException("Incompatible types simulation exception.");
         }
     }
