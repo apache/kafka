@@ -713,6 +713,13 @@ public class WorkerTest extends ThreadedTest {
         assertStatusMetrics(1L, "connector-destroyed-task-count");
         assertStatusMetrics(1L, "connector-unassigned-task-count");
 
+        worker.stopAndAwaitTask(TASK_ID);
+        assertStatusMetrics(0L, "connector-running-task-count");
+        assertStatusMetrics(0L, "connector-paused-task-count");
+        assertStatusMetrics(0L, "connector-failed-task-count");
+        assertStatusMetrics(0L, "connector-destroyed-task-count");
+        assertStatusMetrics(0L, "connector-unassigned-task-count");
+
         PowerMock.verifyAll();
     }
 
