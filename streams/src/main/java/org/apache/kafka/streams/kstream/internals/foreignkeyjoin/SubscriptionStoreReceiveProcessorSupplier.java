@@ -27,15 +27,12 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Optional;
 
 public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
     implements ProcessorSupplier<KO, SubscriptionWrapper<K>> {
@@ -58,16 +55,18 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
         return new AbstractProcessor<KO, SubscriptionWrapper<K>>() {
 
             private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
-            private StreamsMetricsImpl metrics;
-            private Optional<Sensor> skippedRecordsSensor;
+            private Sensor droppedRecordsSensor;
 
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
                 final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
 
-                metrics = internalProcessorContext.metrics();
-                skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
+                droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+                    Thread.currentThread().getName(),
+                    internalProcessorContext.taskId().toString(),
+                    internalProcessorContext.metrics()
+                );
                 store = internalProcessorContext.getStateStore(storeBuilder);
             }
 
@@ -78,7 +77,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                         "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         value, context().topic(), context().partition(), context().offset()
                     );
-                    skippedRecordsSensor.ifPresent(Sensor::record);
+                    droppedRecordsSensor.record();
                     return;
                 }
                 if (value.getVersion() != SubscriptionWrapper.CURRENT_VERSION) {

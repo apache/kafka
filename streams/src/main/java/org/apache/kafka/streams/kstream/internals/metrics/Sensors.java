@@ -18,9 +18,7 @@ package org.apache.kafka.streams.kstream.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -30,7 +28,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATE_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 
 public class Sensors {
     private Sensors() {}
@@ -48,43 +46,14 @@ public class Sensors {
         );
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             sensor,
-            PROCESSOR_NODE_METRICS_GROUP,
+            PROCESSOR_NODE_LEVEL_GROUP,
             metrics.nodeLevelTagMap(threadId, context.taskId().toString(), context.currentNode().name()),
             LATE_RECORD_DROP
         );
         return sensor;
     }
 
-    public static Sensor recordLatenessSensor(final InternalProcessorContext context) {
-        final StreamsMetricsImpl metrics = context.metrics();
-        final String threadId = Thread.currentThread().getName();
 
-        final Sensor sensor = metrics.taskLevelSensor(
-            threadId,
-            context.taskId().toString(),
-            "record-lateness",
-            Sensor.RecordingLevel.DEBUG
-        );
-
-        final Map<String, String> tags = metrics.taskLevelTagMap(threadId, context.taskId().toString());
-        sensor.add(
-            new MetricName(
-                "record-lateness-avg",
-                "stream-task-metrics",
-                "The average observed lateness of records.",
-                tags),
-            new Avg()
-        );
-        sensor.add(
-            new MetricName(
-                "record-lateness-max",
-                "stream-task-metrics",
-                "The max observed lateness of records.",
-                tags),
-            new Max()
-        );
-        return sensor;
-    }
 
     public static Sensor suppressionEmitSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
@@ -104,7 +73,7 @@ public class Sensors {
         sensor.add(
             new MetricName(
                 "suppression-emit-rate",
-                PROCESSOR_NODE_METRICS_GROUP,
+                PROCESSOR_NODE_LEVEL_GROUP,
                 "The average number of occurrence of suppression-emit operation per second.",
                 tags
             ),
@@ -113,7 +82,7 @@ public class Sensors {
         sensor.add(
             new MetricName(
                 "suppression-emit-total",
-                PROCESSOR_NODE_METRICS_GROUP,
+                PROCESSOR_NODE_LEVEL_GROUP,
                 "The total number of occurrence of suppression-emit operations.",
                 tags
             ),

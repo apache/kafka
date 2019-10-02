@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 
@@ -57,7 +56,7 @@ public class RecordDeserializerTest {
             ),
             null,
             new LogContext(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());

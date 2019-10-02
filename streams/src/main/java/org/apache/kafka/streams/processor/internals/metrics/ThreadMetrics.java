@@ -21,7 +21,6 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
@@ -107,19 +106,19 @@ public class ThreadMetrics {
         );
     }
 
-    public static Optional<Sensor> skipRecordSensor(final String threadId,
-                                                    final StreamsMetricsImpl streamsMetrics) {
+    public static Sensor skipRecordSensor(final String threadId,
+                                          final StreamsMetricsImpl streamsMetrics) {
         if (streamsMetrics.version() == Version.FROM_100_TO_24) {
-            return Optional.of(invocationRateAndCountSensor(
+            return invocationRateAndCountSensor(
                 threadId,
                 SKIP_RECORD,
                 SKIP_RECORD_RATE_DESCRIPTION,
                 SKIP_RECORD_TOTAL_DESCRIPTION,
                 RecordingLevel.INFO,
                 streamsMetrics
-            ));
+            );
         }
-        return Optional.empty();
+        return emptySensor(threadId, SKIP_RECORD, RecordingLevel.INFO, streamsMetrics);
     }
 
     public static Sensor commitSensor(final String threadId,
@@ -178,7 +177,7 @@ public class ThreadMetrics {
         );
     }
 
-    public static Optional<Sensor> commitOverTasksSensor(final String threadId,
+    public static Sensor commitOverTasksSensor(final String threadId,
                                                          final StreamsMetricsImpl streamsMetrics) {
         if (streamsMetrics.version() == Version.FROM_100_TO_24) {
             final Sensor commitOverTasksSensor =
@@ -200,9 +199,9 @@ public class ThreadMetrics {
                 COMMIT_OVER_TASKS_RATE_DESCRIPTION,
                 COMMIT_OVER_TASKS_TOTAL_DESCRIPTION
             );
-            return Optional.of(commitOverTasksSensor);
+            return commitOverTasksSensor;
         }
-        return Optional.empty();
+        return emptySensor(threadId, COMMIT, RecordingLevel.DEBUG, streamsMetrics);
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
@@ -251,6 +250,14 @@ public class ThreadMetrics {
             descriptionOfCount
         );
         return sensor;
+    }
+
+    private static Sensor emptySensor(final String threadId,
+                                      final String metricName,
+                                      final RecordingLevel recordingLevel,
+                                      final StreamsMetricsImpl streamsMetrics,
+                                      final Sensor... parentSensors) {
+        return streamsMetrics.threadLevelSensor(threadId, metricName, recordingLevel, parentSensors);
     }
 
     private static String threadLevelGroup(final StreamsMetricsImpl streamsMetrics) {

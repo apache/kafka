@@ -48,7 +48,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
@@ -194,7 +193,7 @@ public class KeyValueStoreTestDriver<K, V> {
             "KeyValueStoreTestDriver",
             new LogContext("KeyValueStoreTestDriver "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         ) {
             @Override
             public <K1, V1> void send(final String topic,
