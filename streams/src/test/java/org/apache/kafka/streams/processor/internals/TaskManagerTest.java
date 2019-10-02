@@ -319,6 +319,7 @@ public class TaskManagerTest {
     @Test
     public void shouldPauseActivePartitions() {
         mockSingleActiveTask();
+        expect(consumer.assignment()).andReturn(taskId0Partitions).times(2);
         consumer.pause(taskId0Partitions);
         expectLastCall();
         replay();
