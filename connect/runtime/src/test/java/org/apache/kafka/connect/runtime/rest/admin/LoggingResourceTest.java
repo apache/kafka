@@ -41,10 +41,13 @@ public class LoggingResourceTest {
     @Test
     public void getLoggersIgnoresNullLevelsTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
-        Logger a = new Logger("a"){};
+        Logger root = new Logger("root") {
+        };
+        Logger a = new Logger("a") {
+        };
         a.setLevel(null);
-        Logger b = new Logger("b"){};
+        Logger b = new Logger("b") {
+        };
         b.setLevel(Level.INFO);
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
         when(loggingResource.rootLogger()).thenReturn(root);
@@ -57,7 +60,8 @@ public class LoggingResourceTest {
     @Test
     public void getLoggerFallsbackToEffectiveLogLevelTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger a = hierarchy.getLogger("a");
@@ -75,7 +79,8 @@ public class LoggingResourceTest {
     @Test(expected = NotFoundException.class)
     public void getUnknownLoggerTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger a = hierarchy.getLogger("a");
@@ -91,7 +96,8 @@ public class LoggingResourceTest {
     @Test
     public void setLevelTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger p = hierarchy.getLogger("a.b.c.p");
@@ -110,12 +116,17 @@ public class LoggingResourceTest {
         List<String> modified = (List<String>) loggingResource.setLevel("a.b.c.p", Collections.singletonMap("level", "DEBUG")).getEntity();
         assertEquals(4, modified.size());
         assertEquals(Arrays.asList("a.b.c.p", "a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z"), modified);
+        assertEquals(p.getLevel(), Level.DEBUG);
+        assertEquals(x.getLevel(), Level.DEBUG);
+        assertEquals(y.getLevel(), Level.DEBUG);
+        assertEquals(z.getLevel(), Level.DEBUG);
     }
 
     @Test
     public void setRootLevelTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger p = hierarchy.getLogger("a.b.c.p");
@@ -140,7 +151,8 @@ public class LoggingResourceTest {
     @Test(expected = BadRequestException.class)
     public void setLevelWithEmptyArgTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger a = hierarchy.getLogger("a");
@@ -156,7 +168,8 @@ public class LoggingResourceTest {
     @Test(expected = NotFoundException.class)
     public void setLevelWithInvalidArgTest() {
         LoggingResource loggingResource = mock(LoggingResource.class);
-        Logger root = new Logger("root"){};
+        Logger root = new Logger("root") {
+        };
         root.setLevel(Level.ERROR);
         Hierarchy hierarchy = new Hierarchy(root);
         Logger a = hierarchy.getLogger("a");

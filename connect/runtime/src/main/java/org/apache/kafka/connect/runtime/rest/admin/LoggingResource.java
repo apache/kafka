@@ -21,7 +21,6 @@ import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -48,7 +47,10 @@ import java.util.TreeMap;
 @Consumes(MediaType.APPLICATION_JSON)
 public class LoggingResource {
 
-    private static final String ROOT_LOGGER_NAME = "@root";
+    /**
+     * Log4j uses "root" (case insensitive) as name of the root logger.
+     */
+    private static final String ROOT_LOGGER_NAME = "root";
 
     /**
      * List the current loggers that have their levels explicitly set and their log levels.
@@ -84,21 +86,26 @@ public class LoggingResource {
     public Response getLogger(final @PathParam("logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
-        Enumeration<Logger> en = currentLoggers();
         Logger logger = null;
-        // search within existing loggers for the given name.
-        // using LogManger.getLogger() will create a logger if it doesn't exist (potential leak since these don't get cleaned up).
-        while (en.hasMoreElements()) {
-            Logger l = en.nextElement();
-            if (namedLogger.equals(l.getName())) {
-                logger = l;
-                break;
+        if (ROOT_LOGGER_NAME.equalsIgnoreCase(namedLogger)) {
+            logger = rootLogger();
+        } else {
+            Enumeration<Logger> en = currentLoggers();
+            // search within existing loggers for the given name.
+            // using LogManger.getLogger() will create a logger if it doesn't exist
+            // (potential leak since these don't get cleaned up).
+            while (en.hasMoreElements()) {
+                Logger l = en.nextElement();
+                if (namedLogger.equals(l.getName())) {
+                    logger = l;
+                    break;
+                }
             }
         }
         if (logger == null) {
-            throw new NotFoundException("logger " + namedLogger + " not found.");
+            throw new NotFoundException("Logger " + namedLogger + " not found.");
         } else {
-            return Response.ok(effLevelToMap(logger)).build();
+            return Response.ok(effectiveLevelToMap(logger)).build();
         }
     }
 
@@ -127,7 +134,7 @@ public class LoggingResource {
         }
 
         List<Logger> childLoggers;
-        if (ROOT_LOGGER_NAME.equals(namedLogger)) {
+        if (ROOT_LOGGER_NAME.equalsIgnoreCase(namedLogger)) {
             childLoggers = Collections.list(currentLoggers());
             childLoggers.add(rootLogger());
         } else {
@@ -179,7 +186,7 @@ public class LoggingResource {
      * @param logger a non-null log4j logger
      * @return a singleton map whose key is level and the value is the string representation of the logger's effective log level.
      */
-    private static Map<String, String> effLevelToMap(Logger logger) {
+    private static Map<String, String> effectiveLevelToMap(Logger logger) {
         Level level = logger.getLevel();
         if (level == null) {
             level = logger.getEffectiveLevel();

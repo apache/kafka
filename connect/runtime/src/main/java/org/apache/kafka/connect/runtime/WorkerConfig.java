@@ -406,7 +406,7 @@ public class WorkerConfig extends AbstractConfig {
                 if (!(item instanceof String)) {
                     throw new ConfigException("Invalid type for admin listener (expected String).");
                 }
-                if (((String) item).length() == 0) {
+                if (((String) item).trim().isEmpty()) {
                     throw new ConfigException("Empty listener found when parsing list.");
                 }
             }

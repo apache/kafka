@@ -392,8 +392,6 @@ public class RestServer {
         UriBuilder builder = UriBuilder.fromUri(jettyServer.getURI());
         builder.port(adminConnector.getLocalPort());
 
-        log.info("Admin URI: {}", builder.build());
-
         return builder.build();
     }
 
