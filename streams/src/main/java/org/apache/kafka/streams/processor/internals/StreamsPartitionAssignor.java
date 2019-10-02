@@ -370,6 +370,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean versionProbing;
         if (futureMetadataVersion == UNKNOWN) {
             versionProbing = false;
+            clientMetadataMap.remove(futureId);
         } else {
             if (minReceivedMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
                 log.info("Received a future (version probing) subscription (version: {})."
