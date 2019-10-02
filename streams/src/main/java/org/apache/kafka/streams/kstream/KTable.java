@@ -2167,7 +2167,8 @@ public interface KTable<K, V> {
      * table are joined according to the result of keyExtractor on the other KTable.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V)
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *      *                            resultant foreignKey is null, the record will not propagate to the output.
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param named     a {@link Named} config used to name the processor in the topology
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
@@ -2189,7 +2190,8 @@ public interface KTable<K, V> {
      * table are joined according to the result of keyExtractor on the other KTable.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V)
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            resultant foreignKey is null, the record will not propagate to the output.
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                      should be materialized. Cannot be {@code null}
