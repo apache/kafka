@@ -160,6 +160,7 @@ public class ProcessorNodeTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
@@ -176,8 +177,8 @@ public class ProcessorNodeTest {
             testDriver.pipeInput(consumerRecord);
         } catch (final StreamsException s) {
             final String msg = s.getMessage();
-            assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
-            assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
+            assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with serdes", msg.contains("serdes"));
             throw s;
         }
     }
@@ -187,6 +188,7 @@ public class ProcessorNodeTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        // Serdes are correctly configured, so should be no class cast exception
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         final StreamsBuilder builder = new StreamsBuilder();
@@ -202,14 +204,7 @@ public class ProcessorNodeTest {
         final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a-value");
 
-        try {
-            testDriver.pipeInput(consumerRecord);
-        } catch (final StreamsException s) {
-            final String msg = s.getMessage();
-            assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
-            assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
-            throw s;
-        }
+        testDriver.pipeInput(consumerRecord);
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {
@@ -227,7 +222,7 @@ public class ProcessorNodeTest {
             node.process("aKey", "aValue");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
-            assertThat(e.getMessage(), containsString("default Serdes"));
+            assertThat(e.getMessage(), containsString("default serdes"));
             assertThat(e.getMessage(), containsString("input types"));
             throw e;
         }
