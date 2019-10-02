@@ -1250,6 +1250,52 @@ class LogValidatorTest {
     testBatchWithoutRecordsNotAllowed(NoCompressionCodec, DefaultCompressionCodec)
   }
 
+  @Test
+  def testInvalidTimestampExceptionHasRelativeOffset(): Unit = {
+    val now = System.currentTimeMillis()
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
+      codec = CompressionType.GZIP)
+    try {
+      LogValidator.validateMessagesAndAssignOffsets(
+        records,
+        topicPartition,
+        offsetCounter = new LongRef(0),
+        time = time,
+        now = System.currentTimeMillis(),
+        sourceCodec = DefaultCompressionCodec,
+        targetCodec = DefaultCompressionCodec,
+        magic = RecordBatch.MAGIC_VALUE_V1,
+        compactedTopic = false,
+        timestampType = TimestampType.CREATE_TIME,
+        timestampDiffMaxMs = 1000L,
+        partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        isFromClient = true,
+        interBrokerProtocolVersion = ApiVersion.latestVersion,
+        brokerTopicStats = brokerTopicStats)
+    } catch {
+      case e: InvalidTimestampException =>
+        assertTrue(!e.getErrorRecords.isEmpty)
+        assertEquals(e.getErrorRecords.keySet.size, 1)
+        assertTrue(e.getErrorRecords.containsKey(0));
+        assertEquals(e.getErrorRecords.get(0), "")
+    }
+  }
+
+  @Test
+  def testInvalidRecordExceptionHasRelativeOffset(): Unit = {
+    try {
+      validateMessages(recordsWithInvalidInnerMagic(
+        RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP),
+        RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
+    } catch {
+      case e: InvalidRecordException =>
+        assertTrue(!e.getErrorRecords.isEmpty)
+        assertEquals(e.getErrorRecords.keySet.size, 1)
+        assertTrue(e.getErrorRecords.containsKey(0))
+        assertEquals(e.getErrorRecords.get(0), "")
+    }
+  }
+
   private def testBatchWithoutRecordsNotAllowed(sourceCodec: CompressionCodec, targetCodec: CompressionCodec): Unit = {
     val offset = 1234567
     val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =

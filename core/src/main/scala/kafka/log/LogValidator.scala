@@ -152,7 +152,7 @@ private[kafka] object LogValidator extends Logging {
     if (!record.hasMagic(batch.magic)) {
       brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
       throw new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic} in topic partition $topicPartition.",
-        java.util.Collections.singletonMap(relativeOffset.asInstanceOf[java.lang.Integer], ""))
+        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
     }
 
     // verify the record-level CRC only if this is one of the deep entries of a compressed message
@@ -481,11 +481,11 @@ private[kafka] object LogValidator extends Logging {
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message with offset ${record.offset} is " +
         s"out of range. The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]",
-        java.util.Collections.singletonMap(relativeOffset.asInstanceOf[java.lang.Integer], ""))
+        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
     if (batch.timestampType == TimestampType.LOG_APPEND_TIME)
       throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
         s"timestamp type to LogAppendTime.",
-        java.util.Collections.singletonMap(relativeOffset.asInstanceOf[java.lang.Integer], ""))
+        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
   }
 
   case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
