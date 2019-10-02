@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.admin;
+package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Vector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -142,11 +143,16 @@ public class LoggingResourceTest {
         when(loggingResource.lookupLogger("a.b.c.p")).thenReturn(p);
         when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
-        List<String> modified = (List<String>) loggingResource.setLevel("@root", Collections.singletonMap("level", "DEBUG")).getEntity();
+        List<String> modified = (List<String>) loggingResource.setLevel("root", Collections.singletonMap("level", "DEBUG")).getEntity();
         assertEquals(5, modified.size());
         assertEquals(Arrays.asList("a.b.c.p.X", "a.b.c.p.Y", "a.b.c.p.Z", "a.b.c.s.W", "root"), modified);
+        assertNull(p.getLevel());
+        assertEquals(root.getLevel(), Level.DEBUG);
+        assertEquals(w.getLevel(), Level.DEBUG);
+        assertEquals(x.getLevel(), Level.DEBUG);
+        assertEquals(y.getLevel(), Level.DEBUG);
+        assertEquals(z.getLevel(), Level.DEBUG);
     }
-
 
     @Test(expected = BadRequestException.class)
     public void setLevelWithEmptyArgTest() {

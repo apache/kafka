@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.admin;
+package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
@@ -120,7 +120,6 @@ public class LoggingResource {
      */
     @PUT
     @Path("/{logger}")
-    @SuppressWarnings("unchecked")
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");
