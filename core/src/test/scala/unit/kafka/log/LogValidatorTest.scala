@@ -1275,7 +1275,7 @@ class LogValidatorTest {
     } catch {
       case e: InvalidTimestampException =>
         assertTrue(!e.getErrorRecords.isEmpty)
-        assertEquals(e.getErrorRecords.keySet.size, 1)
+        assertEquals(e.getErrorRecords.size, 1)
         assertTrue(e.getErrorRecords.containsKey(0));
         assertEquals(e.getErrorRecords.get(0), "")
     }
@@ -1290,7 +1290,7 @@ class LogValidatorTest {
     } catch {
       case e: InvalidRecordException =>
         assertTrue(!e.getErrorRecords.isEmpty)
-        assertEquals(e.getErrorRecords.keySet.size, 1)
+        assertEquals(e.getErrorRecords.size, 1)
         assertTrue(e.getErrorRecords.containsKey(0))
         assertEquals(e.getErrorRecords.get(0), "")
     }

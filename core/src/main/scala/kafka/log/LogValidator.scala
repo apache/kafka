@@ -169,7 +169,7 @@ private[kafka] object LogValidator extends Logging {
       }
     }
 
-    validateKey(record, topicPartition, compactedTopic, brokerTopicStats)
+    validateKey(record, relativeOffset, topicPartition, compactedTopic, brokerTopicStats)
     validateTimestamp(batch, record, relativeOffset, now, timestampType, timestampDiffMaxMs)
   }
 
@@ -353,10 +353,11 @@ private[kafka] object LogValidator extends Logging {
 
       try {
         for (record <- batch.asScala) {
+          val expectedOffset = expectedInnerOffset.getAndIncrement()
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-              s"compression attribute set: $record")
-          val expectedOffset = expectedInnerOffset.getAndIncrement()
+              s"compression attribute set: $record",
+              java.util.Collections.singletonMap(expectedOffset.toInt.asInstanceOf[java.lang.Integer], ""))
           validateRecord(batch, topicPartition, record, expectedOffset, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
 
           uncompressedSizeInBytes += record.sizeInBytes()
@@ -459,10 +460,11 @@ private[kafka] object LogValidator extends Logging {
       recordConversionStats = recordConversionStats)
   }
 
-  private def validateKey(record: Record, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
+  private def validateKey(record: Record, relativeOffset: Long, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
     if (compactedTopic && !record.hasKey) {
       brokerTopicStats.allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
-      throw new InvalidRecordException(s"Compacted topic cannot accept message without key in topic partition $topicPartition.")
+      throw new InvalidRecordException(s"Compacted topic cannot accept message without key in topic partition $topicPartition.",
+        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
     }
   }
 
