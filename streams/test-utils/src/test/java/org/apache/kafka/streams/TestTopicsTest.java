@@ -17,8 +17,13 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
@@ -26,6 +31,8 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,9 +53,11 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertThrows;
 
-public class TestOutputTopicTest {
+public class TestTopicsTest {
+    private static final Logger log = LoggerFactory.getLogger(TestTopicsTest.class);
 
     private final static String INPUT_TOPIC = "input";
     private final static String OUTPUT_TOPIC = "output1";
@@ -60,9 +69,10 @@ public class TestOutputTopicTest {
     private final Serde<Long> longSerde = new Serdes.LongSerde();
 
     private final Properties config = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestOutputTopicTest"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestTopicsTest"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     ));
+    private final Instant testBaseTime = Instant.parse("2019-06-01T10:00:00Z");
 
     @Before
     public void setup() {
@@ -82,12 +92,12 @@ public class TestOutputTopicTest {
         } catch (final RuntimeException e) {
             // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
             // Logged stacktrace cannot be avoided
-            System.out.println("Ignoring exception, test failing in Windows due this exception:" + e.getLocalizedMessage());
+            log.warn("Ignoring exception, test failing in Windows due this exception: {}", e.getLocalizedMessage());
         }
     }
 
     @Test
-    public void testReadValue() {
+    public void testValue() {
         final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
@@ -112,7 +122,7 @@ public class TestOutputTopicTest {
     }
 
     @Test
-    public void testReadKeyValue() {
+    public void testKeyValue() {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
         inputTopic.pipeInput(1L, "Hello");
@@ -157,27 +167,143 @@ public class TestOutputTopicTest {
     }
 
     @Test
-    public void testMultipleTopics() {
+    public void testKeyValueListDuration() {
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde.deserializer(), longSerde.deserializer());
+        final List<String> inputList = Arrays.asList("This", "is", "an", "example");
+        final List<KeyValue<Long, String>> input = new LinkedList<>();
+        final List<TestRecord<String, Long>> expected = new LinkedList<>();
+        long i = 0;
+        final Duration advance = Duration.ofSeconds(15);
+        Instant recordInstant = testBaseTime;
+        for (final String s : inputList) {
+            input.add(new KeyValue<>(i, s));
+            expected.add(new TestRecord<>(s, i, recordInstant));
+            i++;
+            recordInstant = recordInstant.plus(advance);
+        }
+        inputTopic.pipeKeyValueList(input, testBaseTime, advance);
+        final List<TestRecord<String, Long>> output = outputTopic.readRecordsToList();
+        assertThat(output, is(equalTo(expected)));
+    }
+
+    @Test
+    public void testRecordList() {
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde.deserializer(), longSerde.deserializer());
+        final List<String> inputList = Arrays.asList("This", "is", "an", "example");
+        final List<TestRecord<Long, String>> input = new LinkedList<>();
+        final List<TestRecord<String, Long>> expected = new LinkedList<>();
+        final Duration advance = Duration.ofSeconds(15);
+        Instant recordInstant = testBaseTime;
+        Long i = 0L;
+        for (final String s : inputList) {
+            input.add(new TestRecord<Long, String>(i, s, recordInstant));
+            expected.add(new TestRecord<String, Long>(s, i, recordInstant));
+            i++;
+            recordInstant = recordInstant.plus(advance);
+        }
+        inputTopic.pipeRecordList(input);
+        final List<TestRecord<String, Long>> output = outputTopic.readRecordsToList();
+        assertThat(output, is(equalTo(expected)));
+    }
+
+    @Test
+    public void testTimestamp() {
+        long baseTime = 3;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
+        inputTopic.pipeInput(null, "Hello", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Hello", null, baseTime))));
+
+        inputTopic.pipeInput(2L, "Kafka", ++baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", null, baseTime))));
+
+        inputTopic.pipeInput(2L, "Kafka", testBaseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", testBaseTime))));
+
+        final List<String> inputList = Arrays.asList("Advancing", "time");
+        //Feed list of words to inputTopic and no kafka key, timestamp advancing from testInstant
+        final Duration advance = Duration.ofSeconds(15);
+        final Instant recordInstant = testBaseTime.plus(Duration.ofDays(1));
+        inputTopic.pipeValueList(inputList, recordInstant, advance);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Advancing", recordInstant))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "time", null, recordInstant.plus(advance)))));
+    }
+
+    @Test
+    public void testWithHeaders() {
+        long baseTime = 3;
+        final Headers headers = new RecordHeaders(
+                new Header[]{
+                    new RecordHeader("foo", "value".getBytes()),
+                    new RecordHeader("bar", (byte[]) null),
+                    new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+                });
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
+        inputTopic.pipeInput(new TestRecord<Long, String>(1L, "Hello", headers));
+        assertThat(outputTopic.readRecord(), allOf(
+                hasProperty("key", equalTo(1L)),
+                hasProperty("value", equalTo("Hello")),
+                hasProperty("headers", equalTo(headers))));
+        inputTopic.pipeInput(new TestRecord<Long, String>(2L, "Kafka", headers, ++baseTime));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", headers, baseTime))));
+    }
+
+    @Test
+    public void testStartTimestamp() {
+        final long baseTime = testBaseTime.toEpochMilli();
+        final Duration advance = Duration.ofSeconds(2);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer(), testBaseTime, Duration.ZERO);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
+        inputTopic.pipeInput(1L, "Hello");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L, "Hello", testBaseTime))));
+        inputTopic.pipeInput(2L, "World");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "World", null, testBaseTime.toEpochMilli()))));
+        inputTopic.advanceTime(advance);
+        inputTopic.pipeInput(3L, "Kafka");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L, "Kafka", testBaseTime.plus(advance)))));
+    }
+
+    @Test
+    public void testTimestampAutoAdvance() {
+        final Duration advance = Duration.ofSeconds(2);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer(), testBaseTime, advance);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
+        inputTopic.pipeInput("Hello");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Hello", testBaseTime))));
+        inputTopic.pipeInput(2L, "Kafka");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", testBaseTime.plus(advance)))));
+    }
+
+
+    @Test
+    public void testMultipleTopics() {
+        final TestInputTopic<Long, String> inputTopic1 = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestInputTopic<Long, String> inputTopic2 = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic1 = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
         final TestOutputTopic<String, Long> outputTopic2 = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde.deserializer(), longSerde.deserializer());
-        inputTopic.pipeInput(1L, "Hello");
-        assertThat(outputTopic1.isEmpty(), is(false));
-        assertThat(outputTopic2.isEmpty(), is(false));
+        inputTopic1.pipeInput(1L, "Hello");
         assertThat(outputTopic1.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
+        assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
+        assertThat(outputTopic1.isEmpty(), is(true));
+        assertThat(outputTopic2.isEmpty(), is(true));
+        inputTopic2.pipeInput(1L, "Hello");
+        //This is not visible in outputTopic1 even it is the same topic
         assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
         assertThat(outputTopic1.isEmpty(), is(true));
         assertThat(outputTopic2.isEmpty(), is(true));
     }
 
     @Test
-    public void testNonExistingTopic() {
+    public void testNonExistingOutputTopic() {
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic("no-exist", longSerde.deserializer(), stringSerde.deserializer());
         assertThrows("Unknown topic", IllegalArgumentException.class, () -> outputTopic.readRecord());
     }
 
     @Test
-    public void testNonUsedTopic() {
+    public void testNonUsedOutputTopic() {
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
         assertThrows("Uninitialized topic", NoSuchElementException.class, () -> outputTopic.readRecord());
     }
@@ -193,19 +319,61 @@ public class TestOutputTopicTest {
         assertThrows("Empty topic", NoSuchElementException.class, () -> outputTopic.readRecord());
     }
 
+    @Test
+    public void testNonExistingInputTopic() {
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic("no-exist", longSerde.serializer(), stringSerde.serializer());
+        assertThrows("Unknown topic", IllegalArgumentException.class, () -> inputTopic.pipeInput(1L, "Hello"));
+    }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
-        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(null, stringSerde.deserializer(), stringSerde.deserializer());
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(null, stringSerde.serializer(), stringSerde.serializer());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateWithNullDriver() {
+        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(null, INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
+    }
+
+
+    @Test(expected = StreamsException.class)
+    public void testWrongSerde() {
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, stringSerde.serializer(), stringSerde.serializer());
+        inputTopic.pipeInput("1L", "Hello");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDuration() {
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, stringSerde.serializer(), stringSerde.serializer(), testBaseTime, Duration.ofDays(-1));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNegativeAdvance() {
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, stringSerde.serializer(), stringSerde.serializer());
+        inputTopic.advanceTime(Duration.ofDays(-1));
+    }
+
+    @Test
+    public void testInputToString() {
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("topicName", stringSerde.serializer(), stringSerde.serializer());
+        assertThat(inputTopic.toString(), allOf(
+                containsString("TestInputTopic"),
+                containsString("topic='topicName'"),
+                containsString("StringSerializer")));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowToCreateOutputTopicWithNullTopicName() {
+        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(null, stringSerde.deserializer(), stringSerde.deserializer());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowToCreateOutputWithNullDriver() {
         final TestOutputTopic<String, String> outputTopic = new TestOutputTopic<>(null, OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
     }
 
     @Test(expected = SerializationException.class)
-    public void testWrongSerde() {
+    public void testOutputWrongSerde() {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, longSerde.deserializer(), stringSerde.deserializer());
         inputTopic.pipeInput(1L, "Hello");
@@ -213,7 +381,7 @@ public class TestOutputTopicTest {
     }
 
     @Test
-    public void testToString() {
+    public void testOutputToString() {
         final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         assertThat(outputTopic.toString(), allOf(
                 containsString("TestOutputTopic"),
@@ -242,4 +410,5 @@ public class TestOutputTopicTest {
         final List<TestRecord<String, Long>> output = outputTopic.readRecordsToList();
         assertThat(output, is(equalTo(expected)));
     }
+
 }
