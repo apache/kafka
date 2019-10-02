@@ -267,7 +267,7 @@ public class ProduceResponse extends AbstractResponse {
                         .set(ERROR_CODE, errorCode)
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
                 if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
-                    partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
+                    partStruct.setIfExists(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
 
                 List<Struct> errorRecords = new ArrayList<>();
