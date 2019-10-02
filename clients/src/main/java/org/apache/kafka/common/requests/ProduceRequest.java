@@ -408,7 +408,7 @@ public class ProduceRequest extends AbstractRequest {
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                     "contain record batches with magic version 2");
-            if (version < 8 && entry.compressionType() == CompressionType.ZSTD) {
+            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
                 throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
                     "use ZStandard compression");
             }

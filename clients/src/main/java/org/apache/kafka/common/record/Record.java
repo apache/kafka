@@ -66,7 +66,7 @@ public interface Record {
     boolean isValid();
 
     /**
-     * Raise a {@link org.apache.kafka.common.InvalidRecordException} if the record does not have a valid checksum.
+     * Raise a {@link org.apache.kafka.common.errors.CorruptRecordException} if the record does not have a valid checksum.
      */
     void ensureValid();
 
