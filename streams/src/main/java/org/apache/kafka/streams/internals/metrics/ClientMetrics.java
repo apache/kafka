@@ -46,7 +46,7 @@ public class ClientMetrics {
 
             props.load(resourceStream);
         } catch (final Exception exception) {
-            log.warn("Error while loading kafka-streams-version.properties: {}", exception.getMessage());
+            log.warn("Error while loading kafka-streams-version.properties", exception);
         }
         VERSION_FROM_FILE = props.getProperty("version", DEFAULT_VALUE).trim();
         COMMIT_ID_FROM_FILE = props.getProperty("commitId", DEFAULT_VALUE).trim();

@@ -101,7 +101,10 @@ public class RocksDBMetrics {
         private final String metricsScope;
         private final String storeName;
 
-        public RocksDBMetricContext(final String threadId, final String taskName, final String metricsScope, final String storeName) {
+        public RocksDBMetricContext(final String threadId,
+                                    final String taskName,
+                                    final String metricsScope,
+                                    final String storeName) {
             this.threadId = threadId;
             this.taskName = taskName;
             this.metricsScope = metricsScope;

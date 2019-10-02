@@ -99,7 +99,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         private final String threadId;
         private final String taskName;
 
-        TaskMetrics(final String threadId, final TaskId taskId, final StreamsMetricsImpl metrics) {
+        TaskMetrics(final String threadId,
+                    final TaskId taskId,
+                    final StreamsMetricsImpl metrics) {
             this.threadId = threadId;
             taskName = taskId.toString();
             this.metrics = metrics;

@@ -758,16 +758,18 @@ public class StreamThreadTest {
         final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
             new MockStreamThreadConsumer<>(OffsetResetStrategy.EARLIEST);
 
-        final TaskManager taskManager = new TaskManager(new MockChangelogReader(),
+        final TaskManager taskManager = new TaskManager(
+            new MockChangelogReader(),
             PROCESS_ID,
-                                                        "log-prefix",
-                                                        mockStreamThreadConsumer,
-                                                        streamsMetadataState,
-                                                        null,
-                                                        null,
-                                                        null,
-                                                        new AssignedStreamsTasks(new LogContext()),
-                                                        new AssignedStandbyTasks(new LogContext()));
+            "log-prefix",
+            mockStreamThreadConsumer,
+            streamsMetadataState,
+            null,
+            null,
+            null,
+            new AssignedStreamsTasks(new LogContext()),
+            new AssignedStandbyTasks(new LogContext())
+        );
         taskManager.setConsumer(mockStreamThreadConsumer);
         taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
         taskManager.setPartitionsToTaskId(Collections.emptyMap());

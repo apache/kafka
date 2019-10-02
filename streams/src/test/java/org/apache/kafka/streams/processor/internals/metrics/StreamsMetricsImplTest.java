@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
@@ -176,7 +177,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         final String value = "immutable-value";
-        final StreamsMetricsImpl.ImmutableValue immutableValue = new StreamsMetricsImpl.ImmutableValue<>(value);
+        final ImmutableMetricValue immutableValue = new ImmutableMetricValue<>(value);
         expect(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, description1, clientLevelTags))
             .andReturn(metricName1);
         metrics.addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(immutableValue));

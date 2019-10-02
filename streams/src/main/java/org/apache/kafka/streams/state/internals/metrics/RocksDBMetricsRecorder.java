@@ -53,7 +53,9 @@ public class RocksDBMetricsRecorder {
     private StreamsMetricsImpl streamsMetrics;
     private boolean isInitialized = false;
 
-    public RocksDBMetricsRecorder(final String metricsScope, final String threadId, final String storeName) {
+    public RocksDBMetricsRecorder(final String metricsScope,
+                                  final String threadId,
+                                  final String storeName) {
         this.metricsScope = metricsScope;
         this.threadId = threadId;
         this.storeName = storeName;
