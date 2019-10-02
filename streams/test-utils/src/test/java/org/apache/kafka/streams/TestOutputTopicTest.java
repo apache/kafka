@@ -40,10 +40,12 @@ import java.util.Properties;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
 import static org.junit.Assert.assertThrows;
 
 public class TestOutputTopicTest {
@@ -213,7 +215,11 @@ public class TestOutputTopicTest {
     @Test
     public void testToString() {
         final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
-        assertThat(outputTopic.toString(), equalTo("TestOutputTopic{topic='output1',size=0}"));
+        assertThat(outputTopic.toString(), allOf(
+                containsString("TestOutputTopic"),
+                containsString("topic='output1'"),
+                containsString("size=0"),
+                containsString("StringDeserializer")));
     }
 
     @Test

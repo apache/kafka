@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.StringJoiner;
 
 /**
  * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
@@ -108,7 +109,8 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Advances the internally tracked time.
+     * Advances the internally tracked stream time.
+     * This doesn't advance the wall-clock time, and therefore doesn't trigger punctuations.
      *
      * @param advance the duration of time to advance
      */
@@ -281,6 +283,10 @@ public class TestInputTopic<K, V> {
 
     @Override
     public String toString() {
-        return "TestInputTopic{topic='" + topic + "'}";
+        return new StringJoiner(", ", TestInputTopic.class.getSimpleName() + "[", "]")
+                .add("topic='" + topic + "'")
+                .add("keySerializer=" + keySerializer)
+                .add("valueSerializer=" + valueSerializer)
+                .toString();
     }
 }

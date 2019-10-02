@@ -22,6 +22,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.time.Instant;
+import java.util.StringJoiner;
 
 /**
  * A key/value pair to be send to or received from Kafka. This also consists header information
@@ -199,12 +200,12 @@ public class TestRecord<K, V> {
 
     @Override
     public String toString() {
-        final String headers = this.headers == null ? "null" : this.headers.toString();
-        final String key = this.key == null ? "null" : this.key.toString();
-        final String value = this.value == null ? "null" : this.value.toString();
-        final String recordTime = this.recordTime == null ? "null" : this.recordTime.toString();
-        return "TestRecord(headers=" + headers + ", key=" + key + ", value=" + value +
-            ", recordTime=" + recordTime + ")";
+        return new StringJoiner(", ", TestRecord.class.getSimpleName() + "[", "]")
+                .add("key=" + key)
+                .add("value=" + value)
+                .add("headers=" + headers)
+                .add("recordTime=" + recordTime)
+                .toString();
     }
 
     @Override

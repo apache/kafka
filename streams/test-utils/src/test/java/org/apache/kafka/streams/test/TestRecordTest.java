@@ -141,9 +141,10 @@ public class TestRecordTest {
     @Test
     public void testToString() {
         final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
-        assertThat(testRecord.toString(), equalTo("TestRecord(headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
+        assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, "
+                + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
                 + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
-                + "key=testKey, value=1, recordTime=2019-06-01T10:00:00Z)"));
+                + "recordTime=2019-06-01T10:00:00Z]"));
     }
 
     @Test

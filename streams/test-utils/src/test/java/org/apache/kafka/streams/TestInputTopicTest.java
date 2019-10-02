@@ -30,6 +30,8 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -41,6 +43,7 @@ import java.util.Properties;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
@@ -50,6 +53,7 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertThrows;
 
 public class TestInputTopicTest {
+    private static final Logger log = LoggerFactory.getLogger(TestInputTopicTest.class);
 
     private final static String INPUT_TOPIC = "input";
     private final static String OUTPUT_TOPIC = "output1";
@@ -84,7 +88,7 @@ public class TestInputTopicTest {
         } catch (final RuntimeException e) {
             // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
             // Logged stacktrace cannot be avoided
-            System.out.println("Ignoring exception, test failing in Windows due this exception:" + e.getLocalizedMessage());
+            log.warn("Ignoring exception, test failing in Windows due this exception: {}", e.getLocalizedMessage());
         }
     }
 
@@ -307,6 +311,9 @@ public class TestInputTopicTest {
     @Test
     public void testToString() {
         final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic("topicName", stringSerde.serializer(), stringSerde.serializer());
-        assertThat(inputTopic.toString(), equalTo("TestInputTopic{topic='topicName'}"));
+        assertThat(inputTopic.toString(), allOf(
+                containsString("TestInputTopic"),
+                containsString("topic='topicName'"),
+                containsString("StringSerializer")));
     }
 }

@@ -101,7 +101,7 @@ public class TopologyTestDriverTest {
     private final long timestamp2 = 43L;
     private final TestRecord<byte[], byte[]> testRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
 
-    //Factary and records for testing already deprecated methods
+    //Factory and records for testing already deprecated methods
     @SuppressWarnings("deprecation")
     private final org.apache.kafka.streams.test.ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new org.apache.kafka.streams.test.ConsumerRecordFactory<>(
             new ByteArraySerializer(),

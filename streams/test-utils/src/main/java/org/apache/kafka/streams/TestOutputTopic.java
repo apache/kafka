@@ -24,6 +24,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.StringJoiner;
 
 /**
  * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
@@ -68,6 +69,8 @@ public class TestOutputTopic<K, V> {
                     final Deserializer<V> valueDeserializer) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
+        Objects.requireNonNull(keyDeserializer, "keyDeserializer cannot be null");
+        Objects.requireNonNull(valueDeserializer, "valueDeserializer cannot be null");
         this.driver = driver;
         this.topic = topicName;
         this.keyDeserializer = keyDeserializer;
@@ -194,6 +197,11 @@ public class TestOutputTopic<K, V> {
 
     @Override
     public String toString() {
-        return "TestOutputTopic{topic='" + topic + "',size=" + getQueueSize() + "}";
+        return new StringJoiner(", ", TestOutputTopic.class.getSimpleName() + "[", "]")
+                .add("topic='" + topic + "'")
+                .add("keyDeserializer=" + keyDeserializer)
+                .add("valueDeserializer=" + valueDeserializer)
+                .add("size=" + getQueueSize())
+                .toString();
     }
 }
