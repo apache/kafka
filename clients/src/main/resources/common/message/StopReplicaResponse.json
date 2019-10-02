@@ -22,7 +22,7 @@
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code, or 0 if there was no top-level error." },
-    { "name": "Partitions", "type": "[]StopReplicaResponsePartition", "versions": "0+",
+    { "name": "PartitionErrors", "type": "[]StopReplicaPartitionError", "versions": "0+",
       "about": "The responses for each partition.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },

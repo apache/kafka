@@ -248,33 +248,29 @@ public final class MessageTest {
     @Test
     public void testLeaderAndIsrVersions() throws Exception {
         // Version 3 adds two new fields - AddingReplicas and RemovingReplicas
-        LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState partitionStateNoAddingRemovingReplicas =
-                new LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState()
-                        .setName("topic")
-                        .setPartitionStatesV0(
-                                Collections.singletonList(
-                                        new LeaderAndIsrRequestData.LeaderAndIsrRequestPartition()
-                                                .setPartitionIndex(0)
-                                                .setReplicas(Collections.singletonList(0))
-                                )
-                        );
-        LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState partitionStateWithAddingRemovingReplicas =
-                new LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState()
-                        .setName("topic")
-                        .setPartitionStatesV0(
-                                Collections.singletonList(
-                                        new LeaderAndIsrRequestData.LeaderAndIsrRequestPartition()
-                                                .setPartitionIndex(0)
-                                                .setReplicas(Collections.singletonList(0))
-                                                .setAddingReplicas(Collections.singletonList(1))
-                                                .setRemovingReplicas(Collections.singletonList(1))
-                                )
-                        );
+        LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateNoAddingRemovingReplicas =
+            new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
+                .setTopicName("topic")
+                .setPartitionStates(Collections.singletonList(
+                    new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+                        .setPartitionIndex(0)
+                        .setReplicas(Collections.singletonList(0))
+                ));
+        LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateWithAddingRemovingReplicas =
+            new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
+                .setTopicName("topic")
+                .setPartitionStates(Collections.singletonList(
+                    new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+                        .setPartitionIndex(0)
+                        .setReplicas(Collections.singletonList(0))
+                        .setAddingReplicas(Collections.singletonList(1))
+                        .setRemovingReplicas(Collections.singletonList(1))
+                ));
         testAllMessageRoundTripsBetweenVersions(
-                (short) 2,
-                (short) 3,
-                new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
-                new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
+            (short) 2,
+            (short) 3,
+            new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
+            new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
         testAllMessageRoundTripsFromVersion((short) 3, new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)));
     }
 
@@ -506,6 +502,78 @@ public final class MessageTest {
             }
 
             testAllMessageRoundTripsFromVersion(version, responseData);
+        }
+    }
+
+    @Test
+    public void testProduceResponseVersions() throws Exception {
+        String topicName = "topic";
+        int partitionIndex = 0;
+        short errorCode = Errors.INVALID_TOPIC_EXCEPTION.code();
+        long baseOffset = 12L;
+        int throttleTimeMs = 1234;
+        long logAppendTimeMs = 1234L;
+        long logStartOffset = 1234L;
+        int relativeOffset = 0;
+        String relativeOffsetErrorMessage = "error message";
+        String errorMessage = "global error message";
+
+        testAllMessageRoundTrips(new ProduceResponseData()
+                                     .setResponses(singletonList(
+                                         new ProduceResponseData.TopicProduceResponse()
+                                             .setName(topicName)
+                                             .setPartitions(singletonList(
+                                                 new ProduceResponseData.PartitionProduceResponse()
+                                                     .setPartitionIndex(partitionIndex)
+                                                     .setErrorCode(errorCode)
+                                                     .setBaseOffset(baseOffset))))));
+
+        Supplier<ProduceResponseData> response =
+            () -> new ProduceResponseData()
+                      .setResponses(singletonList(
+                            new ProduceResponseData.TopicProduceResponse()
+                                .setName(topicName)
+                                .setPartitions(singletonList(
+                                     new ProduceResponseData.PartitionProduceResponse()
+                                         .setPartitionIndex(partitionIndex)
+                                         .setErrorCode(errorCode)
+                                         .setBaseOffset(baseOffset)
+                                         .setLogAppendTimeMs(logAppendTimeMs)
+                                         .setLogStartOffset(logStartOffset)
+                                         .setErrorRecords(singletonList(
+                                             new ProduceResponseData.RelativeOffsetAndErrorMessage()
+                                                 .setRelativeOffset(relativeOffset)
+                                                 .setRelativeOffsetErrorMessage(relativeOffsetErrorMessage)))
+                                         .setErrorMessage(errorMessage)))))
+                      .setThrottleTimeMs(throttleTimeMs);
+
+        for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
+            ProduceResponseData responseData = response.get();
+
+            if (version < 8) {
+                responseData.responses().get(0).partitions().get(0).setErrorRecords(Collections.emptyList());
+                responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
+            }
+
+            if (version < 5) {
+                responseData.responses().get(0).partitions().get(0).setLogStartOffset(-1);
+            }
+
+            if (version < 2) {
+                responseData.responses().get(0).partitions().get(0).setLogAppendTimeMs(-1);
+            }
+
+            if (version < 1) {
+                responseData.setThrottleTimeMs(0);
+            }
+
+            if (version >= 3 && version <= 4) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 4, responseData, responseData);
+            } else if (version >= 6 && version <= 7) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 7, responseData, responseData);
+            } else {
+                testEquivalentMessageRoundTrip(version, responseData);
+            }
         }
     }
 

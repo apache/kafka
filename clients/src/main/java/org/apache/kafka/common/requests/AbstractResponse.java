@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,9 +56,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
-    protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
+    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Errors error : errors.values())
+        for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
@@ -101,13 +102,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
-                return new StopReplicaResponse(struct);
+                return new StopReplicaResponse(struct, version);
             case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
-                return new UpdateMetadataResponse(struct);
+                return new UpdateMetadataResponse(struct, version);
             case LEADER_AND_ISR:
-                return new LeaderAndIsrResponse(struct);
+                return new LeaderAndIsrResponse(struct, version);
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:

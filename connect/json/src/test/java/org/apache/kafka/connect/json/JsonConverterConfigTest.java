@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.connect.json;
 
-import java.util.List;
+import static org.junit.Assert.assertEquals;
 
-// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
-public class BasePartitionState {
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
+import org.junit.Test;
 
-    public final int controllerEpoch;
-    public final int leader;
-    public final int leaderEpoch;
-    public final List<Integer> isr;
-    public final int zkVersion;
-    public final List<Integer> replicas;
+public class JsonConverterConfigTest {
 
-    BasePartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
-        this.controllerEpoch = controllerEpoch;
-        this.leader = leader;
-        this.leaderEpoch = leaderEpoch;
-        this.isr = isr;
-        this.zkVersion = zkVersion;
-        this.replicas = replicas;
+    @Test
+    public void shouldBeCaseInsensitiveForDecimalFormatConfig() {
+        final Map<String, Object> configValues = new HashMap<>();
+        configValues.put(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName());
+        configValues.put(JsonConverterConfig.DECIMAL_FORMAT_CONFIG, "NuMeRiC");
+
+        final JsonConverterConfig config = new JsonConverterConfig(configValues);
+        assertEquals(config.decimalFormat(), DecimalFormat.NUMERIC);
     }
 
 }
