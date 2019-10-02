@@ -781,7 +781,7 @@ public class FetcherTest {
         try {
             buildFetcher();
 
-            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH, (short) 2, (short) 2));
+            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
             makeFetchRequestWithIncompleteRecord();
             try {
                 fetcher.fetchedRecords();
@@ -3485,7 +3485,7 @@ public class FetcherTest {
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
         apiVersions.update(node.idString(), NodeApiVersions.create(
-            ApiKeys.OFFSET_FOR_LEADER_EPOCH, (short) 0, (short) 2));
+            ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
 
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(

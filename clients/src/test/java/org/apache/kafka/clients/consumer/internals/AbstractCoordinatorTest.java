@@ -499,7 +499,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHandleSingleLeaveGroupRequest() {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.LEAVE_GROUP, (short) 2, (short) 2));
+        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.LEAVE_GROUP.id, (short) 2, (short) 2));
 
         LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
             new MemberResponse()

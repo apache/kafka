@@ -90,7 +90,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testLatestUsableVersion() {
-        NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE, (short) 1, (short) 3);
+        NodeApiVersions apiVersions = NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 1, (short) 3);
         assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
         assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1));
         assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 1, (short) 1));

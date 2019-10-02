@@ -864,14 +864,14 @@ public class NetworkClient implements KafkaClient {
                 // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
                 // If not provided, the client falls back to version 0.
-                short fallbackVersion = 0;
+                short maxApiVersion = 0;
                 if (apiVersionsResponse.data.apiKeys().size() > 0) {
                     ApiVersionsResponseKey apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
                     if (apiVersion != null) {
-                        fallbackVersion = apiVersion.maxVersion();
+                        maxApiVersion = apiVersion.maxVersion();
                     }
                 }
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(fallbackVersion));
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion));
             }
             return;
         }

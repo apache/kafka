@@ -182,7 +182,7 @@ public class SenderTest {
                 null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE, (short) 0, (short) 2));
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
 
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -221,7 +221,7 @@ public class SenderTest {
                 null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE, (short) 0, (short) 2));
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
 
         Future<RecordMetadata> future2 = accumulator.append(tp1, 0L, "key".getBytes(), "value".getBytes(),
                 null, null, MAX_BLOCK_TIMEOUT, false).future;

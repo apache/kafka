@@ -80,16 +80,6 @@ public class NodeApiVersions {
         return create(Collections.singleton(new ApiVersion(apiKey, minVersion, maxVersion)));
     }
 
-    // Used for testing
-    public static NodeApiVersions create(ApiKeys apiKey, short minVersion, short maxVersion) {
-        return create(Collections.singleton(new ApiVersion(apiKey.id, minVersion, maxVersion)));
-    }
-
-    // Used for testing
-    public static NodeApiVersions create(ApiKeys apiKey) {
-        return create(Collections.singleton(new ApiVersion(apiKey)));
-    }
-
     public NodeApiVersions(ApiVersionsResponseKeyCollection nodeApiVersions) {
         for (ApiVersionsResponseKey nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
