@@ -88,6 +88,10 @@ public class Connect {
         return rest.serverUrl();
     }
 
+    public URI adminUrl() {
+        return rest.adminUrl();
+    }
+
     private class ShutdownHook extends Thread {
         @Override
         public void run() {
