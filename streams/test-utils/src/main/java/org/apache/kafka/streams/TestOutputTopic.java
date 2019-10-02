@@ -85,7 +85,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return Next value for output topic
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public V readValue() {
         final TestRecord<K, V> record = readRecord();
         return record.value();
@@ -96,7 +95,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return Next output as KeyValue
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
         final TestRecord<K, V> record = readRecord();
         return new KeyValue<>(record.key(), record.value());
@@ -107,7 +105,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return Next output as ProducerRecord
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public TestRecord<K, V> readRecord() {
         return driver.readRecord(topic, keyDeserializer, valueDeserializer);
     }
@@ -118,7 +115,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return Map of output by key
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<TestRecord<K, V>> readRecordsToList() {
         final List<TestRecord<K, V>> output = new LinkedList<>();
         while (!isEmpty()) {
@@ -134,7 +130,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return Map of output by key
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public Map<K, V> readKeyValuesToMap() {
         final Map<K, V> output = new HashMap<>();
         TestRecord<K, V> outputRow;
@@ -150,7 +145,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return List of output KeyValues
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<KeyValue<K, V>> readKeyValuesToList() {
         final List<KeyValue<K, V>> output = new LinkedList<>();
         KeyValue<K, V> outputRow;
@@ -166,7 +160,6 @@ public class TestOutputTopic<K, V> {
      *
      * @return List of output values
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<V> readValuesToList() {
         final List<V> output = new LinkedList<>();
         V outputValue;

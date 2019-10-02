@@ -114,7 +114,6 @@ public class TestInputTopic<K, V> {
      *
      * @param advance the duration of time to advance
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void advanceTime(final Duration advance) {
         if (advance.isNegative()) {
             throw new IllegalArgumentException("advance must be positive");
@@ -133,7 +132,6 @@ public class TestInputTopic<K, V> {
      *
      * @param record the record to sent
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final TestRecord<K, V> record) {
         //if record timestamp not set get timestamp and advance
         final Instant timestamp = (record.getRecordTime() == null) ? getTimestampAndAdvanced() : record.getRecordTime();
@@ -145,7 +143,6 @@ public class TestInputTopic<K, V> {
      *
      * @param value the record value
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final V value) {
         pipeInput(new TestRecord<>(value));
     }
@@ -156,7 +153,6 @@ public class TestInputTopic<K, V> {
      * @param key   the record key
      * @param value the record value
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final K key, final V value) {
         pipeInput(new TestRecord<>(key, value));
     }
@@ -168,7 +164,6 @@ public class TestInputTopic<K, V> {
      * @param value       the record value
      * @param timestamp the record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final V value,
                           final Instant timestamp) {
         pipeInput(new TestRecord<K, V>(null, value, timestamp));
@@ -182,7 +177,6 @@ public class TestInputTopic<K, V> {
      * @param value       the record value
      * @param timestampMs the record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final K key,
                           final V value,
                           final long timestampMs) {
@@ -197,7 +191,6 @@ public class TestInputTopic<K, V> {
      * @param value       the record value
      * @param timestamp the record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final K key,
                           final V value,
                           final Instant timestamp) {
@@ -210,7 +203,6 @@ public class TestInputTopic<K, V> {
      *
      * @param records the list of TestRecord records
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeRecordList(final List<? extends TestRecord<K, V>> records) {
         for (final TestRecord<K, V> record : records) {
             pipeInput(record);
@@ -223,7 +215,6 @@ public class TestInputTopic<K, V> {
      *
      * @param keyValues the list of KeyValue records
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues) {
         for (final KeyValue<K, V> keyValue : keyValues) {
             pipeInput(keyValue.key, keyValue.value);
@@ -236,7 +227,6 @@ public class TestInputTopic<K, V> {
      *
      * @param values the list of KeyValue records
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeValueList(final List<V> values) {
         for (final V value : values) {
             pipeInput(value);
@@ -251,7 +241,6 @@ public class TestInputTopic<K, V> {
      * @param startTimestamp the timestamp for the first generated record
      * @param advance        the time difference between two consecutive generated records
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues,
                                  final Instant startTimestamp,
                                  final Duration advance) {
@@ -270,7 +259,6 @@ public class TestInputTopic<K, V> {
      * @param startTimestamp the timestamp for the first generated record
      * @param advance        the time difference between two consecutive generated records
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeValueList(final List<V> values,
                               final Instant startTimestamp,
                               final Duration advance) {
