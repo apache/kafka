@@ -788,9 +788,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-            expectTaskCommitRecord(anyTimes, commitSuccess);
-        }
-        if (commitSuccess) {
             expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
         }
 
@@ -827,17 +824,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                     return recordCapture.getValue();
                 }
             });
-    }
-
-    private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {
-        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
-        IExpectationSetters<Void> expect = EasyMock.expectLastCall();
-        if (!succeed) {
-            expect = expect.andThrow(new RuntimeException("Error committing record in source task"));
-        }
-        if (anyTimes) {
-            expect.anyTimes();
-        }
     }
 
     private void expectTaskCommitRecordWithOffset(boolean anyTimes, boolean succeed) throws InterruptedException {

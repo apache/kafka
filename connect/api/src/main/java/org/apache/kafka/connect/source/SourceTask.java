@@ -92,6 +92,10 @@ public abstract class SourceTask implements Task {
      * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
      * </p>
      * <p>
+     * This is an alias for {@link commitRecord(SourceRecord, RecordMetadata)} for backwards compatibility. The default
+     * implementation of {@link commitRecord(SourceRecord, RecordMetadata)} just calls this method.
+     * </p>
+     * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
@@ -99,6 +103,7 @@ public abstract class SourceTask implements Task {
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
      * @throws InterruptedException
+     * @see commitRecord(SourceRecord, RecordMetadata)
      */
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
@@ -113,6 +118,9 @@ public abstract class SourceTask implements Task {
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
      * </p>
+     * <p>
+     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default.
+     * </p>
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer
      * @param metadata {@link RecordMetadata} record metadata returned from the broker
@@ -120,6 +128,7 @@ public abstract class SourceTask implements Task {
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata)
             throws InterruptedException {
-        // This space intentionally left blank.
+        // by default, just call other method for backwards compatability
+        commitRecord(record);
     }
 }

@@ -383,10 +383,7 @@ class WorkerSourceTask extends WorkerTask {
 
     private void commitTaskRecord(SourceRecord record, RecordMetadata metadata) {
         try {
-            task.commitRecord(record);
-            if (metadata != null) {
-                task.commitRecord(record, metadata);
-            }
+            task.commitRecord(record, metadata);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commitRecord()", this, t);
         }
