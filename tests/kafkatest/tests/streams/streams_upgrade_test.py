@@ -545,23 +545,10 @@ class StreamsUpgradeTest(Test):
                     else:
                         self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
-                    if processor == self.leader:
-                        leader_monitor = log_monitor
-                    elif first_other_processor == self.leader:
-                        leader_monitor = first_other_monitor
-                    elif second_other_processor == self.leader:
-                        leader_monitor = second_other_monitor
-                    else:
-                        raise Exception("Could not identify leader.")
-
                     monitors = {}
                     monitors[processor] = log_monitor
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
-
-                    leader_monitor.wait_until("Received a future (version probing) subscription (version: 5). Sending empty assignment back (with supported version 4).",
-                                              timeout_sec=60,
-                                              err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
 
                     if len(self.old_processors) > 0:
                         log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
