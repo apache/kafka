@@ -805,6 +805,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
                 return true;
             }
+        } else {
+            log.debug("Received an assignment version {} that is less than the earliest version that allows version " +
+                "probing {}. If this is not during a rolling upgrade from version 2.0 or below, this is an error.",
+                receivedAssignmentMetadataVersion, EARLIEST_PROBEABLE_VERSION);
         }
 
         return false;
