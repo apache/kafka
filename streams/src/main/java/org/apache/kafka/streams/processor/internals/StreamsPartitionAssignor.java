@@ -769,45 +769,46 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 + "actual latest supported version {}", latestCommonlySupportedVersion, LATEST_SUPPORTED_VERSION);
             throw new TaskAssignmentException("Can't upgrade to metadata version greater than we support");
         }
-
-        if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION) {
-            log.error("Leader sent back assignment with version {} which is less than the earliest probeable version {}. " +
-                "To do a rolling upgrade from a version earlier than {} you must set the {} config",
-                receivedAssignmentMetadataVersion, EARLIEST_PROBEABLE_VERSION, EARLIEST_PROBEABLE_VERSION,
-                StreamsConfig.UPGRADE_FROM_CONFIG);
-            throw new IllegalStateException("Can't use version probing with versions less than " + EARLIEST_PROBEABLE_VERSION);
-        }
     }
 
     // Returns true if subscription version was changed, indicating version probing and need to rebalance again
     protected boolean maybeUpdateSubscriptionVersion(final int receivedAssignmentMetadataVersion,
                                                      final int latestCommonlySupportedVersion) {
-        // If the latest commonly supported version is now greater than our used version, this indicates we have just
-        // completed the rolling upgrade and can now update our subscription version for the final rebalance
-        if (latestCommonlySupportedVersion > usedSubscriptionMetadataVersion) {
-            log.info(
-                "Sent a version {} subscription and group's latest commonly supported version is {} (successful " +
-                    "version probing and end of rolling upgrade). Upgrading subscription metadata version to " +
-                    "{} for next rebalance.",
-                usedSubscriptionMetadataVersion,
-                latestCommonlySupportedVersion,
-                latestCommonlySupportedVersion
-            );
-            usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
-            return true;
-        }
+        if (receivedAssignmentMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
 
-        // If we received a lower version than we sent, someone else in the group still hasn't upgraded. We
-        // should downgrade our subscription until everyone is on the latest version
-        if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion) {
-            log.info(
-                "Sent a version {} subscription and got version {} assignment back (successful version probing). " +
-                    "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
-                usedSubscriptionMetadataVersion,
-                receivedAssignmentMetadataVersion
-            );
-            usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
-            return true;
+            // If the latest commonly supported version is now greater than our used version, this indicates we have just
+            // completed the rolling upgrade and can now update our subscription version for the final rebalance
+            if (latestCommonlySupportedVersion > usedSubscriptionMetadataVersion) {
+                log.info(
+                    "Sent a version {} subscription and group's latest commonly supported version is {} (successful "
+                        +
+                        "version probing and end of rolling upgrade). Upgrading subscription metadata version to " +
+                        "{} for next rebalance.",
+                    usedSubscriptionMetadataVersion,
+                    latestCommonlySupportedVersion,
+                    latestCommonlySupportedVersion
+                );
+                usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
+                return true;
+            }
+
+            // If we received a lower version than we sent, someone else in the group still hasn't upgraded. We
+            // should downgrade our subscription until everyone is on the latest version
+            if (receivedAssignmentMetadataVersion < usedSubscriptionMetadataVersion) {
+                log.info(
+                    "Sent a version {} subscription and got version {} assignment back (successful version probing). "
+                        +
+                        "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
+                    usedSubscriptionMetadataVersion,
+                    receivedAssignmentMetadataVersion
+                );
+                usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
+                return true;
+            }
+        } else {
+            log.debug("Received an assignment version {} that is less than the earliest version that allows version " +
+                "probing {}. If this is not during a rolling upgrade from version 2.0 or below, this is an error.",
+                receivedAssignmentMetadataVersion, EARLIEST_PROBEABLE_VERSION);
         }
 
         return false;
