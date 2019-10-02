@@ -157,6 +157,10 @@ subprojects {
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
 
+  dependencies {
+    testCompile libs.junitFoundation
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
@@ -306,6 +310,9 @@ subprojects {
     minHeapSize = "256m"
     maxHeapSize = "2048m"
 
+    // Read by JUnit Foundation to set a default timeout
+    systemProperty "junit.timeout.test", "60000"
+
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -318,6 +325,13 @@ subprojects {
         excludeCategories 'org.apache.kafka.test.IntegrationTest'
       }
     }
+  }
+
+  unitTest.doFirst{
+    // This attaches the junit-foundation agent which does some manipulation of junit annotations
+    // before the test runner starts. This is done as a "doFirst" since we must wait until the "test" classpath
+    // has been determined.
+    jvmArgs "-javaagent:${sourceSets.test.runtimeClasspath.find { it.name.contains("junit-foundation") }.absolutePath}"
   }
 
   jar {
