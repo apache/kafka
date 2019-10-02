@@ -770,7 +770,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             throw new TaskAssignmentException("Can't upgrade to metadata version greater than we support");
         }
 
-        if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION) {
+        if (receivedAssignmentMetadataVersion < EARLIEST_PROBEABLE_VERSION && usedSubscriptionMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
             log.error("Leader sent back assignment with version {} which is less than the earliest probeable version {}. " +
                 "To do a rolling upgrade from a version earlier than {} you must set the {} config",
                 receivedAssignmentMetadataVersion, EARLIEST_PROBEABLE_VERSION, EARLIEST_PROBEABLE_VERSION,
