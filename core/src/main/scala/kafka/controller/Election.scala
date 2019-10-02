@@ -17,13 +17,14 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.Seq
 
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
-object Election {
+object Election extends Logging {
 
   private def leaderForOffline(partition: TopicPartition,
                                leaderAndIsrOpt: Option[LeaderAndIsr],
@@ -36,8 +37,13 @@ object Election {
       case Some(leaderAndIsr) =>
         val isr = leaderAndIsr.isr
         val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
-          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
-        val newLeaderAndIsrOpt = leaderOpt.map { leader =>
+          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled)
+        val newLeaderAndIsrOpt = leaderOpt.map { case (leader, uncleanElection) =>
+          if (uncleanElection) {
+            controllerContext.stats.uncleanLeaderElectionRate.mark()
+            warn(s"Unclean leader election. Partition $partition has been assigned leader $leader from deposed " +
+              s"leader ${leaderAndIsr.leader}.")
+          }
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
           leaderAndIsr.newLeaderAndIsr(leader, newIsr)
