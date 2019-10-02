@@ -19,9 +19,11 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,11 @@ import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIG
 import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIGNATURE_HEADER;
 import static org.junit.Assert.assertEquals;
 
+/**
+ * A simple integration test to ensure that internal request validation becomes enabled with the
+ * "sessioned" protocol.
+ */
+@Category(IntegrationTest.class)
 public class SessionedProtocolIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(SessionedProtocolIntegrationTest.class);
