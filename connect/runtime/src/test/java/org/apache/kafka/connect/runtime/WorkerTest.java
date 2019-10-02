@@ -663,6 +663,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
         EasyMock.expectLastCall();
 
+        // Each time we check the task metrics, the worker will call the herder
         herder.taskStatus(TASK_ID);
         EasyMock.expectLastCall()
             .andReturn(new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"));
