@@ -28,12 +28,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+
 public class SubscriptionInfo {
-
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
-
-    public static final int LATEST_SUPPORTED_VERSION = 4;
-    static final int UNKNOWN = -1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
@@ -127,6 +126,9 @@ public class SubscriptionInfo {
             case 4:
                 buf = encodeVersionFour();
                 break;
+            case 5:
+                buf = encodeVersionFive();
+                break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
@@ -205,12 +207,11 @@ public class SubscriptionInfo {
         }
     }
 
-    private ByteBuffer encodeVersionThree() {
+    private ByteBuffer encodeVersionThreeFourAndFive(final int usedVersion) {
         final byte[] endPointBytes = prepareUserEndPoint();
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeFourAndFiveByteLength(endPointBytes));
 
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(3); // used version
+        buf.putInt(usedVersion); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
@@ -218,24 +219,21 @@ public class SubscriptionInfo {
         encodeUserEndPoint(buf, endPointBytes);
 
         return buf;
+    }
+
+    private ByteBuffer encodeVersionThree() {
+        return encodeVersionThreeFourAndFive(3);
     }
 
     private ByteBuffer encodeVersionFour() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(4); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
+        return encodeVersionThreeFourAndFive(4);
     }
 
-    protected int getVersionThreeAndFourByteLength(final byte[] endPointBytes) {
+    private ByteBuffer encodeVersionFive() {
+        return encodeVersionThreeFourAndFive(5);
+    }
+
+    protected int getVersionThreeFourAndFiveByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID
@@ -266,6 +264,7 @@ public class SubscriptionInfo {
                 break;
             case 3:
             case 4:
+            case 5:
                 latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 decodeVersionThreeData(subscriptionInfo, data);

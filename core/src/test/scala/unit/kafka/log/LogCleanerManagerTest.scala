@@ -61,107 +61,120 @@ class LogCleanerManagerTest extends Logging {
     Utils.delete(tmpDir)
   }
 
+  private def setupIncreasinglyFilthyLogs(partitions: Seq[TopicPartition],
+                                          startNumBatches: Int,
+                                          batchIncrement: Int): Pool[TopicPartition, Log] = {
+    val logs = new Pool[TopicPartition, Log]()
+    var numBatches = startNumBatches
+
+    for (tp <- partitions) {
+      val log = createLog(2048, LogConfig.Compact, topicPartition = tp)
+      logs.put(tp, log)
+
+      writeRecords(log, numBatches = numBatches, recordsPerBatch = 1, batchesPerSegment = 5)
+      numBatches += batchIncrement
+    }
+    logs
+  }
+
   @Test
   def testGrabFilthiestCompactedLogReturnsLogWithDirtiestRatio(): Unit = {
-    val records = TestUtils.singletonRecords("test".getBytes)
-    val log1: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
-    val log2: Log = createLog(records.sizeInBytes * 10, LogConfig.Compact, 2)
-    val log3: Log = createLog(records.sizeInBytes * 15, LogConfig.Compact, 3)
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val tp2 = new TopicPartition("wishing-well", 2)
+    val partitions = Seq(tp0, tp1, tp2)
 
-    val logs = new Pool[TopicPartition, Log]()
-    val tp1 = new TopicPartition("wishing well", 0) // active segment starts at 0
-    logs.put(tp1, log1)
-    val tp2 = new TopicPartition("wishing well", 1) // active segment starts at 10
-    logs.put(tp2, log2)
-    val tp3 = new TopicPartition("wishing well", 2) // // active segment starts at 20
-    logs.put(tp3, log3)
-    val cleanerManager: LogCleanerManagerMock = createCleanerManager(logs, toMock = true).asInstanceOf[LogCleanerManagerMock]
-    cleanerCheckpoints.put(tp1, 0) // all clean
-    cleanerCheckpoints.put(tp2, 1) // dirtiest - 9 dirty messages
-    cleanerCheckpoints.put(tp3, 15) // 5 dirty messages
+    // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-
-    assertEquals(log2, filthiestLog.log)
     assertEquals(tp2, filthiestLog.topicPartition)
+    assertEquals(tp2, filthiestLog.log.topicPartition)
   }
 
   @Test
   def testGrabFilthiestCompactedLogIgnoresUncleanablePartitions(): Unit = {
-    val records = TestUtils.singletonRecords("test".getBytes)
-    val log1: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
-    val log2: Log = createLog(records.sizeInBytes * 10, LogConfig.Compact, 2)
-    val log3: Log = createLog(records.sizeInBytes * 15, LogConfig.Compact, 3)
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val tp2 = new TopicPartition("wishing-well", 2)
+    val partitions = Seq(tp0, tp1, tp2)
 
-    val logs = new Pool[TopicPartition, Log]()
-    val tp1 = new TopicPartition("wishing well", 0) // active segment starts at 0
-    logs.put(tp1, log1)
-    val tp2 = new TopicPartition("wishing well", 1) // active segment starts at 10
-    logs.put(tp2, log2)
-    val tp3 = new TopicPartition("wishing well", 2) // // active segment starts at 20
-    logs.put(tp3, log3)
-    val cleanerManager: LogCleanerManagerMock = createCleanerManager(logs, toMock = true).asInstanceOf[LogCleanerManagerMock]
-    cleanerCheckpoints.put(tp1, 0) // all clean
-    cleanerCheckpoints.put(tp2, 1) // dirtiest - 9 dirty messages
-    cleanerCheckpoints.put(tp3, 15) // 5 dirty messages
-    cleanerManager.markPartitionUncleanable(log2.dir.getParent, tp2)
+    // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
+
+    cleanerManager.markPartitionUncleanable(logs.get(tp2).dir.getParent, tp2)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
-
-    assertEquals(log3, filthiestLog.log)
-    assertEquals(tp3, filthiestLog.topicPartition)
+    assertEquals(tp1, filthiestLog.topicPartition)
+    assertEquals(tp1, filthiestLog.log.topicPartition)
   }
 
   @Test
   def testGrabFilthiestCompactedLogIgnoresInProgressPartitions(): Unit = {
-    val records = TestUtils.singletonRecords("test".getBytes)
-    val log1: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
-    val log2: Log = createLog(records.sizeInBytes * 10, LogConfig.Compact, 2)
-    val log3: Log = createLog(records.sizeInBytes * 15, LogConfig.Compact, 3)
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val tp2 = new TopicPartition("wishing-well", 2)
+    val partitions = Seq(tp0, tp1, tp2)
 
-    val logs = new Pool[TopicPartition, Log]()
-    val tp1 = new TopicPartition("wishing well", 0) // active segment starts at 0
-    logs.put(tp1, log1)
-    val tp2 = new TopicPartition("wishing well", 1) // active segment starts at 10
-    logs.put(tp2, log2)
-    val tp3 = new TopicPartition("wishing well", 2) // // active segment starts at 20
-    logs.put(tp3, log3)
-    val cleanerManager: LogCleanerManagerMock = createCleanerManager(logs, toMock = true).asInstanceOf[LogCleanerManagerMock]
-    cleanerCheckpoints.put(tp1, 0) // all clean
-    cleanerCheckpoints.put(tp2, 1) // dirtiest - 9 dirty messages
-    cleanerCheckpoints.put(tp3, 15) // 5 dirty messages
+    // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
+
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
 
-    assertEquals(log3, filthiestLog.log)
-    assertEquals(tp3, filthiestLog.topicPartition)
+    assertEquals(tp1, filthiestLog.topicPartition)
+    assertEquals(tp1, filthiestLog.log.topicPartition)
   }
 
   @Test
   def testGrabFilthiestCompactedLogIgnoresBothInProgressPartitionsAndUncleanablePartitions(): Unit = {
-    val records = TestUtils.singletonRecords("test".getBytes)
-    val log1: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
-    val log2: Log = createLog(records.sizeInBytes * 10, LogConfig.Compact, 2)
-    val log3: Log = createLog(records.sizeInBytes * 15, LogConfig.Compact, 3)
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val tp2 = new TopicPartition("wishing-well", 2)
+    val partitions = Seq(tp0, tp1, tp2)
 
-    val logs = new Pool[TopicPartition, Log]()
-    val tp1 = new TopicPartition("wishing well", 0) // active segment starts at 0
-    logs.put(tp1, log1)
-    val tp2 = new TopicPartition("wishing well", 1) // active segment starts at 10
-    logs.put(tp2, log2)
-    val tp3 = new TopicPartition("wishing well", 2) // // active segment starts at 20
-    logs.put(tp3, log3)
-    val cleanerManager: LogCleanerManagerMock = createCleanerManager(logs, toMock = true).asInstanceOf[LogCleanerManagerMock]
-    cleanerCheckpoints.put(tp1, 0) // all clean
-    cleanerCheckpoints.put(tp2, 1) // dirtiest - 9 dirty messages
-    cleanerCheckpoints.put(tp3, 15) // 5 dirty messages
+    // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
+
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
-    cleanerManager.markPartitionUncleanable(log3.dir.getParent, tp3)
+    cleanerManager.markPartitionUncleanable(logs.get(tp1).dir.getParent, tp1)
 
     val filthiestLog: Option[LogToClean] = cleanerManager.grabFilthiestCompactedLog(time)
+    assertEquals(None, filthiestLog)
+  }
 
-    assertTrue(filthiestLog.isEmpty)
+  @Test
+  def testDirtyOffsetResetIfLargerThanEndOffset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 200)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(0L, filthiestLog.firstDirtyOffset)
+  }
+
+  @Test
+  def testDirtyOffsetResetIfSmallerThanStartOffset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
+
+    logs.get(tp).maybeIncrementLogStartOffset(10L)
+
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 0L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(10L, filthiestLog.firstDirtyOffset)
   }
 
   /**
@@ -482,17 +495,16 @@ class LogCleanerManagerTest extends Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(topicPartition, log)
-    createCleanerManager(logs)
+    new LogCleanerManager(Array(logDir), logs, null)
   }
 
-  private def createCleanerManager(pool: Pool[TopicPartition, Log], toMock: Boolean = false): LogCleanerManager = {
-    if (toMock)
-      new LogCleanerManagerMock(Array(logDir), pool, null)
-    else
-      new LogCleanerManager(Array(logDir), pool, null)
+  private def createCleanerManagerMock(pool: Pool[TopicPartition, Log]): LogCleanerManagerMock = {
+    new LogCleanerManagerMock(Array(logDir), pool, null)
   }
 
-  private def createLog(segmentSize: Int, cleanupPolicy: String, segmentsCount: Int = 0): Log = {
+  private def createLog(segmentSize: Int,
+                        cleanupPolicy: String,
+                        topicPartition: TopicPartition = new TopicPartition("log", 0)): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
     logProps.put(LogConfig.RetentionMsProp, 1: Integer)
@@ -500,8 +512,9 @@ class LogCleanerManagerTest extends Logging {
     logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0.05: java.lang.Double) // small for easier and clearer tests
 
     val config = LogConfig(logProps)
-    val partitionDir = new File(logDir, "log-0")
-    val log = Log(partitionDir,
+    val partitionDir = new File(logDir, Log.logDirName(topicPartition))
+
+    Log(partitionDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -511,10 +524,15 @@ class LogCleanerManagerTest extends Logging {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
-    for (i <- 0 until segmentsCount) {
-      val startOffset = i * 10
-      val endOffset = startOffset + 10
-      val segment = LogUtils.createSegment(startOffset, logDir)
+  }
+
+  private def writeRecords(log: Log,
+                           numBatches: Int,
+                           recordsPerBatch: Int,
+                           batchesPerSegment: Int): Unit = {
+    for (i <- 0 until numBatches) {
+      val startOffset = i * recordsPerBatch
+      val endOffset = startOffset + recordsPerBatch
       var lastTimestamp = 0L
       val records = (startOffset until endOffset).map { offset =>
         val currentTimestamp = time.milliseconds()
@@ -524,10 +542,13 @@ class LogCleanerManagerTest extends Logging {
         new SimpleRecord(currentTimestamp, s"key-$offset".getBytes, s"value-$offset".getBytes)
       }
 
-      segment.append(endOffset, lastTimestamp, endOffset, MemoryRecords.withRecords(CompressionType.NONE, records:_*))
-      log.addSegment(segment)
+      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+      log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
+
+      if (i % batchesPerSegment == 0)
+        log.roll()
     }
-    log
+    log.roll()
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig) =

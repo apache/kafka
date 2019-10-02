@@ -23,6 +23,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Test;
@@ -50,6 +52,8 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     private final static String SENSOR_PREFIX_DELIMITER = ".";
     private final static String SENSOR_NAME_DELIMITER = ".s.";
     private final static String INTERNAL_PREFIX = "internal";
+    private final static String THREAD_NAME = "test-thread";
+    private final static String VERSION = StreamsConfig.METRICS_LATEST;
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
@@ -58,22 +62,23 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
     private final String description1 = "description number one";
     private final String description2 = "description number two";
+    private final String description3 = "description number three";
     private final MockTime time = new MockTime(0);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_NAME, VERSION);
 
     @Test
     public void shouldGetThreadLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
-        final String threadName = "thread1";
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_NAME, VERSION);
         final String sensorName = "sensor1";
         final String expectedFullSensorName =
-            INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + threadName + SENSOR_NAME_DELIMITER + sensorName;
+            INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + THREAD_NAME + SENSOR_NAME_DELIMITER + sensorName;
         final RecordingLevel recordingLevel = RecordingLevel.DEBUG;
         final Sensor[] parents = {};
         EasyMock.expect(metrics.sensor(expectedFullSensorName, recordingLevel, parents)).andReturn(null);
 
         replayAll();
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
         final Sensor sensor = streamsMetrics.threadLevelSensor(sensorName, recordingLevel);
 
         verifyAll();
@@ -83,12 +88,11 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test(expected = NullPointerException.class)
     public void testNullMetrics() {
-        new StreamsMetricsImpl(null, "");
+        new StreamsMetricsImpl(null, "", VERSION);
     }
 
     @Test(expected = NullPointerException.class)
     public void testRemoveNullSensor() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         streamsMetrics.removeSensor(null);
     }
 
@@ -98,7 +102,6 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final String scope = "scope";
         final String entity = "entity";
         final String operation = "put";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
 
         final Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
@@ -116,9 +119,9 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     @Test
-    public void testMutiLevelSensorRemoval() {
+    public void testMultiLevelSensorRemoval() {
         final Metrics registry = new Metrics();
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, "");
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, THREAD_NAME, VERSION);
         for (final MetricName defaultMetric : registry.metrics().keySet()) {
             registry.removeMetric(defaultMetric);
         }
@@ -169,7 +172,6 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void testLatencyMetrics() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         final int defaultMetrics = streamsMetrics.metrics().size();
 
         final String scope = "scope";
@@ -189,7 +191,6 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void testThroughputMetrics() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         final int defaultMetrics = streamsMetrics.metrics().size();
 
         final String scope = "scope";
@@ -211,7 +212,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final MockTime time = new MockTime(1);
         final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
         final Metrics metrics = new Metrics(config, time);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "", VERSION);
 
         final String scope = "scope";
         final String entity = "entity";
@@ -245,8 +246,6 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void shouldGetStoreLevelTagMap() {
-        final String threadName = "test-thread";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
         final String taskName = "test-task";
         final String storeType = "remote-window";
         final String storeName = "window-keeper";
@@ -254,9 +253,38 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
         assertThat(tagMap.size(), equalTo(3));
-        assertThat(tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG), equalTo(threadName));
+        assertThat(tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23), equalTo(THREAD_NAME));
         assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
         assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
+    }
+
+    @Test
+    public void shouldGetCacheLevelTagMapForBuiltInMetricsLatestVersion() {
+        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To23() {
+        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+    }
+
+    private void shouldGetCacheLevelTagMap(final String builtInMetricsVersion) {
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, THREAD_NAME, builtInMetricsVersion);
+        final String taskName = "taskName";
+        final String storeName = "storeName";
+
+        final Map<String, String> tagMap = streamsMetrics.cacheLevelTagMap(taskName, storeName);
+
+        assertThat(tagMap.size(), equalTo(3));
+        assertThat(
+            tagMap.get(
+                builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? StreamsMetricsImpl.THREAD_ID_TAG
+                    : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23),
+            equalTo(Thread.currentThread().getName())
+        );
+        assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
+        assertThat(tagMap.get(StreamsMetricsImpl.RECORD_CACHE_ID_TAG), equalTo(storeName));
     }
 
     @Test
@@ -325,6 +353,36 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
         verifyMetric(metricNamePrefix + "-total", description2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldAddAvgAndMinAndMaxMetricsToSensor() {
+        StreamsMetricsImpl
+            .addAvgAndMinAndMaxToSensor(sensor, group, tags, metricNamePrefix, description1, description2, description3);
+
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 42.0;
+        final double expectedAvgMetricValue = (valueToRecord1 + valueToRecord2) / 2;
+        verifyMetric(metricNamePrefix + "-avg", description1, valueToRecord1, valueToRecord2, expectedAvgMetricValue);
+        verifyMetric(metricNamePrefix + "-min", description2, valueToRecord1, valueToRecord2, valueToRecord1);
+        verifyMetric(metricNamePrefix + "-max", description3, valueToRecord1, valueToRecord2, valueToRecord2);
+        assertThat(metrics.metrics().size(), equalTo(3 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldReturnMetricsVersionCurrent() {
+        assertThat(
+            new StreamsMetricsImpl(metrics, THREAD_NAME, StreamsConfig.METRICS_LATEST).version(),
+            equalTo(Version.LATEST)
+        );
+    }
+
+    @Test
+    public void shouldReturnMetricsVersionFrom100To23() {
+        assertThat(
+            new StreamsMetricsImpl(metrics, THREAD_NAME, StreamsConfig.METRICS_0100_TO_23).version(),
+            equalTo(Version.FROM_100_TO_23)
+        );
     }
 
     private void verifyMetric(final String name,

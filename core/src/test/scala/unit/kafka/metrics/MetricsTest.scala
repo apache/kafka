@@ -30,10 +30,8 @@ import kafka.utils._
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import scala.util.matching.Regex
 import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
-import org.scalatest.Assertions
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2

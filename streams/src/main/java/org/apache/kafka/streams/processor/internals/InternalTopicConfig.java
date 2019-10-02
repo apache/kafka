@@ -20,17 +20,17 @@ import org.apache.kafka.common.internals.Topic;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * InternalTopicConfig captures the properties required for configuring
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public abstract class InternalTopicConfig {
-
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = StreamsPartitionAssignor.UNKNOWN;
+    private Optional<Integer> numberOfPartitions = Optional.empty();
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
@@ -53,15 +53,15 @@ public abstract class InternalTopicConfig {
         return name;
     }
 
-    public int numberOfPartitions() {
+    public Optional<Integer> numberOfPartitions() {
         return numberOfPartitions;
     }
 
-    void setNumberOfPartitions(final int numberOfPartitions) {
+    public void setNumberOfPartitions(final int numberOfPartitions) {
         if (numberOfPartitions < 1) {
             throw new IllegalArgumentException("Number of partitions must be at least 1.");
         }
-        this.numberOfPartitions = numberOfPartitions;
+        this.numberOfPartitions = Optional.of(numberOfPartitions);
     }
 
     @Override

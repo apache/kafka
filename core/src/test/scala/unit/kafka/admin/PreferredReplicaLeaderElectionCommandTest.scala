@@ -93,8 +93,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     debug(s"Starting server $targetServer now that a non-preferred replica is leader")
     servers(targetServer).startup()
     TestUtils.waitUntilTrue(() => servers.forall { server =>
-      server.metadataCache.getPartitionInfo(partition.topic(), partition.partition()).exists { partitionState =>
-        partitionState.basePartitionState.isr.contains(targetServer)
+      server.metadataCache.getPartitionInfo(partition.topic, partition.partition).exists { partitionState =>
+        partitionState.isr.contains(targetServer)
       }
     },
       s"Replicas for partition $partition not created")
@@ -106,8 +106,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def awaitLeader(topicPartition: TopicPartition, timeoutMs: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     TestUtils.awaitValue(() => {
-      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
-          .map(_.basePartitionState.leader)
+      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition).map(_.leader)
     }, s"Timed out waiting to find current leader of $topicPartition", timeoutMs)
   }
 

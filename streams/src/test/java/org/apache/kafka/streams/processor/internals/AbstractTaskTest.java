@@ -16,29 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
-import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.MockRestoreCallback;
-import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
+import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
+import static org.easymock.EasyMock.expect;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,12 +31,22 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
-import static org.easymock.EasyMock.expect;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRestoreCallback;
+import org.apache.kafka.test.MockStateRestoreListener;
+import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
 
 public class AbstractTaskTest {
 
@@ -70,27 +62,6 @@ public class AbstractTaskTest {
     @Before
     public void before() {
         expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
-    }
-
-    @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
-        final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
-    }
-
-    @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
-        final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
-    }
-
-    @Test(expected = WakeupException.class)
-    public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
-        final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
     }
 
     @Test
@@ -247,6 +218,9 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
+            public void initializeTaskTime() {}
+
+            @Override
             public void resume() {}
 
             @Override
@@ -270,14 +244,4 @@ public class AbstractTaskTest {
             public void initializeTopology() {}
         };
     }
-
-    private Consumer mockConsumer(final RuntimeException toThrow) {
-        return new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public OffsetAndMetadata committed(final TopicPartition partition) {
-                throw toThrow;
-            }
-        };
-    }
-
 }

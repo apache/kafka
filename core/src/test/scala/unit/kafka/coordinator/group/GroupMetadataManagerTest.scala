@@ -805,6 +805,74 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testLoadConsumerGroup(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+    val protocol = "protocol"
+    val memberId = "member1"
+    val topic = "foo"
+
+    val subscriptions = List(
+      ("protocol", ConsumerProtocol.serializeSubscription(new Subscription(List(topic).asJava)).array())
+    )
+
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+      sessionTimeout, protocolType, subscriptions)
+
+    val members = Seq(member)
+
+    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, null, None,
+      members, time)
+
+    assertTrue(group.is(Stable))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(Some(Set(topic)), group.getSubscribedTopics)
+    assertTrue(group.has(memberId))
+  }
+
+  @Test
+  def testLoadEmptyConsumerGroup(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+
+    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None,
+      Seq(), time)
+
+    assertTrue(group.is(Empty))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertNull(group.protocolOrNull)
+    assertEquals(Some(Set.empty), group.getSubscribedTopics)
+  }
+
+  @Test
+  def testLoadConsumerGroupWithFaultyConsumerProtocol(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+    val protocol = "protocol"
+    val memberId = "member1"
+
+    val subscriptions = List(("protocol", Array[Byte]()))
+
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+      sessionTimeout, protocolType, subscriptions)
+
+    val members = Seq(member)
+
+    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, null, None,
+      members, time)
+
+    assertTrue(group.is(Stable))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(None, group.getSubscribedTopics)
+    assertTrue(group.has(memberId))
+  }
+
+  @Test
   def testReadFromOldGroupMetadata(): Unit = {
     val generation = 1
     val protocol = "range"
@@ -1671,6 +1739,144 @@ class GroupMetadataManagerTest {
     EasyMock.verify(replicaManager)
 
     assert(group.is(Dead))
+  }
+
+  @Test
+  def testOffsetExpirationOfActiveGroupSemantics(): Unit = {
+    val memberId = "memberId"
+    val clientId = "clientId"
+    val clientHost = "localhost"
+
+    val topic1 = "foo"
+    val topic1Partition0 = new TopicPartition(topic1, 0)
+    val topic1Partition1 = new TopicPartition(topic1, 1)
+
+    val topic2 = "bar"
+    val topic2Partition0 = new TopicPartition(topic2, 0)
+    val topic2Partition1 = new TopicPartition(topic2, 1)
+
+    val offset = 37
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    // Subscribe to topic1 and topic2
+    val subscriptionTopic1AndTopic2 = new Subscription(List(topic1, topic2).asJava)
+
+    val member = new MemberMetadata(
+      memberId,
+      groupId,
+      groupInstanceId,
+      clientId,
+      clientHost,
+      rebalanceTimeout,
+      sessionTimeout,
+      ConsumerProtocol.PROTOCOL_TYPE,
+      List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1AndTopic2).array()))
+    )
+
+    group.add(member, _ => ())
+    group.transitionTo(PreparingRebalance)
+    group.initNextGeneration()
+    group.transitionTo(Stable)
+
+    val startMs = time.milliseconds
+
+    val t1p0OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+    val t1p1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+
+    val t2p0OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+    val t2p1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+
+    val offsets = immutable.Map(
+      topic1Partition0 -> t1p0OffsetAndMetadata,
+      topic1Partition1 -> t1p1OffsetAndMetadata,
+      topic2Partition0 -> t2p0OffsetAndMetadata,
+      topic2Partition1 -> t2p1OffsetAndMetadata)
+
+    mockGetPartition()
+    expectAppendMessage(Errors.NONE)
+    EasyMock.replay(replicaManager)
+
+    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
+    assertTrue(group.hasOffsets)
+
+    assertFalse(commitErrors.isEmpty)
+    assertEquals(Some(Errors.NONE), commitErrors.get.get(topic1Partition0))
+
+    // advance time to just after the offset of last partition is to be expired
+    time.sleep(defaultOffsetRetentionMs + 2)
+
+    // no offset should expire because all topics are actively consumed
+    groupMetadataManager.cleanupGroupMetadata()
+
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
+    assert(group.is(Stable))
+
+    assertEquals(Some(t1p0OffsetAndMetadata), group.offset(topic1Partition0))
+    assertEquals(Some(t1p1OffsetAndMetadata), group.offset(topic1Partition1))
+    assertEquals(Some(t2p0OffsetAndMetadata), group.offset(topic2Partition0))
+    assertEquals(Some(t2p1OffsetAndMetadata), group.offset(topic2Partition1))
+
+    var cachedOffsets = groupMetadataManager.getOffsets(groupId,
+      Some(Seq(topic1Partition0, topic1Partition1, topic2Partition0, topic2Partition1)))
+
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition1).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic2Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic2Partition1).map(_.offset))
+
+    EasyMock.verify(replicaManager)
+
+    group.transitionTo(PreparingRebalance)
+
+    // Subscribe to topic1, offsets of topic2 should be removed
+    val subscriptionTopic1 = new Subscription(List(topic1).asJava)
+
+    group.updateMember(
+      member,
+      List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1).array())),
+      null
+    )
+
+    group.initNextGeneration()
+    group.transitionTo(Stable)
+
+    // expect the offset tombstone
+    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
+      .andReturn(LogAppendInfo.UnknownLogAppendInfo)
+    EasyMock.expectLastCall().times(1)
+
+    EasyMock.replay(partition)
+
+    groupMetadataManager.cleanupGroupMetadata()
+
+    EasyMock.verify(partition)
+    EasyMock.verify(replicaManager)
+
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
+    assert(group.is(Stable))
+
+    assertEquals(Some(t1p0OffsetAndMetadata), group.offset(topic1Partition0))
+    assertEquals(Some(t1p1OffsetAndMetadata), group.offset(topic1Partition1))
+    assertEquals(None, group.offset(topic2Partition0))
+    assertEquals(None, group.offset(topic2Partition1))
+
+    cachedOffsets = groupMetadataManager.getOffsets(groupId,
+      Some(Seq(topic1Partition0, topic1Partition1, topic2Partition0, topic2Partition1)))
+
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition1).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topic2Partition0).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topic2Partition1).map(_.offset))
   }
 
   @Test

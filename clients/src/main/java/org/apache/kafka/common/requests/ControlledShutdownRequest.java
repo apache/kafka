@@ -64,18 +64,8 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ControlledShutdownResponseData response = new ControlledShutdownResponseData();
-        response.setErrorCode(Errors.forException(e).code());
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new ControlledShutdownResponse(response);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
-        }
+        return new ControlledShutdownResponse(new ControlledShutdownResponseData().
+            setErrorCode(Errors.forException(e).code()));
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {

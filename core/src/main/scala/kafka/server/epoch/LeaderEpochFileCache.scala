@@ -84,7 +84,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
       debug(s"Appended new epoch entry $entryToAppend. Cache now contains ${epochs.size} entries.")
     } else if (removedEpochs.size > 1 || removedEpochs.head.startOffset != entryToAppend.startOffset) {
       // Only log a warning if there were non-trivial removals. If the start offset of the new entry
-      // matches the start offfset of the removed epoch, then no data has been written and the truncation
+      // matches the start offset of the removed epoch, then no data has been written and the truncation
       // is expected.
       warn(s"New epoch entry $entryToAppend caused truncation of conflicting entries $removedEpochs. " +
         s"Cache now contains ${epochs.size} entries.")
@@ -123,7 +123,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     * Offset if the latest epoch was requested.
     *
     * During the upgrade phase, where there are existing messages may not have a leader epoch,
-    * if requestedEpoch is < the first epoch cached, UNSUPPORTED_EPOCH_OFFSET will be returned
+    * if requestedEpoch is < the first epoch cached, UNDEFINED_EPOCH_OFFSET will be returned
     * so that the follower falls back to High Water Mark.
     *
     * @param requestedEpoch requested leader epoch

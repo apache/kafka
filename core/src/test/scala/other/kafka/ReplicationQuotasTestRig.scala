@@ -173,9 +173,9 @@ object ReplicationQuotasTestRig {
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
-      println("This is the current replica assignment:\n" + actual.toSeq)
+      println("This is the current replica assignment:\n" + actual.mapValues(_.replicas).toMap.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assignment we ended up with" + actual)
+      println("This is the assignment we ended up with" + actual.mapValues(_.replicas).toMap)
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")

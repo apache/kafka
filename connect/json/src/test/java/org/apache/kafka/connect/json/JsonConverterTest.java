@@ -58,6 +58,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -247,6 +248,27 @@ public class JsonConverterTest {
         BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
         Schema schema = Decimal.builder(2).optional().defaultValue(reference).build();
         String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"optional\": true, \"default\": \"AJw=\", \"parameters\": { \"scale\": \"2\" } }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void numericDecimalToConnect() {
+        BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+        Schema schema = Decimal.schema(2);
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }, \"payload\": 1.56 }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void highPrecisionNumericDecimalToConnect() {
+        // this number is too big to be kept in a float64!
+        BigDecimal reference = new BigDecimal("1.23456789123456789");
+        Schema schema = Decimal.schema(17);
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"17\" } }, \"payload\": 1.23456789123456789 }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, schemaAndValue.value());
@@ -587,7 +609,27 @@ public class JsonConverterTest {
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
                 converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue("expected node to be base64 text", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isTextual());
         assertArrayEquals(new byte[]{0, -100}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
+    }
+
+    @Test
+    public void decimalToNumericJson() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.DECIMAL_FORMAT_CONFIG, DecimalFormat.NUMERIC.name()), false);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, Decimal.schema(2), new BigDecimal(new BigInteger("156"), 2)));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertTrue("expected node to be numeric", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber());
+        assertEquals(new BigDecimal("1.56"), converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).decimalValue());
+    }
+
+    @Test
+    public void decimalToJsonWithoutSchema() throws IOException {
+        assertThrows(
+            "expected data exception when serializing BigDecimal without schema",
+            DataException.class,
+            () -> converter.fromConnectData(TOPIC, null, new BigDecimal(new BigInteger("156"), 2)));
     }
 
     @Test

@@ -97,6 +97,10 @@ public class LeaveGroupResponse extends AbstractResponse {
         return getError(Errors.forCode(data.errorCode()), data.members());
     }
 
+    public Errors topLevelError() {
+        return Errors.forCode(data.errorCode());
+    }
+
     private static Errors getError(Errors topLevelError, List<MemberResponse> memberResponses) {
         if (topLevelError != Errors.NONE) {
             return topLevelError;

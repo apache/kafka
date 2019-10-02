@@ -47,7 +47,7 @@ public class MessageDataGeneratorTest {
                 "      \"nullableVersions\": \"2+\", \"default\": \"null\" }",
                 "  ]",
                 "}")), MessageSpec.class);
-        new MessageDataGenerator().generate(testMessageSpec);
+        new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
     }
 
     @Test
@@ -62,7 +62,7 @@ public class MessageDataGeneratorTest {
             "  ]",
             "}")), MessageSpec.class);
         try {
-            new MessageDataGenerator().generate(testMessageSpec);
+            new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
             fail("Expected MessageDataGenerator#generate to fail");
         } catch (Throwable e) {
             assertTrue("Invalid error message: " + e.getMessage(),
@@ -83,7 +83,7 @@ public class MessageDataGeneratorTest {
                 "  ]",
                 "}")), MessageSpec.class);
         try {
-            new MessageDataGenerator().generate(testMessageSpec);
+            new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
             fail("Expected MessageDataGenerator#generate to fail");
         } catch (RuntimeException e) {
             assertTrue("Invalid error message: " + e.getMessage(),

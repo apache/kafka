@@ -16,15 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -40,6 +44,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -65,7 +70,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,6 +84,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -98,7 +106,7 @@ public class StreamTaskTest {
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
     private final TopicPartition partition2 = new TopicPartition(topic2, 1);
-    private final Set<TopicPartition> partitions = Utils.mkSet(partition1, partition2);
+    private final Set<TopicPartition> partitions = mkSet(partition1, partition2);
 
     private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(new String[]{topic1}, intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(new String[]{topic2}, intDeserializer, intDeserializer);
@@ -146,6 +154,9 @@ public class StreamTaskTest {
     private StreamTask task;
     private long punctuatedAt;
 
+    private static final String APPLICATION_ID = "stream-task-test";
+    private static final long DEFAULT_TIMESTAMP = 1000;
+
     private final Punctuator punctuator = new Punctuator() {
         @Override
         public void punctuate(final long timestamp) {
@@ -185,7 +196,7 @@ public class StreamTaskTest {
             throw new RuntimeException(e);
         }
         return new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "stream-task-test"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
@@ -640,6 +651,78 @@ public class StreamTaskTest {
 
         task.commit();
         assertFalse(task.commitNeeded());
+    }
+
+    @Test
+    public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
+        createTaskWithProcessAndCommit(false);
+
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(Collections.singleton(partition1)).get(partition1).metadata()));
+        // reset times here by creating a new task
+        task = createStatelessTask(createConfig(false));
+
+        task.initializeTaskTime();
+        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
+        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
+    }
+
+    @Test
+    public void shouldRestorePartitionTimeAfterRestartWithEosEnabled() {
+        createTaskWithProcessAndCommit(true);
+
+        // extract the committed metadata from MockProducer
+        final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
+            producer.consumerGroupOffsetsHistory();
+        final String storedMetadata = metadataList.get(0).get(APPLICATION_ID).get(partition1).metadata();
+        final long partitionTime = task.decodeTimestamp(storedMetadata);
+        assertEquals(DEFAULT_TIMESTAMP, partitionTime);
+
+        // since producer and consumer is mocked, we need to "connect" producer and consumer
+        // so we should manually commit offsets here to simulate this "connection"
+        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+        final String encryptedMetadata = task.encodeTimestamp(partitionTime);
+        offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
+        consumer.commitSync(offsetMap);
+
+        // reset times here by creating a new task
+        task = createStatelessTask(createConfig(true));
+
+        task.initializeTaskTime();
+        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
+        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
+    }
+
+    private void createTaskWithProcessAndCommit(final boolean eosEnabled) {
+        task = createStatelessTask(createConfig(eosEnabled));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
+
+        task.process();
+        task.commit();
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeMetadata() {
+        task = createStatelessTask(createConfig(false));
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)));
+    }
+
+    @Test
+    public void shouldReturnUnknownTimestampIfUnknownVersion() {
+        task = createStatelessTask(createConfig(false));
+
+        final byte[] emptyMessage = {StreamTask.LATEST_MAGIC_BYTE + 1};
+        final String encodedString = Base64.getEncoder().encodeToString(emptyMessage);
+        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(encodedString));
+    }
+
+    @Test
+    public void shouldReturnUnknownTimestampIfEmptyMessage() {
+        task = createStatelessTask(createConfig(false));
+
+        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(""));
     }
 
     @Test
@@ -1417,7 +1500,7 @@ public class StreamTaskTest {
 
         task = new StreamTask(
             taskId00,
-            Utils.mkSet(partition1, repartition),
+            mkSet(partition1, repartition),
             topology,
             consumer,
             changelogReader,
@@ -1476,6 +1559,59 @@ public class StreamTaskTest {
         });
         task.commit();
         assertEquals(1, producer.history().size());
+    }
+
+    @Test(expected = ProcessorStateException.class)
+    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
+        final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new AuthorizationException("message"));
+        final StreamTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeStateStores();
+    }
+
+    @Test(expected = ProcessorStateException.class)
+    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
+        final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new KafkaException("message"));
+        final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeStateStores();
+    }
+
+    @Test(expected = WakeupException.class)
+    public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
+        final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new WakeupException());
+        final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeStateStores();
+    }
+
+    private Consumer<byte[], byte[]> mockConsumerWithCommittedException(final RuntimeException toThrow) {
+        return new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+                throw toThrow;
+            }
+        };
+    }
+
+    private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
+        final StateStore stateStore = new MockKeyValueStore(storeName, true);
+
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
+            asList(source1),
+            mkMap(mkEntry(topic1, source1)),
+            singletonList(stateStore),
+            Collections.singletonMap(storeName, topic1));
+
+        return new StreamTask(
+            taskId00,
+            mkSet(partition1),
+            topology,
+            consumer,
+            changelogReader,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {

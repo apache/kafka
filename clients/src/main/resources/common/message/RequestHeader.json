@@ -16,7 +16,10 @@
 {
   "type": "header",
   "name": "RequestHeader",
-  "validVersions": "0",
+  // Version 0 of the RequestHeader is only used by v0 of ControlledShutdownRequest.
+  //
+  // Version 1 is the first version with ClientId.
+  "validVersions": "0-1",
   "fields": [
     { "name": "RequestApiKey", "type": "int16", "versions": "0+",
       "about": "The API key of this request." },
@@ -24,7 +27,7 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
-    { "name": "ClientId", "type": "string", "versions": "0+",
+    { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
       "about": "The client ID string." }
   ]
 }
