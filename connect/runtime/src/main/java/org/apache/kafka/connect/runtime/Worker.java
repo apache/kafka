@@ -134,7 +134,7 @@ public class Worker {
         this.config = config;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
-        this.connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics);
+        this.connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
 
         // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
@@ -838,15 +838,36 @@ public class Worker {
         return workerMetricsGroup;
     }
 
-    class ConnectorStatusMetricsGroup {
+    static class ConnectorStatusMetricsGroup {
         private ConnectMetrics connectMetrics;
         private ConnectMetricsRegistry registry;
         private ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
+        private Herder herder;
+        private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
 
 
-        protected ConnectorStatusMetricsGroup(ConnectMetrics connectMetrics) {
+        protected ConnectorStatusMetricsGroup(
+            ConnectMetrics connectMetrics, ConcurrentMap<ConnectorTaskId, WorkerTask> tasks, Herder herder) {
             this.connectMetrics = connectMetrics;
             this.registry = connectMetrics.registry();
+            this.tasks = tasks;
+            this.herder = herder;
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskCounter(String connName) {
+            return (now) -> tasks.values()
+                .stream()
+                .filter(task -> task.id().connector().equals(connName))
+                .count();
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskStatusCounter(String connName, TaskStatus.State state) {
+            return (now) -> tasks.values()
+                .stream()
+                .filter(task ->
+                    task.id().connector().equals(connName) &&
+                    herder.taskStatus(task.id()).state().equalsIgnoreCase(state.toString()))
+                .count();
         }
 
         protected synchronized void recordTaskAdded(ConnectorTaskId connectorTaskId) {
@@ -859,23 +880,11 @@ public class Worker {
             MetricGroup metricGroup = connectMetrics.group(registry.workerGroupName(),
                 registry.connectorTagName(), connName);
 
-            metricGroup.addValueMetric(registry.connectorTotalTaskCount,
-                now -> tasks.values()
-                    .stream()
-                    .filter(task -> task.id().connector().equals(connName))
-                    .count());
+            metricGroup.addValueMetric(registry.connectorTotalTaskCount, taskCounter(connName));
             for (Map.Entry<MetricNameTemplate, TaskStatus.State> statusMetric : registry.connectorStatusMetrics
                 .entrySet()) {
-                metricGroup.addValueMetric(statusMetric.getKey(),
-                    now -> tasks.values()
-                        .stream()
-                        .filter(task ->
-                            task.id().connector().equals(connName)
-                            && herder.taskStatus(task.id())
-                            .state()
-                            .equalsIgnoreCase(statusMetric.getValue().toString())
-                        )
-                        .count());
+                metricGroup.addValueMetric(statusMetric.getKey(), taskStatusCounter(connName,
+                    statusMetric.getValue()));
             }
             connectorStatusMetrics.put(connectorTaskId.connector(), metricGroup);
         }
