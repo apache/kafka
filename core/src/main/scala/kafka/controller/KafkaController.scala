@@ -563,7 +563,7 @@ class KafkaController(val config: KafkaConfig,
    *       (it is essentially (RS - ORS) - URS)
    *
    *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory
-   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS
+   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = OVRS, RS = [] to all brokers in ORS + OVRS
    *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS
    *      unless a preferred leader election was triggered while the reassignment was happening)
    *   3 Replicas in URS -> Offline (force those replicas out of ISR)
