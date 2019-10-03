@@ -103,7 +103,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read one Record from output topic.
      *
-     * @return Next output as ProducerRecord
+     * @return Next output as TestRecord
      */
     public TestRecord<K, V> readRecord() {
         return driver.readRecord(topic, keyDeserializer, valueDeserializer);
