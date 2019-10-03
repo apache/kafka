@@ -166,9 +166,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private String userEndPoint;
     private int numStandbyReplicas;
 
-    // heuristic to favor balance over stickiness if we know a second rebalance will be required anyway
-    private boolean rebalanceRequired = false;
-
     private TaskManager taskManager;
     @SuppressWarnings("deprecation")
     private org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
@@ -674,21 +671,26 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final Set<TopicPartition> allOwnedPartitions,
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion) {
+        // keep track of whether a 2nd rebalance is unavoidable so we can skip trying to get a completely sticky assignment
+        boolean rebalanceRequired = false;
         final Map<String, Assignment> assignment = new HashMap<>();
-        rebalanceRequired = false;
 
         // within the client, distribute tasks to its owned consumers
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             final ClientState state = clientMetadata.state;
+            Map<String, List<TaskId>> activeTaskAssignments;
 
             // Try to avoid triggering another rebalance by giving active tasks back to their previous owners within a
-            // task, without violating load balance. If we already know another rebalance will be required, or the
+            // client, without violating load balance. If we already know another rebalance will be required, or the
             // client had no owned partitions, try to balance the workload as evenly as possible by interleaving the
             // tasks among consumers and hopefully spreading the heavier subtopologies evenly across threads.
-            final Map<String, List<TaskId>> activeTaskAssignments =
-                rebalanceRequired || state.ownedPartitions().isEmpty() ?
-                    interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers) :
-                    giveTasksBackToConsumers(clientMetadata, partitionsForTask, allOwnedPartitions);
+            if (rebalanceRequired || state.ownedPartitions().isEmpty()) {
+                activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+            } else if ((activeTaskAssignments = tryStickyTaskAssignment(clientMetadata, partitionsForTask, allOwnedPartitions))
+                        .equals(Collections.emptyMap())) {
+                rebalanceRequired = true;
+                activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+            }
 
             addClientAssignments(
                 assignment,
@@ -787,18 +789,21 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     /**
      * Generates an assignment that tries to satisfy two conditions: no active task previously owned by a consumer
-     * be assigned to another, and the number of tasks is evenly distributed throughout the client.
+     * be assigned to another (ie nothing gets revoked), and the number of tasks is evenly distributed throughout
+     * the client.
      * <p>
-     * If it is impossible to satisfy both constraints we abort and return the interleaved assignment instead.
+     * If it is impossible to satisfy both constraints we abort early and return an empty map so we can use a
+     * different assignment strategy that tries to distribute tasks of a single subtopology across different threads.
      *
      * @param metadata metadata for this client
      * @param partitionsForTask mapping from task to its associated partitions
      * @param allOwnedPartitions set of all partitions claimed as owned by the group
      * @return task assignment for the consumers of this client
+     *         empty map if it is not possible to generate a balanced assignment without moving a task to a new consumer
      */
-    Map<String, List<TaskId>> giveTasksBackToConsumers(final ClientMetadata metadata,
-        final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-        final Set<TopicPartition> allOwnedPartitions) {
+    Map<String, List<TaskId>> tryStickyTaskAssignment(final ClientMetadata metadata,
+                                                       final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                       final Set<TopicPartition> allOwnedPartitions) {
         final Map<String, List<TaskId>> assignments = new HashMap<>();
         final LinkedList<TaskId> newTasks = new LinkedList<>();
         final ClientState state = metadata.state;
@@ -807,40 +812,51 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final int maxTasksPerClient = (int) Math.ceil(((double) state.activeTaskCount()) / consumers.size());
 
-        for (final TaskId task : state.activeTasks()) {
-            final String consumer = previousConsumerOfTaskPartitions(partitionsForTask.get(task), state.ownedPartitions(), allOwnedPartitions);
+        // initialize task list for consumers
+        for (final String consumer : consumers) {
+            assignments.put(consumer, new ArrayList<>());
+        }
 
-            // if this task's partitions were not all owned by the same consumer in this client, abort
-            if (consumer == null) {
-                rebalanceRequired = true;
-                return interleaveTasksByGroupId(state.activeTasks(), consumers);
+        for (final TaskId task : state.activeTasks()) {
+            final Set<String> previousConsumers = previousConsumersOfTaskPartitions(partitionsForTask.get(task), state.ownedPartitions(), allOwnedPartitions);
+
+            // If this task's partitions were owned by different consumers, we can't avoid revoking partitions
+            if (previousConsumers.size() > 1) {
+                log.error("The partitions of task {} were claimed as owned by different StreamThreads. " +
+                    "This indicates the mapping from partitions to tasks has changed!", task);
+                return Collections.emptyMap();
             }
 
-            // if this is a new task, or its old consumer no longer exists, it can be freely assigned
-            if (consumer.equals("")) {
+            // If this is a new task, or its old consumer no longer exists, it can be freely (re)assigned
+            if (previousConsumers.isEmpty()) {
+                log.debug("Task {} was not previously owned by any consumers still in the group. It's owner may "
+                + "have died or it may be a new task", task);
                 newTasks.add(task);
             } else {
-                assignments.computeIfAbsent(consumer, c -> new ArrayList<>());
+                final String consumer = previousConsumers.iterator().next();
 
-                // if this task was owned by a consumer that is at capacity, abort
+                // If the previous consumer was from another client, these partitions will have to be revoked
+                if (!consumers.contains(consumer)) {
+                    log.debug("This client was assigned a task {} whose partition(s) were previously owned by another " +
+                        "client, falling back on an interleaved assignment since a rebalance is inevitable.", task);
+                    return Collections.emptyMap();
+                }
+
+                // If this consumer previously owned more tasks than it has capacity for, some must be revoked
                 if (assignments.get(consumer).size() >= maxTasksPerClient) {
-                    rebalanceRequired = true;
-                    return interleaveTasksByGroupId(state.activeTasks(), consumers);
-                } else {
-                    assignments.get(consumer).add(task);
-                    // if we have now reach capacity, remove from set of consumers who need more tasks
-                    if (assignments.get(consumer).size() == maxTasksPerClient) {
-                        unfilledConsumers.remove(consumer);
-                    }
+                    return Collections.emptyMap();
+                }
+
+                assignments.get(consumer).add(task);
+
+                // If we have now reached capacity, remove it from set of consumers who still need more tasks
+                if (assignments.get(consumer).size() == maxTasksPerClient) {
+                    unfilledConsumers.remove(consumer);
                 }
             }
         }
-        // initialize task list for any consumers not yet in the assignment
-        for (final String consumer : unfilledConsumers) {
-            assignments.computeIfAbsent(consumer, c -> new ArrayList<>());
-        }
 
-        // interleave any remaining tasks among the remaining consumers with capacity
+        // Interleave any remaining tasks among the consumers with remaining capacity
         Collections.sort(newTasks);
         while (!newTasks.isEmpty()) {
             if (unfilledConsumers.isEmpty()) {
@@ -848,6 +864,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             final Iterator<String> consumerIt = unfilledConsumers.iterator();
+            // Loop through the unfilled consumers and distribute tasks 
             while (consumerIt.hasNext()) {
                 final String consumer = consumerIt.next();
                 final List<TaskId> consumerAssignment = assignments.get(consumer);
@@ -872,39 +889,26 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @param taskPartitions the TopicPartitions for a single given task
      * @param clientOwnedPartitions the partitions owned by all consumers in a client
      * @param allOwnedPartitions all partitions claimed as owned by any consumer in any client
-     * @return the previous consumer that owned these partitions
-     *         empty string if it is a new task, or its owner is no longer in the group
-     *         null if its previous owner is from a different client or the task's partitions had different owners
+     * @return set of consumer(s) that previously owned the partitions in this task
+     *         empty set signals that it is a new task, or its previous owner is no longer in the group
      */
-    String previousConsumerOfTaskPartitions(final Set<TopicPartition> taskPartitions,
-                                           final Map<TopicPartition, String> clientOwnedPartitions,
-                                           final Set<TopicPartition> allOwnedPartitions) {
-        String firstConsumer = "";
+    Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
+                                                 final Map<TopicPartition, String> clientOwnedPartitions,
+                                                 final Set<TopicPartition> allOwnedPartitions) {
+        // this "consumer" indicates a partition was owned by someone from another client -- we don't really care who
+        final String foreignConsumer = "";
+        Set<String> previousConsumers = new HashSet<>();
+
         for (final TopicPartition tp : taskPartitions) {
-            // initialize the first consumer if this is the first iteration
-            if (firstConsumer != null && firstConsumer.equals("")) {
-                firstConsumer = clientOwnedPartitions.get(tp);
-            }
-
-            final String thisConsumer = clientOwnedPartitions.get(tp);
-
-            // if no one in the client had this partition but someone claims it as owned, abort and return null
-            if (thisConsumer == null && allOwnedPartitions.contains(tp)) {
-                log.debug("Client was assigned partition previously owned by another client, will trigger another rebalance.");
-                return null;
-            }
-
-            // if the partitions of this task claim two different previous owners, abort and return null
-            if (thisConsumer != null && !thisConsumer.equals(firstConsumer)) {
-                log.error("Mapping from task to partitions has changed!");
-                return null;
+            final String currentPartitionConsumer = clientOwnedPartitions.get(tp);
+            if (currentPartitionConsumer != null) {
+                previousConsumers.add(currentPartitionConsumer);
+            } else if (allOwnedPartitions.contains(tp)) {
+                previousConsumers.add(foreignConsumer);
             }
         }
-        // if we haven't found a previous owner, this is either a new partition or its old owner left the group
-        if (firstConsumer == null) {
-            return "";
-        }
-        return firstConsumer;
+
+        return previousConsumers;
     }
 
     // visible for testing
