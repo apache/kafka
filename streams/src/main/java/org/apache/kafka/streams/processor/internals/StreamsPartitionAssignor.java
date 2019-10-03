@@ -368,20 +368,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         if (futureMetadataVersion == UNKNOWN) {
             versionProbing = false;
             clientMetadataMap.remove(futureId);
+        } else if (minReceivedMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
+            versionProbing = true;
+            log.info("Received a future (version probing) subscription (version: {})."
+                    + " Sending assignment back (with supported version {}).",
+                futureMetadataVersion,
+                minSupportedMetadataVersion);
+
         } else {
-            if (minReceivedMetadataVersion >= EARLIEST_PROBEABLE_VERSION) {
-                log.info("Received a future (version probing) subscription (version: {})."
-                        + " Sending assignment back (with supported version {}).",
-                    futureMetadataVersion,
-                    minSupportedMetadataVersion);
-                versionProbing = true;
-            } else {
-                throw new IllegalStateException(
-                    "Received a future (version probing) subscription (version: " + futureMetadataVersion
-                        + ") and an incompatible pre Kafka 2.0 subscription (version: " + minReceivedMetadataVersion
-                        + ") at the same time."
-                );
-            }
+            throw new IllegalStateException(
+                "Received a future (version probing) subscription (version: " + futureMetadataVersion
+                    + ") and an incompatible pre Kafka 2.0 subscription (version: " + minReceivedMetadataVersion
+                    + ") at the same time."
+            );
         }
 
         if (minReceivedMetadataVersion < LATEST_SUPPORTED_VERSION) {
@@ -685,15 +684,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // client had no owned partitions, try to balance the workload as evenly as possible by interleaving the
             // tasks among consumers and hopefully spreading the heavier subtopologies evenly across threads.
             if (rebalanceRequired || state.ownedPartitions().isEmpty()) {
-                activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
-            } else if ((activeTaskAssignments = tryStickyTaskAssignmentWithinClient(clientMetadata, partitionsForTask, allOwnedPartitions))
+                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+            } else if ((activeTaskAssignments = tryStickyAndBalancedTaskAssignmentWithinClient(clientMetadata, partitionsForTask, allOwnedPartitions))
                         .equals(Collections.emptyMap())) {
                 rebalanceRequired = true;
-                activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
             }
 
             final Map<String, List<TaskId>> interleavedStandby =
-                interleaveTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
+                interleaveConsumerTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
             addClientAssignments(
                 assignment,
@@ -726,9 +725,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ClientState state = clientMetadata.state;
 
             final Map<String, List<TaskId>> interleavedActive =
-                interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+                interleaveConsumerTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
             final Map<String, List<TaskId>> interleavedStandby =
-                interleaveTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
+                interleaveConsumerTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
             addClientAssignments(
                 assignment,
@@ -850,9 +849,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return task assignment for the consumers of this client
      *         empty map if it is not possible to generate a balanced assignment without moving a task to a new consumer
      */
-    Map<String, List<TaskId>> tryStickyTaskAssignmentWithinClient(final ClientMetadata metadata,
-                                                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                                  final Set<TopicPartition> allOwnedPartitions) {
+    Map<String, List<TaskId>> tryStickyAndBalancedTaskAssignmentWithinClient(final ClientMetadata metadata,
+                                                                             final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                                             final Set<TopicPartition> allOwnedPartitions) {
         final Map<String, List<TaskId>> assignments = new HashMap<>();
         final LinkedList<TaskId> newTasks = new LinkedList<>();
         final ClientState state = metadata.state;
@@ -871,7 +870,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // If this task's partitions were owned by different consumers, we can't avoid revoking partitions
             if (previousConsumers.size() > 1) {
-                log.error("The partitions of task {} were claimed as owned by different StreamThreads. " +
+                log.warn("The partitions of task {} were claimed as owned by different StreamThreads. " +
                     "This indicates the mapping from partitions to tasks has changed!", task);
                 return Collections.emptyMap();
             }
@@ -942,9 +941,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *         empty set signals that it is a new task, or its previous owner is no longer in the group
      */
     Set<String> previousConsumersOfTaskPartitions(final Set<TopicPartition> taskPartitions,
-                                                 final Map<TopicPartition, String> clientOwnedPartitions,
-                                                 final Set<TopicPartition> allOwnedPartitions) {
-        // this "consumer" indicates a partition was owned by someone from another client -- we don't really care who
+                                                  final Map<TopicPartition, String> clientOwnedPartitions,
+                                                  final Set<TopicPartition> allOwnedPartitions) {
+        // this "foreignConsumer" indicates a partition was owned by someone from another client -- we don't really care who
         final String foreignConsumer = "";
         final Set<String> previousConsumers = new HashSet<>();
 
@@ -961,7 +960,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     // visible for testing
-    static Map<String, List<TaskId>> interleaveTasksByGroupId(final Collection<TaskId> taskIds, final Set<String> consumers) {
+    static Map<String, List<TaskId>> interleaveConsumerTasksByGroupId(final Collection<TaskId> taskIds,
+                                                                      final Set<String> consumers) {
         final LinkedList<TaskId> sortedTasks = new LinkedList<>(taskIds);
         Collections.sort(sortedTasks);
         final Map<String, List<TaskId>> taskIdsForConsumerAssignment = new TreeMap<>();

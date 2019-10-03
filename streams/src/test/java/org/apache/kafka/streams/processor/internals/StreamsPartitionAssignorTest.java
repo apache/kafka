@@ -203,7 +203,7 @@ public class StreamsPartitionAssignorTest {
         final List<TaskId> tasks = asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3);
         Collections.shuffle(tasks);
 
-        final Map<String, List<TaskId>> interleavedTaskIds = StreamsPartitionAssignor.interleaveTasksByGroupId(tasks, consumers);
+        final Map<String, List<TaskId>> interleavedTaskIds = StreamsPartitionAssignor.interleaveConsumerTasksByGroupId(tasks, consumers);
 
         assertThat(interleavedTaskIds, equalTo(assignment));
     }
