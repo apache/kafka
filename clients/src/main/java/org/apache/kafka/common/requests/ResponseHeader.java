@@ -62,6 +62,14 @@ public class ResponseHeader extends AbstractRequestResponse {
         return data;
     }
 
+    @Override
+    public String toString() {
+        return "ResponseHeader("
+            + "correlationId=" + data.correlationId()
+            + ", headerVersion=" + headerVersion
+            + ")";
+    }
+
     public static ResponseHeader parse(ByteBuffer buffer, short headerVersion) {
         return new ResponseHeader(
             new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion),
