@@ -46,15 +46,18 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     }
 
     private ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
-        Struct headerStruct = header.toStruct();
         Message data = data();
-        if (data == null)
+        if (data == null) {
+            Struct headerStruct = header.toStruct();
             return serialize(headerStruct, toStruct(version));
+        }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + data.size(serializationCache, version));
-        headerStruct.writeTo(buffer);
-        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
+        ByteBuffer buffer = ByteBuffer.allocate(header.data().size(serializationCache, version) +
+            data.size(serializationCache, version));
+        ByteBufferAccessor bufferAccessor = new ByteBufferAccessor(buffer);
+        header.data().write(bufferAccessor, serializationCache, version);
+        data.write(bufferAccessor, serializationCache, version);
         buffer.rewind();
         return buffer;
     }

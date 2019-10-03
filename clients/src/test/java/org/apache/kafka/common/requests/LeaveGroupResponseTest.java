@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -131,11 +131,8 @@ public class LeaveGroupResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            ByteBuffer buffer = ByteBuffer.allocate(data.size(version));
-            data.write(new ByteBufferAccessor(buffer), version);
-            buffer.rewind();
+            ByteBuffer buffer = MessageTestUtil.messageToByteBuffer(data, version);
             LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
-
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
 
             if (version >= 1) {

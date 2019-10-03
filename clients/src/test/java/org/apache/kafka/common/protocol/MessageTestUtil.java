@@ -25,11 +25,7 @@ public final class MessageTestUtil {
         int size = message.size(cache, version);
         ByteBuffer bytes = ByteBuffer.allocate(size);
         message.write(new ByteBufferAccessor(bytes), cache, version);
-        bytes.flip();
+        bytes.rewind();
         return bytes;
-    }
-
-    public static void messageFromByteBuffer(ByteBuffer bytes, Message message, short version) {
-        message.read(new ByteBufferAccessor(bytes.duplicate()), version);
     }
 }

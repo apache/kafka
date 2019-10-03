@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -86,9 +86,7 @@ public class OffsetCommitResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
-            ByteBuffer buffer = ByteBuffer.allocate(data.size(version));
-            data.write(new ByteBufferAccessor(buffer), version);
-            buffer.rewind();
+            ByteBuffer buffer = MessageTestUtil.messageToByteBuffer(data, version);
             OffsetCommitResponse response = OffsetCommitResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, response.errorCounts());
 
