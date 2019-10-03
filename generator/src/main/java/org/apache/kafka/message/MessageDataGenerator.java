@@ -702,7 +702,7 @@ public final class MessageDataGenerator {
                             buffer.incrementIndent();
                             if (field.type().isArray()) {
                                 buffer.printf("Object[] _nestedObjects = " +
-                                    "(Object[]) _taggedFields.remove(%d);%n");
+                                    "(Object[]) _taggedFields.remove(%d);%n", field.tag().get());
                                 generateArrayFromStruct(field, presentAndTaggedVersions);
                             } else if (field.type().isBytes()) {
                                 headerGenerator.addImport(MessageGenerator.BYTE_BUFFER_CLASS);
@@ -941,7 +941,7 @@ public final class MessageDataGenerator {
                                     generate(buffer);
                             } else if (field.type().isVariableLength()) {
                                 if (field.type().isArray()) {
-                                    buffer.printf("_writable.writeUnsignedVarint(_cache.get(this.%s) + 1);%n",
+                                    buffer.printf("_writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.%s) + 1);%n",
                                         field.camelCaseName());
                                 } else if (field.type().isBytes()) {
                                     buffer.printf("_writable.writeUnsignedVarint(this.%s.length + 1);%n",

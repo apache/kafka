@@ -36,11 +36,11 @@ public final class ObjectSerializationCache {
         this.map = new IdentityHashMap<>();
     }
 
-    public void setArraySizeInBytes(Object[] o, int size) {
+    public void setArraySizeInBytes(Object o, int size) {
         map.put(o, Integer.valueOf(size));
     }
 
-    public int getArraySizeInBytes(Object[] o) {
+    public int getArraySizeInBytes(Object o) {
         Object value = map.get(o);
         Integer sizeInBytes = (Integer) value;
         return sizeInBytes;

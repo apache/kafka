@@ -25,30 +25,30 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
-public class TestUUIDDataTest {
+public class SimpleExampleMessageTest {
 
     @Test
     public void shouldStoreField() {
         final UUID uuid = UUID.randomUUID();
-        final TestUUIDData out = new TestUUIDData();
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
         Assert.assertEquals(uuid, out.processId());
     }
 
     @Test
     public void shouldDefaultField() {
-        final TestUUIDData out = new TestUUIDData();
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
         Assert.assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
     }
 
     @Test
     public void shouldRoundTripFieldThroughStruct() {
         final UUID uuid = UUID.randomUUID();
-        final TestUUIDData out = new TestUUIDData();
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
 
         final Struct struct = out.toStruct((short) 1);
-        final TestUUIDData in = new TestUUIDData();
+        final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.fromStruct(struct, (short) 1);
 
         Assert.assertEquals(uuid, in.processId());
@@ -57,7 +57,7 @@ public class TestUUIDDataTest {
     @Test
     public void shouldRoundTripFieldThroughBuffer() {
         final UUID uuid = UUID.randomUUID();
-        final TestUUIDData out = new TestUUIDData();
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
 
         ObjectSerializationCache cache = new ObjectSerializationCache();
@@ -65,7 +65,7 @@ public class TestUUIDDataTest {
         out.write(new ByteBufferAccessor(buffer), cache, (short) 1);
         buffer.rewind();
 
-        final TestUUIDData in = new TestUUIDData();
+        final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.read(new ByteBufferAccessor(buffer), (short) 1);
 
         Assert.assertEquals(uuid, in.processId());
@@ -74,10 +74,10 @@ public class TestUUIDDataTest {
     @Test
     public void shouldImplementJVMMethods() {
         final UUID uuid = UUID.randomUUID();
-        final TestUUIDData a = new TestUUIDData();
+        final SimpleExampleMessageData a = new SimpleExampleMessageData();
         a.setProcessId(uuid);
 
-        final TestUUIDData b = new TestUUIDData();
+        final SimpleExampleMessageData b = new SimpleExampleMessageData();
         b.setProcessId(uuid);
 
         Assert.assertEquals(a, b);
