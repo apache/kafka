@@ -686,11 +686,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // tasks among consumers and hopefully spreading the heavier subtopologies evenly across threads.
             if (rebalanceRequired || state.ownedPartitions().isEmpty()) {
                 activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
-            } else if ((activeTaskAssignments = tryStickyTaskAssignment(clientMetadata, partitionsForTask, allOwnedPartitions))
+            } else if ((activeTaskAssignments = tryStickyTaskAssignmentWithinClient(clientMetadata, partitionsForTask, allOwnedPartitions))
                         .equals(Collections.emptyMap())) {
                 rebalanceRequired = true;
                 activeTaskAssignments = interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
             }
+
+            final Map<String, List<TaskId>> interleavedStandby =
+                interleaveTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
             addClientAssignments(
                 assignment,
@@ -699,6 +702,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHostState,
                 allOwnedPartitions,
                 activeTaskAssignments,
+                interleavedStandby,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion);
         }
@@ -723,6 +727,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             final Map<String, List<TaskId>> interleavedActive =
                 interleaveTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+            final Map<String, List<TaskId>> interleavedStandby =
+                interleaveTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
 
             addClientAssignments(
                 assignment,
@@ -731,6 +737,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHostState,
                 allOwnedPartitions,
                 interleavedActive,
+                interleavedStandby,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion);
         }
@@ -744,13 +751,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                       final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
                                       final Set<TopicPartition> allOwnedPartitions,
                                       final Map<String, List<TaskId>> activeTaskAssignments,
+                                      final Map<String, List<TaskId>> standbyTaskAssignments,
                                       final int minUserMetadataVersion,
                                       final int minSupportedMetadataVersion) {
 
-        final ClientState clientState = clientMetadata.state;
-        final Map<String, List<TaskId>> interleavedStandby =
-            interleaveTasksByGroupId(clientState.standbyTasks(), clientMetadata.consumers);
-
+        // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
             final List<TaskId> activeTasksForConsumer = activeTaskAssignments.get(consumer);
 
@@ -759,7 +764,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final List<TaskId> assignedActiveList = new ArrayList<>();
 
             buildAssignedActiveTaskAndPartitionsList(consumer,
-                                                     clientState,
+                                                     clientMetadata.state,
                                                      activeTasksForConsumer,
                                                      partitionsForTask,
                                                      allOwnedPartitions,
@@ -767,7 +772,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                      assignedActiveList);
 
             final Map<TaskId, Set<TopicPartition>> standbyTaskMap =
-                buildStandbyTaskMap(interleavedStandby.get(consumer), partitionsForTask);
+                buildStandbyTaskMap(standbyTaskAssignments.get(consumer), partitionsForTask);
 
             // finally, encode the assignment and insert into map with all assignments
             assignment.put(
@@ -787,6 +792,50 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    private void buildAssignedActiveTaskAndPartitionsList(final String consumer,
+                                                          final ClientState clientState,
+                                                          final List<TaskId> activeTasksForConsumer,
+                                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                          final Set<TopicPartition> allOwnedPartitions,
+                                                          final List<TopicPartition> activePartitionsList,
+                                                          final List<TaskId> assignedActiveList) {
+        final List<AssignedPartition> assignedPartitions = new ArrayList<>();
+
+        // Build up list of all assigned partition-task pairs
+        for (final TaskId taskId : activeTasksForConsumer) {
+            for (final TopicPartition partition : partitionsForTask.get(taskId)) {
+                final String oldOwner = clientState.ownedPartitions().get(partition);
+                final boolean newPartitionForConsumer = oldOwner == null || !oldOwner.equals(consumer);
+
+                // If the partition is new to this consumer but is still owned by another, remove from the assignment
+                // until it has been revoked and can safely be reassigned according the COOPERATIVE protocol
+                if (newPartitionForConsumer && allOwnedPartitions.contains(partition)) {
+                    log.debug("Removing task {} from assignment until it is safely revoked", taskId);
+                    clientState.removeFromAssignment(taskId);
+                    break;
+                } else {
+                    assignedPartitions.add(new AssignedPartition(taskId, partition));
+                }
+            }
+        }
+
+        // Add one copy of a task for each corresponding partition, so the receiver can determine the task <-> tp mapping
+        Collections.sort(assignedPartitions);
+        for (final AssignedPartition partition : assignedPartitions) {
+            assignedActiveList.add(partition.taskId);
+            activePartitionsList.add(partition.partition);
+        }
+    }
+
+    private static Map<TaskId, Set<TopicPartition>> buildStandbyTaskMap(final Collection<TaskId> standbys,
+                                                                        final Map<TaskId, Set<TopicPartition>> partitionsForTask) {
+        final Map<TaskId, Set<TopicPartition>> standbyTaskMap = new HashMap<>();
+        for (final TaskId task : standbys) {
+            standbyTaskMap.put(task, partitionsForTask.get(task));
+        }
+        return standbyTaskMap;
+    }
+
     /**
      * Generates an assignment that tries to satisfy two conditions: no active task previously owned by a consumer
      * be assigned to another (ie nothing gets revoked), and the number of tasks is evenly distributed throughout
@@ -801,9 +850,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return task assignment for the consumers of this client
      *         empty map if it is not possible to generate a balanced assignment without moving a task to a new consumer
      */
-    Map<String, List<TaskId>> tryStickyTaskAssignment(final ClientMetadata metadata,
-                                                       final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                       final Set<TopicPartition> allOwnedPartitions) {
+    Map<String, List<TaskId>> tryStickyTaskAssignmentWithinClient(final ClientMetadata metadata,
+                                                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                                  final Set<TopicPartition> allOwnedPartitions) {
         final Map<String, List<TaskId>> assignments = new HashMap<>();
         final LinkedList<TaskId> newTasks = new LinkedList<>();
         final ClientState state = metadata.state;
@@ -829,8 +878,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // If this is a new task, or its old consumer no longer exists, it can be freely (re)assigned
             if (previousConsumers.isEmpty()) {
-                log.debug("Task {} was not previously owned by any consumers still in the group. It's owner may "
-                + "have died or it may be a new task", task);
+                log.debug("Task {} was not previously owned by any consumers still in the group. It's owner may " +
+                    "have died or it may be a new task", task);
                 newTasks.add(task);
             } else {
                 final String consumer = previousConsumers.iterator().next();
@@ -864,7 +913,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             final Iterator<String> consumerIt = unfilledConsumers.iterator();
-            // Loop through the unfilled consumers and distribute tasks 
+            // Loop through the unfilled consumers and distribute tasks
             while (consumerIt.hasNext()) {
                 final String consumer = consumerIt.next();
                 final List<TaskId> consumerAssignment = assignments.get(consumer);
@@ -897,7 +946,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                  final Set<TopicPartition> allOwnedPartitions) {
         // this "consumer" indicates a partition was owned by someone from another client -- we don't really care who
         final String foreignConsumer = "";
-        Set<String> previousConsumers = new HashSet<>();
+        final Set<String> previousConsumers = new HashSet<>();
 
         for (final TopicPartition tp : taskPartitions) {
             final String currentPartitionConsumer = clientOwnedPartitions.get(tp);
@@ -930,50 +979,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
         return taskIdsForConsumerAssignment;
-    }
-
-    private void buildAssignedActiveTaskAndPartitionsList(final String consumer,
-                                                                 final ClientState clientState,
-                                                                 final List<TaskId> activeTasksForConsumer,
-                                                                 final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                                 final Set<TopicPartition> allOwnedPartitions,
-                                                                 final List<TopicPartition> activePartitionsList,
-                                                                 final List<TaskId> assignedActiveList) {
-        final List<AssignedPartition> assignedPartitions = new ArrayList<>();
-
-        // Build up list of all assigned partition-task pairs
-        for (final TaskId taskId : activeTasksForConsumer) {
-            for (final TopicPartition partition : partitionsForTask.get(taskId)) {
-                final String oldOwner = clientState.ownedPartitions().get(partition);
-                final boolean newPartitionForConsumer = oldOwner == null || !oldOwner.equals(consumer);
-
-                // If the partition is new to this consumer but is still owned by another, remove from the assignment
-                // until it has been revoked and can safely be reassigned according the COOPERATIVE protocol
-                if (newPartitionForConsumer && allOwnedPartitions.contains(partition)) {
-                    log.debug("Removing task {} from assignment until it is safely revoked", taskId);
-                    clientState.removeFromAssignment(taskId);
-                    break;
-                } else {
-                    assignedPartitions.add(new AssignedPartition(taskId, partition));
-                }
-            }
-        }
-
-        // Add one copy of a task for each corresponding partition, so the receiver can determine the task <-> tp mapping
-        Collections.sort(assignedPartitions);
-        for (final AssignedPartition partition : assignedPartitions) {
-            assignedActiveList.add(partition.taskId);
-            activePartitionsList.add(partition.partition);
-        }
-    }
-
-    private static Map<TaskId, Set<TopicPartition>> buildStandbyTaskMap(final Collection<TaskId> standbys,
-        final Map<TaskId, Set<TopicPartition>> partitionsForTask) {
-        final Map<TaskId, Set<TopicPartition>> standbyTaskMap = new HashMap<>();
-        for (final TaskId task : standbys) {
-            standbyTaskMap.put(task, partitionsForTask.get(task));
-        }
-        return standbyTaskMap;
     }
 
     private void validateMetadataVersions(final int receivedAssignmentMetadataVersion,
