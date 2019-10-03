@@ -169,7 +169,7 @@ public class SaslServerAuthenticator implements Authenticator {
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
-        this.enabledMechanisms = new ArrayList<String>(new HashSet<String>(enabledMechanisms));
+        this.enabledMechanisms = new ArrayList<>(new HashSet<>(enabledMechanisms));
         for (String mechanism : this.enabledMechanisms) {
             if (!callbackHandlers.containsKey(mechanism))
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
