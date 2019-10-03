@@ -51,6 +51,11 @@ public class MessageDataGeneratorTest {
         new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
     }
 
+    private void assertStringContains(String substring, String value) {
+        assertTrue("Expected string to contain '" + substring + "', but it was " + value,
+            value.contains(substring));
+    }
+
     @Test
     public void testInvalidNullDefaultForInt() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
@@ -62,9 +67,10 @@ public class MessageDataGeneratorTest {
             "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"default\": \"null\" }",
             "  ]",
             "}")), MessageSpec.class);
-        assertThrows("Invalid default for int32", RuntimeException.class, () -> {
-            new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
-        });
+        assertStringContains("Invalid default for int32",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
     }
 
     @Test
@@ -80,9 +86,10 @@ public class MessageDataGeneratorTest {
                 "  ]",
                 "}")), MessageSpec.class);
 
-        assertThrows("not all versions of this field are nullable", RuntimeException.class, () -> {
-            new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
-        });
+        assertStringContains("not all versions of this field are nullable",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
     }
 
     /**
@@ -91,189 +98,162 @@ public class MessageDataGeneratorTest {
      */
     @Test
     public void testInvalidFieldName() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"fields\": [",
-                "    { \"name\": \"_badName\", \"type\": \"[]int32\", \"versions\": \"0+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected MessageDataGenerator constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("Invalid field name"));
-        }
+        assertStringContains("Invalid field name",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"_badName\", \"type\": \"[]int32\", \"versions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidTagWithoutTaggedVersions() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"tag\": 0 }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("If a tag is specified, taggedVersions must be specified as well."));
-        }
+        assertStringContains("If a tag is specified, taggedVersions must be specified as well.",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"tag\": 0 }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+                fail("Expected the MessageSpec constructor to fail");
+            }).getMessage());
     }
 
     @Test
     public void testInvalidNegativeTag() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", ",
-                "        \"tag\": -1, \"taggedVersions\": \"0+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("Tags cannot be negative"));
-        }
+        assertStringContains("Tags cannot be negative",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", ",
+                    "        \"tag\": -1, \"taggedVersions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidFlexibleVersionsRange() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0-2\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("flexibleVersions must be either none, or an open-ended range"));
-        }
+        assertStringContains("flexibleVersions must be either none, or an open-ended range",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0-2\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidSometimesNullableTaggedField() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
-                "        \"tag\": 0, \"taggedVersions\": \"0+\", \"nullableVersions\": \"1+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("Either all tagged versions must be nullable, or none must be"));
-        }
+        assertStringContains("Either all tagged versions must be nullable, or none must be",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
+                    "        \"tag\": 0, \"taggedVersions\": \"0+\", \"nullableVersions\": \"1+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidTaggedVersionsNotASubetOfVersions() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0-2\", ",
-                "        \"tag\": 0, \"taggedVersions\": \"1+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("taggedVersions must be a subset of versions"));
-        }
+        assertStringContains("taggedVersions must be a subset of versions",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0-2\", ",
+                    "        \"tag\": 0, \"taggedVersions\": \"1+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidTaggedVersionsWithoutTag() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
-                "        \"taggedVersions\": \"1+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("Please specify a tag, or remove the taggedVersions"));
-        }
+        assertStringContains("Please specify a tag, or remove the taggedVersions",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
+                    "        \"taggedVersions\": \"1+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testInvalidTaggedVersionsRange() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
-                "        \"tag\": 0, \"taggedVersions\": \"1-2\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("taggedVersions must be either none, " +
-                    "or an open-ended range"));
-        }
+        assertStringContains("taggedVersions must be either none, or an open-ended range",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
+                    "        \"tag\": 0, \"taggedVersions\": \"1-2\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 
     @Test
     public void testDuplicateTags() {
-        try {
-            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
-                "        \"tag\": 0, \"taggedVersions\": \"0+\" },",
-                "    { \"name\": \"field2\", \"type\": \"int64\", \"versions\": \"0+\", ",
-                "        \"tag\": 0, \"taggedVersions\": \"0+\" }",
-                "  ]",
-                "}")), MessageSpec.class);
-            fail("Expected the MessageSpec constructor to fail");
-        } catch (Exception e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                e.getMessage().contains("duplicate tag"));
-        }
+        assertStringContains("duplicate tag",
+            assertThrows(Throwable.class, () -> {
+                MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"FooBar\",",
+                    "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
+                    "        \"tag\": 0, \"taggedVersions\": \"0+\" },",
+                    "    { \"name\": \"field2\", \"type\": \"int64\", \"versions\": \"0+\", ",
+                    "        \"tag\": 0, \"taggedVersions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class);
+            }).getMessage());
     }
 }
