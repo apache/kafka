@@ -43,6 +43,7 @@ public class RequestHeaderTest {
         assertEquals(0, deserialized.apiVersion());
         assertEquals(correlationId, deserialized.correlationId());
         assertEquals("", deserialized.clientId());
+        assertEquals(0, deserialized.headerVersion());
 
         Struct serialized = deserialized.toStruct();
         ByteBuffer serializedBuffer = toBuffer(serialized);
@@ -54,23 +55,12 @@ public class RequestHeaderTest {
     }
 
     @Test
-    public void testRequestHeader() {
+    public void testRequestHeaderV1() {
         RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
+        assertEquals(1, header.headerVersion());
         ByteBuffer buffer = toBuffer(header.toStruct());
+        assertEquals(10, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
     }
-
-    @Test
-    public void testRequestHeaderWithNullClientId() {
-        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, null, 10);
-        Struct headerStruct = header.toStruct();
-        ByteBuffer buffer = toBuffer(headerStruct);
-        RequestHeader deserialized = RequestHeader.parse(buffer);
-        assertEquals(header.apiKey(), deserialized.apiKey());
-        assertEquals(header.apiVersion(), deserialized.apiVersion());
-        assertEquals(header.correlationId(), deserialized.correlationId());
-        assertEquals("", deserialized.clientId()); // null defaults to ""
-    }
-
 }

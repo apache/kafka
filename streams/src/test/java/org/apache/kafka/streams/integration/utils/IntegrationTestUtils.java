@@ -31,7 +31,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -705,13 +705,13 @@ public class IntegrationTestUtils {
         TestUtils.waitForCondition(() -> {
             for (final KafkaServer server : servers) {
                 final MetadataCache metadataCache = server.dataPlaneRequestProcessor().metadataCache();
-                final Option<UpdateMetadataRequest.PartitionState> partitionInfo =
+                final Option<UpdateMetadataPartitionState> partitionInfo =
                         metadataCache.getPartitionInfo(topic, partition);
                 if (partitionInfo.isEmpty()) {
                     return false;
                 }
-                final UpdateMetadataRequest.PartitionState metadataPartitionState = partitionInfo.get();
-                if (!Request.isValidBrokerId(metadataPartitionState.basePartitionState.leader)) {
+                final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
+                if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
                     return false;
                 }
             }

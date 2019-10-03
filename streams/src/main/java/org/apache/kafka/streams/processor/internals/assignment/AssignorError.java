@@ -14,20 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.errors.CorruptRecordException;
+public enum AssignorError {
+    NONE(0),
+    INCOMPLETE_SOURCE_TOPIC_METADATA(1),
+    VERSION_PROBING(2);
 
-public class InvalidRecordException extends CorruptRecordException {
+    private final int code;
 
-    private static final long serialVersionUID = 1;
-
-    public InvalidRecordException(String s) {
-        super(s);
+    AssignorError(final int code) {
+        this.code = code;
     }
 
-    public InvalidRecordException(String message, Throwable cause) {
-        super(message, cause);
+    public int code() {
+        return code;
     }
 
 }

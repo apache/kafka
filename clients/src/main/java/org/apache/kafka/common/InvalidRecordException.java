@@ -14,27 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.common;
 
-import java.util.List;
+import org.apache.kafka.common.errors.ApiException;
 
-// This class contains the common fields shared between LeaderAndIsrRequest.PartitionState and UpdateMetadataRequest.PartitionState
-public class BasePartitionState {
+public class InvalidRecordException extends ApiException {
 
-    public final int controllerEpoch;
-    public final int leader;
-    public final int leaderEpoch;
-    public final List<Integer> isr;
-    public final int zkVersion;
-    public final List<Integer> replicas;
+    private static final long serialVersionUID = 1;
 
-    BasePartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, List<Integer> replicas) {
-        this.controllerEpoch = controllerEpoch;
-        this.leader = leader;
-        this.leaderEpoch = leaderEpoch;
-        this.isr = isr;
-        this.zkVersion = zkVersion;
-        this.replicas = replicas;
+    public InvalidRecordException(String s) {
+        super(s);
+    }
+
+    public InvalidRecordException(String message, Throwable cause) {
+        super(message, cause);
     }
 
 }

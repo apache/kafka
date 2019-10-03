@@ -34,6 +34,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -837,6 +838,29 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * Delete committed offsets for a set of partitions in a consumer group. This will
+     * succeed at the partition level only if the group is not actively subscribed
+     * to the corresponding topic.
+     *
+     * @param options The options to use when deleting offsets in a consumer group.
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId,
+        Set<TopicPartition> partitions,
+        DeleteConsumerGroupOffsetsOptions options);
+
+    /**
+     * Delete committed offsets for a set of partitions in a consumer group with the default
+     * options. This will succeed at the partition level only if the group is not actively
+     * subscribed to the corresponding topic.
+     *
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+        return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
+    }
+
+    /**
      * Elect the preferred replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -1044,6 +1068,17 @@ public interface Admin extends AutoCloseable {
      */
     ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
                                                                 ListPartitionReassignmentsOptions options);
+
+    /**
+     * Remove members from the consumer group by given member identities.
+     * <p>
+     * For possible error codes, refer to {@link LeaveGroupResponse}.
+     *
+     * @param groupId The ID of the group to remove member from.
+     * @param options The options to carry removing members' information.
+     * @return The MembershipChangeResult.
+     */
+    MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
 
     /**
      * Get the metrics kept by the adminClient

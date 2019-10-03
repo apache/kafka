@@ -149,13 +149,13 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
-        Map<String, KafkaFuture<Void>> createTopicResult = new HashMap<>();
+        Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
             for (final NewTopic newTopic : newTopics) {
                 String topicName = newTopic.name();
 
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 createTopicResult.put(topicName, future);
             }
@@ -165,7 +165,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         for (final NewTopic newTopic : newTopics) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
 
             String topicName = newTopic.name();
             if (allTopics.containsKey(topicName)) {
@@ -343,6 +343,11 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     @Deprecated
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
@@ -354,6 +359,11 @@ public class MockAdminClient extends AdminClient {
             ElectionType electionType,
             Set<TopicPartition> partitions,
             ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

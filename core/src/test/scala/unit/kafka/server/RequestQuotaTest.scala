@@ -27,7 +27,9 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
@@ -227,20 +229,39 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava,
-              2, Seq(brokerId).asJava, true)).asJava,
+            Seq(new LeaderAndIsrPartitionState()
+              .setTopicName(tp.topic)
+              .setPartitionIndex(tp.partition)
+              .setControllerEpoch(Int.MaxValue)
+              .setLeader(brokerId)
+              .setLeaderEpoch(Int.MaxValue)
+              .setIsr(List(brokerId).asJava)
+              .setZkVersion(2)
+              .setReplicas(Seq(brokerId).asJava)
+              .setIsNew(true)).asJava,
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
 
         case ApiKeys.UPDATE_METADATA =>
-          val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
-            Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
+          val partitionState = Seq(new UpdateMetadataPartitionState()
+            .setTopicName(tp.topic)
+            .setPartitionIndex(tp.partition)
+            .setControllerEpoch(Int.MaxValue)
+            .setLeader(brokerId)
+            .setLeaderEpoch(Int.MaxValue)
+            .setIsr(List(brokerId).asJava)
+            .setZkVersion(2)
+            .setReplicas(Seq(brokerId).asJava)).asJava
           val securityProtocol = SecurityProtocol.PLAINTEXT
-          val brokers = Set(new UpdateMetadataRequest.Broker(brokerId,
-            Seq(new UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
-            ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
+          val brokers = Seq(new UpdateMetadataBroker()
+            .setId(brokerId)
+            .setEndpoints(Seq(new UpdateMetadataEndpoint()
+              .setHost("localhost")
+              .setPort(0)
+              .setSecurityProtocol(securityProtocol.id)
+              .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
           new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers)
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>
@@ -379,8 +400,16 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder("test-transactional-id", "test-txn-group", 2, 0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
+          new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-txn-group")
+              .setProducerId(2)
+              .setProducerEpoch(0)
+              .setTopics(TxnOffsetCommitRequest.getTopics(
+                Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+              ))
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -464,6 +493,17 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListPartitionReassignmentsRequest.Builder(
             new ListPartitionReassignmentsRequestData()
           )
+
+        case ApiKeys.OFFSET_DELETE =>
+          new OffsetDeleteRequest.Builder(
+            new OffsetDeleteRequestData()
+              .setGroupId("test-group")
+              .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(
+                Collections.singletonList(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                  .setName("test-topic")
+                  .setPartitions(Collections.singletonList(
+                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
+                      .setPartitionIndex(0)))).iterator())))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -550,7 +590,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(response).throttleTimeMs
       case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(response).throttleTimeMs
       case ApiKeys.END_TXN => new EndTxnResponse(response).throttleTimeMs
-      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response).throttleTimeMs
+      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response, ApiKeys.TXN_OFFSET_COMMIT.latestVersion).throttleTimeMs
       case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
@@ -570,6 +610,7 @@ class RequestQuotaTest extends BaseRequestTest {
         new IncrementalAlterConfigsResponse(response, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion()).throttleTimeMs
       case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(response).throttleTimeMs
       case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(response).throttleTimeMs
+      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(response).throttleTimeMs()
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

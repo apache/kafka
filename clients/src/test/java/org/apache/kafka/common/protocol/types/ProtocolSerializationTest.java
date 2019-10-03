@@ -68,31 +68,32 @@ public class ProtocolSerializationTest {
 
     @Test
     public void testSimple() {
-        check(Type.BOOLEAN, false);
-        check(Type.BOOLEAN, true);
-        check(Type.INT8, (byte) -111);
-        check(Type.INT16, (short) -11111);
-        check(Type.INT32, -11111111);
-        check(Type.INT64, -11111111111L);
-        check(Type.STRING, "");
-        check(Type.STRING, "hello");
-        check(Type.STRING, "A\u00ea\u00f1\u00fcC");
-        check(Type.NULLABLE_STRING, null);
-        check(Type.NULLABLE_STRING, "");
-        check(Type.NULLABLE_STRING, "hello");
-        check(Type.BYTES, ByteBuffer.allocate(0));
-        check(Type.BYTES, ByteBuffer.wrap("abcd".getBytes()));
-        check(Type.NULLABLE_BYTES, null);
-        check(Type.NULLABLE_BYTES, ByteBuffer.allocate(0));
-        check(Type.NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()));
-        check(Type.VARINT, Integer.MAX_VALUE);
-        check(Type.VARINT, Integer.MIN_VALUE);
-        check(Type.VARLONG, Long.MAX_VALUE);
-        check(Type.VARLONG, Long.MIN_VALUE);
-        check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
-        check(new ArrayOf(Type.STRING), new Object[] {});
-        check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
-        check(ArrayOf.nullable(Type.STRING), null);
+        check(Type.BOOLEAN, false, "BOOLEAN");
+        check(Type.BOOLEAN, true, "BOOLEAN");
+        check(Type.INT8, (byte) -111, "INT8");
+        check(Type.INT16, (short) -11111, "INT16");
+        check(Type.INT32, -11111111, "INT32");
+        check(Type.INT64, -11111111111L, "INT64");
+        check(Type.STRING, "", "STRING");
+        check(Type.STRING, "hello", "STRING");
+        check(Type.STRING, "A\u00ea\u00f1\u00fcC", "STRING");
+        check(Type.NULLABLE_STRING, null, "NULLABLE_STRING");
+        check(Type.NULLABLE_STRING, "", "NULLABLE_STRING");
+        check(Type.NULLABLE_STRING, "hello", "NULLABLE_STRING");
+        check(Type.BYTES, ByteBuffer.allocate(0), "BYTES");
+        check(Type.BYTES, ByteBuffer.wrap("abcd".getBytes()), "BYTES");
+        check(Type.NULLABLE_BYTES, null, "NULLABLE_BYTES");
+        check(Type.NULLABLE_BYTES, ByteBuffer.allocate(0), "NULLABLE_BYTES");
+        check(Type.NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()), "NULLABLE_BYTES");
+        check(Type.VARINT, Integer.MAX_VALUE, "VARINT");
+        check(Type.VARINT, Integer.MIN_VALUE, "VARINT");
+        check(Type.VARLONG, Long.MAX_VALUE, "VARLONG");
+        check(Type.VARLONG, Long.MIN_VALUE, "VARLONG");
+        check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4}, "ARRAY(INT32)");
+        check(new ArrayOf(Type.STRING), new Object[] {}, "ARRAY(STRING)");
+        check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"},
+                "ARRAY(STRING)");
+        check(ArrayOf.nullable(Type.STRING), null, "ARRAY(STRING)");
     }
 
     @Test
@@ -105,7 +106,7 @@ public class ProtocolSerializationTest {
                 if (!f.def.type.isNullable())
                     fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                assertFalse(f.def.type.isNullable());
+                assertFalse(f.toString() + " should not be nullable", f.def.type.isNullable());
             } finally {
                 this.struct.set(f, o);
             }
@@ -259,12 +260,13 @@ public class ProtocolSerializationTest {
         return read;
     }
 
-    private void check(Type type, Object obj) {
+    private void check(Type type, Object obj, String expectedTypeName) {
         Object result = roundtrip(type, obj);
         if (obj instanceof Object[]) {
             obj = Arrays.asList((Object[]) obj);
             result = Arrays.asList((Object[]) result);
         }
+        assertEquals(expectedTypeName, type.toString());
         assertEquals("The object read back should be the same as what was written.", obj, result);
     }
 

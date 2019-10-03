@@ -14,28 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin;
 
-package org.apache.kafka.common.record;
-
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.junit.Test;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-/**
- * Non-parameterized MemoryRecords tests.
- */
-public class SimpleMemoryRecordsTest {
+public class RemoveMemberFromConsumerGroupOptionsTest {
 
     @Test
-    public void testToStringIfLz4ChecksumIsCorrupted() {
-        long timestamp = 1000000;
-        MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
-                new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()),
-                new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()));
-        // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
-        int lz4ChecksumOffset = 6;
-        memoryRecords.buffer().array()[DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset] = 0;
-        assertEquals("[(record=CORRUPTED)]", memoryRecords.toString());
-    }
+    public void testConstructor() {
+        List<String> groupInstanceIds = Collections.singletonList("instance-1");
 
+        RemoveMemberFromConsumerGroupOptions options = new RemoveMemberFromConsumerGroupOptions(groupInstanceIds);
+
+        assertEquals(Collections.singletonList(
+            new MemberIdentity().setGroupInstanceId("instance-1")), options.getMembers());
+    }
 }

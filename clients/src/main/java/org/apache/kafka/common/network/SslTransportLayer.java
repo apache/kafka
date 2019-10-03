@@ -152,7 +152,7 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Sends a SSL close message and closes socketChannel.
+    * Sends an SSL close message and closes socketChannel.
     */
     @Override
     public void close() throws IOException {
@@ -737,7 +737,7 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-     * returns a SSL Session after the handshake is established
+     * returns an SSL Session after the handshake is established
      * throws IllegalStateException if the handshake is not established
      */
     public SSLSession sslSession() throws IllegalStateException {

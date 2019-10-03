@@ -209,6 +209,33 @@ public class RecordQueueTest {
         assertEquals(queue.partitionTime(), 3L);
     }
 
+    @Test
+    public void shouldSetTimestampAndRespectMaxTimestampPolicy() {
+        assertTrue(queue.isEmpty());
+        assertEquals(0, queue.size());
+        assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        queue.setPartitionTime(150L);
+
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 200, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 100, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 300, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 400, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
+
+        assertEquals(150L, queue.partitionTime());
+
+        queue.addRawRecords(list1);
+
+        assertEquals(200L, queue.partitionTime());
+
+        queue.setPartitionTime(500L);
+        queue.poll();
+        assertEquals(500L, queue.partitionTime());
+
+        queue.poll();
+        assertEquals(500L, queue.partitionTime());
+    }
+
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);

@@ -333,6 +333,16 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    public String adminEndpoint(String resource) throws IOException {
+        String url = connectCluster.stream()
+                .map(WorkerHandle::adminUrl)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new IOException("Admin endpoint is disabled."))
+                .toString();
+        return url + resource;
+    }
+
     public String endpointForResource(String resource) throws IOException {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)
@@ -369,6 +379,28 @@ public class EmbeddedConnectCluster {
         } else {
             try (InputStream is = httpCon.getErrorStream()) {
                 log.info("PUT error response for URL={} is {}", url, responseToString(is));
+            }
+        }
+        return httpCon.getResponseCode();
+    }
+
+    public int executePost(String url, String body, Map<String, String> headers) throws IOException {
+        log.debug("Executing POST request to URL={}. Payload={}", url, body);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestProperty("Content-Type", "application/json");
+        headers.forEach(httpCon::setRequestProperty);
+        httpCon.setRequestMethod("POST");
+        try (OutputStreamWriter out = new OutputStreamWriter(httpCon.getOutputStream())) {
+            out.write(body);
+        }
+        if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
+            try (InputStream is = httpCon.getInputStream()) {
+                log.info("POST response for URL={} is {}", url, responseToString(is));
+            }
+        } else {
+            try (InputStream is = httpCon.getErrorStream()) {
+                log.info("POST error response for URL={} is {}", url, responseToString(is));
             }
         }
         return httpCon.getResponseCode();
