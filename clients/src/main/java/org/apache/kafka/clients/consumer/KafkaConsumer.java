@@ -1213,7 +1213,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            // Record poll start
             this.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
 
             // poll for new data until the timeout expires
@@ -1222,6 +1221,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 if (includeMetadataInTimeout) {
                     if (!updateAssignmentMetadataIfNeeded(timer)) {
+                        this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
                         return ConsumerRecords.empty();
                     }
                 } else {
@@ -1242,11 +1242,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
+                    this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
             } while (timer.notExpired());
 
-            // Record poll end
             this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
 
             return ConsumerRecords.empty();
@@ -2414,7 +2414,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metrics = metrics;
 
             String metricGroupName = metricGrpPrefix + "-metrics";
-            Measurable lastHeartbeat = (mConfig, now) -> {
+            Measurable lastPoll = (mConfig, now) -> {
                 if (lastPollMs == 0L)
                     // if no poll is ever triggered, just return -1.
                     return -1d;
@@ -2424,7 +2424,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
                     metricGroupName,
                     "The number of seconds since the last poll() invocation."),
-                    lastHeartbeat);
+                    lastPoll);
 
             this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
             this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
