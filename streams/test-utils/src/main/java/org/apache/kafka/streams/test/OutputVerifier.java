@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * Helper class to verify topology result records.
  *
- * @deprecated use methods of {@link TestOutputTopic} and standard assertion libraries instead
+ * @deprecated Since 2.4 use methods of {@link TestOutputTopic} and standard assertion libraries instead
  *
  * @see TopologyTestDriver
  */

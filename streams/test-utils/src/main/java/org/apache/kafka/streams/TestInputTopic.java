@@ -29,7 +29,7 @@ import java.util.StringJoiner;
  * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
  * To use {@code TestInputTopic} create new class {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}
  * In actual test code, you can pipe new message values, keys and values or list of {@link KeyValue}
- * You need to have own TestInputTopic object for each topic.
+ * You need a TestInputTopic object for each topic.
  *
  *
  * <h2>Processing messages</h2>

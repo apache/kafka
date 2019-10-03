@@ -408,8 +408,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    //Testing already deprecatd methods until methods removed
+    @Deprecated
     @Test
     public void shouldThrowForUnknownTopicDeprecated() {
         final String unknownTopic = "unknownTopic";
@@ -459,9 +458,8 @@ public class TopologyTestDriverTest {
     }
 
 
-    @SuppressWarnings("deprecation")
-    //Testing already deprecatd methods until methods removed
-    //Test not migrated to non-depreacted methods, topic handling not based on record any more
+    @Deprecated
+    //Test not migrated to non-deprecated methods, topic handling not based on record any more
     @Test
     public void shouldSendRecordViaCorrectSourceTopicDeprecated() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
@@ -488,8 +486,7 @@ public class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
-    @SuppressWarnings("deprecation")
-    //Testing already deprecatd methods until methods removed
+    @Deprecated
     @Test
     public void shouldUseSourceSpecificDeserializersDeprecated() {
         final Topology topology = new Topology();
@@ -650,9 +647,8 @@ public class TopologyTestDriverTest {
         assertThat(result2.getValue(), equalTo(source2Value));
     }
 
-    @SuppressWarnings("deprecation")
-    //Testing already deprecatd methods until methods removed
-    //Test not migrated to non-depreacted methods, List processing now in TestInputTopic
+    @Deprecated
+    //Test not migrated to non-deprecated methods, List processing now in TestInputTopic
     @Test
     public void shouldProcessConsumerRecordList() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);

@@ -101,7 +101,7 @@ inputTopic.pipeInput("key", 42L);
         </pre>
             <p>
                 To verify the output, you can use <code>TestOutputTopic</code>
-                where you configure topic and the corresponding deserializers during initialization.
+                where you configure the topic and the corresponding deserializers during initialization.
                 It offers helper methods to read only certain parts of the result records or the collection of records.
                 For example, you can validate returned <code>KeyValue</code> with standard assertions
                 if you only care about the key and value, but not the timestamp of the result record.

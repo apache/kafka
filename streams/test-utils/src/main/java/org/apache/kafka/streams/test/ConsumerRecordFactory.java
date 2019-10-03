@@ -33,7 +33,7 @@ import java.util.Objects;
  * Factory to create {@link ConsumerRecord consumer records} for a single single-partitioned topic with given key and
  * value {@link Serializer serializers}.
  *
- * @deprecated use methods of {@link TestInputTopic} instead
+ * @deprecated Since 2.4 use methods of {@link TestInputTopic} instead
  *
  * @param <K> the type of the key
  * @param <V> the type of the value

@@ -25,7 +25,7 @@ import java.time.Instant;
 import java.util.StringJoiner;
 
 /**
- * A key/value pair to be send to or received from Kafka. This also consists header information
+ * A key/value pair to be sent to or received from Kafka. This also consists header information
  * and a timestamp. If record do not contain a timestamp, the TestInputTopic will use auto advance time logic.
  */
 public class TestRecord<K, V> {

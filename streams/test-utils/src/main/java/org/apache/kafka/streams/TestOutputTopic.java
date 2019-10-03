@@ -30,7 +30,7 @@ import java.util.StringJoiner;
  * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
  * To use {@code TestOutputTopic} create new class {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}
  * In actual test code, you can read message values, keys, {@link KeyValue} or {@link TestRecord}
- * You need to have own TestOutputTopic for each topic.
+ * You need a TestOutputTopic object for each topic.
  * <p>
  * If you need to test key, value and headers, use {@link #readRecord()} methods.
  * Using {@link #readKeyValue()} you get directly KeyValue, but have no access to headers any more

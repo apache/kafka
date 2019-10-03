@@ -109,8 +109,6 @@ public class TestTopicsTest {
 
     @Test
     public void testValueList() {
-        //Note using here string key serde even other topic is expecting long
-        //Does not affect when key not used
         final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         final List<String> inputList = Arrays.asList("This", "is", "an", "example");
