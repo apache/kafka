@@ -136,7 +136,8 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("%n");
         generateToString();
         buffer.printf("%n");
-        generateHeaderVersion();
+        generateHeaderVersion("request");
+        generateHeaderVersion("response");
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
@@ -247,8 +248,8 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateHeaderVersion() {
-        buffer.printf("public short headerVersion(short version) {%n");
+    private void generateHeaderVersion(String type) {
+        buffer.printf("public short %sHeaderVersion(short version) {%n", type);
         buffer.incrementIndent();
         buffer.printf("switch (apiKey) {%n");
         buffer.incrementIndent();
@@ -264,21 +265,19 @@ public final class ApiMessageTypeGenerator {
                 buffer.printf("}%n");
             }
             ApiData data = entry.getValue();
-            if (data.requestSpec == null) {
-                throw new RuntimeException("failed to find request for API key " + apiKey);
+            MessageSpec spec = null;
+            if (type.equals("request")) {
+                spec = data.requestSpec;
+            } else if (type.equals("response")) {
+                spec = data.responseSpec;
+            } else {
+                throw new RuntimeException("Invalid type " + type + " for generateHeaderVersion");
             }
-            if (data.responseSpec == null) {
-                throw new RuntimeException("failed to find response for API key " + apiKey);
+            if (spec == null) {
+                throw new RuntimeException("failed to find " + type + " for API key " + apiKey);
             }
-            if (!data.requestSpec.flexibleVersions().equals(
-                    data.responseSpec.flexibleVersions())) {
-                throw new RuntimeException("for API key " + apiKey + ", the flexibleVersions " +
-                    "specified for the request do not match those of the response.  " +
-                    "The request's flexibleVersions are " + data.requestSpec.flexibleVersions() +
-                    "; the response's flexibleVersions are " + data.responseSpec.flexibleVersions());
-            }
-            VersionConditional.forVersions(data.requestSpec.flexibleVersions(),
-                data.requestSpec.validVersions()).
+            VersionConditional.forVersions(spec.flexibleVersions(),
+                spec.validVersions()).
                 ifMember(__ -> {
                     buffer.printf("return (short) 2;%n");
                 }).

@@ -175,7 +175,7 @@ public class NetworkClientTest {
         assertEquals(1, networkClient.inFlightRequestCount());
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
-                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -459,7 +459,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
-                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, 100);
@@ -557,7 +557,7 @@ public class NetworkClientTest {
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
         sendResponse(new ResponseHeader(correlationId,
-            PRODUCE.headerVersion(PRODUCE.latestVersion())),
+            PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
             resp);
     }
 

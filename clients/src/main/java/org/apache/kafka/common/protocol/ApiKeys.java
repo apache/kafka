@@ -336,8 +336,12 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
-    public short headerVersion(short apiVersion) {
-        return ApiMessageType.fromApiKey(id).headerVersion(apiVersion);
+    public short requestHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).requestHeaderVersion(apiVersion);
+    }
+
+    public short responseHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).responseHeaderVersion(apiVersion);
     }
 
     private static String toHtml() {

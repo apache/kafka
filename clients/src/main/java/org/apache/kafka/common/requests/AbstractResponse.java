@@ -46,7 +46,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
-        ResponseHeader header = new ResponseHeader(correlationId, apiKey.headerVersion(version));
+        ResponseHeader header =
+            new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
         return serialize(header.toStruct(), toStruct(version));
     }
 

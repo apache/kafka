@@ -76,11 +76,22 @@ public class ApiMessageTypeTest {
 
     @Test
     public void testHeaderVersion() {
-        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 0));
-        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 1));
-        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 2));
-        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion((short) 0));
-        assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion((short) 1));
-        assertEquals((short) 1, ApiMessageType.CREATE_PARTITIONS.headerVersion((short) 0));
+        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 0));
+        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 0));
+
+        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 1));
+        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 1));
+
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 0));
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 0));
+
+        assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 1));
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 1));
+
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
+        assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
+
+        assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 6));
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 6));
     }
 }
