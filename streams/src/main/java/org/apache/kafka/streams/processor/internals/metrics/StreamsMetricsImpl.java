@@ -260,10 +260,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public Map<String, String> taskLevelTagMap(final String threadId, final String taskName, final String... tags) {
-        final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
-        return addTags(tagMap, tags);
-    }
 
     public Map<String, String> nodeLevelTagMap(final String threadId, final String taskName, final String processorNodeName) {
         final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
