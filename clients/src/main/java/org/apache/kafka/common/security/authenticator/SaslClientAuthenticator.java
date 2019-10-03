@@ -150,7 +150,7 @@ public class SaslClientAuthenticator implements Authenticator {
         this.host = host;
         this.servicePrincipal = servicePrincipal;
         this.mechanism = mechanism;
-        this.correlationId = -1;
+        this.correlationId = 0;
         this.transportLayer = transportLayer;
         this.configs = configs;
         this.saslAuthenticateVersion = DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER;
