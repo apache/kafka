@@ -119,6 +119,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1558,43 +1559,37 @@ public class SaslAuthenticatorTest {
         configureMechanisms(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 Arrays.asList(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM));
         server = createEchoServer(securityProtocol);
-        try {
-            createClientConnection(securityProtocol, node);
-            checkClientConnection(node);
-            server.verifyAuthenticationMetrics(1, 0);
-            server.verifyReauthenticationMetrics(0, 0);
-            /*
-             * Now sleep long enough so that the next write will cause re-authentication,
-             * which we expect to succeed.
-             */
-            time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-            checkClientConnection(node);
-            server.verifyAuthenticationMetrics(1, 0);
-            server.verifyReauthenticationMetrics(1, 0);
-            /*
-             * Now sleep long enough so that the next write will cause re-authentication,
-             * but this time we expect re-authentication to not occur since it has been too
-             * soon. The checkClientConnection() call should return an error saying it
-             * expected the one byte-plus-node response but got the SaslHandshakeRequest
-             * instead
-             */
-            time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-            NetworkTestUtils.checkClientConnection(selector, node, 1, 1);
-            fail("Expected a failure when trying to re-authenticate to quickly, but that did not occur");
-        } catch (AssertionError e) {
-            String expectedResponseTextRegex = "\\w-" + node;
-            String receivedResponseTextRegex = ".*" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
-            assertTrue(
-                    "Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, " +
-                    "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
-                    "should not have: " + e,
-                    e.getMessage().matches(
-                            ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + "]>"));
-            server.verifyReauthenticationMetrics(1, 0); // unchanged
-        } finally { 
-            selector.close();
-            selector = null;
-        }
+        createClientConnection(securityProtocol, node);
+        checkClientConnection(node);
+        server.verifyAuthenticationMetrics(1, 0);
+        server.verifyReauthenticationMetrics(0, 0);
+        /*
+         * Now sleep long enough so that the next write will cause re-authentication,
+         * which we expect to succeed.
+         */
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        checkClientConnection(node);
+        server.verifyAuthenticationMetrics(1, 0);
+        server.verifyReauthenticationMetrics(1, 0);
+        /*
+         * Now sleep long enough so that the next write will cause re-authentication,
+         * but this time we expect re-authentication to not occur since it has been too
+         * soon. The checkClientConnection() call should return an error saying it
+         * expected the one byte-plus-node response but got the SaslHandshakeRequest
+         * instead
+         */
+        time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+        AssertionError exception = assertThrows(AssertionError.class,
+            () -> NetworkTestUtils.checkClientConnection(selector, node, 1, 1));
+        String expectedResponseTextRegex = "\\w-" + node;
+        String receivedResponseTextRegex = ".*" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+        System.out.println(exception.getMessage());
+        assertTrue("Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, " +
+            "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
+            "should not have: " + exception,
+            exception.getMessage().matches(
+                ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + "]>"));
+        server.verifyReauthenticationMetrics(1, 0); // unchanged
     }
 
     /**
