@@ -16,12 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
@@ -32,12 +28,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Merger;
-import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreSupplier;
@@ -88,37 +78,6 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
         return aggregate(initializer, Materialized.as(storeSupplier.get().name()));
     }
 
-    //TODO: implement windowed stores
-    @Override
-    public KTable<Windowed<K>, T> aggregate(final Initializer initializer,
-                                            final Merger sessionMerger,
-                                            final SessionWindows sessionWindows,
-                                            final Materialized materialized) {
-        return null;
-    }
-
-    //TODO: implement windowed stores
-    @Override
-    public KTable<Windowed<K>, T> aggregate(final Initializer initializer,
-                                            final Merger sessionMerger,
-                                            final SessionWindows sessionWindows,
-                                            final StoreSupplier storeSupplier) {
-        return null;
-    }
-
-    //TODO: implement windowed stores
-    @Override
-    public KTable<Windowed<K>, T> aggregate(final Initializer initializer, final Windows windows,
-                                            final Materialized materialized) {
-        return null;
-    }
-
-    //TODO: implement windowed stores
-    @Override
-    public KTable<Windowed<K>, T> aggregate(final Initializer initializer, final Windows windows,
-                                            final StoreSupplier storeSupplier) {
-        return null;
-    }
 
     private KTable<K, T> doAggregate(final Initializer<T> initializer,
                                      final NamedInternal named,

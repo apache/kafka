@@ -21,7 +21,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -95,8 +94,9 @@ public class KCogroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterMaterializedOnAggregate() throws Exception {
-        cogroupedStream.aggregate(SUM_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes,byte[]>>) null);
+        cogroupedStream.aggregate(SUM_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
     }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterStoreSupplierOnAggregate() throws Exception {
         cogroupedStream.aggregate(SUM_INITIALIZER, (StoreSupplier<KeyValueStore>) null);
