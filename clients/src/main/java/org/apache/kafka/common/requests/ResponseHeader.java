@@ -16,31 +16,30 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.types.BoundField;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.message.ResponseHeaderData;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
-import static org.apache.kafka.common.protocol.types.Type.INT32;
 
 /**
  * A response header in the kafka protocol.
  */
 public class ResponseHeader extends AbstractRequestResponse {
-    public static final Schema SCHEMA = new Schema(
-            new Field("correlation_id", INT32, "The user-supplied value passed in with the request"));
-    private static final BoundField CORRELATION_KEY_FIELD = SCHEMA.get("correlation_id");
+    private final ResponseHeaderData data;
+    private final short headerVersion;
 
-    private final int correlationId;
-
-    public ResponseHeader(Struct struct) {
-        correlationId = struct.getInt(CORRELATION_KEY_FIELD);
+    public ResponseHeader(Struct struct, short headerVersion) {
+        this(new ResponseHeaderData(struct, headerVersion), headerVersion);
     }
 
-    public ResponseHeader(int correlationId) {
-        this.correlationId = correlationId;
+    public ResponseHeader(int correlationId, short headerVersion) {
+        this(new ResponseHeaderData().setCorrelationId(correlationId), headerVersion);
+    }
+
+    public ResponseHeader(ResponseHeaderData data, short headerVersion) {
+        this.data = data;
+        this.headerVersion = headerVersion;
     }
 
     public int sizeOf() {
@@ -48,17 +47,24 @@ public class ResponseHeader extends AbstractRequestResponse {
     }
 
     public Struct toStruct() {
-        Struct struct = new Struct(SCHEMA);
-        struct.set(CORRELATION_KEY_FIELD, correlationId);
-        return struct;
+        return data.toStruct(headerVersion);
     }
 
     public int correlationId() {
-        return correlationId;
+        return this.data.correlationId();
     }
 
-    public static ResponseHeader parse(ByteBuffer buffer) {
-        return new ResponseHeader(SCHEMA.read(buffer));
+    public short headerVersion() {
+        return headerVersion;
     }
 
+    public ResponseHeaderData data() {
+        return data;
+    }
+
+    public static ResponseHeader parse(ByteBuffer buffer, short headerVersion) {
+        return new ResponseHeader(
+            new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion),
+                headerVersion);
+    }
 }

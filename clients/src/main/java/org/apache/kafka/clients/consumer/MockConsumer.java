@@ -460,7 +460,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("deprecation")
     @Override
     public synchronized void close(long timeout, TimeUnit unit) {
-        ensureNotClosed();
         this.closed = true;
     }
 

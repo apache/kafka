@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -155,16 +156,23 @@ public class NetworkClientTest {
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                        Collections.emptyMap());
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+                PRODUCE.latestVersion(),
+                PRODUCE.latestVersion(),
+                (short) 1,
+                1000,
+                Collections.emptyMap(),
+                null);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(
                 node.idString(), builder, time.milliseconds(), true, defaultRequestTimeoutMs, handler);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
-        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        ResponseHeader respHeader =
+            new ResponseHeader(request.correlationId(),
+                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
@@ -183,7 +191,7 @@ public class NetworkClientTest {
 
     private void setExpectedApiVersionsResponse(ApiVersionsResponse response) {
         short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
-        ByteBuffer buffer = response.serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        ByteBuffer buffer = response.serialize(ApiKeys.API_VERSIONS, apiVersionsResponseVersion, 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
@@ -235,15 +243,22 @@ public class NetworkClientTest {
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
         awaitReady(client, node);
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-            Collections.emptyMap());
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+            PRODUCE.latestVersion(),
+            PRODUCE.latestVersion(),
+            (short) 1,
+            1000,
+            Collections.emptyMap(),
+            null);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
-        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        ResponseHeader respHeader =
+            new ResponseHeader(request.correlationId(),
+                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, 100);
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -288,7 +303,7 @@ public class NetworkClientTest {
     public void testThrottlingNotEnabledForConnectionToOlderBroker() {
         // Instrument the test so that the max protocol version for PRODUCE returned from the node is 5 and thus
         // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(ApiKeys.PRODUCE, (short) 5));
+        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(PRODUCE, (short) 5));
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
@@ -316,8 +331,7 @@ public class NetworkClientTest {
     }
 
 
-    private void sendResponse(int correlationId, Struct response) {
-        ResponseHeader respHeader = new ResponseHeader(correlationId);
+    private void sendResponse(ResponseHeader respHeader, Struct response) {
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + response.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -328,10 +342,12 @@ public class NetworkClientTest {
     }
 
     private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
-        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
-        sendResponse(correlationId, resp);
+        sendResponse(new ResponseHeader(correlationId,
+            PRODUCE.headerVersion(PRODUCE.latestVersion())),
+            resp);
     }
 
     @Test

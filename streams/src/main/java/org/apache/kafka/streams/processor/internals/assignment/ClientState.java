@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.HashSet;
@@ -29,15 +31,25 @@ public class ClientState {
     private final Set<TaskId> prevStandbyTasks;
     private final Set<TaskId> prevAssignedTasks;
 
-    private int capacity;
+    private final Map<String, Set<TaskId>> prevActiveTasksByConsumer;
+    private final Map<String, Set<TaskId>> prevStandbyTasksByConsumer;
 
+    private int capacity;
 
     public ClientState() {
         this(0);
     }
 
     ClientState(final int capacity) {
-        this(new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), capacity);
+        this(new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashSet<>(),
+             new HashMap<>(),
+             new HashMap<>(),
+             capacity);
     }
 
     private ClientState(final Set<TaskId> activeTasks,
@@ -46,6 +58,8 @@ public class ClientState {
                         final Set<TaskId> prevActiveTasks,
                         final Set<TaskId> prevStandbyTasks,
                         final Set<TaskId> prevAssignedTasks,
+                        final Map<String, Set<TaskId>> prevActiveTasksByConsumer,
+                        final Map<String, Set<TaskId>> prevStandbyTasksByConsumer,
                         final int capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
@@ -53,6 +67,8 @@ public class ClientState {
         this.prevActiveTasks = prevActiveTasks;
         this.prevStandbyTasks = prevStandbyTasks;
         this.prevAssignedTasks = prevAssignedTasks;
+        this.prevActiveTasksByConsumer = prevActiveTasksByConsumer;
+        this.prevStandbyTasksByConsumer = prevStandbyTasksByConsumer;
         this.capacity = capacity;
     }
 
@@ -64,6 +80,8 @@ public class ClientState {
             new HashSet<>(prevActiveTasks),
             new HashSet<>(prevStandbyTasks),
             new HashSet<>(prevAssignedTasks),
+            new HashMap<>(prevActiveTasksByConsumer),
+            new HashMap<>(prevStandbyTasksByConsumer),
             capacity);
     }
 
@@ -107,14 +125,24 @@ public class ClientState {
         return activeTasks.size();
     }
 
-    public void addPreviousActiveTasks(final Set<TaskId> prevTasks) {
+    public void addPreviousActiveTasks(final String consumer, final Set<TaskId> prevTasks) {
         prevActiveTasks.addAll(prevTasks);
         prevAssignedTasks.addAll(prevTasks);
+        prevActiveTasksByConsumer.put(consumer, prevTasks);
     }
 
-    public void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
+    public void addPreviousStandbyTasks(final String consumer, final Set<TaskId> standbyTasks) {
         prevStandbyTasks.addAll(standbyTasks);
         prevAssignedTasks.addAll(standbyTasks);
+        prevStandbyTasksByConsumer.put(consumer, standbyTasks);
+    }
+
+    public Set<TaskId> prevActiveTasksForConsumer(final String consumer) {
+        return prevActiveTasksByConsumer.get(consumer);
+    }
+
+    public Set<TaskId> prevStandbyTasksForConsumer(final String consumer) {
+        return prevStandbyTasksByConsumer.get(consumer);
     }
 
     @Override

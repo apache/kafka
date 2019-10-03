@@ -86,7 +86,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     }
 
     public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer));
+        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer), version);
     }
 
     @Override

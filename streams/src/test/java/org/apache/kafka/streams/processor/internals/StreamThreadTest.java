@@ -79,6 +79,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -222,7 +223,7 @@ public class StreamThreadTest {
     }
 
     private Cluster createCluster() {
-        final Node node = new Node(0, "localhost", 8121);
+        final Node node = new Node(-1, "localhost", 8121);
         return new Cluster(
             "mockClusterId",
             singletonList(node),
@@ -1038,10 +1039,19 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        final ThreadMetadata threadMetadata = thread.threadMetadata();
-        assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
-        assertTrue(threadMetadata.standbyTasks().isEmpty());
+        final ThreadMetadata metadata = thread.threadMetadata();
+        assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(metadata.standbyTasks().isEmpty());
+
+        assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
+            Arrays.asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
+        final String threadName = metadata.threadName();
+        assertTrue(threadName.startsWith("clientId-StreamThread-"));
+        assertEquals(threadName + "-consumer", metadata.consumerClientId());
+        assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
+        assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
+        assertEquals("clientId-admin", metadata.adminClientId());
     }
 
     @Test

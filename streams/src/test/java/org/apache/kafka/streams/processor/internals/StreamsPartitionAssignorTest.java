@@ -361,6 +361,7 @@ public class StreamsPartitionAssignorTest {
         assertEquals(expectedInfo11TaskIds, info11.activeTasks());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testAssignWithPartialTopology() {
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -1235,7 +1236,7 @@ public class StreamsPartitionAssignorTest {
             )));
         assertThat(assignment.get("consumer1").partitions(), equalTo(asList(t1p0, t1p1)));
 
-        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
+        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION)));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));
     }
 
