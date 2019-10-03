@@ -37,7 +37,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSizeCache;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -614,11 +614,11 @@ public final class MessageTest {
     }
 
     private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
-        ObjectSizeCache sizeCache = new ObjectSizeCache();
-        int size = message.size(sizeCache, version);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-        message.write(byteBufferAccessor, sizeCache, version);
+        message.write(byteBufferAccessor, cache, version);
         assertEquals("The result of the size function does not match the number of bytes " +
             "written for version " + version, size, buf.position());
         Message message2 = message.getClass().newInstance();
@@ -851,12 +851,12 @@ public final class MessageTest {
     }
 
     private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
-        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
         try {
-            int size = message.size(sizeCache, version);
+            int size = message.size(cache, version);
             ByteBuffer buf = ByteBuffer.allocate(size);
             ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-            message.write(byteBufferAccessor, sizeCache, version);
+            message.write(byteBufferAccessor, cache, version);
             fail("Expected to see a NullPointerException when writing " +
                 message + " at version " + version);
         } catch (NullPointerException e) {
@@ -866,12 +866,12 @@ public final class MessageTest {
     private void verifyWriteRaisesUve(short version,
                                       String problemText,
                                      Message message) throws Exception {
-        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
         try {
-            int size = message.size(sizeCache, version);
+            int size = message.size(cache, version);
             ByteBuffer buf = ByteBuffer.allocate(size);
             ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-            message.write(byteBufferAccessor, sizeCache, version);
+            message.write(byteBufferAccessor, cache, version);
             fail("Expected to see an UnsupportedVersionException when writing " +
                 message + " at version " + version);
         } catch (UnsupportedVersionException e) {
@@ -882,11 +882,11 @@ public final class MessageTest {
     }
 
     private void verifyWriteSucceeds(short version, Message message) throws Exception {
-        ObjectSizeCache sizeCache = new ObjectSizeCache();
-        int size = message.size(sizeCache, version);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size * 2);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-        message.write(byteBufferAccessor, sizeCache, version);
+        message.write(byteBufferAccessor, cache, version);
         ByteBuffer alt = buf.duplicate();
         alt.flip();
         StringBuilder bld = new StringBuilder();

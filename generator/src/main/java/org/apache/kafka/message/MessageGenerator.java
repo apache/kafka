@@ -93,7 +93,7 @@ public final class MessageGenerator {
 
     static final String TAGGED_FIELDS_SECTION_CLASS = "org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection";
 
-    static final String OBJECT_SIZE_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSizeCache";
+    static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
 
     static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
 

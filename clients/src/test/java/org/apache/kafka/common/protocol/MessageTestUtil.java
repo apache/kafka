@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.MessageTestUtil;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+package org.apache.kafka.common.protocol;
 
-import java.util.Set;
+import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertTrue;
-
-public class StopReplicaRequestTest {
-
-    @Test
-    public void testStopReplicaRequestNormalization() {
-        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
-        assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
-            MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
+public final class MessageTestUtil {
+    public static int messageSize(Message message, short version) {
+        return message.size(new ObjectSerializationCache(), version);
     }
 
+    public static ByteBuffer messageToByteBuffer(Message message, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer bytes = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(bytes), cache, version);
+        bytes.flip();
+        return bytes;
+    }
 }

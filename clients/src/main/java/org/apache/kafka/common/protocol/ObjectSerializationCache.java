@@ -20,16 +20,19 @@ package org.apache.kafka.common.protocol;
 import java.util.IdentityHashMap;
 
 /**
- * The ObjectSizeCache stores the sizes of objects.
+ * The ObjectSerializationCache stores sizes and values computed during the
+ * first serialization pass.  This avoids recalculating and recomputing the same
+ * values during the second pass.
+ *
  * It is intended to be used as part of a two-pass serialization process like:
- * ObjectSizeCache cache = new ObjectSizeCache();
- * message.calculateSize(version, cache);
+ * ObjectSerializationCache cache = new ObjectSerializationCache();
+ * message.size(version, cache);
  * message.write(version, cache);
  */
-public final class ObjectSizeCache {
+public final class ObjectSerializationCache {
     private final IdentityHashMap<Object, Object> map;
 
-    public ObjectSizeCache() {
+    public ObjectSerializationCache() {
         this.map = new IdentityHashMap<>();
     }
 

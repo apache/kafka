@@ -40,28 +40,28 @@ public interface Message {
     /**
      * Returns the number of bytes it would take to write out this message.
      *
-     * @param sizeCache     The object size cache to populate.
+     * @param cache         The serialization size cache to populate.
      * @param version       The version to use.
      *
      * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
-    int size(ObjectSizeCache sizeCache, short version);
+    int size(ObjectSerializationCache cache, short version);
 
     /**
      * Writes out this message to the given ByteBuffer.
      *
      * @param writable      The destination writable.
-     * @param sizeCache     The object size cache to use.  You must have previously
-     *                      populated the size cache using #{Message#size()}.
+     * @param cache         The object serialization cache to use.  You must have
+     *                      previously populated the size cache using #{Message#size()}.
      * @param version       The version to use.
      *
      * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
-    void write(Writable writable, ObjectSizeCache sizeCache, short version);
+    void write(Writable writable, ObjectSerializationCache cache, short version);
 
     /**
      * Reads this message from the given ByteBuffer.  This will overwrite all

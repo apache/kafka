@@ -249,7 +249,7 @@ public final class ApiMessageTypeGenerator {
     }
 
     private void generateHeaderVersion(String type) {
-        buffer.printf("public short %sHeaderVersion(short version) {%n", type);
+        buffer.printf("public short %sHeaderVersion(short _version) {%n", type);
         buffer.incrementIndent();
         buffer.printf("switch (apiKey) {%n");
         buffer.incrementIndent();
@@ -261,7 +261,7 @@ public final class ApiMessageTypeGenerator {
                 // Version 0 of ControlledShutdownRequest has a non-standard request header
                 // which does not include clientId.  Version 1 of ControlledShutdownRequest
                 // and later use the standard request header.
-                buffer.printf("if (version == 0) {%n");
+                buffer.printf("if (_version == 0) {%n");
                 buffer.incrementIndent();
                 buffer.printf("return (short) 0;%n");
                 buffer.decrementIndent();
