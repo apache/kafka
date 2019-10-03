@@ -1948,7 +1948,7 @@ public class KafkaConsumerTest {
         List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
 
-        Metrics metrics = new Metrics();
+        Metrics metrics = new Metrics(time);
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
         LogContext loggerFactory = new LogContext();
@@ -2070,7 +2070,6 @@ public class KafkaConsumerTest {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-
         initMetadata(client, Collections.singletonMap(topic, 1));
 
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
@@ -2083,30 +2082,34 @@ public class KafkaConsumerTest {
         MetricName timeBetweenPollAvgName = metrics.metricName("time-between-poll-avg", "consumer-metrics");
         MetricName timeBetweenPollMaxName = metrics.metricName("time-between-poll-max", "consumer-metrics");
         // Test default values
-        assertEquals(-1.0, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
+        assertEquals(-1.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
         assertEquals(Double.NaN, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
         assertEquals(Double.NaN, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
         // Call first poll
         consumer.poll(Duration.ZERO);
-        assertEquals(0.0, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(0.0, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 5 (total time = 5)
-        time.sleep(5);
+        assertEquals(0.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
+        assertEquals(0.0d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
+        assertEquals(0.0d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
+        // Advance time by 5,000 (total time = 5,000)
+        time.sleep(5 * 1000L);
+        assertEquals(5.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
         // Call second poll
         consumer.poll(Duration.ZERO);
-        assertEquals(2.5, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(5.0, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 10 (total time = 15)
-        time.sleep(10);
+        assertEquals(2.5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
+        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
+        // Advance time by 10,000 (total time = 15,000)
+        time.sleep(10 * 1000L);
+        assertEquals(10.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
         // Call third poll
         consumer.poll(Duration.ZERO);
-        assertEquals(5.0, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(10.0, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
-        // Advance time by 5 (total time = 20)
-        time.sleep(5);
+        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
+        assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
+        // Advance time by 5,000 (total time = 20,000)
+        time.sleep(5 * 1000L);
+        assertEquals(5.0d, consumer.metrics().get(lastPollSecondsAgoName).metricValue());
         // Call fourth poll
         consumer.poll(Duration.ZERO);
-        assertEquals(5.0, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
-        assertEquals(10.0, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
+        assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
+        assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
     }
 }
