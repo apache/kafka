@@ -677,6 +677,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // within the client, distribute tasks to its owned consumers
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             final ClientState state = clientMetadata.state;
+            final Set<String> consumers = clientMetadata.consumers;
             Map<String, List<TaskId>> activeTaskAssignments;
 
             // Try to avoid triggering another rebalance by giving active tasks back to their previous owners within a
@@ -684,15 +685,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // client had no owned partitions, try to balance the workload as evenly as possible by interleaving the
             // tasks among consumers and hopefully spreading the heavier subtopologies evenly across threads.
             if (rebalanceRequired || state.ownedPartitions().isEmpty()) {
-                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
-            } else if ((activeTaskAssignments = tryStickyAndBalancedTaskAssignmentWithinClient(clientMetadata, partitionsForTask, allOwnedPartitions))
+                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), consumers);
+            } else if ((activeTaskAssignments = tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, allOwnedPartitions))
                         .equals(Collections.emptyMap())) {
                 rebalanceRequired = true;
-                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), clientMetadata.consumers);
+                activeTaskAssignments = interleaveConsumerTasksByGroupId(state.activeTasks(), consumers);
             }
 
             final Map<String, List<TaskId>> interleavedStandby =
-                interleaveConsumerTasksByGroupId(state.standbyTasks(), clientMetadata.consumers);
+                interleaveConsumerTasksByGroupId(state.standbyTasks(), consumers);
 
             addClientAssignments(
                 assignment,
@@ -843,19 +844,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * If it is impossible to satisfy both constraints we abort early and return an empty map so we can use a
      * different assignment strategy that tries to distribute tasks of a single subtopology across different threads.
      *
-     * @param metadata metadata for this client
+     * @param state state for this client
+     * @param consumers the consumers in this client
      * @param partitionsForTask mapping from task to its associated partitions
      * @param allOwnedPartitions set of all partitions claimed as owned by the group
      * @return task assignment for the consumers of this client
      *         empty map if it is not possible to generate a balanced assignment without moving a task to a new consumer
      */
-    Map<String, List<TaskId>> tryStickyAndBalancedTaskAssignmentWithinClient(final ClientMetadata metadata,
+    Map<String, List<TaskId>> tryStickyAndBalancedTaskAssignmentWithinClient(final ClientState state,
+                                                                             final Set<String> consumers,
                                                                              final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                                              final Set<TopicPartition> allOwnedPartitions) {
         final Map<String, List<TaskId>> assignments = new HashMap<>();
         final LinkedList<TaskId> newTasks = new LinkedList<>();
-        final ClientState state = metadata.state;
-        final Set<String> consumers = metadata.consumers;
         final Set<String> unfilledConsumers = new HashSet<>(consumers);
 
         final int maxTasksPerClient = (int) Math.ceil(((double) state.activeTaskCount()) / consumers.size());

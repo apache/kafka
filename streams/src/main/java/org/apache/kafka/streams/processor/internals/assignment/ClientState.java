@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Collection;
 import java.util.HashMap;
 
 import java.util.List;
@@ -137,7 +138,7 @@ public class ClientState {
         prevAssignedTasks.addAll(standbyTasks);
     }
 
-    public void addOwnedPartitions(final List<TopicPartition> ownedPartitions, final String consumer) {
+    public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
         for (final TopicPartition tp : ownedPartitions) {
             this.ownedPartitions.put(tp, consumer);
         }
@@ -205,5 +206,10 @@ public class ClientState {
 
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
+    }
+
+    // the following methods are used for testing only
+    public void assignActiveTasks(final Collection<TaskId> tasks) {
+        activeTasks.addAll(tasks);
     }
 }
