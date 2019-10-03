@@ -744,9 +744,11 @@ public class StreamThread extends Thread {
             // to unblock the restoration as soon as possible
             records = pollRequests(Duration.ZERO);
         } else if (state == State.PARTITIONS_REVOKED) {
-            // try to fetch some records with normal poll time
+            // try to fetch some records with quarter the normal poll time
             // in order to wait long enough to get the join response
-            records = pollRequests(pollTime);
+            // while still potentially doing other work
+            final Duration partitionsRevokedPollTime = pollTime.dividedBy(4);
+            records = pollRequests(partitionsRevokedPollTime);
         } else if (state == State.RUNNING || state == State.STARTING) {
             // try to fetch some records with normal poll time
             // in order to get long polling
