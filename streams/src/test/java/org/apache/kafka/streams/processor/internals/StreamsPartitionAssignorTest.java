@@ -63,12 +63,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
+import static junit.framework.TestCase.assertFalse;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("unchecked")
@@ -169,6 +171,28 @@ public class StreamsPartitionAssignorTest {
         } else {
             subscriptions = new HashMap<>();
         }
+    }
+
+    @Test
+    public void shouldUseEagerRebalancingProtocol() {
+        createMockTaskManager();
+        final Map<String, Object> props = configProps();
+        props.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23);
+        partitionAssignor.configure(props);
+
+        assertEquals(1, partitionAssignor.supportedProtocols().size());
+        assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.EAGER));
+        assertFalse(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
+    }
+
+    @Test
+    public void shouldUseCooperativeRebalancingProtocol() {
+        createMockTaskManager();
+        final Map<String, Object> props = configProps();
+        partitionAssignor.configure(props);
+
+        assertEquals(2, partitionAssignor.supportedProtocols().size());
+        assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
     }
 
     @Test
