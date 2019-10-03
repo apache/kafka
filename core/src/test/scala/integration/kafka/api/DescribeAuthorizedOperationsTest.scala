@@ -60,7 +60,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
         new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaServerPrincipalUnqualifiedName.toString, ALLOW, CLUSTER_ACTION)),
         new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, ALTER)),
         new AclBinding(topicResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, DESCRIBE))).asJava)
-      result.asScala.foreach { result => assertFalse(result.exception.isPresent) }
+      result.asScala.map(_.toCompletableFuture.get).foreach { result => assertFalse(result.exception.isPresent) }
 
     } finally {
       authorizer.close()

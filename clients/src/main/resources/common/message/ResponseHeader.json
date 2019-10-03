@@ -16,7 +16,8 @@
 {
   "type": "header",
   "name": "ResponseHeader",
-  "validVersions": "0",
+  // Version 0 and version 1 are the same.
+  "validVersions": "0-1",
   "fields": [
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this response." }

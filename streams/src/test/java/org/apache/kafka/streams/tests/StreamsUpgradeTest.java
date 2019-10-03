@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
 
@@ -124,7 +125,7 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
 
             final TaskManager taskManager = taskManger();
-            final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
+            final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
             final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
             standbyTasks.removeAll(previousActiveTasks);
             final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
@@ -167,6 +168,11 @@ public class StreamsUpgradeTest {
             final AssignmentInfo info = AssignmentInfo.decode(
                 assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
 
+            if (super.maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
+                setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+                return;
+            }
+
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
             partitions.sort(PARTITION_COMPARATOR);
 
@@ -176,12 +182,15 @@ public class StreamsUpgradeTest {
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
             final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo);
+            final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
+
+            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
             partitionsByHost = info.partitionsByHost();
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
             taskManager.setPartitionsByHostState(partitionsByHost);
+            taskManager.setPartitionsToTaskId(partitionsToTaskId);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);
         }
@@ -302,6 +311,7 @@ public class StreamsUpgradeTest {
         private FutureAssignmentInfo(final boolean bumpUsedVersion,
                                      final boolean bumpSupportedVersion,
                                      final ByteBuffer bytes) {
+            super(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION);
             this.bumpUsedVersion = bumpUsedVersion;
             this.bumpSupportedVersion = bumpSupportedVersion;
             originalUserMetadata = bytes;

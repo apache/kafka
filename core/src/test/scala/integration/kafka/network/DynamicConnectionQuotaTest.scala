@@ -65,10 +65,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    super.brokerPropertyOverrides(properties)
-  }
-
   @Test
   def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5

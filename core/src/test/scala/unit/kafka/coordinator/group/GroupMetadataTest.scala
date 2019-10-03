@@ -18,11 +18,15 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
+
+import scala.collection.JavaConverters._
 
 /**
  * Test group state transitions and other GroupMetadata functionality
@@ -260,6 +264,57 @@ class GroupMetadataTest {
     assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "foo")))
     assertFalse(group.supportsProtocols("invalid_type", Set("roundrobin", "foo")))
     assertFalse(group.supportsProtocols(protocolType, Set("range", "foo")))
+  }
+
+  @Test
+  def testSubscribedTopics(): Unit = {
+    // not able to compute it for a newly created group
+    assertEquals(None, group.getSubscribedTopics)
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, List(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+
+    group.initNextGeneration()
+
+    assertEquals(Some(Set("foo")), group.getSubscribedTopics)
+
+    group.transitionTo(PreparingRebalance)
+    group.remove(memberId)
+
+    group.initNextGeneration()
+
+    assertEquals(Some(Set.empty), group.getSubscribedTopics)
+
+    val memberWithFaultyProtocol  = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(memberWithFaultyProtocol)
+
+    group.initNextGeneration()
+
+    assertEquals(None, group.getSubscribedTopics)
+  }
+
+  @Test
+  def testSubscribedTopicsNonConsumerGroup(): Unit = {
+    // not able to compute it for a newly created group
+    assertEquals(None, group.getSubscribedTopics)
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, "My Protocol", List(("range", Array.empty[Byte])))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+
+    group.initNextGeneration()
+
+    assertEquals(None, group.getSubscribedTopics)
   }
 
   @Test
