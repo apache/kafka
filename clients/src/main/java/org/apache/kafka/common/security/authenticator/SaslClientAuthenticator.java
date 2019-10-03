@@ -57,6 +57,7 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.Principal;
@@ -518,7 +519,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 currentRequestHeader = null;
                 return response;
             }
-        } catch (SchemaException | IllegalArgumentException e) {
+        } catch (BufferUnderflowException | SchemaException | IllegalArgumentException e) {
             /*
              * Account for the fact that during re-authentication there may be responses
              * arriving for requests that were sent in the past.
