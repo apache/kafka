@@ -707,6 +707,8 @@ public class NetworkClient implements KafkaClient {
         // Always expect the response version id to be the same as the request version id
         AbstractResponse response = AbstractResponse.parseResponse(requestHeader.apiKey(), responseBuffer,
             requestHeader.apiVersion());
+        // We correlate after parsing the response to avoid spurious correlation errors when receiving malformed
+        // responses
         correlate(requestHeader, responseHeader);
         if (throttleTimeSensor != null && response.throttleTimeMs() != AbstractResponse.DEFAULT_THROTTLE_TIME)
             throttleTimeSensor.record(response.throttleTimeMs(), now);
