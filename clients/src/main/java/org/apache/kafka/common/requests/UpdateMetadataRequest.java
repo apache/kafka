@@ -27,6 +27,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSizeCache;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -213,19 +214,22 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    protected ByteBuffer toBytes() {
-        ByteBuffer bytes = ByteBuffer.allocate(size());
-        data.write(new ByteBufferAccessor(bytes), version());
-        bytes.flip();
-        return bytes;
+    // visible for testing
+    int size() {
+        return data.size(new ObjectSizeCache(), version());
     }
 
-    protected int size() {
-        return data.size(version());
+    // visible for testing
+    ByteBuffer toBytes() {
+        ObjectSizeCache cache = new ObjectSizeCache();
+        int size = data.size(cache, version());
+        ByteBuffer bytes = ByteBuffer.allocate(size);
+        data.write(new ByteBufferAccessor(bytes), cache, version());
+        bytes.flip();
+        return bytes;
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
     }
-
 }
