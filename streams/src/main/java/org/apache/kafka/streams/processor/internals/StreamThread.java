@@ -746,7 +746,7 @@ public class StreamThread extends Thread {
         } else if (state == State.PARTITIONS_REVOKED) {
             // try to fetch som records with zero poll millis to unblock
             // other useful work while waiting for the join response
-            records = pollRequests(pollTime);
+            records = pollRequests(Duration.ZERO);
         } else if (state == State.RUNNING || state == State.STARTING) {
             // try to fetch some records with normal poll time
             // in order to get long polling
