@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -224,8 +223,6 @@ public class KStreamKStreamJoinTest {
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
-        final ConsumerRecordFactory<String, Integer> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final KStream<String, Integer> joinedStream;
 
@@ -238,13 +235,17 @@ public class KStreamKStreamJoinTest {
         joinedStream.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, Integer> inputTopicLeft =
+                    driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<String, Integer> inputTopicRight =
+                    driver.createInputTopic("right", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<String, Integer> processor = supplier.theCapturedProcessor();
 
-            driver.pipeInput(recordFactory.create("left", "A", 1, 1L));
-            driver.pipeInput(recordFactory.create("left", "B", 1, 2L));
+            inputTopicLeft.pipeInput("A", 1, 1L);
+            inputTopicLeft.pipeInput("B", 1, 2L);
 
-            driver.pipeInput(recordFactory.create("right", "A", 1, 1L));
-            driver.pipeInput(recordFactory.create("right", "B", 2, 2L));
+            inputTopicRight.pipeInput("A", 1, 1L);
+            inputTopicRight.pipeInput("B", 2, 2L);
 
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>("A", 2, 1L),
                 new KeyValueTimestamp<>("B", 3, 2L));
