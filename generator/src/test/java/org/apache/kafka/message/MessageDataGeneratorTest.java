@@ -23,6 +23,7 @@ import org.junit.rules.Timeout;
 
 import java.util.Arrays;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -61,13 +62,9 @@ public class MessageDataGeneratorTest {
             "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"default\": \"null\" }",
             "  ]",
             "}")), MessageSpec.class);
-        try {
+        assertThrows("Invalid default for int32", RuntimeException.class, () -> {
             new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
-            fail("Expected MessageDataGenerator#generate to fail");
-        } catch (Throwable e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                    e.getMessage().contains("Invalid default for int32"));
-        }
+        });
     }
 
     @Test
@@ -82,15 +79,16 @@ public class MessageDataGeneratorTest {
                 "    \"default\": \"null\" }",
                 "  ]",
                 "}")), MessageSpec.class);
-        try {
+
+        assertThrows("not all versions of this field are nullable", RuntimeException.class, () -> {
             new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
-            fail("Expected MessageDataGenerator#generate to fail");
-        } catch (RuntimeException e) {
-            assertTrue("Invalid error message: " + e.getMessage(),
-                    e.getMessage().contains("not all versions of this field are nullable"));
-        }
+        });
     }
 
+    /**
+     * Test attempting to create a field with an invalid name.  The name is
+     * invalid because it starts with an underscore.
+     */
     @Test
     public void testInvalidFieldName() {
         try {

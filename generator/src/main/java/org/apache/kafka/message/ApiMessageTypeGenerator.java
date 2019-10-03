@@ -258,6 +258,9 @@ public final class ApiMessageTypeGenerator {
             buffer.printf("case %d:%n", apiKey);
             buffer.incrementIndent();
             if (apiKey == 7) {
+                // Version 0 of ControlledShutdownRequest has a non-standard request header
+                // which does not include clientId.  Version 1 of ControlledShutdownRequest
+                // and later use the standard request header.
                 buffer.printf("if (version == 0) {%n");
                 buffer.incrementIndent();
                 buffer.printf("return (short) 0;%n");

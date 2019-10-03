@@ -24,7 +24,7 @@ import java.util.IdentityHashMap;
  * It is intended to be used as part of a two-pass serialization process like:
  * ObjectSizeCache cache = new ObjectSizeCache();
  * message.calculateSize(version, cache);
- * message.write(version, cache
+ * message.write(version, cache);
  */
 public final class ObjectSizeCache {
     private final IdentityHashMap<Object, Object> map;
