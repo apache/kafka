@@ -712,19 +712,19 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests that invalid ApiVersionRequest V3 is handled by the server correctly and
+     * Tests that invalid ApiVersionRequest is handled by the server correctly and
      * returns an INVALID_REQUEST error.
      */
     @Test
-    public void testInvalidApiVersionsRequestV3() throws Exception {
+    public void testInvalidApiVersionsRequest() throws Exception {
         short handshakeVersion = ApiKeys.SASL_HANDSHAKE.latestVersion();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
         server = createEchoServer(securityProtocol);
 
-        // Send ApiVersionsRequest with unsupported version and validate error response.
+        // Send ApiVersionsRequest with invalid version and validate error response.
         String node = "1";
-        short version = 3;
+        short version = ApiKeys.API_VERSIONS.latestVersion();
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
         ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData(), version);
@@ -743,19 +743,19 @@ public class SaslAuthenticatorTest {
     }
 
     /**
-     * Tests that valid ApiVersionRequest V3 is handled by the server correctly and
+     * Tests that valid ApiVersionRequest is handled by the server correctly and
      * returns an NONE error.
      */
     @Test
-    public void testValidApiVersionsRequestV3() throws Exception {
+    public void testValidApiVersionsRequest() throws Exception {
         short handshakeVersion = ApiKeys.SASL_HANDSHAKE.latestVersion();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
         server = createEchoServer(securityProtocol);
 
-        // Send ApiVersionsRequest with unsupported version and validate error response.
+        // Send ApiVersionsRequest with valid version and validate error response.
         String node = "1";
-        short version = 3;
+        short version = ApiKeys.API_VERSIONS.latestVersion();
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
@@ -1748,7 +1748,7 @@ public class SaslAuthenticatorTest {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
-                        ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.defaultApiVersionsResponse();
+                        ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
                         ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
                         for (ApiVersionsResponseKey apiVersion : defaultApiVersionResponse.data.apiKeys()) {
                             if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {

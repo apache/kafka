@@ -568,7 +568,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     // Visible to override for testing
     protected ApiVersionsResponse apiVersionsResponse() {
-        return ApiVersionsResponse.defaultApiVersionsResponse();
+        return ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
     }
 
     // Visible to override for testing

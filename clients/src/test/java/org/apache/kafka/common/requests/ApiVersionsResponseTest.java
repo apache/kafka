@@ -44,7 +44,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.defaultApiVersionsResponse()), Utils.mkSet(ApiKeys.values()));
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
     }
 
     @Test
@@ -56,11 +56,11 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.defaultApiVersionsResponse().data.apiKeys();
+        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
         assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.values().length);
 
         for (ApiKeys key : ApiKeys.values()) {
-            ApiVersionsResponseKey version = ApiVersionsResponse.defaultApiVersionsResponse().apiVersion(key.id);
+            ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull("Could not find ApiVersion for API " + key.name, version);
             assertEquals("Incorrect min version for Api " + key.name, version.minVersion(), key.oldestVersion());
             assertEquals("Incorrect max version for Api " + key.name, version.maxVersion(), key.latestVersion());

@@ -109,8 +109,8 @@ public class ApiVersionsRequest extends AbstractRequest {
             data.setThrottleTimeMs(throttleTimeMs);
         }
 
-        // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
-        // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
+        // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
+        // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
         if (Errors.forException(e) == Errors.UNSUPPORTED_VERSION) {
             ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
             apiKeys.add(new ApiVersionsResponseKey()

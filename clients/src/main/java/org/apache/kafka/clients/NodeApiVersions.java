@@ -75,7 +75,15 @@ public class NodeApiVersions {
         return new NodeApiVersions(apiVersions);
     }
 
-    // Used for testing
+
+    /**
+     * Create a NodeApiVersions object with a single ApiKey. It is mainly used in tests.
+     *
+     * @param apiKey ApiKey's id.
+     * @param minVersion ApiKey's minimum version.
+     * @param maxVersion ApiKey's maximum version.
+     * @return A new NodeApiVersions object.
+     */
     public static NodeApiVersions create(short apiKey, short minVersion, short maxVersion) {
         return create(Collections.singleton(new ApiVersion(apiKey, minVersion, maxVersion)));
     }

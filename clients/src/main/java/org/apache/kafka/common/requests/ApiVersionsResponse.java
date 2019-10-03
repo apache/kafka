@@ -35,8 +35,8 @@ import java.util.Map;
  */
 public class ApiVersionsResponse extends AbstractResponse {
 
-    // initialized lazily to avoid circular initialization dependence with ApiKeys
-    private static volatile ApiVersionsResponse defaultApiVersionsResponse;
+    public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
+        createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
 
     public final ApiVersionsResponseData data;
 
@@ -98,7 +98,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static ApiVersionsResponse apiVersionsResponse(int throttleTimeMs, byte maxMagic) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
-            return defaultApiVersionsResponse();
+            return DEFAULT_API_VERSIONS_RESPONSE;
         }
         return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
@@ -120,11 +120,5 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setApiKeys(apiKeys);
 
         return new ApiVersionsResponse(data);
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse() {
-        if (defaultApiVersionsResponse == null)
-            defaultApiVersionsResponse = createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
-        return defaultApiVersionsResponse;
     }
 }

@@ -205,7 +205,7 @@ public class NetworkClientTest {
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            setExpectedApiVersionsResponse(ApiVersionsResponse.defaultApiVersionsResponse());
+            setExpectedApiVersionsResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -254,7 +254,7 @@ public class NetworkClientTest {
 
         // prepare response
         delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
-            ApiVersionsResponse.defaultApiVersionsResponse());
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
 
         // handle completed receives
         client.poll(0, time.milliseconds());
@@ -326,7 +326,7 @@ public class NetworkClientTest {
 
         // prepare response
         delayedApiVersionsResponse(1, (short) 0,
-            ApiVersionsResponse.defaultApiVersionsResponse());
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
 
         // handle completed receives
         client.poll(0, time.milliseconds());
@@ -393,7 +393,7 @@ public class NetworkClientTest {
 
         // prepare response
         delayedApiVersionsResponse(1, (short) 0,
-            ApiVersionsResponse.defaultApiVersionsResponse());
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
 
         // handle completed receives
         client.poll(0, time.milliseconds());

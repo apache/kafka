@@ -25,8 +25,8 @@
   // not in the header. The length of the header must not change in order to guarantee the
   // backward compatibility.
   //
-  // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
-  // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
+  // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
+  // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
   "validVersions": "0-3",
   // TODO(dajac) Enable this once KIP-482 is committed.
   // "flexibleVersions": "3+",

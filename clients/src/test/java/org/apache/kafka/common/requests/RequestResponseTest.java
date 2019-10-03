@@ -258,10 +258,10 @@ public class RequestResponseTest {
         checkResponse(createApiVersionResponse(), 1, true);
         checkResponse(createApiVersionResponse(), 2, true);
         checkResponse(createApiVersionResponse(), 3, true);
-        checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(), 0, true);
-        checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(), 1, true);
-        checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(), 2, true);
-        checkResponse(ApiVersionsResponse.defaultApiVersionsResponse(), 3, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 0, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 1, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 2, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 3, true);
 
         checkRequest(createCreateTopicRequest(0), true);
         checkErrorResponse(createCreateTopicRequest(0), new UnknownServerException(), true);
@@ -784,7 +784,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testValidApiVersionsRequestV3() {
+    public void testValidApiVersionsRequest() {
         ApiVersionsRequest request;
 
         request = new ApiVersionsRequest.Builder().build();
@@ -799,7 +799,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testInvalidApiVersionsRequestV3() {
+    public void testInvalidApiVersionsRequest() {
         testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
         testInvalidCase("apache-kafka-java", "0.0.0@java");
         testInvalidCase("-apache-kafka-java", "0.0.0");
@@ -840,7 +840,7 @@ public class RequestResponseTest {
 
     @Test
     public void testApiVersionResponseStructParsingFallback() {
-        Struct struct = ApiVersionsResponse.defaultApiVersionsResponse().toStruct((short) 0);
+        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
@@ -854,7 +854,7 @@ public class RequestResponseTest {
 
     @Test
     public void testApiVersionResponseStructParsing() {
-        Struct struct = ApiVersionsResponse.defaultApiVersionsResponse().toStruct(ApiKeys.API_VERSIONS.latestVersion());
+        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
