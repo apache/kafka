@@ -44,7 +44,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             keySerde,
             valueSerde,
             sinkName,
-            repartitionTopic
+            repartitionTopic,
+            null
         );
     }
 

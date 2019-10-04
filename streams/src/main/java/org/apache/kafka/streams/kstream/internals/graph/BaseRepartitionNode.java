@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 
 public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
 
@@ -29,6 +30,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
     protected final String sourceName;
     protected final String repartitionTopic;
     protected final ProcessorParameters processorParameters;
+    protected final StreamPartitioner<K, V> partitioner;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
@@ -36,7 +38,8 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,
-                        final String repartitionTopic) {
+                        final String repartitionTopic,
+                        final StreamPartitioner<K, V> partitioner) {
 
         super(nodeName);
 
@@ -46,6 +49,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
         this.sourceName = sourceName;
         this.repartitionTopic = repartitionTopic;
         this.processorParameters = processorParameters;
+        this.partitioner = partitioner;
     }
 
     Serializer<V> valueSerializer() {
@@ -72,7 +76,8 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
                ", sinkName='" + sinkName + '\'' +
                ", sourceName='" + sourceName + '\'' +
                ", repartitionTopic='" + repartitionTopic + '\'' +
-               ", processorParameters=" + processorParameters +
+               ", processorParameters=" + processorParameters + '\'' +
+               ", partitioner=" + partitioner +
                "} " + super.toString();
     }
 }
