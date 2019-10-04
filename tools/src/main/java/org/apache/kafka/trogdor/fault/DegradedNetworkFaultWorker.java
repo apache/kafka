@@ -98,16 +98,21 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
 
     private void enableTrafficControl(Platform platform, String networkDevice, int delayMs, int rateLimitKbps) throws IOException {
         int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
+        // Here we define a root handler named 1:0, then use the netem (network emulator) to add a delay
+        // on outgoing packets. We're using the given delay in milliseconds plus some deviation. The pareto-normal
+        // distribution is like the 80/20 rule
         platform.runCommand(new String[] {
-            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "handle", "1:0",
+            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "handle", "1:0",
             "netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs), "distribution", "paretonormal"
         });
 
         if (rateLimitKbps > 0) {
             int maxLatency = delayMs * delayMs;
+            // If rate limiting is required, we create a child handler named 10: which is attached to the parent
+            // defined above (1:1). This uses the tbf (token bucket filter) to apply a rate limit in kilobits per
+            // second to outgoing traffic. a 32kbit buffer is allocation, and a max latency is also defined
             platform.runCommand(new String[]{
-                // tc qdisc add dev eth0 parent 1:1 handle 10: tbf rate 256kbit buffer 1600 limit 3000
-                "tc", "qdisc", "add", "dev", "eth0", "parent", "1:1", "handle", "10:",
+                "sudo", "tc", "qdisc", "add", "dev", networkDevice, "parent", "1:1", "handle", "10:",
                 "tbf", "rate", String.format("%dkbit", rateLimitKbps), "buffer", "32kbit", "latency", String.format("%dms", maxLatency)
             });
         }
