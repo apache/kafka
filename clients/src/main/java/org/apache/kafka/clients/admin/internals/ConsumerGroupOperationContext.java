@@ -51,27 +51,27 @@ public final class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>
         this.node = Optional.empty();
     }
 
-    public String getGroupId() {
+    public String groupId() {
         return groupId;
     }
 
-    public O getOptions() {
+    public O options() {
         return options;
     }
 
-    public long getDeadline() {
+    public long deadline() {
         return deadline;
     }
 
-    public KafkaFutureImpl<T> getFuture() {
+    public KafkaFutureImpl<T> future() {
         return future;
     }
 
-    public Optional<Node> getNode() {
+    public Optional<Node> node() {
         return node;
     }
 
-    public void setNode(Node node) {
+    public void node(Node node) {
         this.node = Optional.ofNullable(node);
     }
 

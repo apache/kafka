@@ -17,11 +17,11 @@
 
 package org.apache.kafka.clients.admin.internals;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.common.TopicPartition;
@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
  * as "Call" are completed and values are available.
  *
  * @param <T> The type of return value of the KafkaFuture
- * @param <O> The type of configuration option. Different for different consumer group commands.
+ * @param <O> The type of configuration option.
  */
 public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
     final private Collection<String> topics;
@@ -58,40 +58,40 @@ public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
         this.response = Optional.empty();
     }
 
-    public void setResponse(Optional<MetadataResponse> response) {
+    public void response(Optional<MetadataResponse> response) {
         this.response = response;
     }
 
-    public Optional<MetadataResponse> getResponse() {
+    public Optional<MetadataResponse> response() {
         return response;
     }
 
-    public O getOptions() {
+    public O options() {
         return options;
     }
 
-    public long getDeadline() {
+    public long deadline() {
         return deadline;
     }
 
-    public Map<TopicPartition, KafkaFutureImpl<T>> getFutures() {
+    public Map<TopicPartition, KafkaFutureImpl<T>> futures() {
         return futures;
     }
 
-    public Collection<String> getTopics() {
+    public Collection<String> topics() {
         return topics;
     }
 
     public boolean shouldRefreshMetadata() {
         MetadataResponse mr = response.orElseThrow(() -> new IllegalStateException("No Metadata response"));
-        List<Errors> allErrors = new ArrayList<>(mr.errors().values());
+        Set<Errors> allErrors = new HashSet<>(mr.errors().values());
         for (TopicMetadata tm : mr.topicMetadata()) {
             for (PartitionMetadata pm : tm.partitionMetadata()) {
-                allErrors.add(pm.error());
+                if (pm.error() != Errors.NONE)
+                    allErrors.add(pm.error());
             }
         }
-        return allErrors.stream()
-                        .anyMatch(error -> shouldRefreshMetadata(error));
+        return allErrors.stream().anyMatch(this::shouldRefreshMetadata);
     }
 
     public boolean shouldRefreshMetadata(Errors error) {

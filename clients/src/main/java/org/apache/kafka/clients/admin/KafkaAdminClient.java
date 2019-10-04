@@ -2602,9 +2602,9 @@ public class KafkaAdminClient extends AdminClient {
 
     private void rescheduleFindCoordinatorTask(ConsumerGroupOperationContext<?, ?> context, Supplier<Call> nextCall) {
         log.info("Node {} is no longer the Coordinator. Retrying with new coordinator.",
-                context.getNode().orElse(null));
+                context.node().orElse(null));
         // Requeue the task so that we can try with new coordinator
-        context.setNode(null);
+        context.node(null);
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
@@ -2612,7 +2612,7 @@ public class KafkaAdminClient extends AdminClient {
     private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls) {
         log.info("Retrying to fetch metadata.");
         // Requeue the task so that we can re-attempt fetching metadata
-        context.setResponse(Optional.empty());
+        context.response(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
         runnable.call(metadataCall, time.milliseconds());
     }
@@ -2671,30 +2671,30 @@ public class KafkaAdminClient extends AdminClient {
      */
     private <T, O extends AbstractOptions<O>> Call getFindCoordinatorCall(ConsumerGroupOperationContext<T, O> context,
                                                Supplier<Call> nextCall) {
-        return new Call("findCoordinator", context.getDeadline(), new LeastLoadedNodeProvider()) {
+        return new Call("findCoordinator", context.deadline(), new LeastLoadedNodeProvider()) {
             @Override
             FindCoordinatorRequest.Builder createRequest(int timeoutMs) {
                 return new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(CoordinatorType.GROUP.id())
-                                .setKey(context.getGroupId()));
+                                .setKey(context.groupId()));
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                if (handleGroupRequestError(response.error(), context.getFuture()))
+                if (handleGroupRequestError(response.error(), context.future()))
                     return;
 
-                context.setNode(response.node());
+                context.node(response.node());
 
                 runnable.call(nextCall.get(), time.milliseconds());
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -2702,14 +2702,14 @@ public class KafkaAdminClient extends AdminClient {
     private Call getDescribeConsumerGroupsCall(
             ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context) {
         return new Call("describeConsumerGroups",
-                context.getDeadline(),
-                new ConstantNodeIdProvider(context.getNode().get().id())) {
+                context.deadline(),
+                new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             DescribeGroupsRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeGroupsRequest.Builder(
                     new DescribeGroupsRequestData()
-                        .setGroups(Collections.singletonList(context.getGroupId()))
-                        .setIncludeAuthorizedOperations(context.getOptions().includeAuthorizedOperations()));
+                        .setGroups(Collections.singletonList(context.groupId()))
+                        .setIncludeAuthorizedOperations(context.options().includeAuthorizedOperations()));
             }
 
             @Override
@@ -2718,16 +2718,16 @@ public class KafkaAdminClient extends AdminClient {
 
                 List<DescribedGroup> describedGroups = response.data().groups();
                 if (describedGroups.isEmpty()) {
-                    context.getFuture().completeExceptionally(
-                            new InvalidGroupIdException("No consumer group found for GroupId: " + context.getGroupId()));
+                    context.future().completeExceptionally(
+                            new InvalidGroupIdException("No consumer group found for GroupId: " + context.groupId()));
                     return;
                 }
 
                 if (describedGroups.size() > 1 ||
-                        !describedGroups.get(0).groupId().equals(context.getGroupId())) {
+                        !describedGroups.get(0).groupId().equals(context.groupId())) {
                     String ids = Arrays.toString(describedGroups.stream().map(DescribedGroup::groupId).toArray());
-                    context.getFuture().completeExceptionally(new InvalidGroupIdException(
-                            "DescribeConsumerGroup request for GroupId: " + context.getGroupId() + " returned " + ids));
+                    context.future().completeExceptionally(new InvalidGroupIdException(
+                            "DescribeConsumerGroup request for GroupId: " + context.groupId() + " returned " + ids));
                     return;
                 }
 
@@ -2740,7 +2740,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 final Errors groupError = Errors.forCode(describedGroup.errorCode());
-                if (handleGroupRequestError(groupError, context.getFuture()))
+                if (handleGroupRequestError(groupError, context.future()))
                     return;
 
                 final String protocolType = describedGroup.protocolType();
@@ -2764,19 +2764,19 @@ public class KafkaAdminClient extends AdminClient {
                         memberDescriptions.add(memberDescription);
                     }
                     final ConsumerGroupDescription consumerGroupDescription =
-                        new ConsumerGroupDescription(context.getGroupId(), protocolType.isEmpty(),
+                        new ConsumerGroupDescription(context.groupId(), protocolType.isEmpty(),
                             memberDescriptions,
                             describedGroup.protocolData(),
                             ConsumerGroupState.parse(describedGroup.groupState()),
-                            context.getNode().get(),
+                            context.node().get(),
                             authorizedOperations);
-                    context.getFuture().complete(consumerGroupDescription);
+                    context.future().complete(consumerGroupDescription);
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -2792,18 +2792,18 @@ public class KafkaAdminClient extends AdminClient {
      */
     private <T, O extends AbstractOptions<O>> Call getMetadataCall(MetadataOperationContext<T, O> context,
                                                                    Supplier<List<Call>> nextCalls) {
-        return new Call("metadata", context.getDeadline(), new LeastLoadedNodeProvider()) {
+        return new Call("metadata", context.deadline(), new LeastLoadedNodeProvider()) {
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(convertToMetadataRequestTopic(context.getTopics()))
+                    .setTopics(convertToMetadataRequestTopic(context.topics()))
                     .setAllowAutoTopicCreation(false));
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
-                context.setResponse(Optional.of(response));
+                context.response(Optional.of(response));
 
                 if (context.shouldRefreshMetadata()) {
                     rescheduleMetadataTask(context, nextCalls);
@@ -2817,7 +2817,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                for (KafkaFutureImpl<T> future : context.getFutures().values()) {
+                for (KafkaFutureImpl<T> future : context.futures().values()) {
                     future.completeExceptionally(throwable);
                 }
             }
@@ -2991,11 +2991,11 @@ public class KafkaAdminClient extends AdminClient {
 
     private Call getListConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, OffsetAndMetadata>,
             ListConsumerGroupOffsetsOptions> context) {
-        return new Call("listConsumerGroupOffsets", context.getDeadline(),
-                new ConstantNodeIdProvider(context.getNode().get().id())) {
+        return new Call("listConsumerGroupOffsets", context.deadline(),
+                new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             OffsetFetchRequest.Builder createRequest(int timeoutMs) {
-                return new OffsetFetchRequest.Builder(context.getGroupId(), context.getOptions().topicPartitions());
+                return new OffsetFetchRequest.Builder(context.groupId(), context.options().topicPartitions());
             }
 
             @Override
@@ -3009,7 +3009,7 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                if (handleGroupRequestError(response.error(), context.getFuture()))
+                if (handleGroupRequestError(response.error(), context.future()))
                     return;
 
                 for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
@@ -3027,12 +3027,12 @@ public class KafkaAdminClient extends AdminClient {
                         log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                     }
                 }
-                context.getFuture().complete(groupOffsetsListing);
+                context.future().complete(groupOffsetsListing);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -3063,13 +3063,13 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getDeleteConsumerGroupsCall(ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context) {
-        return new Call("deleteConsumerGroups", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+        return new Call("deleteConsumerGroups", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
 
             @Override
             DeleteGroupsRequest.Builder createRequest(int timeoutMs) {
                 return new DeleteGroupsRequest.Builder(
                     new DeleteGroupsRequestData()
-                        .setGroupsNames(Collections.singletonList(context.getGroupId()))
+                        .setGroupsNames(Collections.singletonList(context.groupId()))
                 );
             }
 
@@ -3083,16 +3083,16 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                final Errors groupError = response.get(context.getGroupId());
-                if (handleGroupRequestError(groupError, context.getFuture()))
+                final Errors groupError = response.get(context.groupId());
+                if (handleGroupRequestError(groupError, context.future()))
                     return;
 
-                context.getFuture().complete(null);
+                context.future().complete(null);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -3125,7 +3125,7 @@ public class KafkaAdminClient extends AdminClient {
     private Call getDeleteConsumerGroupOffsetsCall(
             ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
             Set<TopicPartition> partitions) {
-        return new Call("deleteConsumerGroupOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+        return new Call("deleteConsumerGroupOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
 
             @Override
             OffsetDeleteRequest.Builder createRequest(int timeoutMs) {
@@ -3144,7 +3144,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 return new OffsetDeleteRequest.Builder(
                     new OffsetDeleteRequestData()
-                        .setGroupId(context.getGroupId())
+                        .setGroupId(context.groupId())
                         .setTopics(topics)
                 );
             }
@@ -3161,7 +3161,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If the error is an error at the group level, the future is failed with it
                 final Errors groupError = Errors.forCode(response.data.errorCode());
-                if (handleGroupRequestError(groupError, context.getFuture()))
+                if (handleGroupRequestError(groupError, context.future()))
                     return;
 
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
@@ -3173,12 +3173,12 @@ public class KafkaAdminClient extends AdminClient {
                     });
                 });
 
-                context.getFuture().complete(partitions);
+                context.future().complete(partitions);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -3492,12 +3492,12 @@ public class KafkaAdminClient extends AdminClient {
     private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext
                                                    <RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context) {
         return new Call("leaveGroup",
-                        context.getDeadline(),
-                        new ConstantNodeIdProvider(context.getNode().get().id())) {
+                        context.deadline(),
+                        new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                return new LeaveGroupRequest.Builder(context.getGroupId(),
-                                                     context.getOptions().getMembers());
+                return new LeaveGroupRequest.Builder(context.groupId(),
+                                                     context.options().getMembers());
             }
 
             @Override
@@ -3517,14 +3517,14 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 final RemoveMemberFromGroupResult membershipChangeResult =
-                    new RemoveMemberFromGroupResult(response, context.getOptions().getMembers());
+                    new RemoveMemberFromGroupResult(response, context.options().getMembers());
 
-                context.getFuture().complete(membershipChangeResult);
+                context.future().complete(membershipChangeResult);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                context.getFuture().completeExceptionally(throwable);
+                context.future().completeExceptionally(throwable);
             }
         };
     }
@@ -3556,7 +3556,7 @@ public class KafkaAdminClient extends AdminClient {
             AlterConsumerGroupOffsetsOptions> context, Map<TopicPartition,
             OffsetAndMetadata> offsets, Map<TopicPartition, KafkaFutureImpl<Void>> futures) {
 
-        return new Call("commitOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+        return new Call("commitOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
 
             @Override
             OffsetCommitRequest.Builder createRequest(int timeoutMs) {
@@ -3586,7 +3586,7 @@ public class KafkaAdminClient extends AdminClient {
                     topics.add(topic);
                 }
                 OffsetCommitRequestData data = new OffsetCommitRequestData()
-                    .setGroupId(context.getGroupId())
+                    .setGroupId(context.groupId())
                     .setTopics(topics);
                 return new OffsetCommitRequest.Builder(data);
             }
@@ -3626,7 +3626,7 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
                 }
-                context.getFuture().complete(futures);
+                context.future().complete(futures);
             }
 
             @Override
@@ -3667,7 +3667,7 @@ public class KafkaAdminClient extends AdminClient {
                                            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
                                            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
-        MetadataResponse mr = context.getResponse().orElseThrow(() -> new IllegalStateException("No Metadata respons"));
+        MetadataResponse mr = context.response().orElseThrow(() -> new IllegalStateException("No Metadata response"));
         List<Call> calls = new ArrayList<>();
         // grouping topic partitions per leader
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> leaders = new HashMap<>();
@@ -3686,8 +3686,7 @@ public class KafkaAdminClient extends AdminClient {
             if (!mr.errors().containsKey(tp.topic())) {
                 Node node = mr.cluster().leaderFor(tp);
                 if (node != null) {
-                    if (!leaders.containsKey(node))
-                        leaders.put(node, new HashMap<>());
+                    leaders.computeIfAbsent(node, k -> new HashMap<>());
                     leaders.get(node).put(tp, new ListOffsetRequest.PartitionData(offsetQuery, Optional.empty()));
                 } else {
                     future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
@@ -3701,12 +3700,12 @@ public class KafkaAdminClient extends AdminClient {
 
             final int brokerId = entry.getKey().id();
 
-            calls.add(new Call("listOffsets on broker " + brokerId, context.getDeadline(), new ConstantNodeIdProvider(brokerId)) {
+            calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
                     return ListOffsetRequest.Builder
-                            .forConsumer(true, context.getOptions().isolationLevel())
+                            .forConsumer(true, context.options().isolationLevel())
                             .setTargetTimes(entry.getValue());
                 }
 
