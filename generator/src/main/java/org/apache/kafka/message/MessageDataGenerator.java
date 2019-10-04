@@ -1532,7 +1532,10 @@ public final class MessageDataGenerator {
     }
 
     private void generateFieldEquals(FieldSpec field) {
-        if (field.type().isString() || field.type().isArray() || field.type().isStruct()) {
+        if (field.type() instanceof FieldType.UUIDFieldType) {
+            buffer.printf("if (!this.%s.equals(other.%s)) return false;%n",
+                field.camelCaseName(), field.camelCaseName());
+        } else if (field.type().isString() || field.type().isArray() || field.type().isStruct()) {
             buffer.printf("if (this.%s == null) {%n", field.camelCaseName());
             buffer.incrementIndent();
             buffer.printf("if (other.%s != null) return false;%n", field.camelCaseName());
