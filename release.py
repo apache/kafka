@@ -99,7 +99,9 @@ def print_output(output):
 def cmd(action, cmd, *args, **kwargs):
     if isinstance(cmd, basestring) and not kwargs.get("shell", False):
         cmd = cmd.split()
+
     allow_failure = kwargs.pop("allow_failure", False)
+    num_retries = kwargs.pop("num_retries", 0)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -116,8 +118,15 @@ def cmd(action, cmd, *args, **kwargs):
     except subprocess.CalledProcessError as e:
         print_output(e.output)
 
+        if num_retries > 0:
+            kwargs['num_retries'] = num_retries - 1
+            kwargs['allow_failure'] = allow_failure
+            print("Retrying... %d remaining retries" % (num_retries - 1))
+            return cmd(action, cmd, *args, **kwargs)
+
         if allow_failure:
             return
+
 
         print("*************************************************")
         print("*** First command failure occurred here.      ***")
@@ -628,7 +637,7 @@ for root, dirs, files in os.walk(artifacts_dir):
         sftp_cmds = """
 put %s %s
 """ % (local_path, remote_path)
-        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds)
+        cmd("Uploading artifacts in %s to your Apache home directory" % root, "sftp -b - %s@home.apache.org" % apache_id, stdin=sftp_cmds, num_retries=3)
 
 with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
     contents = f.read()
