@@ -43,15 +43,6 @@ public class InsertHeaderTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void insertHeaderWithNullName() {
-        final Map<String, Object> props = new HashMap<>();
-        props.put("header", null);
-        props.put("literal.value", "dummy value");
-
-        xform.configure(props);
-    }
-
-    @Test(expected = ConfigException.class)
     public void insertHeaderWithBlankName() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "");
