@@ -410,13 +410,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                 ByteBuffer memberAssignment = future.value().duplicate();
 
-                if ("testConsumer-0".equals(Thread.currentThread().getName())) {
-                    try {
-                        readerBarrier.await();
-                    }
-                    catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                try {
+                    readerBarrier.await();
+                }
+                catch (Exception e) {
                 }
 
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
@@ -601,13 +598,11 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
 
-                if ("testConsumer-1".equals(Thread.currentThread().getName())) {
-                    try {
-                        readerBarrier.await();
-                    }
-                    catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                try {
+                    readerBarrier.await();
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
                 }
 
                 future.raise(error);
