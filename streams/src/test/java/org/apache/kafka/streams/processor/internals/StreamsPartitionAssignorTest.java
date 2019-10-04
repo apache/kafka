@@ -413,6 +413,8 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
         standbyTasks.removeAll(prevTasks);
 
+        // When following the eager protocol, we must encode the previous tasks ourselves since we must revoke
+        // everything and thus the "ownedPartitions" field in the subscription will be empty
         final SubscriptionInfo info = new SubscriptionInfo(processId, prevTasks, standbyTasks, null);
         assertEquals(info.encode(), subscription.userData());
     }
@@ -436,7 +438,6 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignor(Collections.emptyMap());
 
         final Set<String> topics = Utils.mkSet("topic1", "topic2");
-        final List<TopicPartition> ownedPartitions = Arrays.asList(t1p0, t1p1);
         final ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(
             new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
 
@@ -446,6 +447,8 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
         standbyTasks.removeAll(prevTasks);
 
+        // We don't encode the active tasks when following the cooperative protocol, as these are inferred from the
+        // ownedPartitions encoded in the subscription
         final SubscriptionInfo info = new SubscriptionInfo(processId, Collections.emptySet(), standbyTasks, null);
         assertEquals(info.encode(), subscription.userData());
     }
@@ -1427,7 +1430,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnNormalAssignmentForOldAndFutureInstances() {
+    public void shouldReturnNormalAssignmentForOldAndFutureInstancesDuringVersionProbing() {
         builder.addSource(null, "source1", null, null, null, "topic1");
 
         final Set<TaskId> allTasks = Utils.mkSet(task0_0, task0_1, task0_2);
@@ -1484,6 +1487,54 @@ public class StreamsPartitionAssignorTest {
             equalTo(new AssignmentInfo(
                 Collections.singletonList(task0_2),
                 futureStandbyTaskMap,
+                Collections.emptyMap()
+            )));
+    }
+
+    @Test
+    public void shouldReturnInterleavedAssignmentForOnlyFutureInstancesDuringVersionProbing() {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+
+        final Set<TaskId> allTasks = Utils.mkSet(task0_0, task0_1, task0_2);
+
+        subscriptions.put(c1,
+            new ConsumerPartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription(),
+                Collections.emptyList())
+        );
+        subscriptions.put(c2,
+            new ConsumerPartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription(),
+                Collections.emptyList())
+        );
+
+        createMockTaskManager(allTasks, allTasks, UUID.randomUUID(), builder);
+        EasyMock.replay(taskManager);
+        final Map<String, Object> props = configProps();
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        partitionAssignor.configure(props);
+        final Map<String, ConsumerPartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        assertThat(assignment.size(), equalTo(2));
+
+        assertThat(assignment.get(c1).partitions(), equalTo(asList(t1p0, t1p2)));
+        assertThat(
+            AssignmentInfo.decode(assignment.get(c1).userData()),
+            equalTo(new AssignmentInfo(
+                Arrays.asList(task0_0, task0_2),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )));
+
+
+        assertThat(assignment.get(c2).partitions(), equalTo(Collections.singletonList(t1p1)));
+        assertThat(
+            AssignmentInfo.decode(assignment.get(c2).userData()),
+            equalTo(new AssignmentInfo(
+                Collections.singletonList(task0_1),
+                Collections.emptyMap(),
                 Collections.emptyMap()
             )));
     }
