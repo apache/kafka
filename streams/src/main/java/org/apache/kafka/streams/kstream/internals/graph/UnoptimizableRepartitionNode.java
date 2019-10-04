@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  * Repartition node that is not subject of optimization algorithm
  */
 public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
-    private final StreamPartitioner<K, V> partitioner;
     private final InternalTopicProperties internalTopicProperties;
 
     private UnoptimizableRepartitionNode(final String nodeName,
@@ -45,10 +44,9 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
             keySerde,
             valueSerde,
             sinkName,
-            repartitionTopic
+            repartitionTopic,
+            partitioner
         );
-
-        this.partitioner = partitioner;
         this.internalTopicProperties = internalTopicProperties;
     }
 

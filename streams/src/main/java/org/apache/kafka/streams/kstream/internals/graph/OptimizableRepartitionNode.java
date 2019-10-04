@@ -31,7 +31,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                                        final Serde<K> keySerde,
                                        final Serde<V> valueSerde,
                                        final String sinkName,
-                                       final String repartitionTopic) {
+                                       final String repartitionTopic,
+                                       final StreamPartitioner<K, V> partitioner) {
         super(
             nodeName,
             sourceName,
