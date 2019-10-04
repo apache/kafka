@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.concurrent.CyclicBarrier;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
@@ -116,6 +117,8 @@ public abstract class AbstractCoordinator implements Closeable {
         REBALANCING, // the client has begun rebalancing
         STABLE,      // the client has joined and is sending heartbeats
     }
+
+    private static CyclicBarrier readerBarrier = new CyclicBarrier(2);
 
     private final Logger log;
     private final GroupCoordinatorMetrics sensors;
@@ -406,6 +409,16 @@ public abstract class AbstractCoordinator implements Closeable {
             if (future.succeeded()) {
                 // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                 ByteBuffer memberAssignment = future.value().duplicate();
+
+                if ("testConsumer-0".equals(Thread.currentThread().getName())) {
+                    try {
+                        readerBarrier.await();
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
 
                 // We reset the join group future only after the completion callback returns. This ensures
@@ -587,6 +600,16 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.rejoinNeeded = true;
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
+
+                if ("testConsumer-1".equals(Thread.currentThread().getName())) {
+                    try {
+                        readerBarrier.await();
+                    }
+                    catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
                 future.raise(error);
             } else {
                 // unexpected error, throw the exception
