@@ -905,7 +905,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
 
-        // Interleave any remaining tasks among the consumers with remaining capacity
+        // Interleave any remaining tasks by groupId among the consumers with remaining capacity. For further
+        // explanation, see the javadocs for #interleaveConsumerTasksByGroupId
         Collections.sort(newTasks);
         while (!newTasks.isEmpty()) {
             if (unfilledConsumers.isEmpty()) {
@@ -913,7 +914,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             final Iterator<String> consumerIt = unfilledConsumers.iterator();
-            // Loop through the unfilled consumers and distribute tasks
+
+            // Loop through the unfilled consumers and distribute tasks until newTasks is empty
             while (consumerIt.hasNext()) {
                 final String consumer = consumerIt.next();
                 final List<TaskId> consumerAssignment = assignments.get(consumer);
@@ -960,19 +962,37 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return previousConsumers;
     }
 
-    // visible for testing
+    /**
+     * Generate an assignment that attempts to maximize load balance without regard for stickiness, by spreading
+     * tasks of the same groupId (subtopology) over different consumers.
+     *
+     * @param taskIds the set of tasks to be distributed
+     * @param consumers the set of consumers to receive tasks
+     * @return a map of task assignments keyed by the consumer id
+     */
     static Map<String, List<TaskId>> interleaveConsumerTasksByGroupId(final Collection<TaskId> taskIds,
                                                                       final Set<String> consumers) {
+        // First we make a sorted list of the tasks, grouping them by groupId
         final LinkedList<TaskId> sortedTasks = new LinkedList<>(taskIds);
         Collections.sort(sortedTasks);
+
+        // Initialize the assignment map and task list for each consumer. We use a TreeMap here for a consistent
+        // ordering of the consumers in the hope they will end up with the same set of tasks in subsequent assignments
         final Map<String, List<TaskId>> taskIdsForConsumerAssignment = new TreeMap<>();
         for (final String consumer : consumers) {
             taskIdsForConsumerAssignment.put(consumer, new ArrayList<>());
         }
+
+        // We loop until the tasks have all been assigned, removing them from the list when they are given to a
+        // consumer. To interleave the tasks, we loop through the consumers and give each one task from the head
+        // of the list. When we finish going through the list of consumers we start over at the beginning of the
+        // consumers list, continuing until we run out of tasks.
         while (!sortedTasks.isEmpty()) {
             for (final Map.Entry<String, List<TaskId>> consumerTaskIds : taskIdsForConsumerAssignment.entrySet()) {
                 final List<TaskId> taskIdList = consumerTaskIds.getValue();
                 final TaskId taskId = sortedTasks.poll();
+
+                // Check for null here as we may run out of tasks before giving every consumer exactly the same number
                 if (taskId == null) {
                     break;
                 }
