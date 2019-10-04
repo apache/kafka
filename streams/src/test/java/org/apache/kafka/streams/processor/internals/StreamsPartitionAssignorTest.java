@@ -64,19 +64,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static junit.framework.TestCase.assertFalse;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("unchecked")
 public class StreamsPartitionAssignorTest {
-    private final String c0 = "consumer0";
     private final String c1 = "consumer1";
     private final String c2 = "consumer2";
     private final String c3 = "consumer3";
@@ -113,21 +112,21 @@ public class StreamsPartitionAssignorTest {
     private final TaskId task2_3 = new TaskId(2, 3);
 
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<TaskId, Set<TopicPartition>>() {{
-        put(task0_0, Utils.mkSet(t1p0, t2p0));
-        put(task0_1, Utils.mkSet(t1p1, t2p1));
-        put(task0_2, Utils.mkSet(t1p2, t2p2));
-        put(task0_3, Utils.mkSet(t1p3, t2p3));
+            put(task0_0, Utils.mkSet(t1p0, t2p0));
+            put(task0_1, Utils.mkSet(t1p1, t2p1));
+            put(task0_2, Utils.mkSet(t1p2, t2p2));
+            put(task0_3, Utils.mkSet(t1p3, t2p3));
 
-        put(task1_0, Utils.mkSet(t3p0));
-        put(task1_1, Utils.mkSet(t3p1));
-        put(task1_2, Utils.mkSet(t3p2));
-        put(task1_3, Utils.mkSet(t3p3));
+            put(task1_0, Utils.mkSet(t3p0));
+            put(task1_1, Utils.mkSet(t3p1));
+            put(task1_2, Utils.mkSet(t3p2));
+            put(task1_3, Utils.mkSet(t3p3));
 
-        put(task2_0, Utils.mkSet(t4p0));
-        put(task2_1, Utils.mkSet(t4p1));
-        put(task2_2, Utils.mkSet(t4p2));
-        put(task2_3, Utils.mkSet(t4p3));
-    }};
+            put(task2_0, Utils.mkSet(t4p0));
+            put(task2_1, Utils.mkSet(t4p1));
+            put(task2_2, Utils.mkSet(t4p2));
+            put(task2_3, Utils.mkSet(t4p3));
+        }};
 
     private final Set<String> allTopics = Utils.mkSet("topic1", "topic2");
 
@@ -243,10 +242,10 @@ public class StreamsPartitionAssignorTest {
         final List<TaskId> allTasks = Arrays.asList(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
 
         final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
-            put(c1, Arrays.asList(task0_0, task1_1, task1_3));
-            put(c2, Arrays.asList(task0_3, task1_0));
-            put(c3, Arrays.asList(task0_1, task0_2, task1_2));
-        }};
+                put(c1, Arrays.asList(task0_0, task1_1, task1_3));
+                put(c2, Arrays.asList(task0_3, task1_0));
+                put(c3, Arrays.asList(task0_1, task0_2, task1_2));
+            }};
 
         for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
             for (final TaskId task : entry.getValue()) {
@@ -269,10 +268,10 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> allTasks = Utils.mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
 
         final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
-            put(c1, new ArrayList<>(Arrays.asList(task0_0, task1_1, task1_3)));
-            put(c2, new ArrayList<>(Arrays.asList(task0_3, task1_0)));
-            put(c3, new ArrayList<>(Arrays.asList(task0_1, task0_2, task1_2)));
-        }};
+                put(c1, new ArrayList<>(Arrays.asList(task0_0, task1_1, task1_3)));
+                put(c2, new ArrayList<>(Arrays.asList(task0_3, task1_0)));
+                put(c3, new ArrayList<>(Arrays.asList(task0_1, task0_2, task1_2)));
+            }};
 
         for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
             for (final TaskId task : entry.getValue()) {
@@ -294,17 +293,17 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseNewConsumer() {
+    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseNewConsumerJoined() {
         configureDefault();
         final ClientState state = new ClientState();
 
         final List<TaskId> allTasks = Arrays.asList(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
 
         final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
-            put(c1, Arrays.asList(task0_0, task1_1, task1_3));
-            put(c2, Arrays.asList(task0_3, task1_0));
-            put(c3, Arrays.asList(task0_1, task0_2, task1_2));
-        }};
+                put(c1, Arrays.asList(task0_0, task1_1, task1_3));
+                put(c2, Arrays.asList(task0_3, task1_0));
+                put(c3, Arrays.asList(task0_1, task0_2, task1_2));
+            }};
 
         for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
             for (final TaskId task : entry.getValue()) {
@@ -317,6 +316,35 @@ public class StreamsPartitionAssignorTest {
         state.assignActiveTasks(allTasks);
 
         assertThat(partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, Collections.emptySet()),
+            equalTo(Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseOtherClientOwnedPartition() {
+        configureDefault();
+        final ClientState state = new ClientState();
+
+        final List<TaskId> allTasks = Arrays.asList(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
+
+        final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
+                put(c1, new ArrayList<>(Arrays.asList(task1_1, task1_3)));
+                put(c2, new ArrayList<>(Arrays.asList(task0_3, task1_0)));
+                put(c3, new ArrayList<>(Arrays.asList(task0_1, task0_2, task1_2)));
+            }};
+
+        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
+            for (final TaskId task : entry.getValue()) {
+                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
+            }
+        }
+
+        // Add the partitions of task0_0 to allOwnedPartitions but not c1's ownedPartitions/previousAssignment
+        final Set<TopicPartition> allOwnedPartitions = new HashSet<>(partitionsForTask.get(task0_0));
+
+        final Set<String> consumers = Utils.mkSet(c1, c2, c3);
+        state.assignActiveTasks(allTasks);
+
+        assertThat(partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, allOwnedPartitions),
             equalTo(Collections.emptyMap()));
     }
 
