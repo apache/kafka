@@ -139,24 +139,22 @@ public class ProcessorTopologyTest {
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
-        final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
 
         inputTopic.pipeInput("key1", "value1");
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1");
-        assertTrue(outputTopic2.isEmpty());
+        assertTrue(outputTopic1.isEmpty());
 
         inputTopic.pipeInput("key2", "value2");
         assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2");
-        assertTrue(outputTopic2.isEmpty());
+        assertTrue(outputTopic1.isEmpty());
 
         inputTopic.pipeInput("key3", "value3");
         inputTopic.pipeInput("key4", "value4");
         inputTopic.pipeInput("key5", "value5");
-        assertTrue(outputTopic2.isEmpty());
         assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3");
         assertNextOutputRecord(outputTopic1.readRecord(), "key4", "value4");
         assertNextOutputRecord(outputTopic1.readRecord(), "key5", "value5");
+        assertTrue(outputTopic1.isEmpty());
     }
 
 
