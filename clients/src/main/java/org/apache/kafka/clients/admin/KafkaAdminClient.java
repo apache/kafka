@@ -3598,7 +3598,7 @@ public class KafkaAdminClient extends AdminClient {
                 // If coordinator changed since we fetched it, retry
                 if (context.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context,
-                                                  () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                        () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
                     return;
                 }
 
@@ -3608,7 +3608,7 @@ public class KafkaAdminClient extends AdminClient {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (context.shouldRefreshCoordinator(error)) {
                             rescheduleFindCoordinatorTask(context,
-                                                          () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                                () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
                             return;
                         }
                     }
@@ -3678,7 +3678,7 @@ public class KafkaAdminClient extends AdminClient {
             TopicPartition tp = entry.getKey();
             KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
             long offsetQuery = (offsetSpec instanceof TimestampSpec)
-                    ? ((TimestampSpec)offsetSpec).timestamp()
+                    ? ((TimestampSpec) offsetSpec).timestamp()
                     : (offsetSpec instanceof OffsetSpec.EarliestSpec)
                         ? ListOffsetRequest.EARLIEST_TIMESTAMP
                         : ListOffsetRequest.LATEST_TIMESTAMP;
@@ -3718,8 +3718,10 @@ public class KafkaAdminClient extends AdminClient {
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(result.getKey());
                         PartitionData partitionData = result.getValue();
                         Errors error = partitionData.error;
-                        if (context.shouldRefreshMetadata(error))
+                        if (context.shouldRefreshMetadata(error)) {
                             rescheduleMetadataTask(context, () -> calls);
+                            return;
+                        }
                         if (partitionData.error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
                         } else {

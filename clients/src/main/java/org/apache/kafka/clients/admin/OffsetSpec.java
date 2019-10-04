@@ -21,8 +21,8 @@ package org.apache.kafka.clients.admin;
  */
 public class OffsetSpec {
 
-    static class EarliestSpec extends OffsetSpec {}
-    static class LatestSpec extends OffsetSpec {}
+    static class EarliestSpec extends OffsetSpec { }
+    static class LatestSpec extends OffsetSpec { }
     static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 

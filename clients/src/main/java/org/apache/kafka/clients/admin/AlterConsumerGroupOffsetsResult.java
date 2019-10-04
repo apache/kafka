@@ -50,7 +50,7 @@ public class AlterConsumerGroupOffsetsResult {
             return KafkaFuture.allOf(values().get().values().toArray(new KafkaFuture[0]));
         } catch (InterruptedException | ExecutionException e) {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-            future.completeExceptionally(e);
+            future.completeExceptionally(e.getCause());
             return future;
         }
     }
