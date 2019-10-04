@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics.stats;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
