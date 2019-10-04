@@ -38,7 +38,7 @@ public interface Readable {
         return new String(arr, StandardCharsets.UTF_8);
     }
 
-    default List<RawTaggedField> readRawTaggedField(List<RawTaggedField> unknowns, int tag, int size) {
+    default List<RawTaggedField> readUnknownTaggedField(List<RawTaggedField> unknowns, int tag, int size) {
         if (unknowns == null) {
             unknowns = new ArrayList<>();
         }

@@ -525,7 +525,7 @@ public final class MessageDataGenerator {
                 }
                 buffer.printf("default:%n");
                 buffer.incrementIndent();
-                buffer.printf("this._unknownTaggedFields = _readable.readRawTaggedField(this._unknownTaggedFields, _tag, _size);%n");
+                buffer.printf("this._unknownTaggedFields = _readable.readUnknownTaggedField(this._unknownTaggedFields, _tag, _size);%n");
                 buffer.printf("break;%n");
                 buffer.decrementIndent();
                 buffer.decrementIndent();

@@ -33,8 +33,19 @@ public class TaggedFields extends DocumentedType {
 
     private final Map<Integer, Field> fields;
 
+    /**
+     * Create a new TaggedFields object with the given tags and fields.
+     *
+     * @param fields    This is an array containing Integer tags followed
+     *                  by associated Field objects.
+     * @return          The new {@link TaggedFields}
+     */
     @SuppressWarnings("unchecked")
     public static TaggedFields of(Object... fields) {
+        if (fields.length % 2 != 0) {
+            throw new RuntimeException("TaggedFields#of takes an even " +
+                "number of parameters.");
+        }
         TreeMap<Integer, Field> newFields = new TreeMap<>();
         for (int i = 0; i < fields.length; i += 2) {
             Integer tag = (Integer) fields[i];
@@ -154,7 +165,7 @@ public class TaggedFields extends DocumentedType {
             }
             return objects;
         } catch (ClassCastException e) {
-            throw new SchemaException("Not a Map.");
+            throw new SchemaException("Not a NavigableMap.");
         }
     }
 

@@ -101,7 +101,7 @@ public final class FieldSpec {
             }
         }
         this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
-        if ((flexibleVersions == null) || flexibleVersions.isEmpty()) {
+        if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {
             this.flexibleVersions = Optional.of(Versions.parse(flexibleVersions, null));
@@ -114,7 +114,7 @@ public final class FieldSpec {
                     "override.");
             }
         }
-        this.tag = (tag == null) ? Optional.empty() : Optional.of(tag);
+        this.tag = Optional.ofNullable(tag);
         checkTagInvariants();
     }
 

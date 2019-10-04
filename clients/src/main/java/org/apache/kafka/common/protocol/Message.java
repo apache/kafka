@@ -50,7 +50,7 @@ public interface Message {
     int size(ObjectSerializationCache cache, short version);
 
     /**
-     * Writes out this message to the given ByteBuffer.
+     * Writes out this message to the given Writable.
      *
      * @param writable      The destination writable.
      * @param cache         The object serialization cache to use.  You must have
@@ -64,7 +64,7 @@ public interface Message {
     void write(Writable writable, ObjectSerializationCache cache, short version);
 
     /**
-     * Reads this message from the given ByteBuffer.  This will overwrite all
+     * Reads this message from the given Readable.  This will overwrite all
      * relevant fields with information from the byte buffer.
      *
      * @param readable      The source readable.

@@ -852,33 +852,28 @@ public final class MessageTest {
 
     private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        try {
-            int size = message.size(cache, version);
-            ByteBuffer buf = ByteBuffer.allocate(size);
-            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        assertThrows(NullPointerException.class, () -> {
             message.write(byteBufferAccessor, cache, version);
-            fail("Expected to see a NullPointerException when writing " +
-                message + " at version " + version);
-        } catch (NullPointerException e) {
-        }
+        });
     }
 
     private void verifyWriteRaisesUve(short version,
                                       String problemText,
                                      Message message) throws Exception {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        try {
-            int size = message.size(cache, version);
-            ByteBuffer buf = ByteBuffer.allocate(size);
-            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-            message.write(byteBufferAccessor, cache, version);
-            fail("Expected to see an UnsupportedVersionException when writing " +
-                message + " at version " + version);
-        } catch (UnsupportedVersionException e) {
-            assertTrue("Expected to get an error message about " + problemText +
-                    ", but got: " + e.getMessage(),
-                    e.getMessage().contains(problemText));
-        }
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        UnsupportedVersionException e =
+            assertThrows(UnsupportedVersionException.class, () -> {
+                message.write(byteBufferAccessor, cache, version);
+        });
+        assertTrue("Expected to get an error message about " + problemText +
+                ", but got: " + e.getMessage(),
+                e.getMessage().contains(problemText));
     }
 
     private void verifyWriteSucceeds(short version, Message message) throws Exception {
@@ -893,7 +888,6 @@ public final class MessageTest {
         while (alt.hasRemaining()) {
             bld.append(String.format(" %02x", alt.get()));
         }
-        System.out.println("WATERMELON: buffer is " + bld.toString());
         assertEquals("Expected the serialized size to be " + size +
             ", but it was " + buf.position(), size, buf.position());
     }
