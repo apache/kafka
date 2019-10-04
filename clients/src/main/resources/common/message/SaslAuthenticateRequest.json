@@ -18,10 +18,8 @@
   "type": "request",
   "name": "SaslAuthenticateRequest",
   // Version 1 is the same as version 0.
-  //
-  // Version 2 is the first flexible version.
-  "validVersions": "0-2",
-  "flexibleVersions": "2+",
+  "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",
       "about": "The SASL authentication bytes from the client, as defined by the SASL mechanism." }

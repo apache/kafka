@@ -693,7 +693,7 @@ public class SaslAuthenticatorTest {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, header.headerVersion());
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
 
