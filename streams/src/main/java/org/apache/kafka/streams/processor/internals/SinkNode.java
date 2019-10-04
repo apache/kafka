@@ -93,7 +93,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             throw new StreamsException(
                     String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
                                     "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
-                                    "provide correct Serdes via method parameters.",
+                                    "provide correct Serdes via method parameters (for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
                                     keySerializer.getClass().getName(),
                                     valSerializer.getClass().getName(),
                                     keyClass,
