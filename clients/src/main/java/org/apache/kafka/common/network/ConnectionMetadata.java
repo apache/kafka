@@ -22,6 +22,9 @@ import java.util.Map;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
+/**
+ * Maintains metadata about an active connection.
+ */
 public class ConnectionMetadata {
     static final String CLIENT_ID_KEY = "ClientId";
     static final String CLIENT_SOFTWARE_NAME_KEY = "ClientSoftwareName";

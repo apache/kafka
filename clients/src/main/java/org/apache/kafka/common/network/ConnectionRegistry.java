@@ -29,8 +29,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
+/**
+ * Maintains metadata about each active connections and exposed various metrics about the connections
+ * and the clients.
+ */
 public class ConnectionRegistry {
-    private static final String METRICS_GROUP_NAME = "ClientMetrics";
 
     private static class CounterMetric implements Gauge<Integer> {
         private MetricName name;
@@ -61,6 +64,8 @@ public class ConnectionRegistry {
 
     }
 
+    private static final String METRICS_GROUP_NAME = "ClientMetrics";
+
     private final Metrics metrics;
     private final String metricsGroup;
     private final MetricName connectionsMetricName;
@@ -69,6 +74,9 @@ public class ConnectionRegistry {
     private final Map<String, CounterMetric> counters;
     private final Map<String, ConnectionMetadata> connections;
 
+    /**
+     * Creates a Connection Registry.
+     */
     public ConnectionRegistry(Metrics metrics, String metricsGroup) {
         this.metrics = metrics;
         this.metricsGroup = metricsGroup;
@@ -107,10 +115,18 @@ public class ConnectionRegistry {
         );
     }
 
+    /**
+     * Creates a Connection Registry.
+     */
     public ConnectionRegistry(Metrics metrics) {
         this(metrics, METRICS_GROUP_NAME);
     }
 
+    /**
+     * Register metadata about a connection.
+     *
+     * Note that the method is synchronized to guard the counters.
+     */
     public synchronized ConnectionMetadata register(
             String connectionId,
             String clientId,
@@ -138,6 +154,11 @@ public class ConnectionRegistry {
         return connection;
     }
 
+    /**
+     * Updates the client software name and version.
+     *
+     * Note that the method is synchronized to guard the counters.
+     */
     public synchronized ConnectionMetadata updateClientSoftwareNameAndVersion(
             String connectionId,
             String clientSoftwareName,
@@ -154,6 +175,11 @@ public class ConnectionRegistry {
         return connection;
     }
 
+    /**
+     * Removes metadata about a connection.
+     *
+     * Note that the method is synchronized to guard the counters.
+     */
     public synchronized void remove(String connectionId) {
         ConnectionMetadata connection = connections.remove(connectionId);
 
@@ -162,6 +188,9 @@ public class ConnectionRegistry {
         }
     }
 
+    /**
+     * Closes the registry.
+     */
     public synchronized void close() {
         for (CounterMetric counter : counters.values()) {
             metrics.removeMetric(counter.name());
@@ -172,6 +201,16 @@ public class ConnectionRegistry {
         connections.clear();
     }
 
+    /**
+     * Gets metadata about a connection.
+     *
+     * Note that the method is NOT synchronized. A lookup is made for each request in the
+     * processor to enrich the request with the metadata (e.g. client software name and version).
+     * We have made the choice to not synchronize this to minimize the contention between the
+     * processor threads, risking that metadata could be stale or inconsistent for few requests. This
+     * should rarely happen in practice because the metadata is only updated by the ApiVersionsRequest
+     * and there are normally no concurrent requests within the connection.
+     */
     public ConnectionMetadata get(String connectionId) {
         return connections.get(connectionId);
     }
