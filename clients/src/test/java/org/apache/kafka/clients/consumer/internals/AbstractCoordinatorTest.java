@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -502,8 +501,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHandleSingleLeaveGroupRequest() {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-        mockClient.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-            new ApiVersionsResponse.ApiVersion(ApiKeys.LEAVE_GROUP, (short) 2, (short) 2))));
+        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.LEAVE_GROUP.id, (short) 2, (short) 2));
 
         LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
             new MemberResponse()
