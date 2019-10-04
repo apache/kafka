@@ -843,19 +843,19 @@ public final class MessageTest {
     @Test
     public void testUnknownTaggedFields() throws Exception {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
-        verifyWriteSucceeds((short) 5, createTopics);
+        verifyWriteSucceeds((short) 6, createTopics);
         RawTaggedField field1000 = new RawTaggedField(1000, new byte[] {0x1, 0x2, 0x3});
         createTopics.unknownTaggedFields().add(field1000);
         verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
-        verifyWriteSucceeds((short) 5, createTopics);
+        verifyWriteSucceeds((short) 6, createTopics);
     }
 
     private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         assertThrows(NullPointerException.class, () -> {
+            int size = message.size(cache, version);
+            ByteBuffer buf = ByteBuffer.allocate(size);
+            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
             message.write(byteBufferAccessor, cache, version);
         });
     }
@@ -864,11 +864,11 @@ public final class MessageTest {
                                       String problemText,
                                      Message message) throws Exception {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         UnsupportedVersionException e =
             assertThrows(UnsupportedVersionException.class, () -> {
+                int size = message.size(cache, version);
+                ByteBuffer buf = ByteBuffer.allocate(size);
+                ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
                 message.write(byteBufferAccessor, cache, version);
             });
         assertTrue("Expected to get an error message about " + problemText +
