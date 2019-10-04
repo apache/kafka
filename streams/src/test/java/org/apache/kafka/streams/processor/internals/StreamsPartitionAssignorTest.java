@@ -94,6 +94,10 @@ public class StreamsPartitionAssignorTest {
     private final TopicPartition t3p1 = new TopicPartition("topic3", 1);
     private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
     private final TopicPartition t3p3 = new TopicPartition("topic3", 3);
+    private final TopicPartition t4p0 = new TopicPartition("topic4", 0);
+    private final TopicPartition t4p1 = new TopicPartition("topic4", 1);
+    private final TopicPartition t4p2 = new TopicPartition("topic4", 2);
+    private final TopicPartition t4p3 = new TopicPartition("topic4", 3);
 
     private final TaskId task0_0 = new TaskId(0, 0);
     private final TaskId task0_1 = new TaskId(0, 1);
@@ -103,6 +107,10 @@ public class StreamsPartitionAssignorTest {
     private final TaskId task1_1 = new TaskId(1, 1);
     private final TaskId task1_2 = new TaskId(1, 2);
     private final TaskId task1_3 = new TaskId(1, 3);
+    private final TaskId task2_0 = new TaskId(2, 0);
+    private final TaskId task2_1 = new TaskId(2, 1);
+    private final TaskId task2_2 = new TaskId(2, 2);
+    private final TaskId task2_3 = new TaskId(2, 3);
 
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<TaskId, Set<TopicPartition>>() {{
         put(task0_0, Utils.mkSet(t1p0, t2p0));
@@ -114,6 +122,11 @@ public class StreamsPartitionAssignorTest {
         put(task1_1, Utils.mkSet(t3p1));
         put(task1_2, Utils.mkSet(t3p2));
         put(task1_3, Utils.mkSet(t3p3));
+
+        put(task2_0, Utils.mkSet(t4p0));
+        put(task2_1, Utils.mkSet(t4p1));
+        put(task2_2, Utils.mkSet(t4p2));
+        put(task2_3, Utils.mkSet(t4p3));
     }};
 
     private final Set<String> allTopics = Utils.mkSet("topic1", "topic2");
@@ -224,17 +237,16 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldProduceStickyAndBalancedAssignmentWhenPossible() {
+    public void shouldProduceStickyAndBalancedAssignmentWhenNothingChanges() {
+        configureDefault();
+        final ClientState state = new ClientState();
         final List<TaskId> allTasks = Arrays.asList(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
-        Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
+
+        final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
             put(c1, Arrays.asList(task0_0, task1_1, task1_3));
             put(c2, Arrays.asList(task0_3, task1_0));
             put(c3, Arrays.asList(task0_1, task0_2, task1_2));
         }};
-
-        final Set<String> consumers = Utils.mkSet(c1, c2, c3);
-        final ClientState state = new ClientState();
-        state.assignActiveTasks(allTasks);
 
         for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
             for (final TaskId task : entry.getValue()) {
@@ -242,10 +254,70 @@ public class StreamsPartitionAssignorTest {
             }
         }
 
-        configureDefault();
+        final Set<String> consumers = Utils.mkSet(c1, c2, c3);
+        state.assignActiveTasks(allTasks);
 
         assertEquivalentAssignment(previousAssignment,
             partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, Collections.emptySet()));
+    }
+
+    @Test
+    public void shouldProduceStickyAndBalancedAssignmentWhenNewTasksAreAdded() {
+        configureDefault();
+        final ClientState state = new ClientState();
+
+        final Set<TaskId> allTasks = Utils.mkSet(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
+
+        final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
+            put(c1, new ArrayList<>(Arrays.asList(task0_0, task1_1, task1_3)));
+            put(c2, new ArrayList<>(Arrays.asList(task0_3, task1_0)));
+            put(c3, new ArrayList<>(Arrays.asList(task0_1, task0_2, task1_2)));
+        }};
+
+        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
+            for (final TaskId task : entry.getValue()) {
+                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
+            }
+        }
+
+        final Set<String> consumers = Utils.mkSet(c1, c2, c3);
+
+        // We should be able to add a new task without sacrificing stickyness
+        final TaskId newTask = task2_0;
+        allTasks.add(newTask);
+        state.assignActiveTasks(allTasks);
+
+        final Map<String, List<TaskId>> newAssignment = partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, Collections.emptySet());
+
+        previousAssignment.get(c2).add(newTask);
+        assertEquivalentAssignment(previousAssignment, newAssignment);
+    }
+
+    @Test
+    public void shouldReturnEmptyMapWhenStickyAndBalancedAssignmentIsNotPossibleBecauseNewConsumer() {
+        configureDefault();
+        final ClientState state = new ClientState();
+
+        final List<TaskId> allTasks = Arrays.asList(task0_0, task0_1, task0_2, task0_3, task1_0, task1_1, task1_2, task1_3);
+
+        final Map<String, List<TaskId>> previousAssignment = new HashMap<String, List<TaskId>>() {{
+            put(c1, Arrays.asList(task0_0, task1_1, task1_3));
+            put(c2, Arrays.asList(task0_3, task1_0));
+            put(c3, Arrays.asList(task0_1, task0_2, task1_2));
+        }};
+
+        for (final Map.Entry<String, List<TaskId>> entry : previousAssignment.entrySet()) {
+            for (final TaskId task : entry.getValue()) {
+                state.addOwnedPartitions(partitionsForTask.get(task), entry.getKey());
+            }
+        }
+
+        // If we add a new consumer here, we cannot produce an assignment that is both sticky and balanced
+        final Set<String> consumers = Utils.mkSet(c1, c2, c3, c4);
+        state.assignActiveTasks(allTasks);
+
+        assertThat(partitionAssignor.tryStickyAndBalancedTaskAssignmentWithinClient(state, consumers, partitionsForTask, Collections.emptySet()),
+            equalTo(Collections.emptyMap()));
     }
 
     @Test
@@ -1496,5 +1568,5 @@ public class StreamsPartitionAssignorTest {
             assertThat(new HashSet<>(thisTaskList), equalTo(new HashSet<>(otherTaskList)));
         }
     }
-    
+
 }
