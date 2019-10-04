@@ -672,7 +672,7 @@ public class Sender implements Runnable {
                     log.error(response.error.message());
 
                 // remove this batch from in flight batches and deallocate it
-                Set<Integer> relativeOffsets = new HashSet<>(response.errorRecords);
+                Set<Integer> relativeOffsets = response.errorRecords.keySet();
                 failPartialBatch(batch, response, relativeOffsets, new InvalidRecordException("Batch is dropped"), true);
                 this.accumulator.dropRecordsAndReenqueueNewBatch(batch, relativeOffsets, now);
             } else {
