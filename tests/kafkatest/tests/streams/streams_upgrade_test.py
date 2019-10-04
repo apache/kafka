@@ -89,8 +89,6 @@ class StreamsUpgradeTest(Test):
             'echo' : { 'partitions': 5 },
             'data' : { 'partitions': 5 },
         }
-        self.leader = None
-        self.leader_counter = {}
 
     processed_msg = "processed [0-9]* records"
     base_version_number = str(DEV_VERSION).split("-")[0]
@@ -317,13 +315,6 @@ class StreamsUpgradeTest(Test):
         self.processors = [self.processor1, self.processor2, self.processor3]
         self.old_processors = [self.processor1, self.processor2, self.processor3]
         self.upgraded_processors = []
-        for p in self.processors:
-            self.leader_counter[p] = 2
-
-        self.update_leader()
-        for p in self.processors:
-            self.leader_counter[p] = 0
-        self.leader_counter[self.leader] = 3
 
         counter = 1
         current_generation = 3
@@ -347,25 +338,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-    def update_leader(self):
-        self.leader = None
-        retries = 10
-        while retries > 0:
-            for p in self.processors:
-                found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) >= self.leader_counter[p] + 1:
-                    self.leader = p
-                    self.leader_counter[p] = self.leader_counter[p] + 1
-
-            if self.leader is None:
-                retries = retries - 1
-                time.sleep(5)
-            else:
-                break
-
-        if self.leader is None:
-            raise Exception("Could not identify leader")
 
     def get_version_string(self, version):
         if version.startswith("0") or version.startswith("1") \
@@ -533,7 +505,6 @@ class StreamsUpgradeTest(Test):
                 node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.LOG_FILE + " " + processor.LOG_FILE + "." + str(counter), allow_fail=False)
-                self.leader_counter[processor] = 0
 
                 with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
                     processor.set_upgrade_to("future_version")
@@ -549,11 +520,6 @@ class StreamsUpgradeTest(Test):
                     log_monitor.wait_until("partition\.assignment\.strategy = \[org\.apache\.kafka\.streams\.tests\.StreamsUpgradeTest$FutureStreamsPartitionAssignor\]",
                                            timeout_sec=60,
                                            err_msg="Could not detect FutureStreamsPartitionAssignor in " + str(node.account))
-
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
                     monitors = {}
                     monitors[processor] = log_monitor
@@ -609,12 +575,8 @@ class StreamsUpgradeTest(Test):
                     if generation_synchronized == False:
                         raise Exception("Never saw all three processors have the synchronized generation number")
 
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
-                    if self.leader in self.old_processors or len(self.old_processors) > 0:
+                    if len(self.old_processors) > 0:
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
@@ -624,9 +586,9 @@ class StreamsUpgradeTest(Test):
 
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
-            found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
+            found = list(p.node.account.ssh_capture("grep \"Sent a version 5 subscription and group.s latest commonly supported version is 6 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 6 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 6 too early'")
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:
