@@ -61,7 +61,7 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
                 if (nodeSpec.latencyMs() < 0) {
                     throw new RuntimeException("Expected a positive value for latencyMs, but got " + nodeSpec.latencyMs());
                 } else {
-                    enableTrafficControl(platform, device, nodeSpec.latencyMs());
+                    enableTrafficControl(platform, device, nodeSpec.latencyMs(), nodeSpec.rateLimitKbit());
                 }
             }
         }
@@ -96,12 +96,21 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
         return devices;
     }
 
-    private void enableTrafficControl(Platform platform, String networkDevice, int delayMs) throws IOException {
+    private void enableTrafficControl(Platform platform, String networkDevice, int delayMs, int rateLimitKbps) throws IOException {
         int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
         platform.runCommand(new String[] {
-            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "netem",
-            "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs), "distribution", "normal"
+            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "handle", "1:0",
+            "netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs), "distribution", "paretonormal"
         });
+
+        if (rateLimitKbps > 0) {
+            int maxLatency = delayMs * delayMs;
+            platform.runCommand(new String[]{
+                // tc qdisc add dev eth0 parent 1:1 handle 10: tbf rate 256kbit buffer 1600 limit 3000
+                "tc", "qdisc", "add", "dev", "eth0", "parent", "1:1", "handle", "10:",
+                "tbf", "rate", String.format("%dkbit", rateLimitKbps), "buffer", "32kbit", "latency", String.format("%dms", maxLatency)
+            });
+        }
     }
 
     private void disableTrafficControl(Platform platform, String networkDevice) throws IOException {
