@@ -1873,7 +1873,7 @@ project(':connect:mirror-client') {
   }
 
   javadoc {
-    enabled = false
+    enabled = true
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {

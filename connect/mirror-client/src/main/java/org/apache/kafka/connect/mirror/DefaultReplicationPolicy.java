@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Defines remote topics like "us-west.topic1". The separator is customizable and defaults to a period. */
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {
     
     private static final Logger log = LoggerFactory.getLogger(DefaultReplicationPolicy.class);

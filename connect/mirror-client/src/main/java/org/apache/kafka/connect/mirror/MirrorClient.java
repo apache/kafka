@@ -43,10 +43,10 @@ import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
 
 /** Interprets MM2's internal topics (checkpoints, heartbeats) on a given cluster.
- *   
+ *  <p> 
  *  Given a top-level "mm2.properties" configuration file, MirrorClients can be constructed
  *  for individual clusters as follows:
- *
+ *  </p> 
  *  <pre>
  *    MirrorMakerConfig mmConfig = new MirrorMakerConfig(props);
  *    MirrorClientConfig mmClientConfig = mmConfig.clientConfig("some-cluster");
@@ -78,16 +78,19 @@ public class MirrorClient implements AutoCloseable {
         this.consumerConfig = consumerConfig;
     }
 
+    /** Close internal clients. */
     public void close() {
         adminClient.close();
     }
 
+    /** Get the ReplicationPolicy instance used to interpret remote topics. This instance is constructed based on
+     *  relevant configuration properties, including {@code replication.policy.class}. */
     public ReplicationPolicy replicationPolicy() {
         return replicationPolicy;
     }
 
     /** Compute shortest number of hops from an upstream source cluster.
-     *  For example, given replication flow A->B->C, there are two hops from A to C.
+     *  For example, given replication flow A-&gt;B-&gt;C, there are two hops from A to C.
      *  Returns -1 if upstream cluster is unreachable.
      */
     public int replicationHops(String upstreamClusterAlias) throws InterruptedException {
