@@ -137,6 +137,7 @@ public final class ApiMessageTypeGenerator {
         generateToString();
         buffer.printf("%n");
         generateHeaderVersion("request");
+        buffer.printf("%n");
         generateHeaderVersion("response");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -257,7 +258,14 @@ public final class ApiMessageTypeGenerator {
             short apiKey = entry.getKey();
             buffer.printf("case %d:%n", apiKey);
             buffer.incrementIndent();
-            if (apiKey == 7) {
+            if (apiKey == 18) {
+                // ApiVersionsResponse always includes a v0 header.
+                // See KIP-511 for details.
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                continue;
+            }
+            if (type.equals("request") && apiKey == 7) {
                 // Version 0 of ControlledShutdownRequest has a non-standard request header
                 // which does not include clientId.  Version 1 of ControlledShutdownRequest
                 // and later use the standard request header.
@@ -282,10 +290,18 @@ public final class ApiMessageTypeGenerator {
             VersionConditional.forVersions(spec.flexibleVersions(),
                 spec.validVersions()).
                 ifMember(__ -> {
-                    buffer.printf("return (short) 2;%n");
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 2;%n");
+                    } else {
+                        buffer.printf("return (short) 1;%n");
+                    }
                 }).
                 ifNotMember(__ -> {
-                    buffer.printf("return (short) 1;%n");
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 1;%n");
+                    } else {
+                        buffer.printf("return (short) 0;%n");
+                    }
                 }).generate(buffer);
             buffer.decrementIndent();
         }

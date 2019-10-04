@@ -34,7 +34,7 @@
       "about": "The top-level error code." },
     { "name": "ApiKeys", "type": "[]ApiVersionsResponseKey", "versions": "0+",
       "about": "The APIs supported by the broker.", "fields": [
-      { "name": "Index", "type": "int16", "versions": "0+", "mapKey": true,
+      { "name": "ApiKey", "type": "int16", "versions": "0+", "mapKey": true,
         "about": "The API index." },
       { "name": "MinVersion", "type": "int16", "versions": "0+",
         "about": "The minimum supported version, inclusive." },

@@ -870,7 +870,7 @@ public final class MessageTest {
         UnsupportedVersionException e =
             assertThrows(UnsupportedVersionException.class, () -> {
                 message.write(byteBufferAccessor, cache, version);
-        });
+            });
         assertTrue("Expected to get an error message about " + problemText +
                 ", but got: " + e.getMessage(),
                 e.getMessage().contains(problemText));
