@@ -28,8 +28,8 @@ import scala.collection.JavaConverters._
 
 object ApiVersionsRequestTest {
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.data.apiKeys().size())
-    for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
+    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.data.apiKeys.size())
+    for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys.asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
       assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
@@ -53,27 +53,37 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(Short.MaxValue), 0)
-    assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
-    assertFalse(apiVersionsResponse.data.apiKeys().isEmpty)
-    val apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id)
-    assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey())
-    assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion())
-    assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion())
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, apiVersionsResponse.data.errorCode)
+    assertFalse(apiVersionsResponse.data.apiKeys.isEmpty)
+    val apiVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.API_VERSIONS.id)
+    assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey)
+    assertEquals(ApiKeys.API_VERSIONS.oldestVersion, apiVersion.minVersion)
+    assertEquals(ApiKeys.API_VERSIONS.latestVersion, apiVersion.maxVersion)
   }
 
   @Test
-  def testApiVersionsRequestValidationV0(): Unit = {
-    val apiVersionsRequest = new ApiVersionsRequest.Builder().build( 0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(0.asInstanceOf[Short]), 0)
+  def testOldestApiVersionsRequestValidation(): Unit = {
+    val version = ApiKeys.API_VERSIONS.oldestVersion
+    val apiVersionsRequest = new ApiVersionsRequest.Builder().build(version)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(version), version)
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test
-  def testApiVersionsRequestValidationV3(): Unit = {
+  def testLatestInvalidApiVersionsRequestValidation(): Unit = {
     // Invalid request because Name and Version are empty by default
-    val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(3.asInstanceOf[Short]), 3)
-    assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
+    val version = ApiKeys.API_VERSIONS.latestVersion
+    val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), version)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(version), version)
+    assertEquals(Errors.INVALID_REQUEST.code, apiVersionsResponse.data.errorCode)
+  }
+
+  @Test
+  def testLatestValidApiVersionsRequestValidation(): Unit = {
+    val version = ApiKeys.API_VERSIONS.latestVersion
+    val apiVersionsRequest = new ApiVersionsRequest.Builder().build(version)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(version), version)
+    ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest, apiVersion: Option[Short] = None, responseVersion: Short = 1): ApiVersionsResponse = {

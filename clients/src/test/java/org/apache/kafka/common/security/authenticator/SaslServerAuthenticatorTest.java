@@ -53,8 +53,6 @@ import static org.mockito.Mockito.when;
 
 public class SaslServerAuthenticatorTest {
 
-
-
     @Test(expected = InvalidReceiveException.class)
     public void testOversizeRequest() throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class);
@@ -100,17 +98,18 @@ public class SaslServerAuthenticatorTest {
     }
 
     @Test
-    public void testApiVersionsRequestV0() throws IOException {
+    public void testOldestApiVersionsRequest() throws IOException {
+        final short version = ApiKeys.API_VERSIONS.oldestVersion();
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
             Collections.singletonList(SCRAM_SHA_256.mechanismName()));
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
 
-        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, (short) 0, "clientId", 0);
+        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
         final Struct headerStruct = header.toStruct();
 
-        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build((short) 0);
-        final Struct requestStruct = request.data.toStruct((short) 0);
+        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        final Struct requestStruct = request.data.toStruct(version);
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
 
@@ -132,17 +131,18 @@ public class SaslServerAuthenticatorTest {
     }
 
     @Test
-    public void testApiVersionsRequestV3() throws IOException {
+    public void testLatestApiVersionsRequest() throws IOException {
+        final short version = ApiKeys.API_VERSIONS.latestVersion();
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
             Collections.singletonList(SCRAM_SHA_256.mechanismName()));
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
 
-        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, (short) 3, "clientId", 0);
+        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
         final Struct headerStruct = header.toStruct();
 
-        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build((short) 3);
-        final Struct requestStruct = request.data.toStruct((short) 3);
+        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        final Struct requestStruct = request.data.toStruct(version);
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
 

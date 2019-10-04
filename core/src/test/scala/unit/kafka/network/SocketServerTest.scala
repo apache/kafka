@@ -233,13 +233,13 @@ class SocketServerTest {
     // Check connection metadata
     assertNotNull(connectionRegistry.get(connId))
     val connection = connectionRegistry.get(connId)
-    assertEquals(clientId, connection.clientId())
-    assertEquals(ConnectionMetadata.UNKNOWN_NAME_OR_VERSION, connection.clientSoftwareName())
-    assertEquals(ConnectionMetadata.UNKNOWN_NAME_OR_VERSION, connection.clientSoftwareVersion())
-    assertEquals(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), connection.listenerName())
-    assertEquals(SecurityProtocol.PLAINTEXT, connection.securityProtocol())
-    assertEquals(address, connection.clientAddress())
-    assertEquals(KafkaPrincipal.ANONYMOUS, connection.principal())
+    assertEquals(clientId, connection.clientId)
+    assertEquals(ConnectionMetadata.UNKNOWN_NAME_OR_VERSION, connection.clientSoftwareName)
+    assertEquals(ConnectionMetadata.UNKNOWN_NAME_OR_VERSION, connection.clientSoftwareVersion)
+    assertEquals(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), connection.listenerName)
+    assertEquals(SecurityProtocol.PLAINTEXT, connection.securityProtocol)
+    assertEquals(address, connection.clientAddress)
+    assertEquals(KafkaPrincipal.ANONYMOUS, connection.principal)
 
     // Close the socket
     plainSocket.setSoLinger(true, 0)

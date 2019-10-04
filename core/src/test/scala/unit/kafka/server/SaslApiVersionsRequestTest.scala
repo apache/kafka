@@ -68,7 +68,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
     try {
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
       val response = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
-      assertEquals(Errors.ILLEGAL_SASL_STATE.code(), response.data.errorCode())
+      assertEquals(Errors.ILLEGAL_SASL_STATE.code, response.data.errorCode)
     } finally {
       plaintextSocket.close()
     }
@@ -80,7 +80,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, apiVersionsRequest, Some(Short.MaxValue))
-      assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
+      assertEquals(Errors.UNSUPPORTED_VERSION.code, apiVersionsResponse.data.errorCode)
       val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)

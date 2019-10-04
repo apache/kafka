@@ -147,8 +147,7 @@ public class ConnectionRegistry {
 
         if (connection != null) {
             decCounterFor(connection.clientSoftwareName(), connection.clientSoftwareVersion());
-            connection.clientSoftwareName = clientSoftwareName;
-            connection.clientSoftwareVersion = clientSoftwareVersion;
+            connection.updateClientSoftwareNameAndVersion(clientSoftwareName, clientSoftwareVersion);
             incCounterFor(connection.clientSoftwareName(), connection.clientSoftwareVersion());
         }
 

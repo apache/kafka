@@ -33,15 +33,15 @@ public class ConnectionMetadata {
 
     public static final String UNKNOWN_NAME_OR_VERSION = "Unknown";
 
-    private String clientId;
-    private ListenerName listenerName;
-    private SecurityProtocol securityProtocol;
-    private InetAddress clientAddress;
-    private KafkaPrincipal principal;
+    private final String clientId;
+    private final ListenerName listenerName;
+    private final SecurityProtocol securityProtocol;
+    private final InetAddress clientAddress;
+    private final KafkaPrincipal principal;
 
     /* They could be updated by the ConnectionRegistry */
-    String clientSoftwareName;
-    String clientSoftwareVersion;
+    private String clientSoftwareName;
+    private String clientSoftwareVersion;
 
     ConnectionMetadata(
         String clientId,
@@ -59,6 +59,11 @@ public class ConnectionMetadata {
         this.securityProtocol = securityProtocol;
         this.clientAddress = clientAddress;
         this.principal = principal;
+    }
+
+    void updateClientSoftwareNameAndVersion(String clientSoftwareName, String clientSoftwareVersion) {
+        this.clientSoftwareName = clientSoftwareName;
+        this.clientSoftwareVersion = clientSoftwareVersion;
     }
 
     public String clientId() {

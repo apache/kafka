@@ -154,7 +154,7 @@ public class RequestContext implements AuthorizableRequestContext {
         return clientSoftwareName;
     }
 
-    public String getClientSoftwareVersion() {
+    public String clientSoftwareVersion() {
         return clientSoftwareVersion;
     }
 }

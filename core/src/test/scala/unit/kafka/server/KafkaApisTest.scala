@@ -138,11 +138,11 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.API_VERSIONS, apiVersionsRequest, capturedResponse)
       .asInstanceOf[ApiVersionsResponse]
 
-    assertEquals(Errors.NONE.code(), response.data.errorCode())
+    assertEquals(Errors.NONE.code, response.data.errorCode)
   }
 
   @Test
-  def testApiVersionsRequestV0UpdateConnectionMetadata(): Unit = {
+  def testApiVersionsRequestOldestUpdateConnectionMetadata(): Unit = {
     EasyMock.reset(connectionRegistry, clientRequestQuotaManager, requestChannel)
     val connection: ConnectionMetadata = EasyMock.mock(classOf[ConnectionMetadata])
 
@@ -159,7 +159,7 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.API_VERSIONS, apiVersionsRequest, capturedResponse)
       .asInstanceOf[ApiVersionsResponse]
 
-    assertEquals(Errors.NONE.code(), response.data.errorCode())
+    assertEquals(Errors.NONE.code, response.data.errorCode)
   }
 
   @Test

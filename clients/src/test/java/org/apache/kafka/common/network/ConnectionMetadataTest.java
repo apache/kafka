@@ -54,8 +54,7 @@ public class ConnectionMetadataTest {
         assertEquals(KafkaPrincipal.ANONYMOUS.getName(),
             map.get(ConnectionMetadata.PRINCIPAL_KEY));
 
-        connection.clientSoftwareName = "name";
-        connection.clientSoftwareVersion = "version";
+        connection.updateClientSoftwareNameAndVersion("name", "version");
 
         map = connection.asMap();
 
