@@ -24,5 +24,5 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class AlterOffsetsOptions extends AbstractOptions<AlterOffsetsOptions> {
+public class AlterConsumerGroupOffsetsOptions extends AbstractOptions<AlterConsumerGroupOffsetsOptions> {
 }

@@ -444,7 +444,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterOffsetsOptions options) {
+    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 

@@ -32,6 +32,8 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDir
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
+import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -56,7 +58,6 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -168,8 +169,6 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
@@ -2601,63 +2600,6 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeDelegationTokenResult(tokensFuture);
     }
 
-    /**
-     * Context class to encapsulate parameters of a call to find and use a consumer group coordinator.
-     * Some of the parameters are provided at construction and are immutable whereas others are provided
-     * as "Call" are completed and values are available, like node id of the coordinator.
-     *
-     * @param <T> The type of return value of the KafkaFuture
-     * @param <O> The type of configuration option. Different for different consumer group commands.
-     */
-    private final static class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>> {
-        final private String groupId;
-        final private O options;
-        final private long deadline;
-        final private KafkaFutureImpl<T> future;
-        private Optional<Node> node;
-
-        public ConsumerGroupOperationContext(String groupId,
-                                             O options,
-                                             long deadline,
-                                             KafkaFutureImpl<T> future) {
-            this.groupId = groupId;
-            this.options = options;
-            this.deadline = deadline;
-            this.future = future;
-            this.node = Optional.empty();
-        }
-
-        public String getGroupId() {
-            return groupId;
-        }
-
-        public O getOptions() {
-            return options;
-        }
-
-        public long getDeadline() {
-            return deadline;
-        }
-
-        public KafkaFutureImpl<T> getFuture() {
-            return future;
-        }
-
-        public Optional<Node> getNode() {
-            return node;
-        }
-
-        public void setNode(Node node) {
-            this.node = Optional.ofNullable(node);
-        }
-
-        public boolean hasCoordinatorMoved(AbstractResponse response) {
-            return response.errorCounts().keySet()
-                    .stream()
-                    .anyMatch(error -> error == Errors.NOT_COORDINATOR);
-        }
-    }
-
     private void rescheduleFindCoordinatorTask(ConsumerGroupOperationContext<?, ?> context, Supplier<Call> nextCall) {
         log.info("Node {} is no longer the Coordinator. Retrying with new coordinator.",
                 context.getNode().orElse(null));
@@ -2667,94 +2609,10 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
 
-    /**
-     * Context class to encapsulate parameters of a call to fetch and use cluster metadata.
-     * Some of the parameters are provided at construction and are immutable whereas others are provided
-     * as "Call" are completed and values are available.
-     *
-     * @param <T> The type of return value of the KafkaFuture
-     * @param <O> The type of configuration option. Different for different consumer group commands.
-     */
-    private final static class MetadataOperationContext<T, O extends AbstractOptions<O>> {
-        final private Collection<String> topics;
-        final private O options;
-        final private long deadline;
-        final private Map<TopicPartition, KafkaFutureImpl<T>> futures;
-        private Cluster cluster;
-        private Collection<TopicMetadata> topicMetadata;
-        private Map<String, Errors> errors;
-
-        public MetadataOperationContext(Collection<String> topics,
-                                        O options,
-                                        long deadline,
-                                        Map<TopicPartition, KafkaFutureImpl<T>> futures) {
-            this.topics = topics;
-            this.options = options;
-            this.deadline = deadline;
-            this.futures = futures;
-            this.cluster = Cluster.empty();
-            this.topicMetadata = Collections.emptyList();
-            this.errors = Collections.emptyMap();
-        }
-
-        public void setErrors(Map<String, Errors> errors) {
-            this.errors = errors;
-        }
-
-        public Map<String, Errors> getErrors() {
-            return errors;
-        }
-
-        public void setTopicMetadata(Collection<TopicMetadata> topicMetadata) {
-            this.topicMetadata = topicMetadata;
-        }
-
-        public Collection<TopicMetadata> getTopicMetadata() {
-            return topicMetadata;
-        }
-
-        public void setCluster(Cluster cluster) {
-            this.cluster = cluster;
-        }
-
-        public Cluster getCluster() {
-            return cluster;
-        }
-
-        public O getOptions() {
-            return options;
-        }
-
-        public long getDeadline() {
-            return deadline;
-        }
-
-        public Map<TopicPartition, KafkaFutureImpl<T>> getFutures() {
-            return futures;
-        }
-
-        public Collection<String> getTopics() {
-            return topics;
-        }
-
-        public boolean shouldRefreshMetadata() {
-            List<Errors> allErrors = new ArrayList<>(errors.values());
-            for (TopicMetadata tm : topicMetadata) {
-                for (PartitionMetadata pm : tm.partitionMetadata()) {
-                    allErrors.add(pm.error());
-                }
-            }
-            return allErrors.stream()
-                            .anyMatch(error -> error.exception() instanceof InvalidMetadataException);
-        }
-    }
-
     private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls) {
         log.info("Retrying to fetch metadata.");
         // Requeue the task so that we can re-attempt fetching metadata
-        context.setCluster(Cluster.empty());
-        context.setErrors(Collections.emptyMap());
-        context.setTopicMetadata(Collections.emptyList());
+        context.setResponse(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
         runnable.call(metadataCall, time.milliseconds());
     }
@@ -2945,9 +2803,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
-                context.setCluster(response.cluster());
-                context.setTopicMetadata(response.topicMetadata());
-                context.setErrors(response.errors());
+                context.setResponse(Optional.of(response));
 
                 if (context.shouldRefreshMetadata()) {
                     rescheduleMetadataTask(context, nextCalls);
@@ -3288,7 +3144,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 return new OffsetDeleteRequest.Builder(
                     new OffsetDeleteRequestData()
-                        .setGroupId(context.groupId)
+                        .setGroupId(context.getGroupId())
                         .setTopics(topics)
                 );
             }
@@ -3674,9 +3530,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterOffsetsResult alterConsumerGroupOffsets(String groupId,
+    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId,
                                                         Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                        AlterOffsetsOptions options) {
+                                                        AlterConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future = new KafkaFutureImpl<>();
         final Map<TopicPartition, KafkaFutureImpl<Void>> futures = new HashMap<>(offsets.size());
         for (TopicPartition tp: offsets.keySet()) {
@@ -3686,18 +3542,18 @@ public class KafkaAdminClient extends AdminClient {
         final long startFindCoordinatorMs = time.milliseconds();
         final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
-        ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>, AlterOffsetsOptions> context =
+        ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>, AlterConsumerGroupOffsetsOptions> context =
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
             () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets, futures));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
-        return new AlterOffsetsResult(future);
+        return new AlterConsumerGroupOffsetsResult(future);
     }
 
     private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>,
-            AlterOffsetsOptions> context, Map<TopicPartition,
+            AlterConsumerGroupOffsetsOptions> context, Map<TopicPartition,
             OffsetAndMetadata> offsets, Map<TopicPartition, KafkaFutureImpl<Void>> futures) {
 
         return new Call("commitOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
@@ -3741,9 +3597,23 @@ public class KafkaAdminClient extends AdminClient {
 
                 // If coordinator changed since we fetched it, retry
                 if (context.hasCoordinatorMoved(response)) {
-                    rescheduleFindCoordinatorTask(context, () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                    rescheduleFindCoordinatorTask(context,
+                                                  () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
                     return;
                 }
+
+                // If there is a group error, retry
+                for (OffsetCommitResponseTopic topic : response.data().topics()) {
+                    for (OffsetCommitResponsePartition partition : topic.partitions()) {
+                        Errors error = Errors.forCode(partition.errorCode());
+                        if (context.shouldRefreshCoordinator(error)) {
+                            rescheduleFindCoordinatorTask(context,
+                                                          () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                            return;
+                        }
+                    }
+                }
+
                 for (OffsetCommitResponseTopic topic : response.data().topics()) {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
@@ -3794,38 +3664,36 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private List<Call> getListOffsetsCalls(MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context,
-            Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-            Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
+                                           Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                           Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures) {
 
+        MetadataResponse mr = context.getResponse().orElseThrow(() -> new IllegalStateException("No Metadata respons"));
         List<Call> calls = new ArrayList<>();
         // grouping topic partitions per leader
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> leaders = new HashMap<>();
 
-        Map<TopicPartition, Optional<Integer>> leaderEpochs = new HashMap<>();
-        for (TopicMetadata topicMetadata : context.getTopicMetadata()) {
-            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
-                leaderEpochs.put(new TopicPartition(topicMetadata.topic(), partitionMetadata.partition()), partitionMetadata.leaderEpoch());
-            }
-        }
         for (Map.Entry<TopicPartition, OffsetSpec> entry: topicPartitionOffsets.entrySet()) {
 
             OffsetSpec offsetSpec = entry.getValue();
+            TopicPartition tp = entry.getKey();
+            KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
             long offsetQuery = (offsetSpec instanceof TimestampSpec)
                     ? ((TimestampSpec)offsetSpec).timestamp()
                     : (offsetSpec instanceof OffsetSpec.EarliestSpec)
                         ? ListOffsetRequest.EARLIEST_TIMESTAMP
                         : ListOffsetRequest.LATEST_TIMESTAMP;
             // avoid sending listOffsets request for topics with errors
-            if (!context.getErrors().containsKey(entry.getKey().topic())) {
-                Node node = context.getCluster().leaderFor(entry.getKey());
+            if (!mr.errors().containsKey(tp.topic())) {
+                Node node = mr.cluster().leaderFor(tp);
                 if (node != null) {
                     if (!leaders.containsKey(node))
                         leaders.put(node, new HashMap<>());
-                    leaders.get(node).put(entry.getKey(), new ListOffsetRequest.PartitionData(offsetQuery, leaderEpochs.get(entry.getKey())));
+                    leaders.get(node).put(tp, new ListOffsetRequest.PartitionData(offsetQuery, Optional.empty()));
                 } else {
-                    KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(entry.getKey());
                     future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
                 }
+            } else {
+                future.completeExceptionally(mr.errors().get(tp.topic()).exception());
             }
         }
 
@@ -3849,6 +3717,9 @@ public class KafkaAdminClient extends AdminClient {
 
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(result.getKey());
                         PartitionData partitionData = result.getValue();
+                        Errors error = partitionData.error;
+                        if (context.shouldRefreshMetadata(error))
+                            rescheduleMetadataTask(context, () -> calls);
                         if (partitionData.error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
                         } else {
@@ -3859,7 +3730,10 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(futures.values(), throwable);
+                    for (TopicPartition tp : entry.getValue().keySet()) {
+                        KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
+                        future.completeExceptionally(throwable);
+                    }
                 }
             });
         }

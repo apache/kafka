@@ -30,11 +30,11 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class AlterOffsetsResult {
+public class AlterConsumerGroupOffsetsResult {
 
     private final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future;
 
-    public AlterOffsetsResult(KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future) {
+    public AlterConsumerGroupOffsetsResult(KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future) {
         this.future = future;
     }
 

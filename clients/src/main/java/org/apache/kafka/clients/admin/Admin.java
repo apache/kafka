@@ -1085,15 +1085,15 @@ public interface Admin extends AutoCloseable {
     /**
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
-     * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterOffsetsOptions)} with default options.
+     * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} with default options.
      * See the overload for more details.
      *
      * @param groupId The group for which to alter offsets.
      * @param offsets A map of offsets by partition with associated metadata.
      * @return The AlterOffsetsResult.
      */
-    default AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
-        return alterConsumerGroupOffsets(groupId, offsets, new AlterOffsetsOptions());
+    default AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
+        return alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions());
     }
 
     /**
@@ -1106,7 +1106,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when altering the offsets.
      * @return The AlterOffsetsResult.
      */
-    AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterOffsetsOptions options);
+    AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
 
     /**
      * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
