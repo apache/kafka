@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -64,6 +65,7 @@ import java.util.regex.Pattern;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -455,6 +457,14 @@ public class TestUtils {
             }
         }
         return tps;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Throwable> T assertFutureThrows(KafkaFuture<?> future, Class<T> exceptionClass) {
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue("Unexpected exception cause " + exception.getCause(),
+                exceptionClass.isAssignableFrom(exception.getCause().getClass()));
+        return (T) exception.getCause();
     }
 
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
