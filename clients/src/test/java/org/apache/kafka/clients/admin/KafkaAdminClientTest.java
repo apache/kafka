@@ -2541,11 +2541,11 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData));
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster));
-            responseData.put(tp1, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 123L, Optional.of(321)));
+            responseData.put(tp1, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 234L, Optional.of(432)));
             env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData));
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster));
-            responseData.put(tp1, new PartitionData(Errors.NONE, -1L, 123L, Optional.of(321)));
+            responseData.put(tp1, new PartitionData(Errors.NONE, -1L, 345L, Optional.of(543)));
             env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData));
 
             Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
@@ -2554,9 +2554,44 @@ public class KafkaAdminClientTest {
 
             Map<TopicPartition, ListOffsetsResultInfo> offsets = result.all().get();
             assertFalse(offsets.isEmpty());
-            assertEquals(123L, offsets.get(tp1).offset());
-            assertEquals(321, offsets.get(tp1).leaderEpoch().get().intValue());
+            assertEquals(345L, offsets.get(tp1).offset());
+            assertEquals(543, offsets.get(tp1).leaderEpoch().get().intValue());
             assertEquals(-1L, offsets.get(tp1).timestamp());
+        }
+    }
+
+    @Test
+    public void testListOffsetsNonRetriableErrors() throws Exception {
+
+        Node node0 = new Node(0, "localhost", 8120);
+        Node node1 = new Node(1, "localhost", 8121);
+        List<Node> nodes = Arrays.asList(node0, node1);
+        List<PartitionInfo> pInfos = new ArrayList<>();
+        pInfos.add(new PartitionInfo("foo", 0, node0, new Node[]{node0, node1}, new Node[]{node0, node1}));
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes,
+                pInfos,
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(),
+                node0);
+
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster));
+            Map<TopicPartition, PartitionData> responseData = new HashMap<>();
+            responseData.put(tp1, new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, -1L, 123L, Optional.of(321)));
+            env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData));
+
+            Map<TopicPartition, OffsetSpec> partitions = new HashMap<>();
+            partitions.put(tp1, OffsetSpec.latest());
+            ListOffsetsResult result = env.adminClient().listOffsets(partitions);
+
+            TestUtils.assertFutureError(result.all(), TopicAuthorizationException.class);
         }
     }
 
