@@ -912,8 +912,11 @@ private[kafka] class Processor(val id: Int,
             val header = RequestHeader.parse(receive.payload)
             var connection = connectionRegistry.get(connectionId)
             if (connection == null) {
-              connection = connectionRegistry.register(connectionId, header.clientId(), channel.clientSoftwareName(),
-                channel.clientSoftwareVersion(), listenerName, securityProtocol, channel.socketAddress(), channel.principal())
+              // The connection's metadata is registered here because it is effectively the first place where
+              // all the metadata is available, except the client software name and version which may be
+              // provided later on when the ApiVersionsRequest is received.
+              connection = connectionRegistry.register(connectionId, header.clientId, channel.clientSoftwareName,
+                channel.clientSoftwareVersion, listenerName, securityProtocol, channel.socketAddress, channel.principal)
             }
 
             if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
@@ -926,8 +929,8 @@ private[kafka] class Processor(val id: Int,
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol, connection.clientSoftwareName(),
-                  connection.clientSoftwareVersion())
+                  channel.principal, listenerName, securityProtocol, connection.clientSoftwareName,
+                  connection.clientSoftwareVersion)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 requestChannel.sendRequest(req)
