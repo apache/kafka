@@ -95,8 +95,8 @@ public class ListOffsetsResult {
 
         @Override
         public String toString() {
-            return "ListOffsetsResultInfo [offset=" + offset + ", timestamp=" + timestamp + ", leaderEpoch="
-                    + leaderEpoch + "]";
+            return "ListOffsetsResultInfo(offset=" + offset + ", timestamp=" + timestamp + ", leaderEpoch="
+                    + leaderEpoch + ")";
         }
     }
 }

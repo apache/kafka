@@ -16,31 +16,37 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.requests.ListOffsetRequest;
-
 /** 
  * This class allows to specify the desired offsets when using {@link #listOffsets(Map, ListOffsetsOptions)}
  */
 public class OffsetSpec {
 
-    private long offsetQuery;
+    static class EarliestSpec extends OffsetSpec {}
+    static class LatestSpec extends OffsetSpec {}
+    static class TimestampSpec extends OffsetSpec {
+        private final long timestamp;
 
-    private OffsetSpec(long offsetQuery) {
-        this.offsetQuery = offsetQuery;
+        TimestampSpec(long timestamp) {
+            this.timestamp = timestamp;
+        }
+
+        long timestamp() {
+            return timestamp;
+        }
     }
 
     /**
      * Used to retrieve the latest offset of a partition
      */
     public static OffsetSpec latest() {
-        return new OffsetSpec(ListOffsetRequest.LATEST_TIMESTAMP);
+        return new LatestSpec();
     }
 
     /**
      * Used to retrieve the earliest offset of a partition
      */
     public static OffsetSpec earliest() {
-        return new OffsetSpec(ListOffsetRequest.EARLIEST_TIMESTAMP);
+        return new EarliestSpec();
     }
 
     /**
@@ -49,10 +55,7 @@ public class OffsetSpec {
      * @param timestamp in milliseconds
      */
     public static OffsetSpec forTimestamp(long timestamp) {
-        return new OffsetSpec(timestamp);
+        return new TimestampSpec(timestamp);
     }
 
-    public long offsetQuery() {
-        return offsetQuery;
-    }
 }

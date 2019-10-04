@@ -1083,7 +1083,7 @@ public interface Admin extends AutoCloseable {
     MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
 
     /**
-     * <p>Alters offsets for the specified group.
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
      * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterOffsetsOptions)} with default options.
      * See the overload for more details.
@@ -1097,7 +1097,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Alters offsets for the specified group.
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
      * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
      *

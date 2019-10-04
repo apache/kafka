@@ -29,7 +29,6 @@ public class ListOffsetsOptions extends AbstractOptions<ListOffsetsOptions> {
 
     private final IsolationLevel isolationLevel;
 
-    // isolationLevel default to READ_UNCOMMITTED
     public ListOffsetsOptions() {
         this(IsolationLevel.READ_UNCOMMITTED);
     }
