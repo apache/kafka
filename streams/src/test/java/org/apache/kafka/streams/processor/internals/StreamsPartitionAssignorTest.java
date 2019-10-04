@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1240,7 +1241,8 @@ public class StreamsPartitionAssignorTest {
             )));
         assertThat(assignment.get("consumer1").partitions(), equalTo(asList(t1p0, t1p1)));
 
-        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
+        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()),
+            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION)));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));
     }
 
