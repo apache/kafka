@@ -287,6 +287,7 @@ class WorkerSinkTask extends WorkerTask {
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
+            Arrays.setAll(topics, i -> topics[i].trim());
             consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
             log.debug("{} Initializing and starting task for topics {}", this, topics);
         } else {
