@@ -557,13 +557,13 @@ public class SuppressScenarioTest {
             .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config)) {
-            final TestInputTopic<String, String> inputTopic =
+            final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =
                     driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
 
-            inputTopic.pipeInput("B", "1", 0L);
-            inputTopic.pipeInput("A", "1", 0L);
+            inputTopicRight.pipeInput("B", "1", 0L);
+            inputTopicRight.pipeInput("A", "1", 0L);
             // buffered, no output
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -571,7 +571,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("tick", "tick", 10L);
+            inputTopicRight.pipeInput("tick", "tick", 10L);
             // flush buffer
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -582,7 +582,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("A", "2", 11L);
+            inputTopicRight.pipeInput("A", "2", 11L);
             // buffered, no output
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -614,7 +614,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("tick", "tick", 21L);
+            inputTopicRight.pipeInput("tick", "tick", 21L);
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 asList(
@@ -646,7 +646,7 @@ public class SuppressScenarioTest {
         final Topology topology = builder.build();
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
-            final TestInputTopic<String, String> inputTopic =
+            final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =
                     driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -679,7 +679,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("A", "a", 12L);
+            inputTopicRight.pipeInput("A", "a", 12L);
             // should join with previously emitted left side
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -687,7 +687,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("B", "b", 12L);
+            inputTopicRight.pipeInput("B", "b", 12L);
             // should view through to the parent KTable, since B is no longer buffered
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
@@ -695,7 +695,7 @@ public class SuppressScenarioTest {
             );
 
 
-            inputTopic.pipeInput("A", "b", 13L);
+            inputTopicRight.pipeInput("A", "b", 13L);
             // should join with previously emitted left side
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),

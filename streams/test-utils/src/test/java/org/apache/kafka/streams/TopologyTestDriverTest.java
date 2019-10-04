@@ -400,12 +400,9 @@ public class TopologyTestDriverTest {
         final byte[] nullValue = null;
 
         testDriver = new TopologyTestDriver(new Topology(), config);
-        try {
+        assertThrows(IllegalArgumentException.class, () -> {
             pipeRecord(unknownTopic, new TestRecord<byte[], byte[]>(nullValue));
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException exception) {
-            assertEquals("Unknown topic: " + unknownTopic, exception.getMessage());
-        }
+        });
     }
 
     @Deprecated

@@ -26,10 +26,10 @@ import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
- * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
- * To use {@code TestInputTopic} create new class {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}
- * In actual test code, you can pipe new message values, keys and values or list of {@link KeyValue}
- * You need a TestInputTopic object for each topic.
+ * {@code TestInputTopic} is used to pipe records to topic in {@link TopologyTestDriver}.
+ * To use {@code TestInputTopic} create a new instance via {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}
+ * In actual test code, you can pipe new record values, keys and values or list of {@link KeyValue} pairs
+ * If you have multiple source topics, you need to create a {@code TestInputTopic} for each.
  *
  *
  * <h2>Processing messages</h2>
@@ -41,8 +41,8 @@ import java.util.StringJoiner;
  *     inputTopic.pipeInput("Hello");
  * }</pre>
  *
- * @param <K> the type of the Kafka key
- * @param <V> the type of the Kafka value
+ * @param <K> the type of the record key
+ * @param <V> the type of the record value
  * @see TopologyTestDriver
  */
 
@@ -56,34 +56,6 @@ public class TestInputTopic<K, V> {
     private Instant currentTime;
     private final Duration advanceDuration;
 
-    /**
-     * Create a test input topic to pipe messages in.
-     * Uses current system time as start timestamp.
-     * Auto-advance is disabled.
-     *
-     * @param driver     TopologyTestDriver to use
-     * @param topicName  the topic name used
-     * @param keySerializer   the key serializer
-     * @param valueSerializer the value serializer
-     */
-    TestInputTopic(final TopologyTestDriver driver,
-                   final String topicName,
-                   final Serializer<K> keySerializer,
-                   final Serializer<V> valueSerializer) {
-        this(driver, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
-    }
-
-    /**
-     * Create a test input topic to pipe messages in.
-     * Validate inputs
-     *
-     * @param driver    TopologyTestDriver to use
-     * @param topicName the topic name used
-     * @param keySerializer   the key serializer
-     * @param valueSerializer the value serializer
-     * @param startTimestamp the initial timestamp for records
-     * @param autoAdvance the time increment per record
-     */
     TestInputTopic(final TopologyTestDriver driver,
                    final String topicName,
                    final Serializer<K> keySerializer,
@@ -109,8 +81,9 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Advances the internally tracked stream time.
-     * This doesn't advance the wall-clock time, and therefore doesn't trigger punctuations.
+     * Advances the internally tracked event time of this input topic. Each time a record without explicitly defined timestamp is piped, the current topic event time is used as record timestamp.
+     * <p>
+     * Note: advancing the event time on the input topic, does not advance the tracked stream time in {@link TopologyTestDriver} as long as no new input records are piped. Furthermore, it does not advance the wall-clock time of {@link TopologyTestDriver}.
      *
      * @param advance the duration of time to advance
      */
@@ -128,7 +101,8 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given record on the topic and then commit the messages.
+     * Send an input record with the given record on the topic and then commit the records.
+     * May auto advance topic time
      *
      * @param record the record to sent
      */
@@ -139,7 +113,8 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given value on the topic and then commit the messages.
+     * Send an input record with the given value on the topic and then commit the records.
+     * May auto advance topic time
      *
      * @param value the record value
      */
@@ -148,7 +123,8 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given key and value on the topic and then commit the messages.
+     * Send an input record with the given key and value on the topic and then commit the records.
+     * May auto advance topic time
      *
      * @param key   the record key
      * @param value the record value
@@ -158,7 +134,7 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given key and timestamp on the topic and then commit the messages.
+     * Send an input record with the given value and timestamp on the topic and then commit the records.
      * Does not auto advance internally tracked time.
      *
      * @param value       the record value
@@ -170,7 +146,7 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given key, value and timestamp on the topic and then commit the messages.
+     * Send an input record with the given key, value and timestamp on the topic and then commit the records.
      * Does not auto advance internally tracked time.
      *
      * @param key         the record key
@@ -184,7 +160,7 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given key, value and timestamp on the topic and then commit the messages.
+     * Send an input record with the given key, value and timestamp on the topic and then commit the records.
      * Does not auto advance internally tracked time.
      *
      * @param key         the record key
@@ -198,7 +174,7 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
+     * Send input records with the given KeyValue  list on the topic  then commit each record individually.
      * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param records the list of TestRecord records
@@ -210,10 +186,10 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
+     * Send input records with the given KeyValue list on the topic then commit each record individually.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
      *
-     * @param keyValues the list of KeyValue records
+     * @param keyValues the {@link List} of {@link KeyValue} records
      */
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues) {
         for (final KeyValue<K, V> keyValue : keyValues) {
@@ -222,10 +198,10 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given value list on the topic then commit each message individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
+     * Send input records with the given value list on the topic then commit each record individually.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
      *
-     * @param values the list of KeyValue records
+     * @param values the {@link List} of {@link KeyValue} records
      */
     public void pipeValueList(final List<V> values) {
         for (final V value : values) {
@@ -234,10 +210,10 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
+     * Send input records with the given {@link KeyValue} list on the topic then commit each record individually.
      * Does not auto advance internally tracked time.
      *
-     * @param keyValues      the list of KeyValue records
+     * @param keyValues      the {@link List} of {@link KeyValue} records
      * @param startTimestamp the timestamp for the first generated record
      * @param advance        the time difference between two consecutive generated records
      */
@@ -252,10 +228,10 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given value list on the topic then commit each message individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
+     * Send input records with the given value list on the topic then commit each record individually.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
      *
-     * @param values         the list of KeyValue records
+     * @param values         the {@link List} of values
      * @param startTimestamp the timestamp for the first generated record
      * @param advance        the time difference between two consecutive generated records
      */
@@ -273,8 +249,8 @@ public class TestInputTopic<K, V> {
     public String toString() {
         return new StringJoiner(", ", TestInputTopic.class.getSimpleName() + "[", "]")
                 .add("topic='" + topic + "'")
-                .add("keySerializer=" + keySerializer)
-                .add("valueSerializer=" + valueSerializer)
+                .add("keySerializer=" + keySerializer.getClass().getSimpleName())
+                .add("valueSerializer=" + valueSerializer.getClass().getSimpleName())
                 .toString();
     }
 }

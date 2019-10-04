@@ -20,16 +20,19 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
- * A key/value pair to be sent to or received from Kafka. This also consists header information
- * and a timestamp. If record do not contain a timestamp, the TestInputTopic will use auto advance time logic.
+ * A key/value pair, including timestamp and record headers, to be sent to or received from {@link TopologyTestDriver}.
+ * If [a] record does not contain a timestamp,
+ * {@link TestInputTopic} will auto advance it's time when the record is piped.
  */
 public class TestRecord<K, V> {
-
     private final Headers headers;
     private final K key;
     private final V value;
@@ -37,13 +40,12 @@ public class TestRecord<K, V> {
 
 
     /**
-     * Creates a record with a specified Instant
+     * Creates a record.
      *
      * @param key The key that will be included in the record
-     * @param value The record contents
-     * @param headers the headers that will be included in the record
-     * @param recordTime The timestamp of the record as Instant. If null,
-     *                  the timestamp is assigned using Instant.now() or internally tracked time.
+     * @param value The value of the record
+     * @param headers the record headers that will be included in the record
+     * @param recordTime The timestamp of the record.
      */
     public TestRecord(final K key, final V value, final Headers headers, final Instant recordTime) {
         this.key = key;
@@ -54,45 +56,45 @@ public class TestRecord<K, V> {
 
 
     /**
-     * Creates a record with a specified timestamp
+     * Creates a record.
      * 
      * @param key The key that will be included in the record
-     * @param value The record contents
-     * @param headers the headers that will be included in the record
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
-     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
+     * @param value The value of the record
+     * @param headers the record headers that will be included in the record
+     * @param timestampMs The timestamp of the record, in milliseconds since the beginning of the epoch.
      */
-    public TestRecord(final K key, final V value, final Headers headers, final Long timestamp) {
-        if (timestamp != null) {
-            if (timestamp < 0)
+    public TestRecord(final K key, final V value, final Headers headers, final Long timestampMs) {
+        if (timestampMs != null) {
+            if (timestampMs < 0) {
                 throw new IllegalArgumentException(
-                        String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
-            this.recordTime = Instant.ofEpochMilli(timestamp);
-        } else
+                        String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestampMs));
+            }
+            this.recordTime = Instant.ofEpochMilli(timestampMs);
+        } else {
             this.recordTime = null;
+        }
         this.key = key;
         this.value = value;
         this.headers = new RecordHeaders(headers);
     }
 
     /**
-     * Creates a record with a specified Instant
+     * Creates a record.
      *
-     * @param key The key that will be included in the record
-     * @param value The record contents
-     * @param recordTime The timestamp of the record as Instant. If null,
-     *                  the timestamp is assigned using Instant.now() or internally tracked time.
+     * @param key The key of the record
+     * @param value The value of the record
+     * @param recordTime The timestamp of the record as Instant.
      */
     public TestRecord(final K key, final V value, final Instant recordTime) {
         this(key, value, null, recordTime);
     }
 
     /**
-     * Creates a record
+     * Creates a record.
      *
-     * @param key The key that will be included in the record
-     * @param value The record contents
-     * @param headers The headers that will be included in the record
+     * @param key The key of the record
+     * @param value The value of the record
+     * @param headers The record headers that will be included in the record
      */
     public TestRecord(final K key, final V value, final Headers headers) {
         this.key = key;
@@ -102,10 +104,10 @@ public class TestRecord<K, V> {
     }
     
     /**
-     * Creates a record
+     * Creates a record.
      *
-     * @param key The key that will be included in the record
-     * @param value The record contents
+     * @param key The key of the record
+     * @param value The value of the record
      */
     public TestRecord(final K key, final V value) {
         this.key = key;
@@ -115,30 +117,38 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * Create a record with no key
+     * Create a record with {@code null} key.
      *
-     * @param value The record contents
+     * @param value The value of the record
      */
     public TestRecord(final V value) {
         this(null, value);
     }
 
     /**
-     * Create a TestRecord from ConsumerRecord
+     * Create a {@code TestRecord} from a {@link ConsumerRecord}.
      *
-     * @param record The record contents
+     * @param record The v
      */
     public TestRecord(final ConsumerRecord<K, V> record) {
-        this(record.key(), record.value(), record.headers(), record.timestamp());
+        Objects.requireNonNull(record);
+        this.key = record.key();
+        this.value = record.value();
+        this.headers = record.headers();
+        this.recordTime = Instant.ofEpochMilli(record.timestamp());
     }
 
     /**
-     * Create a TestRecord from ProducerRecord
+     * Create a {@code TestRecord} from a {@link ProducerRecord}.
      *
      * @param record The record contents
      */
     public TestRecord(final ProducerRecord<K, V> record) {
-        this(record.key(), record.value(), record.headers(), record.timestamp());
+        Objects.requireNonNull(record);
+        this.key = record.key();
+        this.value = record.value();
+        this.headers = record.headers();
+        this.recordTime = Instant.ofEpochMilli(record.timestamp());
     }
 
     /**

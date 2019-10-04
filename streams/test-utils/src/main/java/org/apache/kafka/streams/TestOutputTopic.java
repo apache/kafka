@@ -27,16 +27,16 @@ import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
- * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
- * To use {@code TestOutputTopic} create new class {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}
- * In actual test code, you can read message values, keys, {@link KeyValue} or {@link TestRecord}
- * You need a TestOutputTopic object for each topic.
+ * {@code TestOutputTopic} is used to read records from a topic in {@link TopologyTestDriver}.
+ * To use {@code TestOutputTopic} create a new instance via {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}
+ * In actual test code, you can read record values, keys, {@link KeyValue} or {@link TestRecord}
+ * If you have multiple source topics, you need to create a {@code TestOutputTopic} for each.
  * <p>
  * If you need to test key, value and headers, use {@link #readRecord()} methods.
- * Using {@link #readKeyValue()} you get directly KeyValue, but have no access to headers any more
- * Using {@link #readValue()} you get directly value, but have no access to key or  headers any more
+ * Using {@link #readKeyValue()} you get a {@link KeyValue} pair, and thus, don't get access to the record's timestamp or headers.
+ * Similarly using {@link #readValue()} you only get the value of a record.
  *
- * <h2>Processing messages</h2>
+ * <h2>Processing records</h2>
  * <pre>{@code
  *     private TestOutputTopic<String, Long> outputTopic;
  *      ...
@@ -45,8 +45,8 @@ import java.util.StringJoiner;
  *     assertThat(outputTopic.readValue()).isEqual(1);
  * }</pre>
  *
- * @param <K> the type of the Kafka key
- * @param <V> the type of the Kafka value
+ * @param <K> the type of the record key
+ * @param <V> the type of the record value
  * @see TopologyTestDriver
  */
 public class TestOutputTopic<K, V> {
@@ -55,14 +55,6 @@ public class TestOutputTopic<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
-    /**
-     * Create a test output topic to read messages from
-     *
-     * @param driver            TopologyTestDriver to use
-     * @param topicName         the topic name used
-     * @param keyDeserializer   the key deserializer
-     * @param valueDeserializer the value deserializer
-     */
     TestOutputTopic(final TopologyTestDriver driver,
                     final String topicName,
                     final Deserializer<K> keyDeserializer,
@@ -79,9 +71,7 @@ public class TestOutputTopic<K, V> {
 
 
     /**
-     * Read one Record from output topic and return value only.
-     * <p>
-     * Note. The key and header is not available
+     * Read one record from the output topic and return record's value.
      *
      * @return Next value for output topic
      */
@@ -91,9 +81,9 @@ public class TestOutputTopic<K, V> {
     }
 
     /**
-     * Read one Record KeyValue from output topic.
+     * Read one record from the output topic and return its key and value as pair.
      *
-     * @return Next output as KeyValue
+     * @return Next output as {@link KeyValue}
      */
     public KeyValue<K, V> readKeyValue() {
         final TestRecord<K, V> record = readRecord();
@@ -103,7 +93,7 @@ public class TestOutputTopic<K, V> {
     /**
      * Read one Record from output topic.
      *
-     * @return Next output as TestRecord
+     * @return Next output as {@link TestRecord}
      */
     public TestRecord<K, V> readRecord() {
         return driver.readRecord(topic, keyDeserializer, valueDeserializer);
@@ -111,9 +101,10 @@ public class TestOutputTopic<K, V> {
 
     /**
      * Read output to List.
-     * If the existing key is modified, it can appear twice in output, but replaced in map
+     * This method can be used if the result is considered a stream. If the result is considered a table, the list will
+     * contain all updated, ie, a key might be contained multiple times. If you are only interested in the last table update (ie, the final table state), you can use {@link #readKeyValuesToMap()} instead.
      *
-     * @return Map of output by key
+     * @return List of output
      */
     public List<TestRecord<K, V>> readRecordsToList() {
         final List<TestRecord<K, V>> output = new LinkedList<>();
@@ -126,7 +117,11 @@ public class TestOutputTopic<K, V> {
 
     /**
      * Read output to map.
-     * If the existing key is modified, it can appear twice in output, but replaced in map
+     * This method can be used if the result is considered a table, when
+     * you are only interested in the last table update (ie, the final table state).
+     * If the result is considered a stream, you can use {@link #readRecordsToList()} instead.
+     * The list will contain all updated, ie, a key might be contained multiple times.
+     * If the last update to a key is a delete/tombstone, the key will still be in the map (with null-value).
      *
      * @return Map of output by key
      */
@@ -135,6 +130,9 @@ public class TestOutputTopic<K, V> {
         TestRecord<K, V> outputRow;
         while (!isEmpty()) {
             outputRow = readRecord();
+            if (outputRow.key() == null) {
+                throw new NullPointerException("Null keys not allowed");
+            }
             output.put(outputRow.key(), outputRow.value());
         }
         return output;
@@ -192,8 +190,8 @@ public class TestOutputTopic<K, V> {
     public String toString() {
         return new StringJoiner(", ", TestOutputTopic.class.getSimpleName() + "[", "]")
                 .add("topic='" + topic + "'")
-                .add("keyDeserializer=" + keyDeserializer)
-                .add("valueDeserializer=" + valueDeserializer)
+                .add("keyDeserializer=" + keyDeserializer.getClass().getSimpleName())
+                .add("valueDeserializer=" + valueDeserializer.getClass().getSimpleName())
                 .add("size=" + getQueueSize())
                 .toString();
     }

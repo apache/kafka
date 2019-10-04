@@ -330,7 +330,7 @@ public class TestTopicsTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateWithNullDriver() {
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(null, INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
+        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(null, INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer(), Instant.now(), Duration.ZERO);
     }
 
 

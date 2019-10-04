@@ -176,13 +176,13 @@ public class CachingWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
-        final long initialWallClockTime = 0L;
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, Instant.ofEpochMilli(initialWallClockTime));
+        final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic,
             Serdes.String().serializer(),
             Serdes.String().serializer(),
-            Instant.ofEpochMilli(initialWallClockTime),
+            initialWallClockTime,
             Duration.ZERO);
 
         for (int i = 0; i < 5; i++) {

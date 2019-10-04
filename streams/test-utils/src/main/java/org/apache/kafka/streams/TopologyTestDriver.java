@@ -110,10 +110,10 @@ import java.util.regex.Pattern;
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
  * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide a {@link Topology}
- * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, create {@link #createInputTopic(String, Serializer, Serializer)}
- * and use the {@link TestInputTopic} to supply an input message to the topology,
- * and then create {@link #createOutputTopic(String, Deserializer, Deserializer)} and use the {@link TestOutputTopic} to read and
- * verify any messages output by the topology.
+ * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, {@link #createInputTopic(String, Serializer, Serializer) create}
+ * and use a {@link TestInputTopic} to supply an input records to the topology,
+ * and then {@link #createOutputTopic(String, Deserializer, Deserializer) create} and use a {@link TestOutputTopic} to read and
+ * verify any output records by the topology.
  * <p>
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link Consumer consumers} and
  * {@link Producer producers} that read and write raw {@code byte[]} messages.
@@ -161,7 +161,7 @@ import java.util.regex.Pattern;
  * TestOutputTopic<String, String> outputTopic2 = driver.createOutputTopic("output-topic-2", stringDeserializer, stringDeserializer);
  *
  * KeyValue<String, String> record1 = outputTopic1.readKeyValue();
- * KeyValue<String, String> record2 = outputTopic1.readKeyValue();
+ * KeyValue<String, String> record2 = outputTopic2.readKeyValue();
  * KeyValue<String, String> record3 = outputTopic1.readKeyValue();
  * }</pre>
  *
@@ -459,8 +459,8 @@ public class TopologyTestDriver implements Closeable {
                     timestamp,
                     TimestampType.CREATE_TIME,
                     (long) ConsumerRecord.NULL_CHECKSUM,
-                    key == null ? 0 : key.length,
-                    value == null ? 0 : value.length,
+                    key == null ? ConsumerRecord.NULL_SIZE : key.length,
+                    value == null ? ConsumerRecord.NULL_SIZE : value.length,
                     key,
                     value,
                     headers)));
@@ -483,8 +483,8 @@ public class TopologyTestDriver implements Closeable {
                     timestamp,
                     TimestampType.CREATE_TIME,
                     (long) ConsumerRecord.NULL_CHECKSUM,
-                    key == null ? 0 : key.length,
-                    value == null ? 0 : value.length,
+                    key == null ? ConsumerRecord.NULL_SIZE : key.length,
+                    value == null ? ConsumerRecord.NULL_SIZE : value.length,
                     key,
                     value,
                     headers));
@@ -653,7 +653,7 @@ public class TopologyTestDriver implements Closeable {
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
                                                               final Serializer<K> keySerializer,
                                                               final Serializer<V> valueSerializer) {
-        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer);
+        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
     }
 
     /**
@@ -693,13 +693,6 @@ public class TopologyTestDriver implements Closeable {
         return new TestOutputTopic<K, V>(this, topicName, keyDeserializer, valueDeserializer);
     }
 
-    /**
-     * Read the next record from the given topic.
-     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
-     *
-     * @param topic the name of the topic
-     * @return the next record on that topic, or {@code null} if there is no record available
-     */
     @SuppressWarnings("WeakerAccess")
     ProducerRecord<byte[], byte[]> readRecord(final String topic) {
         final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
@@ -709,17 +702,6 @@ public class TopologyTestDriver implements Closeable {
         return outputRecords.poll();
     }
 
-    /**
-     * Read the next record from the given topic.
-     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
-     *
-     * @param topic             the name of the topic
-     * @param keyDeserializer   the deserializer for the key type
-     * @param valueDeserializer the deserializer for the value type
-     * @param <K> the key type
-     * @param <V> the value type
-     * @return the next record on that topic, or {@code null} if there is no record available
-     */
     @SuppressWarnings("WeakerAccess")
     <K, V> TestRecord<K, V> readRecord(final String topic,
                                          final Deserializer<K> keyDeserializer,
@@ -737,18 +719,6 @@ public class TopologyTestDriver implements Closeable {
         return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
-    /**
-     * Serialize an input recond and send on the specified topic to the topology and then
-     * commit the messages.
-     *
-     * @param topic           the name of the topic
-     * @param record          TestRecord to be send
-     * @param keySerializer   the key serializer
-     * @param valueSerializer the value serializer
-     * @param <K> the key type
-     * @param <V> the value type*
-     * @param time            timestamp to override the record timestamp
-     */
     @SuppressWarnings("WeakerAccess")
     <K, V> void pipeRecord(final String topic,
                            final TestRecord<K, V> record,
@@ -757,12 +727,12 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        //final Long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
         long timestamp = 0;
-        if (time != null)
+        if (time != null) {
             timestamp = time.toEpochMilli();
-        else if (record.timestamp() != null)
+        } else if (record.timestamp() != null) {
             timestamp = record.timestamp();
+        }
 
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
