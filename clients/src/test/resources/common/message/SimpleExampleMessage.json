@@ -19,7 +19,7 @@
   "flexibleVersions": "1+",
   "fields": [
     { "name": "processId", "versions": "1+", "type": "uuid" },
-    { "name": "field1", "type": "[]int32", 
+    { "name": "myTaggedIntArray", "type": "[]int32",
         "versions": "1+", "taggedVersions": "1+", "tag": 0 }
   ]
 }

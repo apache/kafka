@@ -32,4 +32,8 @@ public final class MessageTestUtil {
         bytes.flip();
         return bytes;
     }
+
+    public static void messageFromByteBuffer(ByteBuffer bytes, Message message, short version) {
+        message.read(new ByteBufferAccessor(bytes.duplicate()), version);
+    }
 }

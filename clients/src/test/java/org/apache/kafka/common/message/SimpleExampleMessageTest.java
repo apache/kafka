@@ -17,13 +17,16 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.UUID;
+
+import static org.junit.Assert.assertEquals;
 
 public class SimpleExampleMessageTest {
 
@@ -32,13 +35,13 @@ public class SimpleExampleMessageTest {
         final UUID uuid = UUID.randomUUID();
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
-        Assert.assertEquals(uuid, out.processId());
+        assertEquals(uuid, out.processId());
     }
 
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
-        Assert.assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
+        assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
     }
 
     @Test
@@ -51,7 +54,7 @@ public class SimpleExampleMessageTest {
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.fromStruct(struct, (short) 1);
 
-        Assert.assertEquals(uuid, in.processId());
+        assertEquals(uuid, in.processId());
     }
 
     @Test
@@ -68,7 +71,7 @@ public class SimpleExampleMessageTest {
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.read(new ByteBufferAccessor(buffer), (short) 1);
 
-        Assert.assertEquals(uuid, in.processId());
+        assertEquals(uuid, in.processId());
     }
 
     @Test
@@ -80,9 +83,22 @@ public class SimpleExampleMessageTest {
         final SimpleExampleMessageData b = new SimpleExampleMessageData();
         b.setProcessId(uuid);
 
-        Assert.assertEquals(a, b);
-        Assert.assertEquals(a.hashCode(), b.hashCode());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
         // just tagging this on here
-        Assert.assertEquals(a.toString(), b.toString());
+        assertEquals(a.toString(), b.toString());
+    }
+
+    @Test
+    public void testMyTaggedIntArray() {
+        final SimpleExampleMessageData data = new SimpleExampleMessageData();
+        data.setMyTaggedIntArray(Arrays.asList(1, 2, 3));
+        short version = 1;
+        ByteBuffer buf = MessageTestUtil.messageToByteBuffer(data, version);
+        final SimpleExampleMessageData data2 = new SimpleExampleMessageData();
+        data2.read(new ByteBufferAccessor(buf.duplicate()), version);
+        assertEquals(Arrays.asList(1, 2, 3), data.myTaggedIntArray());
+        assertEquals(Arrays.asList(1, 2, 3), data2.myTaggedIntArray());
+        assertEquals(data, data2);
     }
 }
