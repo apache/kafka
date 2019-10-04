@@ -64,10 +64,7 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class GlobalStateManagerImplTest {
 
@@ -171,7 +168,7 @@ public class GlobalStateManagerImplTest {
         assertEquals(expected, offsets);
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionForOldTopicPartitions() throws IOException {
         final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 1L);
@@ -190,7 +187,8 @@ public class GlobalStateManagerImplTest {
         checkpoint.write(startOffsets);
 
         // initialize will throw exception
-        stateManager.initialize();
+        StreamsException e = assertThrows(StreamsException.class, () -> stateManager.initialize());
+        assertThat(e.getMessage(), equalTo("Encountered a topic-partition not associated with any global state store"));
     }
 
     @Test

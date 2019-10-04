@@ -131,18 +131,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         final List<StateStore> stateStores = topology.globalStateStores();
-        final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
-        final Set<String> stateStoreTopics = new HashSet<>();
+        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
+        final Set<String> changelogTopics = new HashSet<>();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
-            final String sourceTopic = storeNameToTopic.get(stateStore.name());
-            stateStoreTopics.add(sourceTopic);
+            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
+            changelogTopics.add(sourceTopic);
             stateStore.init(globalProcessorContext, stateStore);
         }
 
         // make sure each topic-partition from checkpointFileCache is associated with a global state store
         checkpointFileCache.keySet().forEach(tp -> {
-            if (!stateStoreTopics.contains(tp.topic())) {
+            if (!changelogTopics.contains(tp.topic())) {
                 log.error("Encountered a topic-partition in the global checkpoint file not associated with any global" +
                     " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
                     " an application reset and state store directory cleanup will be required.",
