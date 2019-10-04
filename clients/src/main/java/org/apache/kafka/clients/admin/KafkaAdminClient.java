@@ -2329,6 +2329,10 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
+        // avoid unnecessary metadata lookup
+        if(recordsToDelete.isEmpty()) {
+            return new DeleteRecordsResult(Collections.emptyMap());
+        }
 
         // requests need to be sent to partitions leader nodes so ...
         // ... from the provided map it's needed to create more maps grouping topic/partition per leader
