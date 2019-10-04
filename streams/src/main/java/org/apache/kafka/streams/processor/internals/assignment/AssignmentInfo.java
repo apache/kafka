@@ -45,59 +45,55 @@ public class AssignmentInfo {
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
-    private final int latestSupportedVersion;
+    private final int commonlySupportedVersion;
     private int errCode;
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-    // used for decoding; don't apply version checks
-    private AssignmentInfo(final int version,
-                           final int latestSupportedVersion) {
-        this.usedVersion = version;
-        this.latestSupportedVersion = latestSupportedVersion;
-        this.errCode = 0;
-    }
-
-    public AssignmentInfo(final List<TaskId> activeTasks,
-                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, 0);
-    }
-
-    public AssignmentInfo() {
-        this(LATEST_SUPPORTED_VERSION,
+    // used for decoding and "future consumer" assignments during version probing
+    public AssignmentInfo(final int version,
+                          final int commonlySupportedVersion) {
+        this(version,
+            commonlySupportedVersion,
             Collections.emptyList(),
             Collections.emptyMap(),
             Collections.emptyMap(),
             0);
     }
 
+    public AssignmentInfo(final List<TaskId> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, 0);
+    }
+
     public AssignmentInfo(final int version,
                           final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> hostState,
+                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, errCode);
+    }
+
+
+    public AssignmentInfo(final int version,
+                          final int commonlySupportedVersion,
+                          final List<TaskId> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                          final int errCode) {
+        this.usedVersion = version;
+        this.commonlySupportedVersion = commonlySupportedVersion;
+        this.activeTasks = activeTasks;
+        this.standbyTasks = standbyTasks;
+        this.partitionsByHost = partitionsByHost;
+        this.errCode = errCode;
+
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
         }
-    }
-
-    // for testing only; don't apply version checks
-    AssignmentInfo(final int version,
-                   final int latestSupportedVersion,
-                   final List<TaskId> activeTasks,
-                   final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                   final Map<HostInfo, Set<TopicPartition>> hostState,
-                   final int errCode) {
-        this.usedVersion = version;
-        this.latestSupportedVersion = latestSupportedVersion;
-        this.activeTasks = activeTasks;
-        this.standbyTasks = standbyTasks;
-        this.partitionsByHost = hostState;
-        this.errCode = errCode;
     }
 
     public int version() {
@@ -108,8 +104,8 @@ public class AssignmentInfo {
         return errCode;
     }
 
-    public int latestSupportedVersion() {
-        return latestSupportedVersion;
+    public int commonlySupportedVersion() {
+        return commonlySupportedVersion;
     }
 
     public List<TaskId> activeTasks() {
@@ -334,7 +330,7 @@ public class AssignmentInfo {
 
     @Override
     public int hashCode() {
-        return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
+        return usedVersion ^ commonlySupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
             ^ partitionsByHost.hashCode() ^ errCode;
     }
 
@@ -343,7 +339,7 @@ public class AssignmentInfo {
         if (o instanceof AssignmentInfo) {
             final AssignmentInfo other = (AssignmentInfo) o;
             return usedVersion == other.usedVersion &&
-                    latestSupportedVersion == other.latestSupportedVersion &&
+                    commonlySupportedVersion == other.commonlySupportedVersion &&
                     errCode == other.errCode &&
                     activeTasks.equals(other.activeTasks) &&
                     standbyTasks.equals(other.standbyTasks) &&
@@ -356,7 +352,7 @@ public class AssignmentInfo {
     @Override
     public String toString() {
         return "[version=" + usedVersion
-            + ", supported version=" + latestSupportedVersion
+            + ", supported version=" + commonlySupportedVersion
             + ", active tasks=" + activeTasks
             + ", standby tasks=" + standbyTasks
             + ", global assignment=" + partitionsByHost + "]";

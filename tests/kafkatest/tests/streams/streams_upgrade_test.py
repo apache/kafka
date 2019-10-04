@@ -47,8 +47,6 @@ class StreamsUpgradeTest(Test):
             'echo' : { 'partitions': 5 },
             'data' : { 'partitions': 5 },
         }
-        self.leader = None
-        self.leader_counter = {}
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -255,13 +253,6 @@ class StreamsUpgradeTest(Test):
         self.processors = [self.processor1, self.processor2, self.processor3]
         self.old_processors = [self.processor1, self.processor2, self.processor3]
         self.upgraded_processors = []
-        for p in self.processors:
-            self.leader_counter[p] = 2
-
-        self.update_leader()
-        for p in self.processors:
-            self.leader_counter[p] = 0
-        self.leader_counter[self.leader] = 3
 
         counter = 1
         current_generation = 3
@@ -286,29 +277,7 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
         self.driver.stop()
-
-    def update_leader(self):
-        self.leader = None
-        retries = 10
-        while retries > 0:
-            for p in self.processors:
-                found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
-                    if self.leader is not None:
-                        raise Exception("Could not uniquely identify leader")
-                    self.leader = p
-                    self.leader_counter[p] = self.leader_counter[p] + 1
-
-            if self.leader is None:
-                retries = retries - 1
-                time.sleep(5)
-            else:
-                break
-
-        if self.leader is None:
-            raise Exception("Could not identify leader")
 
     def start_all_nodes_with(self, version):
         # start first with <version>
@@ -462,7 +431,6 @@ class StreamsUpgradeTest(Test):
                 node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + "." + str(counter), allow_fail=False)
                 node.account.ssh("mv " + processor.LOG_FILE + " " + processor.LOG_FILE + "." + str(counter), allow_fail=False)
-                self.leader_counter[processor] = 0
 
                 with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
                     processor.set_upgrade_to("future_version")
@@ -480,78 +448,73 @@ class StreamsUpgradeTest(Test):
                                            timeout_sec=60,
                                            err_msg="Could not detect FutureStreamsPartitionAssignor in " + str(node.account))
 
-                    log_monitor.wait_until("Successfully joined group with generation " + str(current_generation),
-                                           timeout_sec=60,
-                                           err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(node.account))
-                    first_other_monitor.wait_until("Successfully joined group with generation " + str(current_generation),
-                                                   timeout_sec=60,
-                                                   err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(first_other_node.account))
-                    second_other_monitor.wait_until("Successfully joined group with generation " + str(current_generation),
-                                                    timeout_sec=60,
-                                                    err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(second_other_node.account))
-
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
-
-                    if processor == self.leader:
-                        leader_monitor = log_monitor
-                    elif first_other_processor == self.leader:
-                        leader_monitor = first_other_monitor
-                    elif second_other_processor == self.leader:
-                        leader_monitor = second_other_monitor
-                    else:
-                        raise Exception("Could not identify leader.")
-
                     monitors = {}
                     monitors[processor] = log_monitor
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    leader_monitor.wait_until("Received a future (version probing) subscription (version: 5). Sending empty assignment back (with supported version 4).",
-                                              timeout_sec=60,
-                                              err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
-
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                     else:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Setting subscription metadata to leaders supported version 5 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                        first_other_monitor.wait_until("Sent a version 4 subscription and group.s latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.",
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                                                       err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Sent a version 4 subscription and group.s latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.",
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(second_other_node.account))
-
+                                                        err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(second_other_node.account))
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,
                                            err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
 
                     # version probing should trigger second rebalance
-                    current_generation = current_generation + 1
+                    # now we check that after consecutive rebalances we have synchronized generation
+                    generation_synchronized = False
+                    retries = 0
 
-                    for p in self.processors:
-                        monitors[p].wait_until("Successfully joined group with generation " + str(current_generation),
-                                               timeout_sec=60,
-                                               err_msg="Never saw output 'Successfully joined group with generation " + str(current_generation) + "' on" + str(p.node.account))
+                    while retries < 10:
+                        processor_found = self.extract_generation_from_logs(processor)
+                        first_other_processor_found = self.extract_generation_from_logs(first_other_processor)
+                        second_other_processor_found = self.extract_generation_from_logs(second_other_processor)
 
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
+                        if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
+                            self.logger.info("processor: " + str(processor_found))
+                            self.logger.info("first other processor: " + str(first_other_processor_found))
+                            self.logger.info("second other processor: " + str(second_other_processor_found))
 
-                    if self.leader in self.old_processors or len(self.old_processors) > 0:
+                            processor_generation = self.extract_highest_generation(processor_found)
+                            first_other_processor_generation = self.extract_highest_generation(first_other_processor_found)
+                            second_other_processor_generation = self.extract_highest_generation(second_other_processor_found)
+
+                            if processor_generation == first_other_processor_generation and processor_generation == second_other_processor_generation:
+                                current_generation = processor_generation
+                                generation_synchronized = True
+                                break
+
+                        time.sleep(5)
+                        retries = retries + 1
+
+                    if generation_synchronized == False:
+                        raise Exception("Never saw all three processors have the synchronized generation number")
+
+
+                    if len(self.old_processors) > 0:
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
 
+    def extract_generation_from_logs(self, processor):
+        return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
+
+    def extract_highest_generation(self, found_generations):
+        return int(found_generations[-1])
+
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
-            found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
+            found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group.s latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 5 too early'")

@@ -280,9 +280,10 @@ public class StreamThread extends Thread {
                     );
                 } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
                     log.debug(
-                        "Encountered assignment error during partition assignment: {}. Skipping task initialization",
-                        streamThread.assignmentErrorCode
-                    );
+                        "Encountered assignment error during partition assignment: {}. Skipping task initialization and "
+                            + "pausing any partitions we may have been assigned.",
+                        streamThread.assignmentErrorCode);
+                    taskManager.pausePartitions();
                 } else {
                     log.debug("Creating tasks based on assignment.");
                     taskManager.createTasks(assignment);
