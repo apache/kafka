@@ -1297,7 +1297,8 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 1
     val correlationId = 0
     val controllerId = 0
-    val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
+    val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
+    val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
     EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
     EasyMock.replay(mockTopicStats1)
@@ -1384,7 +1385,8 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 1
     val correlationId = 0
     val controllerId = 0
-    val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
+    val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
+    val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
     EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
     EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(topic)).andVoid.once
@@ -1465,43 +1467,6 @@ class ReplicaManagerTest {
     EasyMock.verify(mockTopicStats1)
   }
 
-  private def prepareDifferentReplicaManagersWithMockedBrokerTopicStats(): (ReplicaManager, ReplicaManager, BrokerTopicStats, BrokerTopicStats) = {
-    val props0 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    val props1 = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-
-    props0.put("log0.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    props1.put("log1.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-
-    val config0 = KafkaConfig.fromProps(props0)
-    val config1 = KafkaConfig.fromProps(props1)
-
-    val mockLogMgr0 = TestUtils.createLogManager(config0.logDirs.map(new File(_)))
-    val mockLogMgr1 = TestUtils.createLogManager(config1.logDirs.map(new File(_)))
-
-    val mockTopicStats0: BrokerTopicStats = EasyMock.createMock(classOf[BrokerTopicStats])
-    val mockTopicStats1: BrokerTopicStats = EasyMock.createMock(classOf[BrokerTopicStats])
-
-    val metadataCache0: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
-    val metadataCache1: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
-
-    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
-
-    EasyMock.expect(metadataCache0.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
-    EasyMock.replay(metadataCache0)
-    EasyMock.expect(metadataCache1.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
-    EasyMock.replay(metadataCache1)
-
-    // each replica manager is for a broker
-    val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
-      mockTopicStats0, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
-    val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
-      mockTopicStats1, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
-
-    (rm0, rm1, mockTopicStats0, mockTopicStats1)
-  }
-
   @Test
   def testReassignmentLagStatRemovedWhenReassignmentFinishes(): Unit = {
     val controllerEpoch = 0
@@ -1566,12 +1531,12 @@ class ReplicaManagerTest {
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
 
-      assertEquals(1, rm0.reassigningPartitionsCount())
-      assertEquals(0, rm1.reassigningPartitionsCount())
+      assertEquals(1, rm0.reassigningPartitionsCount)
+      assertEquals(0, rm1.reassigningPartitionsCount)
 
       // there should be no lag at this point as no data is fetched
-      assertEquals(0L, rm0.fetchersMaxLag())
-      assertEquals(0L, rm1.fetchersMaxLag())
+      assertEquals(0L, rm0.followerReassignmentMaxLag)
+      assertEquals(0L, rm1.followerReassignmentMaxLag)
 
       // there should be no under-replicated partitions
       assertEquals(0, rm0.underReplicatedPartitionCount)
@@ -1584,7 +1549,7 @@ class ReplicaManagerTest {
         wait(100L)
         timeout -= 100
       }
-      assertEquals(2, rm0.fetchersMaxLag())
+      assertEquals(2, rm0.followerReassignmentMaxLag)
 
       // simulate that replicas are in ISR and the leader is 1 and the follower is 0
       leaderEpoch += leaderEpochIncrement
@@ -1606,8 +1571,8 @@ class ReplicaManagerTest {
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest3, (_, _) => ())
 
       // there should be no lag after the reassignment is completed
-      assertEquals(0, rm0.fetchersMaxLag())
-      assertEquals(0, rm1.fetchersMaxLag())
+      assertEquals(0, rm0.followerReassignmentMaxLag)
+      assertEquals(0, rm1.followerReassignmentMaxLag)
     } finally {
       rm0.shutdown()
       rm1.shutdown()
@@ -1615,7 +1580,7 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def fetcherReassignmentLagStatsRemovedWhenReplicaIsRemoved(): Unit = {
+  def testFetcherReassignmentLagStatsRemovedWhenReplicaIsRemoved(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log0.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
@@ -1661,7 +1626,8 @@ class ReplicaManagerTest {
     rm.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
 
     // Append a couple of messages.
-    for (i <- 1 to 2) {
+    val messagesProduced = 2
+    for (i <- 1 to messagesProduced) {
       appendRecords(rm, tp0, TestUtils.singletonRecords(s"message $i".getBytes)).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
@@ -1688,22 +1654,19 @@ class ReplicaManagerTest {
 
     // after the fetch the lag should be increased to 2 as 2 messages have been produced
     val fetchResult = fetchAsFollower(rm, tp0, new PartitionData(0, 0, Int.MaxValue, Optional.empty()))
-    var timeout = 1000L
-    while (!fetchResult.isFired && timeout > 0) {
-      wait(100L)
-      timeout -= 100
-    }
-    assertEquals(2, rm.fetchersMaxLag())
+    TestUtils.waitUntilTrue(() => fetchResult.isFired, "Got no fetch results")
+    assertEquals(messagesProduced, rm.followerReassignmentMaxLag)
 
     // we have the lag now and let's simulate that the reassignment ended where tp0 is deleted
     // so we can remove the lag stats
     rm.maybeUpdateMetadataCache(0, new UpdateMetadataRequest.Builder(0,0,0,0,
       Collections.emptyList(), Collections.emptyList()).build(ApiKeys.UPDATE_METADATA.latestVersion()))
 
-    assertEquals(0, rm.fetchersMaxLag())
+    assertEquals(0, rm.followerReassignmentMaxLag)
   }
 
-  private def prepareDifferentReplicaManagers(): (ReplicaManager, ReplicaManager) = {
+  private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats = new BrokerTopicStats,
+                                              brokerTopicStats2: BrokerTopicStats = new BrokerTopicStats): (ReplicaManager, ReplicaManager) = {
     val props0 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     val props1 = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
 
@@ -1729,10 +1692,10 @@ class ReplicaManagerTest {
     // each replica manager is for a broker
     val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
       new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
-      new BrokerTopicStats, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
+      brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
     val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
       new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
-      new BrokerTopicStats, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
+      brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
 
     (rm0, rm1)
   }

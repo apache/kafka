@@ -270,7 +270,7 @@ class ReplicaManager(val config: KafkaConfig,
   val reassigningPartitions = newGauge(
     "ReassigningPartitions",
     new Gauge[Int] {
-      def value = reassigningPartitionsCount()
+      def value = reassigningPartitionsCount
     }
   )
 
@@ -283,13 +283,9 @@ class ReplicaManager(val config: KafkaConfig,
   )
 
   // Visible for testing
-  def fetchersMaxLag(): Long = {
-    followerReassignmentLagStats.maxLag()
-  }
+  def followerReassignmentMaxLag: Long = followerReassignmentLagStats.maxLag()
 
-  def reassigningPartitionsCount(): Int = {
-    leaderPartitionsIterator.count(_.isReassigning)
-  }
+  def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -1289,10 +1285,11 @@ class ReplicaManager(val config: KafkaConfig,
         leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
 
         // remove reassignment lag stats from old leaders and followers
-        followerReassignmentLagStats.removeStats(allPartitions.flatMap(f => f._2 match {
-          case Online(partition) => Some(partition)
-          case _ => None
-        }).filter(!_.isReassigning)
+        followerReassignmentLagStats.removeStats(allPartitions.flatMap {
+          case (_, hostedPartition) => hostedPartition match {
+            case Online(partition) => Some(partition)
+            case _ => None
+        }}.filter(!_.isReassigning)
           .map(_.topicPartition))
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
@@ -1798,21 +1795,13 @@ class ReplicaManager(val config: KafkaConfig,
   class FollowerLagStats {
     private val lagStats = new ConcurrentHashMap[TopicPartition, Long]()
 
-    def updateLag(partition: TopicPartition, lag: Long): Unit = {
-      lagStats.put(partition, lag)
-    }
+    def updateLag(partition: TopicPartition, lag: Long): Unit = lagStats.put(partition, lag)
 
-    def maxLag(): Long = {
-      lagStats.asScala.foldLeft(0L)((maxLagAll, entry) => entry._2.max(maxLagAll))
-    }
+    def maxLag(): Long = if (lagStats.isEmpty) 0 else lagStats.asScala.maxBy(_._2)._2
 
-    def resetLag(): Unit = {
-      lagStats.clear()
-    }
+    def resetLag(): Unit = lagStats.clear()
 
-    def removeStats(traversable: Traversable[TopicPartition]): Unit = {
-      traversable.foreach(tp => lagStats.remove(tp))
-    }
+    def removeStats(traversable: Traversable[TopicPartition]): Unit = traversable.foreach(lagStats.remove(_))
   }
 
 }

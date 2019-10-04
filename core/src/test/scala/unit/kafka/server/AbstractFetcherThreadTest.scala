@@ -815,7 +815,8 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
-      failedPartitions) {
+      failedPartitions,
+      replicaManager = null) {
 
     import MockFetcherThread.PartitionState
 

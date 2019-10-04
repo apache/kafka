@@ -24,7 +24,6 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -221,6 +220,14 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesOutPerSec).meter())
     else None
 
+  private[server] def reassignmentBytesInPerSec =
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
+    else None
+
+  private[server] def reassignmentBytesOutPerSec =
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
+    else None
+
   def failedProduceRequestRate = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
 
   def failedFetchRequestRate = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
@@ -240,14 +247,6 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def invalidMessageCrcRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidMessageCrcRecordsPerSec).meter()
 
   def invalidOffsetOrSequenceRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
-
-  def reassignmentBytesInPerSec =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
-    else None
-
-  def reassignmentBytesOutPerSec =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
-    else None
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)

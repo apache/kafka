@@ -1242,8 +1242,13 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AllReplicaIds: " + assignmentState.replicas.mkString(","))
-    partitionString.append("; InSyncReplicaIds: " + assignmentState.inSyncReplicas.mkString(","))
+    partitionString.append("; Replicas: " + assignmentState.replicas.mkString(","))
+    partitionString.append("; ISR: " + assignmentState.inSyncReplicas.mkString(","))
+    assignmentState match {
+      case OngoingReassignmentState(adding, removing, _, _, _) =>
+        partitionString.append("; AddingReplicas: " + adding.mkString(","))
+        partitionString.append("; RemovingReplicas: " + removing.mkString(","))
+    }
     partitionString.toString
   }
 }

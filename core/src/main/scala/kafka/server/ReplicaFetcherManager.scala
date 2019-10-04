@@ -19,6 +19,7 @@ package kafka.server
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
+import kafka.server.HostedPartition.Online
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
@@ -40,17 +41,13 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     new Gauge[Long] {
       // current max lag across all fetchers/topics/partitions
       def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-        val replicaMgr = fetcherThreadMapEntry._2.replicaManager
-        fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
-          val partitionAndLagMetrics = replicaMgr.getPartition(fetcherLagStatsEntry._1.topicPartition) match {
-            case HostedPartition.Online(p) => Some(p -> fetcherLagStatsEntry._2)
-            case _ => None
+        val curThreadMax = fetcherThreadMapEntry._2.fetcherLagStats.stats.maxBy {
+          case (tp, lagMetrics) => replicaManager.getPartition(tp.topicPartition) match {
+            case Online(partition) => if (partition.isAddingLocalReplica) lagMetrics.lag else curMaxAll
+            case _ => curMaxAll
           }
-          if (partitionAndLagMetrics.exists(_._1.isAddingLocalReplica))
-            curMaxThread.max(partitionAndLagMetrics.get._2.lag)
-          else
-            0L
-        }).max(curMaxAll)
+        }._2.lag
+        if (curMaxAll > curThreadMax) curMaxAll else curThreadMax
       })
     },
     Map("clientId" -> "Replica")

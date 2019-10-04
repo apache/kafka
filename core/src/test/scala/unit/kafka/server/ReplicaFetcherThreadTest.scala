@@ -746,7 +746,16 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldReassignmentBytesInMetricsGetsUpdated(): Unit = {
+  def shouldUpdateReassignmentBytesInMetrics(): Unit = {
+    assertProcessPartitionDataWhen(isReassigning = true)
+  }
+
+  @Test
+  def shouldNotUpdateReassignmentBytesInMetricsWhenNoReassignmentsInProgress(): Unit = {
+    assertProcessPartitionDataWhen(isReassigning = false)
+  }
+
+  private def assertProcessPartitionDataWhen(isReassigning: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
 
@@ -756,8 +765,8 @@ class ReplicaFetcherThreadTest {
 
     val partition: Partition = createNiceMock(classOf[Partition])
     expect(partition.localLogOrException).andReturn(log)
-    expect(partition.isReassigning).andReturn(true)
-    expect(partition.isAddingLocalReplica).andReturn(true)
+    expect(partition.isReassigning).andReturn(isReassigning)
+    expect(partition.isAddingLocalReplica).andReturn(isReassigning)
 
     val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
     expect(replicaManager.nonOfflinePartition(anyObject[TopicPartition])).andReturn(Some(partition))
@@ -784,11 +793,19 @@ class ReplicaFetcherThreadTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
 
+    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReassignmentBytesInPerSec)
+    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec)
+
     val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
       Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
     thread.processPartitionData(t1p0, 0, partitionData)
 
-    assertTrue("No reassignment bytes in recorded", brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count() > 0)
+    if (isReassigning)
+      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())
+    else
+      assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())
+
+    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesInRate.get.count())
   }
 
   def stub(partition: Partition, replicaManager: ReplicaManager, log: Log): Unit = {

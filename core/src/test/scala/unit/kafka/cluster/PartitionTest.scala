@@ -18,9 +18,9 @@ package kafka.cluster
 
 import java.io.File
 import java.nio.ByteBuffer
-import java.util.{Collections, Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
+import java.util.{Optional, Properties}
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Metric
@@ -35,16 +35,16 @@ import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, ListOffsetRequest}
-import org.junit.{After, Before, Test}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.junit.Assert._
-import org.mockito.Mockito.{doAnswer, doNothing, mock, spy, times, verify, when}
-import org.scalatest.Assertions.assertThrows
+import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers
+import org.mockito.Mockito.{doAnswer, doNothing, mock, spy, times, verify, when}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+import org.scalatest.Assertions.assertThrows
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -94,6 +94,15 @@ class PartitionTest {
       .thenReturn(None)
   }
 
+  private def withLocalSetup(testToRun: => Unit): Unit = {
+    try {
+      setup()
+      testToRun
+    } finally {
+      tearDown()
+    }
+  }
+
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
@@ -105,9 +114,11 @@ class PartitionTest {
 
   @After
   def tearDown(): Unit = {
-    logManager.shutdown()
-    Utils.delete(tmpDir)
-    TestUtils.clearYammerMetrics()
+    if (tmpDir.exists()) {
+      logManager.shutdown()
+      Utils.delete(tmpDir)
+      TestUtils.clearYammerMetrics()
+    }
   }
 
   @Test
@@ -1546,50 +1557,98 @@ class PartitionTest {
   }
 
   @Test
-  def testPartitionIsReassigningComputedCorrectly(): Unit = {
-    val controllerId = 0
-    val controllerEpoch = 3
-    val replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2).asJava
-    val addingReplicas = List[Integer](brokerId + 3, brokerId + 4).asJava
-    val removingReplicas = List[Integer](brokerId + 1).asJava
+  def testPartitionAssignmentStatuses(): Unit = {
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2))
 
-    // non-empty addingReplicas and removingReplicas
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId, brokerId + 1),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      isUnderReplicated = true)
 
-    var leaderState = new LeaderAndIsrPartitionState()
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(brokerId)
-      .setLeaderEpoch(6)
-      .setIsr(replicas)
-      .setZkVersion(1)
-      .setReplicas(replicas)
-      .setAddingReplicas(addingReplicas)
-      .setRemovingReplicas(removingReplicas)
-      .setIsNew(false)
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
-    assertTrue(partition.isReassigning)
-    // non-empty addingReplicas and empty removingReplicas
-    leaderState = leaderState
-      .setAddingReplicas(addingReplicas)
-      .setRemovingReplicas(Collections.emptyList())
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
-    assertTrue(partition.isReassigning)
-    // empty addingReplicas and non-empty removingReplicas
-    leaderState = leaderState
-      .setAddingReplicas(Collections.emptyList())
-      .setRemovingReplicas(removingReplicas)
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
-    assertTrue(partition.isReassigning)
-    // empty addingReplicas and removingReplicas
-    leaderState = new LeaderAndIsrPartitionState()
-      .setControllerEpoch(controllerEpoch)
-      .setLeader(brokerId)
-      .setLeaderEpoch(6)
-      .setIsr(replicas)
-      .setZkVersion(1)
-      .setReplicas(replicas)
-      .setIsNew(false)
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
-    assertFalse(partition.isReassigning)
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId + 3, brokerId + 4),
+      removing = List[Integer](brokerId + 1),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId + 3, brokerId + 4),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      removing = List[Integer](brokerId + 1),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId + 1, brokerId + 2),
+      replicas = List[Integer](brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId),
+      original = Seq(brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId + 2, brokerId + 3, brokerId + 4),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2))
+
+    testPartitionAssignmentStatus(
+      isr = List[Integer](brokerId + 2, brokerId + 3),
+      replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2),
+      adding = List[Integer](brokerId + 3, brokerId + 4, brokerId + 5),
+      original = Seq(brokerId, brokerId + 1, brokerId + 2),
+      isUnderReplicated = true)
+  }
+
+  private def testPartitionAssignmentStatus(isr: List[Integer], replicas: List[Integer],
+                                            adding: List[Integer] = List.empty, removing: List[Integer] = List.empty,
+                                            original: Seq[Int] = Seq.empty, isUnderReplicated: Boolean = false): Unit = {
+    withLocalSetup {
+      val controllerId = 0
+      val controllerEpoch = 3
+
+      val leaderState = new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(6)
+        .setIsr(isr.asJava)
+        .setZkVersion(1)
+        .setReplicas(replicas.asJava)
+        .setIsNew(false)
+      if (adding.nonEmpty)
+        leaderState.setAddingReplicas(adding.asJava)
+      if (removing.nonEmpty)
+        leaderState.setRemovingReplicas(removing.asJava)
+
+      val isReassigning = adding.nonEmpty || removing.nonEmpty
+
+      // set the original replicas as the URP calculation will need them
+      if (original.nonEmpty)
+        partition.assignmentState = SimpleAssignmentState(original, Set.empty)
+      // do the test
+      partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+      assertEquals(isReassigning, partition.isReassigning)
+      if (adding.nonEmpty)
+        adding.foreach(r => assertTrue(partition.isAddingReplica(r)))
+      if (adding.contains(brokerId))
+        assertTrue(partition.isAddingLocalReplica)
+      else
+        assertFalse(partition.isAddingLocalReplica)
+
+      assertEquals(isUnderReplicated, partition.isUnderReplicated)
+    }
   }
 
   @Test
@@ -1607,12 +1666,48 @@ class PartitionTest {
       .setZkVersion(1)
       .setReplicas(replicas)
       .setIsNew(false)
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
+    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
     assertTrue(partition.isUnderReplicated)
 
     leaderState = leaderState.setIsr(replicas)
-    partition.makeLeader(controllerId, leaderState, 0 ,offsetCheckpoints)
+    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
     assertFalse(partition.isUnderReplicated)
+  }
+
+  @Test
+  def testUpdateAssignmentAndIsr(): Unit = {
+    val topicPartition = new TopicPartition("test", 1)
+    val partition = new Partition(
+      topicPartition, 1000, ApiVersion.latestVersion, 0,
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]))
+
+    val replicas = Seq(0, 1, 2, 3)
+    val isr = Set(0, 1, 2, 3)
+    val adding = Seq(4, 5)
+    val removing = Seq(1, 2)
+
+    // Test with ongoing reassignment
+    partition.updateAssignmentAndIsr(replicas, isr, adding, removing)
+
+    assertTrue("The assignmentState is not OngoingReassignmentState",
+      partition.assignmentState.isInstanceOf[OngoingReassignmentState])
+    assertEquals(replicas, partition.assignmentState.replicas)
+    assertEquals(isr, partition.assignmentState.inSyncReplicas)
+    assertEquals(adding, partition.assignmentState.asInstanceOf[OngoingReassignmentState].addingReplicas)
+    assertEquals(removing, partition.assignmentState.asInstanceOf[OngoingReassignmentState].removingReplicas)
+    assertEquals(Seq(1, 2, 3), partition.remoteReplicas.map(_.brokerId))
+
+    // Test with simple assignment
+    val replicas2 = Seq(0, 3, 4, 5)
+    val isr2 = Set(0, 3, 4, 5)
+    partition.updateAssignmentAndIsr(replicas2, isr2)
+
+    assertTrue("The assignmentState is not SimpleAssignmentState",
+      partition.assignmentState.isInstanceOf[SimpleAssignmentState])
+    assertEquals(replicas2, partition.assignmentState.replicas)
+    assertEquals(isr2, partition.assignmentState.inSyncReplicas)
+    assertEquals(Seq(3, 4, 5), partition.remoteReplicas.map(_.brokerId))
   }
 
   /**

@@ -91,12 +91,12 @@ class KafkaApisTest {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion, replicaMgr: ReplicaManager = replicaManager): KafkaApis = {
+  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): KafkaApis = {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
     new KafkaApis(requestChannel,
-      replicaMgr,
+      replicaManager,
       adminManager,
       groupCoordinator,
       txnCoordinator,
@@ -774,7 +774,16 @@ class KafkaApisTest {
   }
 
   @Test
-  def testReassignmentBytesOutMetricsUpdatedOnFetchRequest(): Unit = {
+  def testReassignmentAndReplicationBytesOutRateWhenReassigning(): Unit = {
+    assertReassignmentAndReplicationBytesOutPerSec(true)
+  }
+
+  @Test
+  def testReassignmentAndReplicationBytesOutRateWhenNotReassigning(): Unit = {
+    assertReassignmentAndReplicationBytesOutPerSec(false)
+  }
+
+  private def assertReassignmentAndReplicationBytesOutPerSec(isReassigning: Boolean) {
     val leaderEpoch = 0
     val tp0 = new TopicPartition("tp", 0)
 
@@ -785,23 +794,22 @@ class KafkaApisTest {
     setupBasicMetadataCache(tp0.topic, numPartitions = 1)
     val hw = 3
 
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
       anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
       anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
-        val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]
-        val records = MemoryRecords.withRecords(CompressionType.NONE,
-          new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
-          None, None, Option.empty)))
+        val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
+        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records, None, None, Option.empty)))
       }
     })
 
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false)
+      fetchMetadata, fetchData, true)
     expect(fetchManager.newContext(anyObject[JFetchMetadata],
       anyObject[util.Map[TopicPartition, FetchRequest.PartitionData]],
       anyObject[util.List[TopicPartition]],
@@ -811,15 +819,23 @@ class KafkaApisTest {
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)
 
     val partition: Partition = createNiceMock(classOf[Partition])
-    expect(partition.isAddingReplica(anyInt())).andReturn(true)
+    expect(partition.isAddingReplica(anyInt())).andReturn(isReassigning)
     expect(replicaManager.getPartition(anyObject[TopicPartition])).andReturn(Online(partition))
 
     replay(replicaManager, fetchManager, clientQuotaManager, requestChannel, replicaQuotaManager, partition)
 
+    // reset the metrics so they don't affect other tests
+    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
+    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
+
     createKafkaApis().handle(fetchFromFollower)
 
-    assertTrue("Reassingment bytes out rate didn't increase",
-      brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count() > 0)
+    if (isReassigning)
+      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
+    else
+      assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
+
+    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
   }
 
   /**
