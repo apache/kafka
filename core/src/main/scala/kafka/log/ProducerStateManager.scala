@@ -148,8 +148,6 @@ private[log] class ProducerStateEntry(val producerId: Long,
     this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset
   }
 
-  def removeBatchesOlderThan(offset: Long): Unit = batchMetadata.dropWhile(_.lastOffset < offset)
-
   def findDuplicateBatch(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch != producerEpoch)
        None
@@ -598,8 +596,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
-   * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
-   * or equal to the high watermark.
+   * snapshot in range (if there is one). We delete snapshot files prior to the logStartOffset but do not remove
+   * producer state from the map. This means that in-memory and on-disk state can diverge, and in the case of
+   * broker failover or unclean shutdown, any in-memory state not persisted in the snapshots will be lost.
+   * Note that the log end offset is assumed to be less than or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long): Unit = {
     // remove all out of range snapshots
