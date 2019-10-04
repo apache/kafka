@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Collection;
-import java.util.HashMap;
-
-import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class ClientState {
