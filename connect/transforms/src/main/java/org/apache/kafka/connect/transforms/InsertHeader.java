@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Values;
@@ -45,20 +44,8 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(ConfigName.HEADER_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
-                @SuppressWarnings("unchecked")
-                @Override
-                public void ensureValid(String name, Object valueObject) {
-                    String value = (String) valueObject;
-                    if (value == null || value.isEmpty()) {
-                        throw new ConfigException("Must specify a header name.");
-                    }
-                }
-                @Override
-                public String toString() {
-                    return "value not null and not empty";
-                }
-            }, ConfigDef.Importance.MEDIUM,
+        .define(ConfigName.HEADER_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+            new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
             "Name of the header to add.")
         .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
             "Value of the header to add.");
@@ -80,7 +67,6 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
         if (record == null) {
             return record;
         }
-
         Headers newHeaders = new ConnectHeaders(record.headers());
         newHeaders.add(headerName, schemaAndValue);
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(),
