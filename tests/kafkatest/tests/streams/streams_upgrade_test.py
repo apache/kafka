@@ -501,12 +501,8 @@ class StreamsUpgradeTest(Test):
                     if generation_synchronized == False:
                         raise Exception("Never saw all three processors have the synchronized generation number")
 
-                    if processor == self.leader:
-                        self.update_leader()
-                    else:
-                        self.leader_counter[self.leader] = self.leader_counter[self.leader] + 1
 
-                    if self.leader in self.old_processors or len(self.old_processors) > 0:
+                    if len(self.old_processors) > 0:
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
@@ -521,4 +517,4 @@ class StreamsUpgradeTest(Test):
         for p in self.processors:
             found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group.s latest commonly supported version is 5 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 5 too early'")
