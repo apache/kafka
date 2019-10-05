@@ -1311,6 +1311,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (newTopics.isEmpty()) {
+            return new CreateTopicsResult(Collections.emptyMap());
+        }
+
         final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
