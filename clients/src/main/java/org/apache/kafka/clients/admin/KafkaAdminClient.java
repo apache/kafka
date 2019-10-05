@@ -1706,6 +1706,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (acls.isEmpty()) {
+            return new CreateAclsResult(Collections.emptyMap());
+        }
+
         final long now = time.milliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
         final List<AclCreation> aclCreations = new ArrayList<>();
