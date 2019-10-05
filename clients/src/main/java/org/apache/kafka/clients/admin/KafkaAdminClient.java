@@ -2132,6 +2132,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, final AlterReplicaLogDirsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (replicaAssignment.isEmpty()) {
+            return new AlterReplicaLogDirsResult(Collections.emptyMap());
+        }
+
         final Map<TopicPartitionReplica, KafkaFutureImpl<Void>> futures = new HashMap<>(replicaAssignment.size());
 
         for (TopicPartitionReplica replica : replicaAssignment.keySet())
