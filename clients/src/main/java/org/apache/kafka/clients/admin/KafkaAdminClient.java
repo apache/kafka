@@ -2331,6 +2331,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                    final CreatePartitionsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (newPartitions.isEmpty()) {
+            return new CreatePartitionsResult(Collections.emptyMap());
+        }
+
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
         for (String topic : newPartitions.keySet()) {
             futures.put(topic, new KafkaFutureImpl<>());
