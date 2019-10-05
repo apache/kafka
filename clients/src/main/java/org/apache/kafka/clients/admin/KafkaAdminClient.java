@@ -1818,6 +1818,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (configResources.isEmpty()) {
+            return new DescribeConfigsResult(Collections.emptyMap());
+        }
+
         final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>();
         final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
 
