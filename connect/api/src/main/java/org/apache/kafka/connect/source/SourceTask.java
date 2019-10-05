@@ -89,11 +89,13 @@ public abstract class SourceTask implements Task {
 
     /**
      * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
+     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker.
      * </p>
      * <p>
      * This is an alias for {@link commitRecord(SourceRecord, RecordMetadata)} for backwards compatibility. The default
-     * implementation of {@link commitRecord(SourceRecord, RecordMetadata)} just calls this method.
+     * implementation of {@link commitRecord(SourceRecord, RecordMetadata)} just calls this method. It is not necessary
+     * to override both methods.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
@@ -111,7 +113,9 @@ public abstract class SourceTask implements Task {
 
     /**
      * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
+     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker. In this case
+     * {@code metadata} will be null.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
@@ -119,11 +123,12 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      * <p>
-     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default.
+     * The default implementation just calls @{link commitRecord(SourceRecord)}, which is a nop by default. It is
+     * not necessary to implement both methods.
      * </p>
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer
-     * @param metadata {@link RecordMetadata} record metadata returned from the broker
+     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
+     * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered
      * @throws InterruptedException
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata)
