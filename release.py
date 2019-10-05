@@ -96,9 +96,9 @@ def print_output(output):
     for line in output.split('\n'):
         print(">", line)
 
-def cmd(action, cmd, *args, **kwargs):
-    if isinstance(cmd, basestring) and not kwargs.get("shell", False):
-        cmd = cmd.split()
+def cmd(action, cmd_arg, *args, **kwargs):
+    if isinstance(cmd_arg, basestring) and not kwargs.get("shell", False):
+        cmd_arg = cmd_arg.split()
 
     allow_failure = kwargs.pop("allow_failure", False)
     num_retries = kwargs.pop("num_retries", 0)
@@ -111,9 +111,9 @@ def cmd(action, cmd, *args, **kwargs):
         stdin.seek(0)
         kwargs["stdin"] = stdin
 
-    print(action, cmd, stdin_log)
+    print(action, cmd_arg, stdin_log)
     try:
-        output = subprocess.check_output(cmd, *args, stderr=subprocess.STDOUT, **kwargs)
+        output = subprocess.check_output(cmd_arg, *args, stderr=subprocess.STDOUT, **kwargs)
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
@@ -122,7 +122,7 @@ def cmd(action, cmd, *args, **kwargs):
             kwargs['num_retries'] = num_retries - 1
             kwargs['allow_failure'] = allow_failure
             print("Retrying... %d remaining retries" % (num_retries - 1))
-            return cmd(action, cmd, *args, **kwargs)
+            return cmd(action, cmd_arg, *args, **kwargs)
 
         if allow_failure:
             return
@@ -162,7 +162,7 @@ def regexReplace(path, pattern, replacement):
 
 def user_ok(msg):
     ok = raw_input(msg)
-    return ok.lower() == 'y'
+    return ok.strip().lower() == 'y'
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
