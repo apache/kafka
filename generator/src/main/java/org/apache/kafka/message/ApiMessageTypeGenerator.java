@@ -258,7 +258,7 @@ public final class ApiMessageTypeGenerator {
             short apiKey = entry.getKey();
             buffer.printf("case %d:%n", apiKey);
             buffer.incrementIndent();
-            if (apiKey == 18) {
+            if (type.equals("response") && apiKey == 18) {
                 // ApiVersionsResponse always includes a v0 header.
                 // See KIP-511 for details.
                 buffer.printf("return (short) 0;%n");

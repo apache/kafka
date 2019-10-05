@@ -817,7 +817,7 @@ class KafkaApisTest {
     send.writeTo(channel)
     channel.close()
     channel.buffer.getInt() // read the size
-    ResponseHeader.parse(channel.buffer, sendResponse.request.header.headerVersion())
+    ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version()))
     val struct = api.responseSchema(request.version).read(channel.buffer)
     AbstractResponse.parseResponse(api, struct, request.version)
   }

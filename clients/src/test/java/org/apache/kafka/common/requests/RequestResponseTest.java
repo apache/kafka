@@ -850,7 +850,8 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseStructParsingFallback() {
         Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
@@ -858,13 +859,14 @@ public class RequestResponseTest {
     @Test(expected = SchemaException.class)
     public void testApiVersionResponseStructParsingFallbackException() {
         short version = 0;
-        ApiVersionsResponse.apiVersionsResponse(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
+        ApiVersionsResponse.fromStruct(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
     }
 
     @Test
     public void testApiVersionResponseStructParsing() {
         Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }

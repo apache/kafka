@@ -79,7 +79,8 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(data.correlationId(), headerVersion);
+        return new ResponseHeader(data.correlationId(),
+            apiKey().responseHeaderVersion(apiVersion()));
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
