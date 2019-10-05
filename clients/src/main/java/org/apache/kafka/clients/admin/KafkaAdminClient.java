@@ -2196,6 +2196,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (brokers.isEmpty()) {
+            return new DescribeLogDirsResult(Collections.emptyMap());
+        }
+
         final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
         for (Integer brokerId: brokers) {
@@ -2236,6 +2241,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (replicas.isEmpty()) {
+            return new DescribeReplicaLogDirsResult(Collections.emptyMap());
+        }
+
         final Map<TopicPartitionReplica, KafkaFutureImpl<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> futures = new HashMap<>(replicas.size());
 
         for (TopicPartitionReplica replica : replicas) {
