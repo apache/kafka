@@ -1523,6 +1523,11 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeTopicsResult describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (topicNames.isEmpty()) {
+            return new DescribeTopicsResult(Collections.emptyMap());
+        }
+
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
