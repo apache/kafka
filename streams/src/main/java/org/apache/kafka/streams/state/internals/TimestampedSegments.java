@@ -31,7 +31,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
                         final long retentionPeriod,
                         final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
     }
 
     @Override

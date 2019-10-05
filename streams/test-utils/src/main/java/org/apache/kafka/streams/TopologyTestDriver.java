@@ -280,24 +280,25 @@ public class TopologyTestDriver implements Closeable {
 
         metrics = new Metrics(metricConfig, mockWallClockTime);
 
-        final String threadName = "topology-test-driver-virtual-thread";
+        final String threadId = Thread.currentThread().getName();
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
-            threadName,
+            "test-client",
             StreamsConfig.METRICS_LATEST
         );
         streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
-        final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
+        final Sensor skippedRecordsSensor =
+            streamsMetrics.threadLevelSensor(threadId, "skipped-records", Sensor.RecordingLevel.INFO);
         final String threadLevelGroup = "stream-metrics";
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
                                                 threadLevelGroup,
                                                 "The average per-second number of skipped records",
-                                                streamsMetrics.tagMap()),
+                                                streamsMetrics.tagMap(threadId)),
                                  new Rate(TimeUnit.SECONDS, new WindowedCount()));
         skippedRecordsSensor.add(new MetricName("skipped-records-total",
                                                 threadLevelGroup,
                                                 "The total number of skipped records",
-                                                streamsMetrics.tagMap()),
+                                                streamsMetrics.tagMap(threadId)),
                                  new CumulativeSum());
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),

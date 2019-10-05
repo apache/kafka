@@ -65,7 +65,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
 
                 metrics = internalProcessorContext.metrics();
-                skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+                skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
                 store = internalProcessorContext.getStateStore(storeBuilder);
             }
 

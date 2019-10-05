@@ -62,7 +62,8 @@ public class RecordQueue {
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
         this.processorContext = processorContext;
-        skipRecordsSensor = ThreadMetrics.skipRecordSensor(processorContext.metrics());
+        skipRecordsSensor =
+            ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), processorContext.metrics());
         recordDeserializer = new RecordDeserializer(
             source,
             deserializationExceptionHandler,
