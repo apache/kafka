@@ -274,7 +274,7 @@ public class MirrorConnectorsIntegrationTest {
     }
 
     @Test
-    public void testRebalanceMirrorSourceConnector() throws InterruptedException, TimeoutException {
+    public void testRebalanceMirrorSourceConnector() {
         assertEquals("Primary cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
             primary.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "backup.test-topic-1", "test-topic-1").count());
         assertEquals("Backup cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
