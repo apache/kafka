@@ -2725,6 +2725,10 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
                                                                final DescribeConsumerGroupsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (groupIds.isEmpty()) {
+            return new DescribeConsumerGroupsResult(Collections.emptyMap());
+        }
 
         final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> futures = createFutures(groupIds);
 
