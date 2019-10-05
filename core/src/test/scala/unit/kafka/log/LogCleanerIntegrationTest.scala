@@ -201,14 +201,4 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     )
     assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
   }
-
-  @Test
-  def testDeadThreadCountMetricOnShutdown(): Unit = {
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
-    cleaner.startup()
-    assertEquals(0, cleaner.deadThreadCount)
-    cleaner.cleaners.foreach(_.shutdown())
-    // intentionally shutting down threads shouldn't wobble the metric
-    assertEquals(0, cleaner.deadThreadCount)
-  }
 }

@@ -42,8 +42,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     * @return true if there has been an unexpected error and the thread shut down
     */
   def isThreadFailed: Boolean = {
-    // mind that run might set both but in that case we're shutting down the broker
-    // so the return value of this funtion wouldn't matter
+    // mind that run() might set both when we're shutting down the broker
+    // but the return value of this function at that point wouldn't matter
     isShutdownComplete && shutdownInitiated.getCount != 0
   }
 
