@@ -3089,6 +3089,10 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (groupIds.isEmpty()) {
+            return new DeleteConsumerGroupsResult(Collections.emptyMap());
+        }
 
         final Map<String, KafkaFutureImpl<Void>> futures = createFutures(groupIds);
 
