@@ -3285,6 +3285,11 @@ public class KafkaAdminClient extends AdminClient {
     public AlterPartitionReassignmentsResult alterPartitionReassignments(
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
             AlterPartitionReassignmentsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (reassignments.isEmpty()) {
+            return new AlterPartitionReassignmentsResult(Collections.emptyMap());
+        }
+
         final Map<TopicPartition, KafkaFutureImpl<Void>> futures = new HashMap<>();
         final Map<String, Map<Integer, Optional<NewPartitionReassignment>>> topicsToReassignments = new TreeMap<>();
         for (Map.Entry<TopicPartition, Optional<NewPartitionReassignment>> entry : reassignments.entrySet()) {
