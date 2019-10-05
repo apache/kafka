@@ -459,12 +459,11 @@ public class TestUtils {
         return tps;
     }
 
-    @SuppressWarnings("unchecked")
     public static <T extends Throwable> T assertFutureThrows(KafkaFuture<?> future, Class<T> exceptionClass) {
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
         assertTrue("Unexpected exception cause " + exception.getCause(),
-                exceptionClass.isAssignableFrom(exception.getCause().getClass()));
-        return (T) exception.getCause();
+                exceptionClass.isInstance(exception.getCause()));
+        return exceptionClass.cast(exception.getCause());
     }
 
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
