@@ -119,7 +119,7 @@ object TopicCommand extends Logging {
     }
 
     def hasUnderReplicatedPartitions: Boolean = {
-      info.isr.size < info.replicas.size
+      info.replicas.size - info.isr.size > 0
     }
 
     private def hasLeader: Boolean = {
