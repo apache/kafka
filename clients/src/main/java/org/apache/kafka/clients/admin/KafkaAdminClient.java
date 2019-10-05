@@ -1413,6 +1413,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DeleteTopicsResult deleteTopics(Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
+        // avoid unnecessary metadata lookup
+        if (topicNames.isEmpty()) {
+            return new DeleteTopicsResult(Collections.emptyMap());
+        }
+
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
