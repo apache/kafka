@@ -2330,7 +2330,7 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
         // avoid unnecessary metadata lookup
-        if(recordsToDelete.isEmpty()) {
+        if (recordsToDelete.isEmpty()) {
             return new DeleteRecordsResult(Collections.emptyMap());
         }
 
