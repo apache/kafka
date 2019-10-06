@@ -155,7 +155,7 @@ public class ClientState {
                 ") prevActiveTasks: (" + prevActiveTasks +
                 ") prevStandbyTasks: (" + prevStandbyTasks +
                 ") prevAssignedTasks: (" + prevAssignedTasks +
-                ") prevOwnedPartitions: (" + ownedPartitions.keySet() +
+                ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
                 ") capacity: " + capacity +
                 "]";
     }

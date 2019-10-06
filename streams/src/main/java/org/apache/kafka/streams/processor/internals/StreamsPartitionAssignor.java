@@ -80,8 +80,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final TaskId taskId;
         private final TopicPartition partition;
 
-        AssignedPartition(final TaskId taskId,
-            final TopicPartition partition) {
+        AssignedPartition(final TaskId taskId, final TopicPartition partition) {
             this.taskId = taskId;
             this.partition = partition;
         }
@@ -275,8 +274,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
-        final String topic,
-        final int errorCode) {
+                                                    final String topic,
+                                                    final int errorCode) {
         log.error("{} is unknown yet during rebalance," +
             " please make sure they have been pre-created before starting the Streams application.", topic);
         final Map<String, Assignment> assignment = new HashMap<>();
@@ -439,10 +438,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
                                     if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
-                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions()
-                                            .isPresent()) {
-                                            numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName)
-                                                .numberOfPartitions().get();
+                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
+                                            numPartitionsCandidate =
+                                                repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
                                         }
                                     } else {
                                         final Integer count = metadata.partitionCountForTopic(sourceTopicName);
@@ -803,6 +801,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // Build up list of all assigned partition-task pairs
         for (final TaskId taskId : activeTasksForConsumer) {
+            final List<AssignedPartition> assignedPartitionsForTask = new ArrayList<>();
             for (final TopicPartition partition : partitionsForTask.get(taskId)) {
                 final String oldOwner = clientState.ownedPartitions().get(partition);
                 final boolean newPartitionForConsumer = oldOwner == null || !oldOwner.equals(consumer);
@@ -812,11 +811,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 if (newPartitionForConsumer && allOwnedPartitions.contains(partition)) {
                     log.debug("Removing task {} from assignment until it is safely revoked", taskId);
                     clientState.removeFromAssignment(taskId);
+                    // Clear the assigned partitions list for this task if any partition can not safely be assigned,
+                    // so as not to encode a partial task
+                    assignedPartitionsForTask.clear();
                     break;
                 } else {
-                    assignedPartitions.add(new AssignedPartition(taskId, partition));
+                    assignedPartitionsForTask.add(new AssignedPartition(taskId, partition));
                 }
             }
+            // assignedPartitionsForTask will either contain all partitions for the task or be empty, so just add all
+            assignedPartitions.addAll(assignedPartitionsForTask);
         }
 
         // Add one copy of a task for each corresponding partition, so the receiver can determine the task <-> tp mapping
@@ -887,12 +891,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // If the previous consumer was from another client, these partitions will have to be revoked
                 if (!consumers.contains(consumer)) {
                     log.debug("This client was assigned a task {} whose partition(s) were previously owned by another " +
-                        "client, falling back on an interleaved assignment since a rebalance is inevitable.", task);
+                        "client, falling back to an interleaved assignment since a rebalance is inevitable.", task);
                     return Collections.emptyMap();
                 }
 
                 // If this consumer previously owned more tasks than it has capacity for, some must be revoked
                 if (assignments.get(consumer).size() >= maxTasksPerClient) {
+                    log.debug("Cannot create a sticky and balanced assignment as this client's consumers owned more " +
+                        "previous tasks than it has capacity for during this assignment, falling back to interleaved " +
+                        "assignment since a realance is inevitable.");
                     return Collections.emptyMap();
                 }
 

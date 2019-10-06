@@ -1683,15 +1683,17 @@ public class StreamsPartitionAssignorTest {
 
     private void assertEquivalentAssignment(final Map<String, List<TaskId>> thisAssignment,
                                             final Map<String, List<TaskId>> otherAssignment) {
+        assertEquals(thisAssignment.size(), otherAssignment.size());
         for (final Map.Entry<String, List<TaskId>> entry : thisAssignment.entrySet()) {
             final String consumer = entry.getKey();
             assertTrue(otherAssignment.containsKey(consumer));
 
             final List<TaskId> thisTaskList = entry.getValue();
+            Collections.sort(thisTaskList);
             final List<TaskId> otherTaskList = otherAssignment.get(consumer);
+            Collections.sort(otherTaskList);
 
-            assertEquals(thisTaskList.size(), otherTaskList.size());
-            assertThat(new HashSet<>(thisTaskList), equalTo(new HashSet<>(otherTaskList)));
+            assertThat(thisTaskList, equalTo(otherTaskList));
         }
     }
 
