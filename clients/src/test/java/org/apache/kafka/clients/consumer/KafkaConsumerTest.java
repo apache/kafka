@@ -2112,4 +2112,39 @@ public class KafkaConsumerTest {
         assertEquals(5 * 1000d, consumer.metrics().get(timeBetweenPollAvgName).metricValue());
         assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
     }
+
+    @Test
+    public void testPollIdleRatio() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        // MetricName object to check
+        Metrics metrics = consumer.metrics;
+        MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio", "consumer-metrics");
+        // Test default value
+        assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
+
+        // Spend 50ms in poll
+        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+        time.sleep(50);
+        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+
+        assertEquals(1.0d, consumer.metrics().get(pollIdleRatio).metricValue());
+
+        // Spend 50m outside poll
+        time.sleep(50);
+
+        // Record poll 0ms in poll to update sensor
+        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+
+        // Now we have spent 50ms inside poll and 50ms outside poll so ratio should be 0.5
+        assertEquals(0.5d, consumer.metrics().get(pollIdleRatio).metricValue());
+    }
 }

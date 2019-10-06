@@ -567,6 +567,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Visible for testing
     final Metrics metrics;
+    final KafkaConsumerMetrics kafkaConsumerMetrics;
 
     private final Logger log;
     private final String clientId;
@@ -595,8 +596,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHashAllFetchPositions;
-
-    private final KafkaConsumerMetrics kafkaConsumerMetrics;
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -2401,7 +2400,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return clientId;
     }
 
-    private static class KafkaConsumerMetrics {
+    static class KafkaConsumerMetrics {
         private final Metrics metrics;
 
         private Sensor timeBetweenPollSensor;
@@ -2443,16 +2442,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     new Avg());
         }
 
-        private void recordPollStart(long pollStartMs) {
+        void recordPollStart(long pollStartMs) {
             this.pollStartMs = pollStartMs;
             this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
             this.timeBetweenPollSensor.record(timeSinceLastPollMs);
             this.lastPollMs = pollStartMs;
         }
 
-        private void recordPollEnd(long pollEndMs) {
+        void recordPollEnd(long pollEndMs) {
             long pollTimeMs = pollEndMs - pollStartMs;
-            double pollIdleRatio = pollTimeMs == 0 ? 1.0 : pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
+            double pollIdleRatio = pollTimeMs == 0 ? 0.0 : pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
             this.pollIdleSensor.record(pollIdleRatio);
         }
     }
