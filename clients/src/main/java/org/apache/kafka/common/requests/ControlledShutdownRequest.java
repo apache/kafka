@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-
 public class ControlledShutdownRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
@@ -63,9 +62,10 @@ public class ControlledShutdownRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new ControlledShutdownResponse(new ControlledShutdownResponseData().
-            setErrorCode(Errors.forException(e).code()));
+    public ControlledShutdownResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
+                .setErrorCode(Errors.forException(e).code());
+        return new ControlledShutdownResponse(data);
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {

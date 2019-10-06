@@ -16,50 +16,36 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.MessageTestUtil;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.Set;
-
-import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
+import static org.apache.kafka.common.protocol.ApiKeys.CONTROLLED_SHUTDOWN;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
-public class StopReplicaRequestTest {
+public class ControlledShutdownRequestTest {
 
     @Test
     public void testUnsupportedVersion() {
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
-                (short) (STOP_REPLICA.latestVersion() + 1),
-                0, 0, 0L, false, Collections.emptyList());
+        ControlledShutdownRequest.Builder builder = new ControlledShutdownRequest.Builder(
+                new ControlledShutdownRequestData().setBrokerId(1),
+                (short) (CONTROLLED_SHUTDOWN.latestVersion() + 1));
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
     @Test
     public void testGetErrorResponse() {
-        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
-            StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
-                    0, 0, 0L, false, Collections.emptyList());
-            StopReplicaRequest request = builder.build();
-            StopReplicaResponse response = request.getErrorResponse(0,
+        for (short version = CONTROLLED_SHUTDOWN.oldestVersion(); version < CONTROLLED_SHUTDOWN.latestVersion(); version++) {
+            ControlledShutdownRequest.Builder builder = new ControlledShutdownRequest.Builder(
+                    new ControlledShutdownRequestData().setBrokerId(1), version);
+            ControlledShutdownRequest request = builder.build();
+            ControlledShutdownResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
         }
-    }
-
-    @Test
-    public void testStopReplicaRequestNormalization() {
-        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
-        assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
-            MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
     }
 
 }

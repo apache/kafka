@@ -187,12 +187,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     @Override
     public UpdateMetadataResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        if (version <= 5)
-            return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.forException(e).code()));
-        else
-            throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                version, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
+        UpdateMetadataResponseData data = new UpdateMetadataResponseData()
+                .setErrorCode(Errors.forException(e).code());
+        return new UpdateMetadataResponse(data);
     }
 
     public Iterable<UpdateMetadataPartitionState> partitionStates() {
