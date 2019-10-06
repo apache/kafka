@@ -419,6 +419,22 @@ subprojects {
         "-Xlint:constant",
         "-Xlint:unused"
       ]
+
+      // Inline more aggressively when compiling the `core` jar since it's not meant to be used as a library.
+      // More specifically, inline classes from the Scala library so that we can inline methods like `Option.exists`
+      // and avoid lambda allocations. This is only safe if the Scala library version is the same at compile time
+      // and runtime. We cannot guarantee this for libraries like kafka streams, so only inline classes from the
+      // Kafka project in that case.
+      List<String> inlineFrom
+      if (project.name.equals('core'))
+        inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
+      else
+        inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
+
+      // Somewhat confusingly, `-opt:l:inline` enables all optimizations. `inlineFrom` configures what can be inlined.
+      // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
+      scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
+      scalaCompileOptions.additionalParameters += inlineFrom
     }
     
   // these options are valid for Scala versions < 2.13 only
