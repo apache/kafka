@@ -1742,8 +1742,10 @@ public class Fetcher<K, V> implements Closeable {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
                         if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) ->
-                                subscription.preferredReadReplica(tp, 0L).orElse(-1));
+                            metrics.addMetric(
+                                metricName,
+                                (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
+                            );
                         }
                     }
                 }
