@@ -115,7 +115,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     RocksDBStore(final String name,
                  final String metricsScope) {
-        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
+        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name));
     }
 
     RocksDBStore(final String name,

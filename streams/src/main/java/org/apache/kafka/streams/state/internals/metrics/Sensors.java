@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Value;
@@ -33,18 +34,20 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public final class Sensors {
     private Sensors() {}
 
-    public static Sensor createTaskAndStoreLatencyAndThroughputSensors(final Sensor.RecordingLevel level,
+    public static Sensor createTaskAndStoreLatencyAndThroughputSensors(final RecordingLevel level,
                                                                        final String operation,
                                                                        final StreamsMetricsImpl metrics,
                                                                        final String metricsGroup,
+                                                                       final String threadId,
                                                                        final String taskName,
                                                                        final String storeName,
                                                                        final Map<String, String> taskTags,
                                                                        final Map<String, String> storeTags) {
-        final Sensor taskSensor = metrics.taskLevelSensor(taskName, operation, level);
+        final Sensor taskSensor = metrics.taskLevelSensor(threadId, taskName, operation, level);
         addAvgAndMaxLatencyToSensor(taskSensor, metricsGroup, taskTags, operation);
         addInvocationRateAndCountToSensor(taskSensor, metricsGroup, taskTags, operation);
-        final Sensor sensor = metrics.storeLevelSensor(taskName, storeName, operation, level, taskSensor);
+        final Sensor sensor = metrics
+            .storeLevelSensor(threadId, taskName, storeName, operation, level, taskSensor);
         addAvgAndMaxLatencyToSensor(sensor, metricsGroup, storeTags, operation);
         addInvocationRateAndCountToSensor(sensor, metricsGroup, storeTags, operation);
         return sensor;
@@ -64,10 +67,12 @@ public final class Sensors {
                                                      final InternalProcessorContext context,
                                                      final String property) {
         final StreamsMetricsImpl metrics = context.metrics();
+        final String threadId = Thread.currentThread().getName();
 
         final String sensorName = "suppression-buffer-" + property;
 
         final Sensor sensor = metrics.storeLevelSensor(
+            threadId,
             context.taskId().toString(),
             store.name(),
             sensorName,
@@ -77,8 +82,11 @@ public final class Sensors {
         final String metricsGroup = "stream-buffer-metrics";
 
         final Map<String, String> tags = metrics.tagMap(
-            "task-id", context.taskId().toString(),
-            "buffer-id", store.name()
+            threadId,
+            "task-id",
+            context.taskId().toString(),
+            "buffer-id",
+            store.name()
         );
 
         sensor.add(

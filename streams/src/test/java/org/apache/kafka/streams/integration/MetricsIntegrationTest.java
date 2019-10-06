@@ -29,6 +29,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -69,8 +70,10 @@ public class MetricsIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final long timeout = 60000;
 
+    private final static String APPLICATION_ID_VALUE = "stream-metrics-test";
 
     // Metric group
+    private static final String STREAM_CLIENT_NODE_METRICS = "stream-metrics";
     private static final String STREAM_THREAD_NODE_METRICS = "stream-metrics";
     private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
@@ -82,6 +85,11 @@ public class MetricsIntegrationTest {
     private static final String STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS = "stream-rocksdb-session-state-metrics";
 
     // Metrics name
+    private static final String VERSION = "version";
+    private static final String COMMIT_ID = "commit-id";
+    private static final String APPLICATION_ID = "application-id";
+    private static final String TOPOLOGY_DESCRIPTION = "topology-description";
+    private static final String STATE = "state";
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
     private static final String PUT_LATENCY_MAX = "put-latency-max";
     private static final String PUT_IF_ABSENT_LATENCY_AVG = "put-if-absent-latency-avg";
@@ -205,7 +213,7 @@ public class MetricsIntegrationTest {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
         streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "stream-metrics-test");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID_VALUE);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -220,7 +228,13 @@ public class MetricsIntegrationTest {
     }
 
     private void startApplication() throws InterruptedException {
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        final Topology topology = builder.build();
+        kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
+
+        verifyStateMetric(State.CREATED);
+        verifyTopologyDescriptionMetric(topology.describe().toString());
+        verifyApplicationIdMetric(APPLICATION_ID_VALUE);
+
         kafkaStreams.start();
         TestUtils.waitForCondition(
             () -> kafkaStreams.state() == State.RUNNING,
@@ -306,6 +320,7 @@ public class MetricsIntegrationTest {
             .to(STREAM_OUTPUT_4);
         startApplication();
 
+        verifyStateMetric(State.RUNNING);
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
         checkProcessorLevelMetrics();
@@ -339,6 +354,8 @@ public class MetricsIntegrationTest {
 
         startApplication();
 
+        verifyStateMetric(State.RUNNING);
+
         waitUntilAllRecordsAreConsumed();
 
         checkWindowStoreMetrics();
@@ -368,6 +385,8 @@ public class MetricsIntegrationTest {
         produceRecordsForTwoSegments(inactivityGap);
 
         startApplication();
+
+        verifyStateMetric(State.RUNNING);
 
         waitUntilAllRecordsAreConsumed();
 
@@ -401,10 +420,44 @@ public class MetricsIntegrationTest {
         closeApplication();
     }
 
+    private void verifyStateMetric(final State state) {
+        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().name().equals(STATE) &&
+                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
+            .collect(Collectors.toList());
+        assertThat(metricsList.size(), is(1));
+        assertThat(metricsList.get(0).metricValue(), is(state));
+    }
+
+    private void verifyTopologyDescriptionMetric(final String topologyDescription) {
+        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().name().equals(TOPOLOGY_DESCRIPTION) &&
+                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
+            .collect(Collectors.toList());
+        assertThat(metricsList.size(), is(1));
+        assertThat(metricsList.get(0).metricValue(), is(topologyDescription));
+    }
+
+    private void verifyApplicationIdMetric(final String applicationId) {
+        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().name().equals(APPLICATION_ID) &&
+                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
+            .collect(Collectors.toList());
+        assertThat(metricsList.size(), is(1));
+        assertThat(metricsList.get(0).metricValue(), is(applicationId));
+    }
+
     private void checkThreadLevelMetrics() {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS))
             .collect(Collectors.toList());
+        // instance-level metrics start
+        checkMetricByName(listMetricThread, VERSION, 1);
+        checkMetricByName(listMetricThread, COMMIT_ID, 1);
+        checkMetricByName(listMetricThread, APPLICATION_ID, 1);
+        checkMetricByName(listMetricThread, TOPOLOGY_DESCRIPTION, 1);
+        checkMetricByName(listMetricThread, STATE, 1);
+        // instance-level metrics end
         checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
         checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
         checkMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);

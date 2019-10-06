@@ -892,13 +892,14 @@ public abstract class WindowBytesStoreTest {
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
         final String metricScope = getMetricsScope();
+        final String threadId = Thread.currentThread().getName();
 
         final Metric dropTotal = metrics.get(new MetricName(
             "expired-window-record-drop-total",
             "stream-" + metricScope + "-metrics",
             "The total number of occurrence of expired-window-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry(metricScope + "-id", windowStore.name())
             )
@@ -909,7 +910,7 @@ public abstract class WindowBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry(metricScope + "-id", windowStore.name())
             )

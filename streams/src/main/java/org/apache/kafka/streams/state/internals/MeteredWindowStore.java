@@ -54,6 +54,7 @@ public class MeteredWindowStore<K, V>
     private Sensor fetchTime;
     private Sensor flushTime;
     private ProcessorContext context;
+    private final String threadId;
     private String taskName;
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
@@ -64,6 +65,7 @@ public class MeteredWindowStore<K, V>
                        final Serde<V> valueSerde) {
         super(inner);
         this.windowSizeMs = windowSizeMs;
+        threadId = Thread.currentThread().getName();
         this.metricsScope = metricsScope;
         this.time = time;
         this.keySerde = keySerde;
@@ -79,13 +81,55 @@ public class MeteredWindowStore<K, V>
 
         taskName = context.taskId().toString();
         final String metricsGroup = GROUP_PREFIX + metricsScope + STATE_LEVEL_GROUP_SUFFIX;
-        final Map<String, String> taskTags = metrics.storeLevelTagMap(taskName, metricsScope, ROLLUP_VALUE);
-        final Map<String, String> storeTags = metrics.storeLevelTagMap(taskName, metricsScope, name());
+        final Map<String, String> taskTags =
+            metrics.storeLevelTagMap(threadId, taskName, metricsScope, ROLLUP_VALUE);
+        final Map<String, String> storeTags =
+            metrics.storeLevelTagMap(threadId, taskName, metricsScope, name());
 
-        putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        fetchTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "fetch", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        putTime = createTaskAndStoreLatencyAndThroughputSensors(
+            DEBUG,
+            "put",
+            metrics,
+            metricsGroup,
+            threadId,
+            taskName,
+            name(),
+            taskTags,
+            storeTags
+        );
+        fetchTime = createTaskAndStoreLatencyAndThroughputSensors(
+            DEBUG,
+            "fetch",
+            metrics,
+            metricsGroup,
+            threadId,
+            taskName,
+            name(),
+            taskTags,
+            storeTags
+        );
+        flushTime = createTaskAndStoreLatencyAndThroughputSensors(
+            DEBUG,
+            "flush",
+            metrics,
+            metricsGroup,
+            threadId,
+            taskName,
+            name(),
+            taskTags,
+            storeTags
+        );
+        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(
+            DEBUG,
+            "restore",
+            metrics,
+            metricsGroup,
+            threadId,
+            taskName,
+            name(),
+            taskTags,
+            storeTags
+        );
 
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
@@ -218,7 +262,7 @@ public class MeteredWindowStore<K, V>
     @Override
     public void close() {
         super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
+        metrics.removeAllStoreLevelSensors(threadId, taskName, name());
     }
 
     private Bytes keyBytes(final K key) {

@@ -116,7 +116,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
-                return new ApiVersionsResponse(struct);
+                return ApiVersionsResponse.apiVersionsResponse(struct, version);
             case CREATE_TOPICS:
                 return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:

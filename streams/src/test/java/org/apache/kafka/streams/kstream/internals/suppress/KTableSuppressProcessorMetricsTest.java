@@ -43,90 +43,91 @@ import static org.hamcrest.core.Is.is;
 
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
+    private final String threadId = Thread.currentThread().getName();
 
-    private static final MetricName EVICTION_TOTAL_METRIC = new MetricName(
+    private final MetricName evictionTotalMetric = new MetricName(
         "suppression-emit-total",
         "stream-processor-node-metrics",
         "The total number of occurrence of suppression-emit operations.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("processor-node-id", "testNode")
         )
     );
 
-    private static final MetricName EVICTION_RATE_METRIC = new MetricName(
+    private final MetricName evictionRateMetric = new MetricName(
         "suppression-emit-rate",
         "stream-processor-node-metrics",
         "The average number of occurrence of suppression-emit operation per second.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("processor-node-id", "testNode")
         )
     );
 
-    private static final MetricName BUFFER_SIZE_AVG_METRIC = new MetricName(
+    private final MetricName bufferSizeAvgMetric = new MetricName(
         "suppression-buffer-size-avg",
         "stream-buffer-metrics",
         "The average size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
     );
 
-    private static final MetricName BUFFER_SIZE_CURRENT_METRIC = new MetricName(
+    private final MetricName bufferSizeCurrentMetric = new MetricName(
         "suppression-buffer-size-current",
         "stream-buffer-metrics",
         "The current size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
     );
 
-    private static final MetricName BUFFER_SIZE_MAX_METRIC = new MetricName(
+    private final MetricName bufferSizeMaxMetric = new MetricName(
         "suppression-buffer-size-max",
         "stream-buffer-metrics",
         "The max size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
     );
 
-    private static final MetricName BUFFER_COUNT_AVG_METRIC = new MetricName(
+    private final MetricName bufferCountAvgMetric = new MetricName(
         "suppression-buffer-count-avg",
         "stream-buffer-metrics",
         "The average count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
     );
 
-    private static final MetricName BUFFER_COUNT_CURRENT_METRIC = new MetricName(
+    private final MetricName bufferCountCurrentMetric = new MetricName(
         "suppression-buffer-count-current",
         "stream-buffer-metrics",
         "The current count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
     );
 
-    private static final MetricName BUFFER_COUNT_MAX_METRIC = new MetricName(
+    private final MetricName bufferCountMaxMetric = new MetricName(
         "suppression-buffer-count-max",
         "stream-buffer-metrics",
         "The max count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
+            mkEntry("client-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -166,14 +167,14 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, EVICTION_RATE_METRIC, is(0.0));
-            verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(0.0));
-            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(21.5));
-            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(43.0));
-            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(43.0));
-            verifyMetric(metrics, BUFFER_COUNT_AVG_METRIC, is(0.5));
-            verifyMetric(metrics, BUFFER_COUNT_CURRENT_METRIC, is(1.0));
-            verifyMetric(metrics, BUFFER_COUNT_MAX_METRIC, is(1.0));
+            verifyMetric(metrics, evictionRateMetric, is(0.0));
+            verifyMetric(metrics, evictionTotalMetric, is(0.0));
+            verifyMetric(metrics, bufferSizeAvgMetric, is(21.5));
+            verifyMetric(metrics, bufferSizeCurrentMetric, is(43.0));
+            verifyMetric(metrics, bufferSizeMaxMetric, is(43.0));
+            verifyMetric(metrics, bufferCountAvgMetric, is(0.5));
+            verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
+            verifyMetric(metrics, bufferCountMaxMetric, is(1.0));
         }
 
         context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
@@ -182,14 +183,14 @@ public class KTableSuppressProcessorMetricsTest {
         {
             final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-            verifyMetric(metrics, EVICTION_RATE_METRIC, greaterThan(0.0));
-            verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(1.0));
-            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(41.0));
-            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(39.0));
-            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(82.0));
-            verifyMetric(metrics, BUFFER_COUNT_AVG_METRIC, is(1.0));
-            verifyMetric(metrics, BUFFER_COUNT_CURRENT_METRIC, is(1.0));
-            verifyMetric(metrics, BUFFER_COUNT_MAX_METRIC, is(2.0));
+            verifyMetric(metrics, evictionRateMetric, greaterThan(0.0));
+            verifyMetric(metrics, evictionTotalMetric, is(1.0));
+            verifyMetric(metrics, bufferSizeAvgMetric, is(41.0));
+            verifyMetric(metrics, bufferSizeCurrentMetric, is(39.0));
+            verifyMetric(metrics, bufferSizeMaxMetric, is(82.0));
+            verifyMetric(metrics, bufferCountAvgMetric, is(1.0));
+            verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
+            verifyMetric(metrics, bufferCountMaxMetric, is(2.0));
         }
     }
 
