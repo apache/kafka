@@ -808,26 +808,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized String memberId() {
-        return generation == null ? JoinGroupRequest.UNKNOWN_MEMBER_ID :
-                generation.memberId;
-    }
-
-    /**
-     * Check whether given generation id is matching the record within current generation.
-     * Only using in unit tests.
-     * @param generationId generation id
-     * @return true if the two ids are matching.
-     */
-    final synchronized boolean hasMatchingGenerationId(int generationId) {
-        return generation != null && generation.generationId == generationId;
-    }
-
-    /**
-     * @return true if the current generation's member ID is valid, false otherwise
-     */
-    // Visible for testing
-    final synchronized boolean hasValidMemberId() {
-        return generation != null && generation.hasMemberId();
+        return generation.memberId;
     }
 
     private synchronized void resetGeneration() {
@@ -1328,12 +1309,35 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    // For testing only
+    // For testing only below
     public Heartbeat heartbeat() {
         return heartbeat;
     }
 
-    public void setLastRebalanceTime(final long timestamp) {
+    final void setLastRebalanceTime(final long timestamp) {
         lastRebalanceEndMs = timestamp;
     }
+
+    /**
+     * Check whether given generation id is matching the record within current generation.
+     *
+     * @param generationId generation id
+     * @return true if the two ids are matching.
+     */
+    final boolean hasMatchingGenerationId(int generationId) {
+        return generation != Generation.NO_GENERATION && generation.generationId == generationId;
+    }
+
+    final boolean hasUnknownGeneration() {
+        return generation == Generation.NO_GENERATION;
+    }
+
+    /**
+     * @return true if the current generation's member ID is valid, false otherwise
+     */
+    final boolean hasValidMemberId() {
+        return generation != Generation.NO_GENERATION && generation.hasMemberId();
+    }
+
+
 }
