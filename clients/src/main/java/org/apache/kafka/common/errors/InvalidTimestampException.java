@@ -16,44 +16,18 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.requests.ProduceResponse;
-
-import java.util.Collections;
-import java.util.List;
-
 /**
  * Indicate the timestamp of a record is invalid.
  */
-// TODO: remove errorRecords
 public class InvalidTimestampException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    // Relative offset of the record that throws this exception
-    private final List<ProduceResponse.ErrorRecord> errorRecords;
-
     public InvalidTimestampException(String message) {
         super(message);
-        this.errorRecords = Collections.emptyList();
-    }
-
-    public InvalidTimestampException(String message, List<ProduceResponse.ErrorRecord> errorRecords) {
-        super(message);
-        this.errorRecords = errorRecords;
     }
 
     public InvalidTimestampException(String message, Throwable cause) {
         super(message, cause);
-        this.errorRecords = Collections.emptyList();
     }
-
-    public InvalidTimestampException(String message, Throwable cause, List<ProduceResponse.ErrorRecord> errorRecords) {
-        super(message, cause);
-        this.errorRecords = errorRecords;
-    }
-
-    public List<ProduceResponse.ErrorRecord> getErrorRecords() {
-        return errorRecords;
-    }
-
 }
