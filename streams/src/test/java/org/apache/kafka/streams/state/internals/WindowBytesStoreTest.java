@@ -663,6 +663,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testPutSameKeyTimestamp() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -771,6 +772,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testDeleteAndUpdate() {
 
         final long currentTime = 0;
@@ -792,6 +794,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         windowStore.put(null, "anyValue");
     }
@@ -933,6 +936,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testWindowIteratorPeek() {
         final long currentTime = 0;
         setCurrentTime(currentTime);
@@ -963,6 +967,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowConcurrentModificationException() {
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -991,6 +996,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testFetchDuplicates() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -1020,6 +1026,7 @@ public abstract class WindowBytesStoreTest {
     }
 
 
+    @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {
@@ -1035,6 +1042,7 @@ public abstract class WindowBytesStoreTest {
         store.put(5, "five");
     }
 
+    @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {

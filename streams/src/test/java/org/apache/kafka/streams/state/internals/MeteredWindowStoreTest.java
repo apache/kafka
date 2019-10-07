@@ -114,6 +114,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
