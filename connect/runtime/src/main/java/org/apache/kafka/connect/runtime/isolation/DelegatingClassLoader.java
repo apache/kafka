@@ -146,10 +146,9 @@ public class DelegatingClassLoader extends URLClassLoader {
             return null;
         }
         ClassLoader pluginLoader = inner.get(inner.lastKey());
-        if (!(pluginLoader instanceof PluginClassLoader)) {
-            return null;
-        }
-        return (PluginClassLoader) pluginLoader;
+        return pluginLoader instanceof PluginClassLoader
+               ? (PluginClassLoader) pluginLoader
+               : null;
     }
 
     public ClassLoader connectorLoader(Connector connector) {
