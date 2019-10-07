@@ -197,6 +197,9 @@
     <suppress checks="MethodLength"
               files="RocksDBWindowStoreTest.java"/>
 
+    <suppress checks="MemberName"
+              files="StreamsPartitionAssignorTest.java"/>
+
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
 

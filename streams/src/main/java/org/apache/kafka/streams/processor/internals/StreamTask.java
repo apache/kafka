@@ -573,7 +573,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    @Override
     public void suspend() {
         log.debug("Suspending");
         suspend(true, false);
@@ -687,10 +686,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               RuntimeException firstException) {
+    void closeSuspended(final boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -742,7 +738,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("Could not close task due to the following error:", e);
         }
 
-        closeSuspended(clean, isZombie, firstException);
+        closeSuspended(clean, firstException);
 
         taskClosed = true;
     }
