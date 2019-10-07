@@ -18,6 +18,7 @@
 package test.plugins;
 
 import java.util.Map;
+import java.util.HashMap;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
@@ -28,16 +29,16 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public class Sampling implements Converter, SamplingTestPlugin {
 
+  private static final Map<String, SamplingTestPlugin> SAMPLES;
   private static final ClassLoader STATIC_CLASS_LOADER;
-  private static int dynamicInitializations;
   private final ClassLoader classloader;
 
   static {
+    SAMPLES = new HashMap<>();
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
   }
 
   {
-    dynamicInitializations++;
     classloader = Thread.currentThread().getContextClassLoader();
   }
 
@@ -67,7 +68,7 @@ public class Sampling implements Converter, SamplingTestPlugin {
   }
 
   @Override
-  public int dynamicInitializations() {
-    return dynamicInitializations;
+  public Map<String, SamplingTestPlugin> otherSamples() {
+      return SAMPLES;
   }
 }

@@ -23,7 +23,6 @@ package test.plugins;
 public class ServiceLoadedSubclass extends ServiceLoadedClass {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
-  private static int dynamicInitializations;
   private final ClassLoader classloader;
 
   static {
@@ -31,7 +30,6 @@ public class ServiceLoadedSubclass extends ServiceLoadedClass {
   }
 
   {
-    dynamicInitializations++;
     classloader = Thread.currentThread().getContextClassLoader();
   }
 
@@ -45,8 +43,4 @@ public class ServiceLoadedSubclass extends ServiceLoadedClass {
     return classloader;
   }
 
-  @Override
-  public int dynamicInitializations() {
-    return dynamicInitializations;
-  }
 }

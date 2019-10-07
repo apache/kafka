@@ -32,8 +32,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
-  private static int dynamicInitializations;
-  private static Map<String, SamplingTestPlugin> SAMPLES;
+  private static final Map<String, SamplingTestPlugin> SAMPLES;
   private final ClassLoader classloader;
 
   static {
@@ -48,7 +47,6 @@ public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
   }
 
   {
-    dynamicInitializations++;
     classloader = Thread.currentThread().getContextClassLoader();
     Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
     while (it.hasNext()) {
@@ -80,11 +78,6 @@ public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
   @Override
   public ClassLoader classloader() {
     return classloader;
-  }
-
-  @Override
-  public int dynamicInitializations() {
-    return dynamicInitializations;
   }
 
   @Override

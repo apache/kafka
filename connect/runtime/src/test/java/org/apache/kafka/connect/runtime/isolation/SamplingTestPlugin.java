@@ -18,7 +18,9 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Mix-in interface for plugins so we can sample information about their initialization
@@ -36,14 +38,27 @@ public interface SamplingTestPlugin {
     ClassLoader classloader();
 
     /**
-     * @return number of instances of this plugin class that have been initialized
-     */
-    int dynamicInitializations();
-
-    /**
      * @return a group of other SamplingTestPlugin instances known by this plugin
+     * This should only return direct children, and not reference this instance directly
      */
     default Map<String, SamplingTestPlugin> otherSamples() {
         return Collections.emptyMap();
+    }
+
+    /**
+     * @return a flattened list of child samples including this entry keyed as "this"
+     */
+    default Map<String, SamplingTestPlugin> flatten() {
+        Map<String, SamplingTestPlugin> out = new HashMap<>();
+        Map<String, SamplingTestPlugin> otherSamples = otherSamples();
+        if (otherSamples != null) {
+            for (Entry<String, SamplingTestPlugin> child : otherSamples.entrySet()) {
+                for (Entry<String, SamplingTestPlugin> flattened : child.getValue().flatten().entrySet()) {
+                    out.put(child.getValue() + "." + flattened.getKey(), flattened.getValue());
+                }
+            }
+        }
+        out.put("this", this);
+        return out;
     }
 }

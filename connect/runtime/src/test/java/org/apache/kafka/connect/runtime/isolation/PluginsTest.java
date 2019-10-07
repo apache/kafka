@@ -47,6 +47,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class PluginsTest {
@@ -204,9 +205,6 @@ public class PluginsTest {
 
         assertTrue(firstPlugin instanceof SamplingTestPlugin);
 
-        // The plugin should have only been initialized a single time (in the above call)
-        assertEquals(1, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
-
         Converter secondPlugin = plugins.newPlugin(
             TestPlugins.SAMPLING,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -214,12 +212,10 @@ public class PluginsTest {
         );
 
         assertTrue(secondPlugin instanceof SamplingTestPlugin);
-
-        // The shared static value for all instances of the SAMPLING plugin should be incremented
-        assertEquals(2, ((SamplingTestPlugin) secondPlugin).dynamicInitializations());
-
-        // This value changes because secondPlugin's instantiation incremented it.
-        assertEquals(2, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
+        assertSame(
+            ((SamplingTestPlugin) firstPlugin).otherSamples(),
+            ((SamplingTestPlugin) secondPlugin).otherSamples()
+        );
     }
 
     @Test
@@ -233,32 +229,15 @@ public class PluginsTest {
 
         assertTrue(plugin instanceof SamplingTestPlugin);
         SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-        for (Entry<String, SamplingTestPlugin> e : samplingPlugin.otherSamples().entrySet()) {
-            String message = e.getKey() + "was not initialized properly";
+        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
+        // There should be at least 1 (root) + 4 (service loaded) = 5 samples
+        assertTrue(samples.size() >= 5);
+        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+            String message = e.getKey() + " does not have the PluginClassLoader active";
             SamplingTestPlugin sample = e.getValue();
             assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
             assertTrue(message, sample.classloader() instanceof PluginClassLoader);
-            assertEquals(message, sample.staticClassloader(), sample.classloader());
         }
-        Map<String, SamplingTestPlugin> samples = samplingPlugin.otherSamples();
-        // Initialized once per (static, dynamic, static subclass, dynamic subclass)
-        assertEquals(
-            4,
-            samples.get("static:test.plugins.ServiceLoadedClass").dynamicInitializations()
-        );
-        assertEquals(
-            4,
-            samples.get("dynamic:test.plugins.ServiceLoadedClass").dynamicInitializations()
-        );
-        // Initialized once per (static subclass, dynamic subclass)
-        assertEquals(
-            2,
-            samples.get("static:test.plugins.ServiceLoadedSubclass").dynamicInitializations()
-        );
-        assertEquals(
-            2,
-            samples.get("dynamic:test.plugins.ServiceLoadedSubclass").dynamicInitializations()
-        );
     }
 
     @Test
@@ -273,10 +252,9 @@ public class PluginsTest {
         assertTrue(plugin instanceof SamplingTestPlugin);
         SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
 
-        assertTrue(samplingPlugin.staticClassloader() instanceof PluginClassLoader);
-        assertTrue(samplingPlugin.classloader() instanceof PluginClassLoader);
-        assertEquals(samplingPlugin.staticClassloader(), samplingPlugin.classloader());
-        assertEquals(samplingPlugin.staticClassloader(), samplingPlugin.getClass().getClassLoader());
+        String message = "sampling plugin does not have the PluginClassLoader active";
+        assertTrue(message, samplingPlugin.staticClassloader() instanceof PluginClassLoader);
+        assertTrue(message, samplingPlugin.classloader() instanceof PluginClassLoader);
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {

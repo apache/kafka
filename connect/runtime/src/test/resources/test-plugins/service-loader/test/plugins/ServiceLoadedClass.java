@@ -25,7 +25,6 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 public class ServiceLoadedClass implements SamplingTestPlugin {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
-  private static int dynamicInitializations;
   private final ClassLoader classloader;
 
   static {
@@ -33,7 +32,6 @@ public class ServiceLoadedClass implements SamplingTestPlugin {
   }
 
   {
-    dynamicInitializations++;
     classloader = Thread.currentThread().getContextClassLoader();
   }
 
@@ -45,11 +43,6 @@ public class ServiceLoadedClass implements SamplingTestPlugin {
   @Override
   public ClassLoader classloader() {
     return classloader;
-  }
-
-  @Override
-  public int dynamicInitializations() {
-    return dynamicInitializations;
   }
 
 }
