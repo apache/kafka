@@ -52,6 +52,9 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
             return null;
         }
         Headers recordHeaders = record.headers();
+        if (recordHeaders.isEmpty()) {
+            return record;
+        }
         Headers newHeaders = new ConnectHeaders();
         recordHeaders.forEach(header -> {
                 if (!headers.contains(header.key())) {
@@ -59,12 +62,8 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
                 }
             }
         );
-        if (newHeaders.size() == recordHeaders.size()) {
-            return record;
-        }
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(),
             record.key(), record.valueSchema(), record.value(), record.timestamp(), newHeaders);
-
     }
 
     @Override
