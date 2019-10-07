@@ -47,8 +47,7 @@ public class ConsumerRejoinToGroupAfterRebalanceTest {
         KafkaConsumer<byte[], byte[]> consumer =
             connect.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic");
 
-        long start = System.currentTimeMillis();
-        while (System.currentTimeMillis() - start < 60_000) {
+        for (int i = 0; i < 100; i++) {
             try {
                 consumer.poll(Duration.ofMillis(TIMEOUT));
 

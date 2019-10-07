@@ -889,6 +889,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the rebalance callback throws exception
      */
     public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        // Generation will be refreshed (or already refreshed) by (re)-join request.
+        if (joinFuture != null)
+            return RequestFuture.voidSuccess();
+
         RequestFuture<Void> future = null;
 
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
