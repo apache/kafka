@@ -57,13 +57,16 @@ class ReplicaFetcherThreadTest {
   def shouldSendLatestRequestVersionsByDefault(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    replay(replicaManager)
     val thread = new ReplicaFetcherThread(
       name = "bob",
       fetcherId = 0,
       sourceBroker = brokerEndPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
-      replicaMgr = null,
+      replicaMgr = replicaManager,
       metrics =  new Metrics(),
       time = new SystemTime(),
       quota = UnboundedQuota,
@@ -98,6 +101,7 @@ class ReplicaFetcherThreadTest {
       Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     //Expectations
@@ -179,7 +183,9 @@ class ReplicaFetcherThreadTest {
     val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
 
     expect(mockBlockingSend.sendRequest(anyObject())).andThrow(new NullPointerException).once()
-    replay(mockBlockingSend)
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    replay(mockBlockingSend, replicaManager)
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -187,7 +193,7 @@ class ReplicaFetcherThreadTest {
       sourceBroker = brokerEndPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
-      replicaMgr = null,
+      replicaMgr = replicaManager,
       metrics =  new Metrics(),
       time = new SystemTime(),
       quota = null,
@@ -227,6 +233,7 @@ class ReplicaFetcherThreadTest {
       Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     //Expectations
@@ -291,6 +298,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     replay(replicaManager, logManager, quota, partition, log)
@@ -342,6 +350,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     replay(replicaManager, logManager, quota, partition, log)
@@ -398,6 +407,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     replay(replicaManager, logManager, quota, partition, log)
@@ -471,6 +481,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
 
     replay(replicaManager, logManager, quota, partition, log)
@@ -528,6 +539,7 @@ class ReplicaFetcherThreadTest {
     expect(log.latestEpoch).andReturn(Some(5))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
     replay(replicaManager, logManager, quota, partition, log)
 
@@ -577,6 +589,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
     stub(partition, replicaManager, log)
     replay(replicaManager, logManager, quota, partition, log)
 
@@ -721,7 +734,9 @@ class ReplicaFetcherThreadTest {
 
     expect(mockBlockingSend.initiateClose()).andThrow(new IllegalArgumentException()).once()
     expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
-    replay(mockBlockingSend)
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    replay(mockBlockingSend, replicaManager)
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -729,7 +744,7 @@ class ReplicaFetcherThreadTest {
       sourceBroker = brokerEndPoint,
       brokerConfig = config,
       failedPartitions = failedPartitions,
-      replicaMgr = null,
+      replicaMgr = replicaManager,
       metrics =  new Metrics(),
       time = new SystemTime(),
       quota = null,
@@ -771,10 +786,10 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
     expect(replicaManager.nonOfflinePartition(anyObject[TopicPartition])).andReturn(Some(partition))
     val brokerTopicStats = new BrokerTopicStats
-    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats)
-    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats)
+    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats).anyTimes()
 
     val replicaQuota: ReplicaQuota = createNiceMock(classOf[ReplicaQuota])
+    replay(mockBlockingSend, replicaManager, partition, log, replicaQuota)
 
     val thread = new ReplicaFetcherThread(
       name = "bob",
@@ -787,8 +802,6 @@ class ReplicaFetcherThreadTest {
       time = new SystemTime(),
       quota = replicaQuota,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
-
-    replay(mockBlockingSend, replicaManager, partition, log, replicaQuota)
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))

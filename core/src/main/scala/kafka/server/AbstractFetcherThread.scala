@@ -57,7 +57,7 @@ abstract class AbstractFetcherThread(name: String,
                                      failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
-                                     val replicaManager: ReplicaManager)
+                                     val brokerTopicStats: BrokerTopicStats)
   extends ShutdownableThread(name, isInterruptible) {
 
   type FetchData = FetchResponse.PartitionData[Records]
