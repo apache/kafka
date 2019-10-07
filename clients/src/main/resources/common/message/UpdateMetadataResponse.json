@@ -19,6 +19,7 @@
   "name": "UpdateMetadataResponse",
   // Versions 1, 2, 3, 4, and 5 are the same as version 0
   "validVersions": "0-5",
+  "flexibleVersions": "none",
   "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The error code, or 0 if there was no error." }

@@ -524,7 +524,12 @@ public class SubscriptionState {
      * @return Returns the current preferred read replica, if it has been set and if it has not expired.
      */
     public synchronized Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
-        return assignedState(tp).preferredReadReplica(timeMs);
+        final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+        if (topicPartitionState == null) {
+            return Optional.empty();
+        } else {
+            return topicPartitionState.preferredReadReplica(timeMs);
+        }
     }
 
     /**

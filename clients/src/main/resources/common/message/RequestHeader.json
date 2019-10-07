@@ -19,7 +19,10 @@
   // Version 0 of the RequestHeader is only used by v0 of ControlledShutdownRequest.
   //
   // Version 1 is the first version with ClientId.
-  "validVersions": "0-1",
+  //
+  // Version 2 is the first flexible version.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "RequestApiKey", "type": "int16", "versions": "0+",
       "about": "The API key of this request." },

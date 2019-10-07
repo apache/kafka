@@ -280,7 +280,7 @@ class FetchRequestTest extends BaseRequestTest {
 
       val socket = connect(brokerSocketServer(leaderId))
       try {
-        send(fetchRequest, ApiKeys.FETCH, socket, fetchRequest.api.headerVersion(fetchRequest.version()))
+        send(fetchRequest, ApiKeys.FETCH, socket, fetchRequest.version())
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
           val size = new DataInputStream(socket.getInputStream).readInt()
@@ -291,7 +291,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(FetchResponse.parse(receive(socket, ApiKeys.FETCH.headerVersion(version)), version))
+          Some(FetchResponse.parse(receive(socket, ApiKeys.FETCH.responseHeaderVersion(version)), version))
         }
       } finally {
         socket.close()

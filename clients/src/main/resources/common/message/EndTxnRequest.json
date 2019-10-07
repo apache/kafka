@@ -19,6 +19,7 @@
   "name": "EndTxnRequest",
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
       "about": "The ID of the transaction to end." },

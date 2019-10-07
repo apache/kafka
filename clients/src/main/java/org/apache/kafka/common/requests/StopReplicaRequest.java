@@ -169,13 +169,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
     }
 
+    // Visible for testing
+    StopReplicaRequestData data() {
+        return data;
+    }
+
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
     }
-
-    protected long size() {
-        return data.size(version());
-    }
-
 }

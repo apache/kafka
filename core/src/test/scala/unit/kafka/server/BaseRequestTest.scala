@@ -136,9 +136,9 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   /**
    * Receive response and return a ByteBuffer containing response without the header
    */
-  def receive(socket: Socket, headerVersion: Short): ByteBuffer = {
+  def receive(socket: Socket, responseHeaderVersion: Short): ByteBuffer = {
     val response = receiveResponse(socket)
-    skipResponseHeader(response, headerVersion)
+    skipResponseHeader(response, responseHeaderVersion)
   }
 
   /**
@@ -149,7 +149,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val version = apiVersion.getOrElse(request.version)
     send(request, apiKey, socket, version)
     val response = receiveResponse(socket)
-    skipResponseHeader(response, apiKey.headerVersion(version))
+    skipResponseHeader(response, apiKey.responseHeaderVersion(version))
   }
 
   /**
@@ -160,7 +160,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val request = requestBuilder.build()
     val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
     val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response, header.headerVersion())
+    val responseBuffer = skipResponseHeader(response, apiKey.responseHeaderVersion(request.version()))
     apiKey.parseResponse(request.version, responseBuffer)
   }
   
@@ -172,13 +172,13 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val header = nextRequestHeader(apiKey, apiVersion)
     val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
     val response = requestAndReceive(socket, serializedBytes)
-    skipResponseHeader(response, header.headerVersion())
+    skipResponseHeader(response, apiKey.responseHeaderVersion(apiVersion))
   }
 
-  protected def skipResponseHeader(response: Array[Byte], headerVersion: Short): ByteBuffer = {
+  protected def skipResponseHeader(response: Array[Byte], responseHeaderVersion: Short): ByteBuffer = {
     val responseBuffer = ByteBuffer.wrap(response)
     // Parse the header to ensure its valid and move the buffer forward
-    ResponseHeader.parse(responseBuffer, headerVersion)
+    ResponseHeader.parse(responseBuffer, responseHeaderVersion)
     responseBuffer
   }
 

@@ -689,11 +689,12 @@ public class SaslAuthenticatorTest {
                 setRequestApiKey(ApiKeys.API_VERSIONS.id).
                 setRequestApiVersion(Short.MAX_VALUE).
                 setClientId("someclient").
-                setCorrelationId(1), (short) 1);
+                setCorrelationId(1),
+                (short) 2);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, header.headerVersion());
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
 
@@ -727,11 +728,14 @@ public class SaslAuthenticatorTest {
         short version = ApiKeys.API_VERSIONS.latestVersion();
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
-        ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData(), version);
+        ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData().
+                setClientSoftwareName("  ").
+                setClientSoftwareVersion("   "), version);
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, header.headerVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
+        ApiVersionsResponse response =
+            ApiVersionsResponse.parse(responseBuffer, version);
         assertEquals(Errors.INVALID_REQUEST.code(), response.data.errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
@@ -761,7 +765,7 @@ public class SaslAuthenticatorTest {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, header.headerVersion());
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
         assertEquals(Errors.NONE.code(), response.data.errorCode());
 
