@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CountDownLatch;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
@@ -118,7 +118,7 @@ public abstract class AbstractCoordinator implements Closeable {
         STABLE,      // the client has joined and is sending heartbeats
     }
 
-    private CyclicBarrier readerBarrier = new CyclicBarrier(2);
+    private CountDownLatch latch = new CountDownLatch(1);
 
     private final Logger log;
     private final GroupCoordinatorMetrics sensors;
@@ -411,7 +411,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 ByteBuffer memberAssignment = future.value().duplicate();
 
                 try {
-                    readerBarrier.await();
+                    if ("Test worker".equals(Thread.currentThread().getName()))
+                        latch.await();
                 } catch (Exception e) {}
 
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
@@ -1213,9 +1214,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                                     "the maximum size of batches returned in poll() with max.poll.records.";
                             maybeLeaveGroup(leaveReason);
 
-                            try {
-                                readerBarrier.await();
-                            } catch (Exception e) { }
+                            latch.countDown();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected

@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -29,11 +28,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.Assert.fail;
 
 /** */
@@ -47,26 +42,25 @@ public class ConsumerRejoinToGroupAfterRebalanceTest {
     public void testConsumerRejoinAfterRebalance() throws Exception {
         Map<String, Object> consumerProps = new HashMap<>();
 
-        consumerProps.put(GROUP_ID_CONFIG, UUID.randomUUID().toString());
-        consumerProps.put(KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
-        consumerProps.put(VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
         consumerProps.put(MAX_POLL_INTERVAL_MS_CONFIG, Long.toString(TIMEOUT));
 
-        KafkaConsumer<byte[], byte[]> consumer = connect.kafka().createConsumer(consumerProps);
+        KafkaConsumer<byte[], byte[]> consumer =
+            connect.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic");
 
-        consumer.subscribe(singletonList("test-topic"));
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 60_000) {
+            try {
+                consumer.poll(Duration.ofMillis(TIMEOUT));
 
-        try {
-            consumer.poll(Duration.ofMillis(TIMEOUT));
+                Thread.sleep(2 * TIMEOUT);
 
-            Thread.sleep(2 * TIMEOUT);
-
-            consumer.commitSync();
-        } catch (CommitFailedException e) {
-            // Ignore.
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail();
+                consumer.commitSync();
+            } catch (CommitFailedException e) {
+                // Ignore.
+            } catch (Exception e) {
+                e.printStackTrace();
+                fail();
+            }
         }
     }
 
