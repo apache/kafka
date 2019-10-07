@@ -391,7 +391,7 @@ object ConsumerGroupCommand extends Logging {
                   adminClient.alterConsumerGroupOffsets(
                     groupId,
                     preparedOffsets.asJava,
-                    withTimeoutMs(new AlterOffsetsOptions)
+                    withTimeoutMs(new AlterConsumerGroupOffsetsOptions)
                   ).all.get
                 }
                 acc.updated(groupId, preparedOffsets)
