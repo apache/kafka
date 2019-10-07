@@ -790,7 +790,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Get the current generation state
      *
-     * @return the current generation or null
+     * @return the current generation
      */
     protected synchronized Generation generation() {
         return generation;
