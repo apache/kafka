@@ -1153,7 +1153,7 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicPartition, replicaId: Int): Boolean = {
-    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.assignmentState.inSyncReplicas.contains(replicaId))
+    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.inSyncReplicaIds.contains(replicaId))
     !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
