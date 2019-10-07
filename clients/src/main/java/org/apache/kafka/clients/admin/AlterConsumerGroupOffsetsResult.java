@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.KafkaFuture.BaseFunction;
+import org.apache.kafka.common.KafkaFuture.BiConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.protocol.Errors;
 
 /**
  * The result of the {@link AdminClient#alterConsumerGroupOffsets(String, Map)} call.
@@ -32,26 +34,55 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 @InterfaceStability.Evolving
 public class AlterConsumerGroupOffsetsResult {
 
-    private final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future;
+    private final KafkaFuture<Map<TopicPartition, Errors>> future;
 
-    public AlterConsumerGroupOffsetsResult(KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future) {
+    public AlterConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
         this.future = future;
     }
 
-    public KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> values() {
-        return future;
+    /**
+     * Return a future which can be used to check the result for a given partition.
+     */
+    public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        this.future.whenComplete(new BiConsumer<Map<TopicPartition, Errors>, Throwable>() {
+            @Override
+            public void accept(final Map<TopicPartition, Errors> topicPartitions, final Throwable throwable) {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else if (!topicPartitions.containsKey(partition)) {
+                    result.completeExceptionally(new IllegalArgumentException(
+                        "Alter offset for partition \"" + partition + "\" was not attempted"));
+                } else {
+                    final Errors error = topicPartitions.get(partition);
+                    if (error == Errors.NONE) {
+                        result.complete(null);
+                    } else {
+                        result.completeExceptionally(error.exception());
+                    }
+                }
+
+            }
+        });
+
+        return result;
     }
 
     /**
      * Return a future which succeeds if all the alter offsets succeed.
      */
     public KafkaFuture<Void> all() {
-        try {
-            return KafkaFuture.allOf(values().get().values().toArray(new KafkaFuture[0]));
-        } catch (InterruptedException | ExecutionException e) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-            future.completeExceptionally(e.getCause());
-            return future;
-        }
+        return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {
+            @Override
+            public Void apply(final Map<TopicPartition, Errors> topicPartitionErrorsMap) {
+                for (Errors error : topicPartitionErrorsMap.values()) {
+                    if (error != Errors.NONE) {
+                        throw error.exception();
+                    }
+                }
+                return null;
+            }
+        });
     }
 }

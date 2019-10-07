@@ -3533,28 +3533,24 @@ public class KafkaAdminClient extends AdminClient {
     public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId,
                                                         Map<TopicPartition, OffsetAndMetadata> offsets,
                                                         AlterConsumerGroupOffsetsOptions options) {
-        final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future = new KafkaFutureImpl<>();
-        final Map<TopicPartition, KafkaFutureImpl<Void>> futures = new HashMap<>(offsets.size());
-        for (TopicPartition tp: offsets.keySet()) {
-            futures.put(tp, new KafkaFutureImpl<>());
-        }
+        final KafkaFutureImpl<Map<TopicPartition, Errors>> future = new KafkaFutureImpl<>();
 
         final long startFindCoordinatorMs = time.milliseconds();
         final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
-        ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>, AlterConsumerGroupOffsetsOptions> context =
+        ConsumerGroupOperationContext<Map<TopicPartition, Errors>, AlterConsumerGroupOffsetsOptions> context =
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+            () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new AlterConsumerGroupOffsetsResult(future);
     }
 
-    private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>,
-            AlterConsumerGroupOffsetsOptions> context, Map<TopicPartition,
-            OffsetAndMetadata> offsets, Map<TopicPartition, KafkaFutureImpl<Void>> futures) {
+    private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, Errors>,
+                                                  AlterConsumerGroupOffsetsOptions> context,
+                                                  Map<TopicPartition, OffsetAndMetadata> offsets) {
 
         return new Call("commitOffsets", context.deadline(), new ConstantNodeIdProvider(context.node().get().id())) {
 
@@ -3598,42 +3594,36 @@ public class KafkaAdminClient extends AdminClient {
                 // If coordinator changed since we fetched it, retry
                 if (context.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context,
-                        () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                        () -> getAlterConsumerGroupOffsetsCall(context, offsets));
                     return;
                 }
 
-                // If there is a group error, retry
+                // If there is a coordinator error, retry
                 for (OffsetCommitResponseTopic topic : response.data().topics()) {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (context.shouldRefreshCoordinator(error)) {
                             rescheduleFindCoordinatorTask(context,
-                                () -> getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+                                () -> getAlterConsumerGroupOffsetsCall(context, offsets));
                             return;
                         }
                     }
                 }
 
+                final Map<TopicPartition, Errors> partitions = new HashMap<>();
                 for (OffsetCommitResponseTopic topic : response.data().topics()) {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
-                        KafkaFutureImpl<Void> future = futures.get(tp);
                         Errors error = Errors.forCode(partition.errorCode());
-                        if (error != Errors.NONE) {
-                            future.completeExceptionally(error.exception());
-                        } else {
-                            future.complete(null);
-                        }
+                        partitions.put(tp, error);
                     }
                 }
-                context.future().complete(futures);
+                context.future().complete(partitions);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                for (KafkaFutureImpl<?> future : futures.values()) {
-                    future.completeExceptionally(throwable);
-                }
+                context.future().completeExceptionally(throwable);
             }
         };
     }

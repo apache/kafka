@@ -1877,47 +1877,6 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterConsumerGroupOffsetsNonRetriableErrors() throws Exception {
-        // Non-retriable errors throw an exception
-
-        final Map<Integer, Node> nodes = new HashMap<>();
-        nodes.put(0, new Node(0, "localhost", 8121));
-
-        final Cluster cluster =
-            new Cluster(
-                "mockClusterId",
-                nodes.values(),
-                Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
-
-        final String groupId = "group-0";
-        final TopicPartition tp1 = new TopicPartition("foo", 0);
-        final List<Errors> retriableErrors = Arrays.asList(
-            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
-
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-
-            for (Errors error : retriableErrors) {
-                env.kafkaClient().prepareResponse(FindCoordinatorResponse
-                    .prepareResponse(Errors.NONE, env.cluster().controller()));
-
-                env.kafkaClient().prepareResponse(
-                    prepareOffsetCommitResponse(tp1, error));
-
-                Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-                offsets.put(tp1,  new OffsetAndMetadata(123L));
-                AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
-                    .alterConsumerGroupOffsets(groupId, offsets);
-
-                TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
-                TestUtils.assertFutureError(errorResult.values().get().get(tp1), error.exception().getClass());
-            }
-        }
-    }
-
-    @Test
     public void testIncrementalAlterConfigs()  throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -2304,6 +2263,7 @@ public class KafkaAdminClientTest {
         final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final TopicPartition tp2 = new TopicPartition("bar", 0);
+        final TopicPartition tp3 = new TopicPartition("foobar", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -2313,7 +2273,7 @@ public class KafkaAdminClientTest {
 
             Map<TopicPartition, Errors> responseData = new HashMap<>();
             responseData.put(tp1, Errors.NONE);
-            responseData.put(tp2, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+            responseData.put(tp2, Errors.NONE);
             env.kafkaClient().prepareResponse(new OffsetCommitResponse(0, responseData));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -2322,8 +2282,10 @@ public class KafkaAdminClientTest {
             final AlterConsumerGroupOffsetsResult result = env.adminClient().alterConsumerGroupOffsets(
                 groupId, offsets);
 
-            assertNull(result.values().get().get(tp1).get());
-            TestUtils.assertFutureError(result.values().get().get(tp2), GroupSubscribedToTopicException.class);
+            assertNull(result.all().get());
+            assertNull(result.partitionResult(tp1).get());
+            assertNull(result.partitionResult(tp2).get());
+            TestUtils.assertFutureError(result.partitionResult(tp3), IllegalArgumentException.class);
         }
     }
 
@@ -2378,7 +2340,48 @@ public class KafkaAdminClientTest {
                 .alterConsumerGroupOffsets(groupId, offsets);
 
             assertNull(result1.all().get());
-            assertNull(result1.values().get().get(tp1).get());
+            assertNull(result1.partitionResult(tp1).get());
+        }
+    }
+
+    @Test
+    public void testAlterConsumerGroupOffsetsNonRetriableErrors() throws Exception {
+        // Non-retriable errors throw an exception
+
+        final Map<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final String groupId = "group-0";
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+        final List<Errors> retriableErrors = Arrays.asList(
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            for (Errors error : retriableErrors) {
+                env.kafkaClient().prepareResponse(FindCoordinatorResponse
+                    .prepareResponse(Errors.NONE, env.cluster().controller()));
+
+                env.kafkaClient().prepareResponse(
+                    prepareOffsetCommitResponse(tp1, error));
+
+                Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+                offsets.put(tp1,  new OffsetAndMetadata(123L));
+                AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
+                    .alterConsumerGroupOffsets(groupId, offsets);
+
+                TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
+                TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
+            }
         }
     }
 
@@ -2420,7 +2423,7 @@ public class KafkaAdminClientTest {
                 .alterConsumerGroupOffsets(groupId, offsets);
 
             assertNull(result.all().get());
-            assertNull(result.values().get().get(tp1).get());
+            assertNull(result.partitionResult(tp1).get());
         }
     }
 
@@ -2454,6 +2457,7 @@ public class KafkaAdminClientTest {
                 .alterConsumerGroupOffsets(groupId, offsets);
 
             TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
+            TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
         }
     }
 
