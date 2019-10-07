@@ -2451,7 +2451,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         void recordPollEnd(long pollEndMs) {
             long pollTimeMs = pollEndMs - pollStartMs;
-            double pollIdleRatio = pollTimeMs == 0 ? 0.0 : pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
+            double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
             this.pollIdleSensor.record(pollIdleRatio);
         }
     }

@@ -2130,21 +2130,31 @@ public class KafkaConsumerTest {
         // Test default value
         assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
 
-        // Spend 50ms in poll
+        // 1st poll
+        // Spend 50ms in poll so value = 1.0
         consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
         time.sleep(50);
         consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
 
         assertEquals(1.0d, consumer.metrics().get(pollIdleRatio).metricValue());
 
-        // Spend 50m outside poll
+        // 2nd poll
+        // Spend 50m outside poll and 0ms in poll so value = 0.0
         time.sleep(50);
-
-        // Record poll 0ms in poll to update sensor
         consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
         consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
 
-        // Now we have spent 50ms inside poll and 50ms outside poll so ratio should be 0.5
-        assertEquals(0.5d, consumer.metrics().get(pollIdleRatio).metricValue());
+        // Avg of first two data points
+        assertEquals((1.0d + 0.0d) / 2, consumer.metrics().get(pollIdleRatio).metricValue());
+
+        // 3rd poll
+        // Spend 25ms outside poll and 25ms in poll so value = 0.5
+        time.sleep(25);
+        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+        time.sleep(25);
+        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+
+        // Avg of three data points
+        assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
     }
 }
