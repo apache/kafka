@@ -48,10 +48,11 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
@@ -839,7 +840,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       element
     }
 
-    override def remove() = throw new UnsupportedOperationException()
+    override def remove(): Unit = throw new UnsupportedOperationException()
   }
 
   // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
@@ -1644,13 +1645,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data().topics().size())
     if (!controller.isActive) {
-      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+      createTopicsRequest.data.topics.asScala.foreach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name()).
           setErrorCode(Errors.NOT_CONTROLLER.code()))
       }
       sendResponseCallback(results)
     } else {
-      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+      createTopicsRequest.data.topics.asScala.foreach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name()))
       }
       val hasClusterAuthorization = authorize(request, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
@@ -1705,7 +1706,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new CreatePartitionsResponse(requestThrottleMs, results.asJava)
+        val createPartitionsResults = results.map {
+          case (topic, error) => new CreatePartitionsTopicResult()
+            .setName(topic)
+            .setErrorCode(error.error().code())
+            .setErrorMessage(error.message())
+        }.toSeq
+        val responseBody = new CreatePartitionsResponse(new CreatePartitionsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setResults(createPartitionsResults.asJava))
         trace(s"Sending create partitions response $responseBody for correlation id ${request.header.correlationId} to " +
           s"client ${request.header.clientId}.")
         responseBody
@@ -1714,28 +1723,31 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!controller.isActive) {
-      val result = createPartitionsRequest.newPartitions.asScala.map { case (topic, _) =>
-        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
-      }
+      val result = createPartitionsRequest.data.topics().asScala.map { topic =>
+        (topic.name(), new ApiError(Errors.NOT_CONTROLLER, null))
+      }.toMap
       sendResponseCallback(result)
     } else {
       // Special handling to add duplicate topics to the response
-      val dupes = createPartitionsRequest.duplicates.asScala
-      val notDuped = createPartitionsRequest.newPartitions.asScala -- dupes
-      val authorizedTopics = filterAuthorized(request, ALTER, TOPIC, notDuped.toSeq.map(_._1))
-      val (authorized, unauthorized) = notDuped.partition { case (topic, _) =>
-        authorizedTopics.contains(topic)
-      }
+      val topics = createPartitionsRequest.data().topics().asScala
+      val dupes = topics.groupBy(_.name())
+        .filter { _._2.size > 1 }
+        .keySet
+      val notDuped = topics.filterNot(topic => dupes.contains(topic.name()))
+      val authorizedTopics = filterAuthorized(request, ALTER, TOPIC, notDuped.map(_.name()))
+      val (authorized, unauthorized) = notDuped.partition { topic => authorizedTopics.contains(topic.name()) }
 
-      val (queuedForDeletion, valid) = authorized.partition { case (topic, _) =>
-        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic)
+      val (queuedForDeletion, valid) = authorized.partition { topic =>
+        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name())
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
-        unauthorized.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
-        queuedForDeletion.keySet.map(_ -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
+        unauthorized.map(_.name() -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
+        queuedForDeletion.map(_.name() -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
-      adminManager.createPartitions(createPartitionsRequest.timeout, valid, createPartitionsRequest.validateOnly,
+      adminManager.createPartitions(createPartitionsRequest.data().timeoutMs(),
+        valid,
+        createPartitionsRequest.data().validateOnly(),
         request.context.listenerName, result => sendResponseCallback(result ++ errors))
     }
   }
@@ -1757,7 +1769,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
     if (!controller.isActive) {
-      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+      deleteTopicRequest.data.topicNames.asScala.foreach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic)
           .setErrorCode(Errors.NOT_CONTROLLER.code))
@@ -1765,14 +1777,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
-      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+      deleteTopicRequest.data.topicNames.asScala.foreach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic)
           .setErrorCode(error.code))
       }
       sendResponseCallback(results)
     } else {
-      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+      deleteTopicRequest.data.topicNames.asScala.foreach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic))
       }
@@ -1799,7 +1811,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         adminManager.deleteTopics(
-          deleteTopicRequest.data.timeoutMs.toInt,
+          deleteTopicRequest.data.timeoutMs,
           toDelete,
           handleDeleteTopicsResults
         )
@@ -2045,7 +2057,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedPartitions = mutable.Set[TopicPartition]()
 
       val authorizedTopics = filterAuthorized(request, WRITE, TOPIC,
-        partitionsToAdd.toSeq.map(_.topic).filterNot(org.apache.kafka.common.internals.Topic.isInternal))
+        partitionsToAdd.map(_.topic).filterNot(org.apache.kafka.common.internals.Topic.isInternal))
       for (topicPartition <- partitionsToAdd) {
         if (!authorizedTopics.contains(topicPartition.topic))
           unauthorizedTopicErrors += topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED
@@ -2536,7 +2548,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a renew token response
     def sendResponseCallback(error: Errors, expiryTimestamp: Long): Unit = {
-      trace("Sending renew token response %s for correlation id %d to client %s."
+      trace("Sending renew token response for correlation id %d to client %s."
         .format(request.header.correlationId, request.header.clientId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new RenewDelegationTokenResponse(
