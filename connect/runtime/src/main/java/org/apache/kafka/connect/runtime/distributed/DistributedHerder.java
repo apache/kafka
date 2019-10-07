@@ -427,7 +427,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         + "than required by current worker configuration. Distributing new key now.");
                     return true;
                 }
-            } else if (sessionKey == null) {
+            } else if (sessionKey == null && configState.sessionKey() != null) {
                 // This happens on startup for follower workers; the snapshot contains the session key,
                 // but no callback in the config update listener has been fired for it yet.
                 sessionKey = configState.sessionKey().key();

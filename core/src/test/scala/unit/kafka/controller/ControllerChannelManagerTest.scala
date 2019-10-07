@@ -18,7 +18,7 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -157,7 +157,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_4_IV0) 3
+        if (apiVersion >= KAFKA_2_4_IV1) 4
+        else if (apiVersion >= KAFKA_2_4_IV0) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
         else if (apiVersion >= KAFKA_1_0_IV0) 1
         else 0
@@ -326,7 +327,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_2_IV0) 5
+        if (apiVersion >= KAFKA_2_4_IV1) 6
+        else if (apiVersion >= KAFKA_2_2_IV0) 5
         else if (apiVersion >= KAFKA_1_0_IV0) 4
         else if (apiVersion >= KAFKA_0_10_2_IV0) 3
         else if (apiVersion >= KAFKA_0_10_0_IV1) 2
@@ -597,8 +599,10 @@ class ControllerChannelManagerTest {
     for (apiVersion <- ApiVersion.allVersions) {
       if (apiVersion < KAFKA_2_2_IV0)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 0.toShort)
-      else
+      else if (apiVersion < KAFKA_2_4_IV1)
         testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 1.toShort)
+      else
+        testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 2.toShort)
     }
   }
 

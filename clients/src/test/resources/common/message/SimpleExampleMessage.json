@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 {
-  "name": "TestUUID",
-  "validVersions": "1",
+  "name": "SimpleExampleMessage",
+  "type": "header",
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
-    { "name": "processId", "versions": "1+", "type": "uuid" }
-  ],
-  "type": "header"
+    { "name": "processId", "versions": "1+", "type": "uuid" },
+    { "name": "myTaggedIntArray", "type": "[]int32",
+        "versions": "1+", "taggedVersions": "1+", "tag": 0 }
+  ]
 }

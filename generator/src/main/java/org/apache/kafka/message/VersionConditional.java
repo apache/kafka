@@ -85,7 +85,7 @@ public final class VersionConditional {
                                         Versions ifNotVersions,
                                         CodeBuffer buffer) {
         if (ifMember != null) {
-            buffer.printf("if ((version >= %d) && (version <= %d)) {%n",
+            buffer.printf("if ((_version >= %d) && (_version <= %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
             ifMember.generate(ifVersions);
@@ -98,7 +98,7 @@ public final class VersionConditional {
             }
             buffer.printf("}%n");
         } else if (ifNotMember != null) {
-            buffer.printf("if ((version < %d) || (version > %d)) {%n",
+            buffer.printf("if ((_version < %d) || (_version > %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
             ifNotMember.generate(ifNotVersions);
@@ -111,7 +111,7 @@ public final class VersionConditional {
                                          Versions ifNotVersions,
                                          CodeBuffer buffer) {
         if (ifMember != null) {
-            buffer.printf("if (version >= %d) {%n", containingVersions.lowest());
+            buffer.printf("if (_version >= %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
             ifMember.generate(ifVersions);
             buffer.decrementIndent();
@@ -123,7 +123,7 @@ public final class VersionConditional {
             }
             buffer.printf("}%n");
         } else if (ifNotMember != null) {
-            buffer.printf("if (version < %d) {%n", containingVersions.lowest());
+            buffer.printf("if (_version < %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
             ifNotMember.generate(ifNotVersions);
             buffer.decrementIndent();
@@ -135,7 +135,7 @@ public final class VersionConditional {
                                          Versions ifNotVersions,
                                          CodeBuffer buffer) {
         if (ifMember != null) {
-            buffer.printf("if (version <= %d) {%n", containingVersions.highest());
+            buffer.printf("if (_version <= %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
             ifMember.generate(ifVersions);
             buffer.decrementIndent();
@@ -147,7 +147,7 @@ public final class VersionConditional {
             }
             buffer.printf("}%n");
         } else if (ifNotMember != null) {
-            buffer.printf("if (version > %d) {%n", containingVersions.highest());
+            buffer.printf("if (_version > %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
             ifNotMember.generate(ifNotVersions);
             buffer.decrementIndent();

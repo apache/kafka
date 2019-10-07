@@ -52,7 +52,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     public void init(final ProcessorContext context) {
         super.init(context);
         metrics = (StreamsMetricsImpl) context.metrics();
-        skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+        skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
 
         valueGetter.init(context);
     }

@@ -21,8 +21,7 @@
   //
   // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
   "validVersions": "0-3",
-  // TODO(dajac) Enable this once KIP-482 is committed.
-  // "flexibleVersions": "3+",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
       "about": "The name of the client." },

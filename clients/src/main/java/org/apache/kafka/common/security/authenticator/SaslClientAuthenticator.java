@@ -332,7 +332,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 setRequestApiVersion(version).
                 setClientId(clientId).
                 setCorrelationId(correlationId++),
-            apiKey.headerVersion(version));
+            apiKey.requestHeaderVersion(version));
         return currentRequestHeader;
     }
 

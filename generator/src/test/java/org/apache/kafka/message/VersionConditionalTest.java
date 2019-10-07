@@ -140,7 +140,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version >= 1) {%n",
+            "if (_version >= 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "} else {%n",
             "    System.out.println(\"foobar\");%n",
@@ -157,7 +157,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version >= 1) {%n",
+            "if (_version >= 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
     }
@@ -172,7 +172,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version < 1) {%n",
+            "if (_version < 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
     }
@@ -190,7 +190,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version <= 10) {%n",
+            "if (_version <= 10) {%n",
             "    System.out.println(\"hello world\");%n",
             "} else {%n",
             "    System.out.println(\"foobar\");%n",
@@ -207,7 +207,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version <= 10) {%n",
+            "if (_version <= 10) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
     }
@@ -222,7 +222,7 @@ public class VersionConditionalTest {
             }).
             generate(buffer);
         assertEquals(buffer,
-            "if (version < 1) {%n",
+            "if (_version < 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
     }
@@ -238,7 +238,7 @@ public class VersionConditionalTest {
             allowMembershipCheckAlwaysFalse(false).
             generate(buffer);
         assertEquals(buffer,
-            "if ((version >= 5) && (version <= 10)) {%n",
+            "if ((_version >= 5) && (_version <= 10)) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
     }

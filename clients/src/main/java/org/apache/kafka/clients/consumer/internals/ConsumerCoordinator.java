@@ -355,26 +355,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
-        // Invoke user's revocation callback before changing assignment or updating state
         if (protocol == RebalanceProtocol.COOPERATIVE) {
             Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
             revokedPartitions.removeAll(assignedPartitions);
 
-            log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
-                    "newly added partitions: {}, revoking partitions: {}",
+            log.info("Updating assignment with\n" +
+                    "now assigned partitions: {}\n" +
+                    "compare with previously owned partitions: {}\n" +
+                    "newly added partitions: {}\n" +
+                    "revoked partitions: {}\n",
                 Utils.join(assignedPartitions, ", "),
                 Utils.join(ownedPartitions, ", "),
                 Utils.join(addedPartitions, ", "),
-                Utils.join(revokedPartitions, ", "));
-
+                Utils.join(revokedPartitions, ", ")
+            );
 
             if (!revokedPartitions.isEmpty()) {
-                // revoke partitions that was previously owned but no longer assigned;
-                // note that we should only change the assignment AFTER we've triggered
-                // the revoke callback
+                // revoke partitions that were previously owned but no longer assigned;
+                // note that we should only change the assignment (or update the assignor's state)
+                // AFTER we've triggered  the revoke callback
                 firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
 
                 // if revoked any partitions, need to re-join the group afterwards
+                log.debug("Need to revoke partitions {} and re-join the group", revokedPartitions);
                 requestRejoin();
             }
         }
@@ -678,7 +681,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     break;
             }
         }
-
 
         isLeader = false;
         subscriptions.resetGroupSubscription();

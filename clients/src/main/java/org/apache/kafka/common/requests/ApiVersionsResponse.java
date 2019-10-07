@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -77,10 +78,26 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsResponse(ApiKeys.API_VERSIONS.parseResponse(version, buffer), version);
+        // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
+        // using a version higher than that supported by the broker, a version 0 response is sent
+        // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
+        // falls back while parsing it into a Struct which means that the version received by this
+        // method is not necessary the real one. It may be version 0 as well.
+        int prev = buffer.position();
+        try {
+            return new ApiVersionsResponse(
+                new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
+        } catch (RuntimeException e) {
+            buffer.position(prev);
+            if (version != 0)
+                return new ApiVersionsResponse(
+                    new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
+            else
+                throw e;
+        }
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(Struct struct, short version) {
+    public static ApiVersionsResponse fromStruct(Struct struct, short version) {
         // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
         // using a version higher than that supported by the broker, a version 0 response is sent
         // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it

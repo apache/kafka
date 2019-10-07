@@ -447,7 +447,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendLeaderAndIsrRequest(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     val leaderAndIsrRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV0) 3
+      if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 4
+      else if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV0) 3
       else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
       else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
       else 0
@@ -483,7 +484,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     val partitionStates = updateMetadataRequestPartitionInfoMap.values.toBuffer
     val updateMetadataRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
+      if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 6
+      else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
       else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
       else if (config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
       else if (config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
@@ -528,7 +530,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendStopReplicaRequests(controllerEpoch: Int): Unit = {
     val stopReplicaRequestVersion: Short =
-      if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
+      if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV1) 2
+      else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
       else 0
 
     def stopReplicaPartitionDeleteResponseCallback(brokerId: Int)(response: AbstractResponse): Unit = {
