@@ -165,6 +165,15 @@ public class TestTopicsTest {
     }
 
     @Test
+    public void testKeyValuesToMapWithNull() {
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
+        inputTopic.pipeInput("value");
+        assertThrows(IllegalStateException.class, () -> outputTopic.readKeyValuesToMap());
+    }
+
+
+    @Test
     public void testKeyValueListDuration() {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC_MAP, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde.deserializer(), longSerde.deserializer());
