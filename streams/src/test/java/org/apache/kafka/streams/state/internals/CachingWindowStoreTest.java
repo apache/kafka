@@ -41,7 +41,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -49,6 +49,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -174,31 +176,32 @@ public class CachingWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
-        final long initialWallClockTime = 0L;
+        final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
 
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic,
             Serdes.String().serializer(),
             Serdes.String().serializer(),
-            initialWallClockTime);
+            initialWallClockTime,
+            Duration.ZERO);
 
         for (int i = 0; i < 5; i++) {
-            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+            inputTopic.pipeInput(UUID.randomUUID().toString(), UUID.randomUUID().toString());
         }
-        driver.advanceWallClockTime(10 * 1000L);
-        recordFactory.advanceTimeMs(10 * 1000L);
+        driver.advanceWallClockTime(Duration.ofSeconds(10));
+        inputTopic.advanceTime(Duration.ofSeconds(10));
         for (int i = 0; i < 5; i++) {
-            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+            inputTopic.pipeInput(UUID.randomUUID().toString(), UUID.randomUUID().toString());
         }
-        driver.advanceWallClockTime(10 * 1000L);
-        recordFactory.advanceTimeMs(10 * 1000L);
+        driver.advanceWallClockTime(Duration.ofSeconds(10));
+        inputTopic.advanceTime(Duration.ofSeconds(10));
         for (int i = 0; i < 5; i++) {
-            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+            inputTopic.pipeInput(UUID.randomUUID().toString(), UUID.randomUUID().toString());
         }
-        driver.advanceWallClockTime(10 * 1000L);
-        recordFactory.advanceTimeMs(10 * 1000L);
+        driver.advanceWallClockTime(Duration.ofSeconds(10));
+        inputTopic.advanceTime(Duration.ofSeconds(10));
         for (int i = 0; i < 5; i++) {
-            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+            inputTopic.pipeInput(UUID.randomUUID().toString(), UUID.randomUUID().toString());
         }
     }
 

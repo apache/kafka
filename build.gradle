@@ -1284,6 +1284,7 @@ project(':streams:test-utils') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
   }
