@@ -790,11 +790,19 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Get the current generation state
      *
-     * @param onlyIfStable if set to true, only return null when the group is stable.
      * @return the current generation or null
      */
-    protected synchronized Generation generation(final boolean onlyIfStable) {
-        if (onlyIfStable && this.state != MemberState.STABLE)
+    protected synchronized Generation generation() {
+        return generation;
+    }
+
+    /**
+     * Get the current generation state if the group is stable, otherwise return null
+     *
+     * @return the current generation or null
+     */
+    protected synchronized Generation generationIfStable() {
+        if (this.state != MemberState.STABLE)
             return null;
         return generation;
     }

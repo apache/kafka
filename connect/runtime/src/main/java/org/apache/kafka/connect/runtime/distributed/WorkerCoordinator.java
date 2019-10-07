@@ -221,7 +221,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     public String memberId() {
-        Generation generation = generation(true);
+        Generation generation = generationIfStable();
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
