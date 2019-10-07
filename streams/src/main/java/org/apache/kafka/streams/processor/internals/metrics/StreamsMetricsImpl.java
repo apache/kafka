@@ -65,6 +65,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
 
     static class ImmutableMetricValue<T> implements Gauge<T> {
+
         private final T value;
 
         public ImmutableMetricValue(final T value) {
@@ -93,7 +94,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             return Objects.hash(value);
         }
     }
-    
+
     private final Metrics metrics;
     private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;

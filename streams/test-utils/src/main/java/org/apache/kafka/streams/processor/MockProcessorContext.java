@@ -214,7 +214,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
-        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadId, StreamsMetricsImpl.METRICS_LATEST);
+        this.metrics =
+            new StreamsMetricsImpl(new Metrics(metricConfig), "test-client", StreamsMetricsImpl.METRICS_LATEST);
         ThreadMetrics.skipRecordSensor(threadId, metrics);
     }
 
