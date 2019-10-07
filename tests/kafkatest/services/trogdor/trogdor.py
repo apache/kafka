@@ -316,6 +316,22 @@ class TrogdorTask(object):
             return task_state["state"] == TrogdorTask.DONE_STATE
         raise RuntimeError("Failed to gracefully stop %s: got task error: %s" % (self.id, error))
 
+    def running(self):
+        """
+        Check if this task is running.
+
+        :raises RuntimeError:       If the task encountered an error.
+        :returns:                   True if the task is in RUNNING_STATE;
+                                    False if it is in a different state.
+        """
+        task_state = self.trogdor.tasks()["tasks"][self.id]
+        if task_state is None:
+            raise RuntimeError("Coordinator did not know about %s." % self.id)
+        error = task_state.get("error")
+        if error is None or error == "":
+            return task_state["state"] == TrogdorTask.RUNNING_STATE
+        raise RuntimeError("Failed to gracefully stop %s: got task error: %s" % (self.id, error))
+
     def stop(self):
         """
         Stop this task.

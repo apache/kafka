@@ -28,10 +28,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.NetworkInterface;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Uses the linux utility <pre>tc</pre> (traffic controller) to simulate latency on a specified network device
@@ -97,25 +101,44 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
     }
 
     private void enableTrafficControl(Platform platform, String networkDevice, int delayMs, int rateLimitKbps) throws IOException {
-        int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
-        // Here we define a root handler named 1:0, then use the netem (network emulator) to add a delay
-        // on outgoing packets. We're using the given delay in milliseconds plus some deviation. The pareto-normal
-        // distribution is like the 80/20 rule
-        platform.runCommand(new String[] {
-            "sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "handle", "1:0",
-            "netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs), "distribution", "paretonormal"
-        });
+        if (delayMs > 0) {
+            int deviationMs = Math.max(1, (int) Math.sqrt(delayMs));
+            List<String> delay = new ArrayList<>();
+            rootHandler(networkDevice, delay::add);
+            netemDelay(delayMs, deviationMs, delay::add);
+            platform.runCommand(delay.toArray(new String[]{}));
 
-        if (rateLimitKbps > 0) {
-            int maxLatency = delayMs * delayMs;
-            // If rate limiting is required, we create a child handler named 10: which is attached to the parent
-            // defined above (1:1). This uses the tbf (token bucket filter) to apply a rate limit in kilobits per
-            // second to outgoing traffic. a 32kbit buffer is allocation, and a max latency is also defined
-            platform.runCommand(new String[]{
-                "sudo", "tc", "qdisc", "add", "dev", networkDevice, "parent", "1:1", "handle", "10:",
-                "tbf", "rate", String.format("%dkbit", rateLimitKbps), "buffer", "32kbit", "latency", String.format("%dms", maxLatency)
-            });
+            if (rateLimitKbps > 0) {
+                List<String> rate = new ArrayList<>();
+                childHandler(networkDevice, rate::add);
+                tbfRate(rateLimitKbps, rate::add);
+                platform.runCommand(rate.toArray(new String[]{}));
+            }
+        } else if (rateLimitKbps > 0) {
+            List<String> rate = new ArrayList<>();
+            rootHandler(networkDevice, rate::add);
+            tbfRate(rateLimitKbps, rate::add);
+            platform.runCommand(rate.toArray(new String[]{}));
+        } else {
+            // nothing to do!
         }
+    }
+
+    private void rootHandler(String networkDevice, Consumer<String> consumer) {
+        Stream.of("sudo", "tc", "qdisc", "add", "dev", networkDevice, "root", "handle", "1:0").forEach(consumer);
+    }
+
+    private void childHandler(String networkDevice, Consumer<String> consumer) {
+        Stream.of("sudo", "tc", "qdisc", "add", "dev", networkDevice, "parent", "1:1", "handle", "10:").forEach(consumer);
+    }
+
+    private void netemDelay(int delayMs, int deviationMs, Consumer<String> consumer) {
+        Stream.of("netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs),
+                "distribution", "paretonormal").forEach(consumer);
+    }
+
+    private void tbfRate(int rateLimitKbit, Consumer<String> consumer) {
+        Stream.of("tbf", "rate", String.format("%dkbit", rateLimitKbit), "buffer", "32kbit", "latency", "500").forEach(consumer);
     }
 
     private void disableTrafficControl(Platform platform, String networkDevice) throws IOException {
