@@ -2394,9 +2394,10 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
 
-                for (final Map.Entry<Node, Map<TopicPartition, Long>> entry: leaders.entrySet()) {
+                final long deleteRecordsCallTimeMs = time.milliseconds();
+
+                for (final Map.Entry<Node, Map<TopicPartition, Long>> entry : leaders.entrySet()) {
                     final Map<TopicPartition, Long> partitionDeleteOffsets = entry.getValue();
-                    final long currentTimeMs = time.milliseconds();
                     final int brokerId = entry.getKey().id();
 
                     runnable.call(new Call("deleteRecords", deadline,
@@ -2427,7 +2428,7 @@ public class KafkaAdminClient extends AdminClient {
                                     partitionDeleteOffsets.keySet().stream().map(futures::get);
                             completeAllExceptionally(callFutures, throwable);
                         }
-                    }, currentTimeMs);
+                    }, deleteRecordsCallTimeMs);
                 }
             }
 

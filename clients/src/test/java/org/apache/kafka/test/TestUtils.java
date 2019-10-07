@@ -19,7 +19,6 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -459,11 +458,20 @@ public class TestUtils {
         return tps;
     }
 
-    public static <T extends Throwable> T assertFutureThrows(KafkaFuture<?> future, Class<T> exceptionClass) {
+    /**
+     * Assert that a future raises an expected exception cause type. Return the exception cause
+     * if the assertion succeeds; otherwise raise AssertionError.
+     *
+     * @param future The future to await
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param <T> Exception cause type parameter
+     * @return The caught exception cause
+     */
+    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
         assertTrue("Unexpected exception cause " + exception.getCause(),
-                exceptionClass.isInstance(exception.getCause()));
-        return exceptionClass.cast(exception.getCause());
+                exceptionCauseClass.isInstance(exception.getCause()));
+        return exceptionCauseClass.cast(exception.getCause());
     }
 
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)

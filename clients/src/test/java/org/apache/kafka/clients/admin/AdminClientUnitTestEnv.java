@@ -114,7 +114,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
     @Override
     public void close() {
-        this.adminClient.close(Duration.ZERO);
+        this.adminClient.close();
     }
 
     static Map<String, Object> clientConfigs(String... overrides) {
