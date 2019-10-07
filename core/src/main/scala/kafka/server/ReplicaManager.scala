@@ -25,6 +25,7 @@ import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
@@ -48,7 +49,7 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, Rep
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.ProduceResponse.{ErrorRecord, PartitionResponse}
 import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse, DescribeLogDirsResponse, EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, LeaderAndIsrResponse, OffsetsForLeaderEpochRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -752,6 +753,19 @@ class ReplicaManager(val config: KafkaConfig,
                                isFromClient: Boolean,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
+
+    def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
+      val logStartOffset = getPartition(topicPartition) match {
+        case HostedPartition.Online(partition) => partition.logStartOffset
+        case HostedPartition.None | HostedPartition.Offline => -1L
+      }
+      brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
+      brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
+      error(s"Error processing append operation on partition $topicPartition", t)
+
+      logStartOffset
+    }
+
     trace(s"Append [$entriesPerPartition] to local log")
     entriesPerPartition.map { case (topicPartition, records) =>
       brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
@@ -787,22 +801,13 @@ class ReplicaManager(val config: KafkaConfig,
                    _: CorruptRecordException |
                    _: KafkaStorageException) =>
             (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
+          case rve: RecordValidationException =>
+            val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
+            val errorRecords = rve.errorRecords
+            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, errorRecords, null), Some(rve.invalidException)))
           case t: Throwable =>
-            val logStartOffset = getPartition(topicPartition) match {
-              case HostedPartition.Online(partition) => partition.logStartOffset
-              case HostedPartition.None | HostedPartition.Offline => -1L
-            }
-            brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
-            brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
-            error(s"Error processing append operation on partition $topicPartition", t)
-
-            val errorRecords: Map[java.lang.Integer, String] = t match {
-              case ire: InvalidRecordException => ire.getErrorRecords.asScala
-              case ite: InvalidTimestampException => ite.getErrorRecords.asScala
-              case _ => Map.empty[java.lang.Integer, String]
-            }
-
-            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, errorRecords, ""), Some(t)))
+            val logStartOffset = processFailedRecord(topicPartition, t)
+            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
         }
       }
     }

@@ -225,13 +225,13 @@ public class ProduceResponse extends AbstractResponse {
                 long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
                 long logStartOffset = partRespStruct.getOrElse(LOG_START_OFFSET_FIELD, INVALID_OFFSET);
 
-                Map<Integer, String> errorRecords = new HashMap<>();
+                List<ErrorRecord> errorRecords = new ArrayList<>();
                 if (partRespStruct.hasField(ERROR_RECORDS_KEY_NAME)) {
                     for (Object recordOffsetAndMessage : partRespStruct.getArray(ERROR_RECORDS_KEY_NAME)) {
                         Struct recordOffsetAndMessageStruct = (Struct) recordOffsetAndMessage;
-                        Integer relativeOffset = recordOffsetAndMessageStruct.getInt(RELATIVE_OFFSET_KEY_NAME);
-                        String relativeOffsetErrorMessage = recordOffsetAndMessageStruct.getOrElse(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, "");
-                        errorRecords.put(relativeOffset, relativeOffsetErrorMessage);
+                        errorRecords.add(new ErrorRecord(
+                                recordOffsetAndMessageStruct.getInt(RELATIVE_OFFSET_KEY_NAME),
+                                recordOffsetAndMessageStruct.getOrElse(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, "")));
                     }
                 }
 
@@ -266,15 +266,14 @@ public class ProduceResponse extends AbstractResponse {
                         .set(PARTITION_ID, partitionEntry.getKey())
                         .set(ERROR_CODE, errorCode)
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
-                if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
-                    partStruct.setIfExists(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
+                partStruct.setIfExists(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
 
                 List<Struct> errorRecords = new ArrayList<>();
-                for (Map.Entry<Integer, String> recordOffsetAndMessage : part.errorRecords.entrySet()) {
+                for (ErrorRecord recordOffsetAndMessage : part.errorRecords) {
                     Struct recordOffsetAndMessageStruct = partStruct.instance(ERROR_RECORDS_KEY_NAME)
-                            .set(RELATIVE_OFFSET_KEY_NAME, recordOffsetAndMessage.getKey())
-                            .setIfExists(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, recordOffsetAndMessage.getValue());
+                            .set(RELATIVE_OFFSET_KEY_NAME, recordOffsetAndMessage.getRelativeOffset())
+                            .setIfExists(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, recordOffsetAndMessage.getMessage());
                     errorRecords.add(recordOffsetAndMessageStruct);
                 }
 
@@ -314,7 +313,7 @@ public class ProduceResponse extends AbstractResponse {
         public long baseOffset;
         public long logAppendTime;
         public long logStartOffset;
-        public Map<Integer, String> errorRecords;
+        public List<ErrorRecord> errorRecords;
         public String errorMessage;
 
         public PartitionResponse(Errors error) {
@@ -322,14 +321,14 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset) {
-            this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyMap(), null);
+            this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyList(), null);
         }
 
-        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, Map<Integer, String> errorRecords) {
-            this(error, baseOffset, logAppendTime, logStartOffset, errorRecords, "");
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<ErrorRecord> errorRecords) {
+            this(error, baseOffset, logAppendTime, logStartOffset, errorRecords, null);
         }
 
-        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, Map<Integer, String> errorRecords, String errorMessage) {
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<ErrorRecord> errorRecords, String errorMessage) {
             this.error = error;
             this.baseOffset = baseOffset;
             this.logAppendTime = logAppendTime;
@@ -357,6 +356,25 @@ public class ProduceResponse extends AbstractResponse {
             b.append('}');
             return b.toString();
         }
+    }
+
+    public static final class ErrorRecord {
+        private final int relativeOffset;
+        private final String message;
+
+        public ErrorRecord(int relativeOffset, String message) {
+            this.relativeOffset = relativeOffset;
+            this.message = message;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public int getRelativeOffset() {
+            return relativeOffset;
+        }
+
     }
 
     public static ProduceResponse parse(ByteBuffer buffer, short version) {

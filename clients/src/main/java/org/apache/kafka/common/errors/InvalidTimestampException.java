@@ -16,43 +16,44 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.requests.ProduceResponse;
+
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 
 /**
  * Indicate the timestamp of a record is invalid.
  */
+// TODO: remove errorRecords
 public class InvalidTimestampException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
     // Relative offset of the record that throws this exception
-    private Map<Integer, String> errorRecords = Collections.emptyMap();
+    private final List<ProduceResponse.ErrorRecord> errorRecords;
 
     public InvalidTimestampException(String message) {
         super(message);
+        this.errorRecords = Collections.emptyList();
     }
 
-    public InvalidTimestampException(String message, Map<Integer, String> errorRecords) {
+    public InvalidTimestampException(String message, List<ProduceResponse.ErrorRecord> errorRecords) {
         super(message);
         this.errorRecords = errorRecords;
     }
 
     public InvalidTimestampException(String message, Throwable cause) {
         super(message, cause);
+        this.errorRecords = Collections.emptyList();
     }
 
-    public InvalidTimestampException(String message, Throwable cause, Map<Integer, String> errorRecords) {
+    public InvalidTimestampException(String message, Throwable cause, List<ProduceResponse.ErrorRecord> errorRecords) {
         super(message, cause);
         this.errorRecords = errorRecords;
     }
 
-    public Map<Integer, String> getErrorRecords() {
+    public List<ProduceResponse.ErrorRecord> getErrorRecords() {
         return errorRecords;
-    }
-
-    public void setErrorRecords(Map<Integer, String> errorRecords) {
-        this.errorRecords = errorRecords;
     }
 
 }

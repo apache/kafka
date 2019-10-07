@@ -17,40 +17,40 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.requests.ProduceResponse;
 
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
 
+// TODO: remove errorRecords
 public class InvalidRecordException extends ApiException {
 
     private static final long serialVersionUID = 1;
 
     // Relative offset of the record that throws this exception
-    private Map<Integer, String> errorRecords = Collections.emptyMap();
+    private final List<ProduceResponse.ErrorRecord> errorRecords;
 
     public InvalidRecordException(String s) {
         super(s);
+        this.errorRecords = Collections.emptyList();
     }
 
-    public InvalidRecordException(String s, Map<Integer, String> errorRecords) {
+    public InvalidRecordException(String s, List<ProduceResponse.ErrorRecord> errorRecords) {
         super(s);
         this.errorRecords = errorRecords;
     }
 
     public InvalidRecordException(String message, Throwable cause) {
         super(message, cause);
+        this.errorRecords = Collections.emptyList();
     }
 
-    public InvalidRecordException(String message, Throwable cause, Map<Integer, String> errorRecords) {
+    public InvalidRecordException(String message, Throwable cause, List<ProduceResponse.ErrorRecord> errorRecords) {
         super(message, cause);
         this.errorRecords = errorRecords;
     }
 
-    public void setErrorRecords(Map<Integer, String> errorRecords) {
-        this.errorRecords = errorRecords;
-    }
-
-    public Map<Integer, String> getErrorRecords() {
+    public List<ProduceResponse.ErrorRecord> getErrorRecords() {
         return errorRecords;
     }
 

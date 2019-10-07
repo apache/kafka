@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
-import kafka.common.LongRef
+import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.BrokerTopicStats
 import kafka.utils.Logging
@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampE
 import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.ProduceResponse.ErrorRecord
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
@@ -151,8 +152,9 @@ private[kafka] object LogValidator extends Logging {
                              brokerTopicStats: BrokerTopicStats): Unit = {
     if (!record.hasMagic(batch.magic)) {
       brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
-      throw new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic} in topic partition $topicPartition.",
-        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
+      throw new RecordValidationException(
+        new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic} in topic partition $topicPartition."),
+        List(new ErrorRecord(relativeOffset.toInt, null)))
     }
 
     // verify the record-level CRC only if this is one of the deep entries of a compressed message
@@ -355,9 +357,9 @@ private[kafka] object LogValidator extends Logging {
         for (record <- batch.asScala) {
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
-            throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-              s"compression attribute set: $record",
-              java.util.Collections.singletonMap(expectedOffset.toInt.asInstanceOf[java.lang.Integer], ""))
+            throw new RecordValidationException(new InvalidRecordException("Compressed outer record should not have an inner record with a " +
+              s"compression attribute set: $record"),
+              List(new ErrorRecord(expectedOffset.toInt, null)))
           validateRecord(batch, topicPartition, record, expectedOffset, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
 
           uncompressedSizeInBytes += record.sizeInBytes()
@@ -463,8 +465,9 @@ private[kafka] object LogValidator extends Logging {
   private def validateKey(record: Record, relativeOffset: Long, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
     if (compactedTopic && !record.hasKey) {
       brokerTopicStats.allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
-      throw new InvalidRecordException(s"Compacted topic cannot accept message without key in topic partition $topicPartition.",
-        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
+      throw new RecordValidationException(
+        new InvalidRecordException(s"Compacted topic cannot accept message without key in topic partition $topicPartition."),
+        List(new ErrorRecord(relativeOffset.toInt, null)))
     }
   }
 
@@ -481,13 +484,15 @@ private[kafka] object LogValidator extends Logging {
     if (timestampType == TimestampType.CREATE_TIME
       && record.timestamp != RecordBatch.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)
-      throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message with offset ${record.offset} is " +
-        s"out of range. The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]",
-        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
+      throw new RecordValidationException(
+        new InvalidTimestampException(s"Timestamp ${record.timestamp} of message with offset ${record.offset} is " +
+          s"out of range. The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]"),
+        List(new ErrorRecord(relativeOffset.toInt, null)))
     if (batch.timestampType == TimestampType.LOG_APPEND_TIME)
-      throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
-        s"timestamp type to LogAppendTime.",
-        java.util.Collections.singletonMap(relativeOffset.toInt.asInstanceOf[java.lang.Integer], ""))
+      throw new RecordValidationException(
+        new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
+          s"timestamp type to LogAppendTime."),
+        List(new ErrorRecord(relativeOffset.toInt, null)))
   }
 
   case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,

@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.requests.ProduceResponse.ErrorRecord
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
@@ -52,7 +53,12 @@ object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
-  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, errorRecords: scala.collection.Map[java.lang.Integer, String], errorMessage: String): LogAppendInfo =
+  def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
+    LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      offsetsMonotonic = false, -1L)
+
+  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, errorRecords: List[ErrorRecord], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L, errorRecords, errorMessage)
@@ -90,8 +96,8 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
                          lastOffsetOfFirstBatch: Long,
-                         errorRecords: scala.collection.Map[java.lang.Integer, String] = scala.collection.Map.empty[java.lang.Integer, String],
-                         errorMessage: String = "") {
+                         errorRecords: List[ErrorRecord] = List(),
+                         errorMessage: String = null) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions
