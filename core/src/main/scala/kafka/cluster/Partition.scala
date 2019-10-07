@@ -156,14 +156,18 @@ object Partition extends KafkaMetricsGroup {
 }
 
 
-trait AssignmentState {
+sealed trait AssignmentState {
   def replicas: Seq[Int]
+  def replicationFactor: Int = replicas.size
 }
 
 case class OngoingReassignmentState(addingReplicas: Seq[Int],
                                     removingReplicas: Seq[Int],
                                     originalReplicas: Seq[Int],
-                                    replicas: Seq[Int]) extends AssignmentState
+                                    replicas: Seq[Int]) extends AssignmentState {
+
+  override def replicationFactor = originalReplicas.size
+}
 
 case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
 
@@ -252,7 +256,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("ReplicasCount",
     new Gauge[Int] {
       def value: Int = {
-        if (isLeader) assignmentState.replicas.size else 0
+        if (isLeader) assignmentState.replicationFactor else 0
       }
     },
     tags
@@ -267,10 +271,7 @@ class Partition(val topicPartition: TopicPartition,
     tags
   )
 
-  def isUnderReplicated: Boolean = assignmentState match {
-    case OngoingReassignmentState(_, _, originalReplicas, _) => isLeader && (originalReplicas.size - inSyncReplicaIds.size) > 0
-    case SimpleAssignmentState(replicas) => isLeader && (replicas.size - inSyncReplicaIds.size) > 0
-  }
+  def isUnderReplicated: Boolean = (assignmentState.replicationFactor - inSyncReplicaIds.size) > 0
 
   def isUnderMinIsr: Boolean = {
     leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
