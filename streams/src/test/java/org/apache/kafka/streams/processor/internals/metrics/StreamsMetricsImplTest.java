@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.easymock.EasyMock;
@@ -63,7 +62,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     private final static String SENSOR_PREFIX_DELIMITER = ".";
     private final static String SENSOR_NAME_DELIMITER = ".s.";
     private final static String INTERNAL_PREFIX = "internal";
-    private final static String VERSION = StreamsConfig.METRICS_LATEST;
+    private final static String VERSION = StreamsMetricsImpl.METRICS_LATEST;
     private final static String CLIENT_ID = "test-client";
     private final static String THREAD_ID = "test-thread";
     private final static String TASK_ID = "test-task";
@@ -439,17 +438,16 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void shouldGetCacheLevelTagMapForBuiltInMetricsLatestVersion() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_LATEST);
+        shouldGetCacheLevelTagMap(StreamsMetricsImpl.METRICS_LATEST);
     }
 
     @Test
     public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To23() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+        shouldGetCacheLevelTagMap(StreamsMetricsImpl.METRICS_0100_TO_23);
     }
 
     private void shouldGetCacheLevelTagMap(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, THREAD_ID, builtInMetricsVersion);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, builtInMetricsVersion);
         final String taskName = "taskName";
         final String storeName = "storeName";
 
@@ -458,7 +456,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         assertThat(tagMap.size(), equalTo(3));
         assertThat(
             tagMap.get(
-                builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? StreamsMetricsImpl.THREAD_ID_TAG
+                builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? StreamsMetricsImpl.THREAD_ID_TAG
                     : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23),
             equalTo(THREAD_ID)
         );
@@ -551,7 +549,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     @Test
     public void shouldReturnMetricsVersionCurrent() {
         assertThat(
-            new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_LATEST).version(),
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsMetricsImpl.METRICS_LATEST).version(),
             equalTo(Version.LATEST)
         );
     }
@@ -559,7 +557,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     @Test
     public void shouldReturnMetricsVersionFrom100To23() {
         assertThat(
-            new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_0100_TO_23).version(),
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsMetricsImpl.METRICS_0100_TO_23).version(),
             equalTo(Version.FROM_100_TO_23)
         );
     }

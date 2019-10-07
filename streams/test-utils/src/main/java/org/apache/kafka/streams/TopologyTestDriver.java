@@ -306,7 +306,7 @@ public class TopologyTestDriver implements Closeable {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             "test-client",
-            StreamsConfig.METRICS_LATEST
+            StreamsMetricsImpl.METRICS_LATEST
         );
         streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         final Sensor skippedRecordsSensor =

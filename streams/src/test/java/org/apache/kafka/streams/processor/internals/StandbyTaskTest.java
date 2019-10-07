@@ -160,9 +160,8 @@ public class StandbyTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
-    private final String threadName = "threadName";
     private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
+        new StreamsMetricsImpl(new Metrics(), applicationId, StreamsMetricsImpl.METRICS_LATEST);
 
     @Before
     public void setup() throws Exception {

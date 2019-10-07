@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -292,17 +293,11 @@ public class MetricsIntegrationTest {
     }
 
     @Test
-    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsLatestVersion() throws Exception {
-        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_LATEST);
-    }
-
-    @Test
     public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To23() throws Exception {
-        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_23);
+        shouldAddMetricsOnAllLevels(StreamsMetricsImpl.METRICS_0100_TO_23);
     }
 
     private void shouldAddMetricsOnAllLevels(final String builtInMetricsVersion) throws Exception {
-        streamsConfiguration.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
@@ -593,18 +588,18 @@ public class MetricsIntegrationTest {
             .collect(Collectors.toList());
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_AVG : HIT_RATIO_AVG_BEFORE_24,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_AVG : HIT_RATIO_AVG_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_MIN : HIT_RATIO_MIN_BEFORE_24,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_MIN : HIT_RATIO_MIN_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
         checkMetricByName(
             listMetricCache,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_MAX : HIT_RATIO_MAX_BEFORE_24,
-            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? HIT_RATIO_MAX : HIT_RATIO_MAX_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsMetricsImpl.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
         );
     }
 
