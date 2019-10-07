@@ -47,19 +47,17 @@ public class ConsumerRejoinToGroupAfterRebalanceTest {
         KafkaConsumer<byte[], byte[]> consumer =
             connect.kafka().createConsumerAndSubscribeTo(consumerProps, "test-topic");
 
-        for (int i = 0; i < 100; i++) {
-            try {
-                consumer.poll(Duration.ofMillis(TIMEOUT));
+        try {
+            consumer.poll(Duration.ofMillis(TIMEOUT));
 
-                Thread.sleep(2 * TIMEOUT);
+            Thread.sleep(2 * TIMEOUT);
 
-                consumer.commitSync();
-            } catch (CommitFailedException e) {
-                // Ignore.
-            } catch (Exception e) {
-                e.printStackTrace();
-                fail();
-            }
+            consumer.commitSync();
+        } catch (CommitFailedException e) {
+            // Ignore.
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail();
         }
     }
 
