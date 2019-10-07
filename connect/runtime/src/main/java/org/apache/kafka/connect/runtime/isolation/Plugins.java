@@ -93,6 +93,23 @@ public class Plugins {
     }
 
     @SuppressWarnings("unchecked")
+    protected static <U> Class<? extends U> pluginClassFromConfig(
+            AbstractConfig config,
+            String propertyName,
+            Class<U> pluginClass
+    ) throws ClassNotFoundException {
+        Class<?> klass = config.getClass(propertyName);
+        if (pluginClass.isAssignableFrom(klass)) {
+            return (Class<? extends U>) klass;
+        }
+        throw new ClassNotFoundException(
+            "Requested class for property: "
+                + propertyName
+                + " does not extend " + pluginClass.getSimpleName()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
@@ -229,17 +246,26 @@ public class Plugins {
             return null;
         }
         Converter plugin = null;
+        Class<? extends Converter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-                plugin = getInstance(config, classPropertyName, Converter.class);
+
+                try {
+                    klass = pluginClassFromConfig(config, classPropertyName, Converter.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                        "Failed to find any class that implements Converter for the config "
+                        + classPropertyName + ", available converters are: "
+                        + pluginNames(delegatingLoader.converters())
+                    );
+                }
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
                 String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends Converter> klass;
                 try {
                     klass = pluginClass(delegatingLoader, converterClassOrAlias, Converter.class);
                 } catch (ClassNotFoundException e) {
@@ -249,36 +275,42 @@ public class Plugins {
                             + pluginNames(delegatingLoader.converters())
                     );
                 }
-                plugin = newPlugin(klass);
                 break;
         }
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        if (klass == null) {
+            throw new ConnectException("Unable to initialize the Converter specified in '" + classPropertyName + "'");
         }
 
-        // Determine whether this is a key or value converter based upon the supplied property name ...
-        @SuppressWarnings("deprecation")
-        final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
-                                     || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
 
-        // Configure the Converter using only the old configuration mechanism ...
-        String configPrefix = classPropertyName + ".";
-        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-        log.debug("Configuring the {} converter with configuration keys:{}{}",
-                  isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
+            // Determine whether this is a key or value converter based upon the supplied property name ...
+            @SuppressWarnings("deprecation")
+            final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
+                                         || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
 
-        // Have to override schemas.enable from true to false for internal JSON converters
-        // Don't have to warn the user about anything since all deprecation warnings take place in the
-        // WorkerConfig class
-        if (plugin instanceof JsonConverter && isInternalConverter(classPropertyName)) {
-            // If they haven't explicitly specified values for internal.key.converter.schemas.enable
-            // or internal.value.converter.schemas.enable, we can safely default them to false
-            if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
-                converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
+            // Configure the Converter using only the old configuration mechanism ...
+            String configPrefix = classPropertyName + ".";
+            Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
+            log.debug("Configuring the {} converter with configuration keys:{}{}",
+                      isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
+
+            // Have to override schemas.enable from true to false for internal JSON converters
+            // Don't have to warn the user about anything since all deprecation warnings take place in the
+            // WorkerConfig class
+            if (plugin instanceof JsonConverter && isInternalConverter(classPropertyName)) {
+                // If they haven't explicitly specified values for internal.key.converter.schemas.enable
+                // or internal.value.converter.schemas.enable, we can safely default them to false
+                if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
+                    converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
+                }
             }
-        }
 
-        plugin.configure(converterConfig, isKeyConverter);
+            plugin.configure(converterConfig, isKeyConverter);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
         return plugin;
     }
 
@@ -294,6 +326,7 @@ public class Plugins {
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
         HeaderConverter plugin = null;
+        Class<? extends HeaderConverter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 if (!config.originals().containsKey(classPropertyName)) {
@@ -303,13 +336,20 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                plugin = getInstance(config, classPropertyName, HeaderConverter.class);
+                try {
+                    klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                        "Failed to find any class that implements HeaderConverter for the config "
+                        + classPropertyName + ", available converters are: "
+                        + pluginNames(delegatingLoader.converters())
+                    );
+                }
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
                 // Note that there will always be at least a default header converter for the worker
                 String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends HeaderConverter> klass;
                 try {
                     klass = pluginClass(
                             delegatingLoader,
@@ -324,17 +364,22 @@ public class Plugins {
                                     + pluginNames(delegatingLoader.headerConverters())
                     );
                 }
-                plugin = newPlugin(klass);
         }
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        if (klass == null) {
+            throw new ConnectException("Unable to initialize the HeaderConverter specified in '" + classPropertyName + "'");
         }
 
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
-        plugin.configure(converterConfig);
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
+            plugin.configure(converterConfig);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
         return plugin;
     }
 
