@@ -69,6 +69,7 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
         }
         // Copy the existing headers
         Headers newHeaders = new ConnectHeaders(record.headers());
+        // Always add the new header, even if there is already a header with the same name
         newHeaders.add(headerName, schemaAndValue);
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(),
             record.key(), record.valueSchema(), record.value(), record.timestamp(), newHeaders);
