@@ -38,7 +38,7 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)
-    assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
+    assertEquals(Errors.UNSUPPORTED_VERSION, apiVersionsResponse.data.errorCode())
     assertFalse(apiVersionsResponse.data.apiKeys().isEmpty)
     val apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id)
     assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey())
@@ -58,7 +58,7 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
-    assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
+    assertEquals(Errors.INVALID_REQUEST, apiVersionsResponse.data.errorCode())
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {

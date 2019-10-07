@@ -83,6 +83,8 @@ There are several primitive field types available.
 
 * "bytes": binary data.
 
+* "error": an org.apache.kafka.common.protocol.Errors encoded as a 16-bit integer.  This takes up 2 bytes on the wire.
+
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
 example, []Foo declares an array of "Foo" objects.  Array fields have their own
@@ -194,7 +196,7 @@ default to true rather than false, and so forth.
 Note that the default must be valid for the field type.  So the default for an
 int16 field must by an integer that fits in 16 bits, and so forth.  You may
 specify hex or octal values, as long as they are prefixed with 0x or 0.  It is
-currently not possible to specify a custom default for bytes or array fields.
+currently not possible to specify a custom default for bytes, array or error fields.
 
 Custom defaults are useful when an older message version lacked some
 information.  For example, if an older request lacked a timeout field, you may

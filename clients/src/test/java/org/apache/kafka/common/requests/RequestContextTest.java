@@ -59,7 +59,7 @@ public class RequestContextTest {
 
         Send send = context.buildResponse(new ApiVersionsResponse(new ApiVersionsResponseData()
             .setThrottleTimeMs(0)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+            .setErrorCode(Errors.UNSUPPORTED_VERSION)
             .setApiKeys(new ApiVersionsResponseKeyCollection())));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
@@ -75,7 +75,7 @@ public class RequestContextTest {
         Struct struct = ApiKeys.API_VERSIONS.parseResponse((short) 0, responseBuffer);
         ApiVersionsResponse response = (ApiVersionsResponse)
             AbstractResponse.parseResponse(ApiKeys.API_VERSIONS, struct, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+        assertEquals(Errors.UNSUPPORTED_VERSION, response.data.errorCode());
         assertTrue(response.data.apiKeys().isEmpty());
     }
 

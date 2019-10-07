@@ -64,7 +64,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(Errors.forCode(this.data.errorCode()));
+        return errorCounts(this.data.errorCode());
     }
 
     @Override
@@ -133,7 +133,7 @@ public class ApiVersionsResponse extends AbstractResponse {
 
         ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
-        data.setErrorCode(Errors.NONE.code());
+        data.setErrorCode(Errors.NONE);
         data.setApiKeys(apiKeys);
 
         return new ApiVersionsResponse(data);

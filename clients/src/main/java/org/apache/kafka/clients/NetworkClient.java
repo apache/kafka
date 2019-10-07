@@ -852,10 +852,10 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.data.errorCode() != Errors.NONE.code()) {
-            if (req.request.version() == 0 || apiVersionsResponse.data.errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
+        if (apiVersionsResponse.data.errorCode() != Errors.NONE) {
+            if (req.request.version() == 0 || apiVersionsResponse.data.errorCode() != Errors.UNSUPPORTED_VERSION) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
-                        Errors.forCode(apiVersionsResponse.data.errorCode()), node, req.header.correlationId());
+                        apiVersionsResponse.data.errorCode(), node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {

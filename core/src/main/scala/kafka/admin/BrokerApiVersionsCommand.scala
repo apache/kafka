@@ -162,7 +162,7 @@ object BrokerApiVersionsCommand {
 
     private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
       val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
-      Errors.forCode(response.data.errorCode).maybeThrow()
+      response.data.errorCode.maybeThrow()
       response.data.apiKeys
     }
 

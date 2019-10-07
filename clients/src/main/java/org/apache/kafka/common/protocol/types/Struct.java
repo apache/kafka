@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.types.Field.Errors;
 import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
@@ -93,6 +94,10 @@ public class Struct {
         return getUUID(field.name);
     }
 
+    public org.apache.kafka.common.protocol.Errors get(Errors field) {
+        return getErrors(field.name);
+    }
+
     public Short get(Field.Int16 field) {
         return getShort(field.name);
     }
@@ -126,6 +131,13 @@ public class Struct {
     public UUID getOrElse(Field.UUID field, UUID alternative) {
         if (hasField(field.name))
             return getUUID(field.name);
+        return alternative;
+    }
+
+    public org.apache.kafka.common.protocol.Errors getOrElse(
+        Errors field, org.apache.kafka.common.protocol.Errors alternative) {
+        if (hasField(field.name))
+            return getErrors(field.name);
         return alternative;
     }
 
@@ -288,6 +300,14 @@ public class Struct {
         return (Boolean) get(name);
     }
 
+    public org.apache.kafka.common.protocol.Errors getErrors(BoundField field) {
+        return (org.apache.kafka.common.protocol.Errors) get(field);
+    }
+
+    public org.apache.kafka.common.protocol.Errors getErrors(String name) {
+        return (org.apache.kafka.common.protocol.Errors) get(name);
+    }
+
     public ByteBuffer getBytes(BoundField field) {
         Object result = get(field);
         if (result instanceof byte[])
@@ -362,6 +382,10 @@ public class Struct {
     }
 
     public Struct set(Field.UUID def, UUID value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Errors def, org.apache.kafka.common.protocol.Errors value) {
         return set(def.name, value);
     }
 

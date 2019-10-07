@@ -56,4 +56,8 @@ public interface Readable {
     default UUID readUUID() {
         return new UUID(readLong(), readLong());
     }
+
+    default Errors readErrors() {
+        return Errors.forCode(readShort());
+    }
 }

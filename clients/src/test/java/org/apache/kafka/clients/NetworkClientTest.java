@@ -239,7 +239,7 @@ public class NetworkClientTest {
         delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
             new ApiVersionsResponse(
                 new ApiVersionsResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorCode(Errors.INVALID_REQUEST)
                     .setThrottleTimeMs(0)
             ));
 
@@ -307,7 +307,7 @@ public class NetworkClientTest {
         delayedApiVersionsResponse(0, (short) 0,
             new ApiVersionsResponse(
                 new ApiVersionsResponseData()
-                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION)
                     .setApiKeys(apiKeys)
             ));
 
@@ -375,7 +375,7 @@ public class NetworkClientTest {
         delayedApiVersionsResponse(0, (short) 0,
             new ApiVersionsResponse(
                 new ApiVersionsResponseData()
-                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION)
             ));
 
         // handle ApiVersionResponse, initiate second ApiVersionRequest
@@ -517,7 +517,7 @@ public class NetworkClientTest {
             }
         }
         return new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE)
             .setThrottleTimeMs(0)
             .setApiKeys(versionList));
     }

@@ -103,7 +103,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     @Override
     public ApiVersionsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiVersionsResponseData data = new ApiVersionsResponseData()
-            .setErrorCode(Errors.forException(e).code());
+            .setErrorCode(Errors.forException(e));
 
         if (version() >= 1) {
             data.setThrottleTimeMs(throttleTimeMs);

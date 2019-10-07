@@ -342,6 +342,9 @@ public final class MessageDataGenerator {
             return "int";
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             return "long";
+        } else if (field.type() instanceof FieldType.ErrorFieldType) {
+            headerGenerator.addImport(MessageGenerator.ERRORS_CLASS);
+            return "Errors";
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
@@ -571,6 +574,8 @@ public final class MessageDataGenerator {
             return "_readable.readInt()";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "_readable.readLong()";
+        } else if (type instanceof FieldType.ErrorFieldType) {
+            return "_readable.readErrors()";
         } else if (type instanceof FieldType.UUIDFieldType) {
             return "_readable.readUUID()";
         } else if (type.isStruct()) {
@@ -818,6 +823,9 @@ public final class MessageDataGenerator {
             return "Integer";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "Long";
+        } else if (type instanceof FieldType.ErrorFieldType) {
+            headerGenerator.addImport(MessageGenerator.ERRORS_CLASS);
+            return "Errors";
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             return "UUID";
@@ -841,6 +849,8 @@ public final class MessageDataGenerator {
             return String.format("struct.getInt(\"%s\")", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("struct.getLong(\"%s\")", name);
+        } else if (type instanceof FieldType.ErrorFieldType) {
+            return String.format("struct.getErrors(\"%s\")", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("struct.getUUID(\"%s\")", name);
         } else if (type.isString()) {
@@ -1050,6 +1060,8 @@ public final class MessageDataGenerator {
             return String.format("_writable.writeInt(%s)", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("_writable.writeLong(%s)", name);
+        } else if (type instanceof FieldType.ErrorFieldType) {
+            return String.format("_writable.writeErrors(%s)", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
             return String.format("_writable.writeUUID(%s)", name);
         } else if (type instanceof FieldType.StructType) {
@@ -1277,6 +1289,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.ErrorFieldType) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("struct.set(\"%s\", this.%s);%n",
@@ -1316,6 +1329,7 @@ public final class MessageDataGenerator {
             (field.type() instanceof FieldType.Int16FieldType) ||
             (field.type() instanceof FieldType.Int32FieldType) ||
             (field.type() instanceof FieldType.Int64FieldType) ||
+            (field.type() instanceof FieldType.ErrorFieldType) ||
             (field.type() instanceof FieldType.UUIDFieldType) ||
             (field.type() instanceof FieldType.StringFieldType)) {
             buffer.printf("_taggedFields.put(%d, %s);%n",
@@ -1723,6 +1737,9 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
+        } else if (field.type() instanceof FieldType.ErrorFieldType) {
+            buffer.printf("hashCode = 31 * hashCode + %s.code();%n",
+                field.camelCaseName());
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             buffer.printf("hashCode = 31 * hashCode + %s.hashCode();%n",
                 field.camelCaseName());
@@ -1772,6 +1789,10 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType)) {
             buffer.printf("+ \"%s%s=\" + %s%n",
+                prefix, field.camelCaseName(), field.camelCaseName());
+        } else if (field.type() instanceof FieldType.ErrorFieldType) {
+            headerGenerator.addImport(MessageGenerator.ERRORS_CLASS);
+            buffer.printf("+ \"%s%s=\" + %s.name()%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
             buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : \"'\" + %s.toString() + \"'\")%n",
@@ -1831,65 +1852,46 @@ public final class MessageDataGenerator {
                 if (defaultString.isEmpty()) {
                     return "(byte) 0";
                 } else {
-                    try {
-                        Byte.valueOf(defaultString, base);
-                    } catch (NumberFormatException e) {
-                        throw new RuntimeException("Invalid default for int8 field " +
-                            field.name() + ": " + defaultString, e);
-                    }
+                    validateByteDefault(field, defaultString, base);
                     return "(byte) " + field.defaultString();
                 }
             } else if (field.type() instanceof FieldType.Int16FieldType) {
                 if (defaultString.isEmpty()) {
                     return "(short) 0";
                 } else {
-                    try {
-                        Short.valueOf(defaultString, base);
-                    } catch (NumberFormatException e) {
-                        throw new RuntimeException("Invalid default for int16 field " +
-                            field.name() + ": " + field.defaultString(), e);
-                    }
+                    validateShortDefault(field, defaultString, base);
                     return "(short) " + field.defaultString();
                 }
             } else if (field.type() instanceof FieldType.Int32FieldType) {
                 if (defaultString.isEmpty()) {
                     return "0";
                 } else {
-                    try {
-                        Integer.valueOf(defaultString, base);
-                    } catch (NumberFormatException e) {
-                        throw new RuntimeException("Invalid default for int32 field " +
-                            field.name() + ": " + field.defaultString(), e);
-                    }
+                    validateIntegerDefault(field, defaultString, base);
                     return field.defaultString();
                 }
             } else if (field.type() instanceof FieldType.Int64FieldType) {
                 if (defaultString.isEmpty()) {
                     return "0L";
                 } else {
-                    try {
-                        Long.valueOf(defaultString, base);
-                    } catch (NumberFormatException e) {
-                        throw new RuntimeException("Invalid default for int64 field " +
-                            field.name() + ": " + field.defaultString(), e);
-                    }
+                    validateLongDefault(field, defaultString, base);
                     return field.defaultString() + "L";
                 }
             } else {
                 throw new RuntimeException("Unsupported field type " + field.type());
             }
+        } else if (field.type() instanceof FieldType.ErrorFieldType) {
+            // Defaults are not supported because it is not possible to import Errors from the
+            // client package. Thus, it is not possible to validate the provided values.
+            validateEmptyDefault(field);
+            headerGenerator.addImport(MessageGenerator.ERRORS_CLASS);
+            return "Errors.NONE";
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             if (field.defaultString().isEmpty()) {
                 headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
                 return "MessageUtil.ZERO_UUID";
             } else {
-                try {
-                    UUID.fromString(field.defaultString());
-                } catch (IllegalArgumentException e) {
-                    throw new RuntimeException("Invalid default for uuid field " +
-                        field.name() + ": " + field.defaultString(), e);
-                }
+                validateUUIDDefault(field);
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
                 return "UUID.fromString(\"" + field.defaultString() + "\")";
             }
@@ -1917,10 +1919,7 @@ public final class MessageDataGenerator {
                 return "Bytes.EMPTY";
             }
         } else if (field.type().isStruct()) {
-            if (!field.defaultString().isEmpty()) {
-                throw new RuntimeException("Invalid default for struct field " +
-                    field.name() + ": custom defaults are not supported for struct fields.");
-            }
+            validateEmptyDefault(field);
             return "new " + field.type().toString() + "()";
         } else if (field.type().isArray()) {
             if (field.defaultString().equals("null")) {
@@ -1948,6 +1947,58 @@ public final class MessageDataGenerator {
             throw new RuntimeException("null cannot be the default for field " +
                     field.name() + ", because not all versions of this field are " +
                     "nullable.");
+        }
+    }
+
+    private void validateEmptyDefault(FieldSpec field) {
+        if (!field.defaultString().isEmpty()) {
+            throw new RuntimeException("Invalid default for " + field.type().toString() + " field " +
+                field.name() + ": custom defaults are not supported for " + field.type().toString() + " fields.");
+        }
+    }
+
+    private void validateByteDefault(FieldSpec field, String defaultString, int base) {
+        try {
+            Byte.valueOf(defaultString, base);
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Invalid default for int8 field " +
+                field.name() + ": " + field.defaultString(), e);
+        }
+    }
+
+    private void validateShortDefault(FieldSpec field, String defaultString, int base) {
+        try {
+            Short.valueOf(defaultString, base);
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Invalid default for int16 field " +
+                field.name() + ": " + field.defaultString(), e);
+        }
+    }
+
+    private void validateIntegerDefault(FieldSpec field, String defaultString, int base) {
+        try {
+            Integer.valueOf(defaultString, base);
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Invalid default for int32 field " +
+                field.name() + ": " + field.defaultString(), e);
+        }
+    }
+
+    private void validateLongDefault(FieldSpec field, String defaultString, int base) {
+        try {
+            Long.valueOf(defaultString, base);
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Invalid default for int64 field " +
+                field.name() + ": " + field.defaultString(), e);
+        }
+    }
+
+    private void validateUUIDDefault(FieldSpec field) {
+        try {
+            UUID.fromString(field.defaultString());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid default for uuid field " +
+                field.name() + ": " + field.defaultString(), e);
         }
     }
 
