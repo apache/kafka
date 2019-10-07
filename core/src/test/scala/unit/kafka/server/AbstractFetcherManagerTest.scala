@@ -98,7 +98,7 @@ class AbstractFetcherManagerTest {
     assertEquals(0, getMetricValue(metricName))
   }
   @Test
-  def testDeadFetcherThreadCountMetric(): Unit = {
+  def testDeadThreadCountMetric(): Unit = {
     val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
       override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
@@ -121,14 +121,14 @@ class AbstractFetcherManagerTest {
 
     fetcherManager.addFetcherForPartitions(Map(tp -> initialFetchState))
 
-    assertEquals(1, fetcherManager.deadFetcherThreadCount)
+    assertEquals(1, fetcherManager.deadThreadCount)
     EasyMock.verify(fetcher)
 
     EasyMock.reset(fetcher)
     EasyMock.expect(fetcher.isThreadFailed).andReturn(false)
     EasyMock.replay(fetcher)
 
-    assertEquals(0, fetcherManager.deadFetcherThreadCount)
+    assertEquals(0, fetcherManager.deadThreadCount)
     EasyMock.verify(fetcher)
   }
 }
