@@ -118,7 +118,7 @@ public abstract class AbstractCoordinator implements Closeable {
         STABLE,      // the client has joined and is sending heartbeats
     }
 
-    private static CyclicBarrier readerBarrier = new CyclicBarrier(2);
+    private CyclicBarrier readerBarrier = new CyclicBarrier(2);
 
     private final Logger log;
     private final GroupCoordinatorMetrics sensors;
@@ -412,9 +412,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 try {
                     readerBarrier.await();
-                }
-                catch (Exception e) {
-                }
+                } catch (Exception e) {}
 
                 onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
 
@@ -596,13 +594,6 @@ public abstract class AbstractCoordinator implements Closeable {
                             joinResponse.data().memberId(), null);
                     AbstractCoordinator.this.rejoinNeeded = true;
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
-                }
-
-                try {
-                    readerBarrier.await();
-                }
-                catch (Exception e) {
-                    e.printStackTrace();
                 }
 
                 future.raise(error);
@@ -1221,6 +1212,10 @@ public abstract class AbstractCoordinator implements Closeable {
                                                     "You can address this either by increasing max.poll.interval.ms or by reducing " +
                                                     "the maximum size of batches returned in poll() with max.poll.records.";
                             maybeLeaveGroup(leaveReason);
+
+                            try {
+                                readerBarrier.await();
+                            } catch (Exception e) { }
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected
