@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -133,13 +132,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    protected ByteBuffer toBytes() {
-        ByteBuffer bytes = ByteBuffer.allocate(size());
-        data.write(new ByteBufferAccessor(bytes), version());
-        bytes.flip();
-        return bytes;
-    }
-
     @Override
     public LeaderAndIsrResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         LeaderAndIsrResponseData responseData = new LeaderAndIsrResponseData();
@@ -194,12 +186,12 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return Collections.unmodifiableList(data.liveLeaders());
     }
 
-    protected int size() {
-        return data.size(version());
+    // Visible for testing
+    LeaderAndIsrRequestData data() {
+        return data;
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {
         return new LeaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.parseRequest(version, buffer), version);
     }
-
 }

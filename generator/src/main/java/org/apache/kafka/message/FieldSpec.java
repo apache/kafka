@@ -24,8 +24,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 public final class FieldSpec {
+    private static final Pattern VALID_FIELD_NAMES = Pattern.compile("[A-Za-z]([A-Za-z0-9]*)");
+
     private final String name;
 
     private final Versions versions;
@@ -46,6 +50,12 @@ public final class FieldSpec {
 
     private final String about;
 
+    private final Versions taggedVersions;
+
+    private final Optional<Versions> flexibleVersions;
+
+    private final Optional<Integer> tag;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -56,8 +66,14 @@ public final class FieldSpec {
                      @JsonProperty("default") String fieldDefault,
                      @JsonProperty("ignorable") boolean ignorable,
                      @JsonProperty("entityType") EntityType entityType,
-                     @JsonProperty("about") String about) {
+                     @JsonProperty("about") String about,
+                     @JsonProperty("taggedVersions") String taggedVersions,
+                     @JsonProperty("flexibleVersions") String flexibleVersions,
+                     @JsonProperty("tag") Integer tag) {
         this.name = Objects.requireNonNull(name);
+        if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
+            throw new RuntimeException("Invalid field name " + this.name);
+        }
         this.versions = Versions.parse(versions, null);
         if (this.versions == null) {
             throw new RuntimeException("You must specify the version of the " +
@@ -83,6 +99,56 @@ public final class FieldSpec {
             if (!this.type.isArray()) {
                 throw new RuntimeException("Non-array field " + name + " cannot have fields");
             }
+        }
+        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+        if (flexibleVersions == null || flexibleVersions.isEmpty()) {
+            this.flexibleVersions = Optional.empty();
+        } else {
+            this.flexibleVersions = Optional.of(Versions.parse(flexibleVersions, null));
+            if (!(this.type.isString() || this.type.isBytes())) {
+                // For now, only allow flexibleVersions overrides for the string and bytes
+                // types.  Overrides are only needed to keep compatibility with some old formats,
+                // so there isn't any need to support them for all types.
+                throw new RuntimeException("Invalid flexibleVersions override for " + name +
+                    ".  Only fields of type string or bytes can specify a flexibleVersions " +
+                    "override.");
+            }
+        }
+        this.tag = Optional.ofNullable(tag);
+        checkTagInvariants();
+    }
+
+    private void checkTagInvariants() {
+        if (this.tag.isPresent()) {
+            if (this.tag.get() < 0) {
+                throw new RuntimeException("Field " + name + " specifies a tag of " + this.tag.get() +
+                    ".  Tags cannot be negative.");
+            }
+            if (this.taggedVersions.empty()) {
+                throw new RuntimeException("Field " + name + " specifies a tag of " + this.tag.get() +
+                    ", but has no tagged versions.  If a tag is specified, taggedVersions must " +
+                    "be specified as well.");
+            }
+            Versions nullableTaggedVersions = this.nullableVersions.intersect(this.taggedVersions);
+            if (!(nullableTaggedVersions.empty() || nullableTaggedVersions.equals(this.taggedVersions))) {
+                throw new RuntimeException("Field " + name + " specifies nullableVersions " +
+                    this.nullableVersions + " and taggedVersions " + this.taggedVersions + ".  " +
+                    "Either all tagged versions must be nullable, or none must be.");
+            }
+            if (this.taggedVersions.highest() < Short.MAX_VALUE) {
+                throw new RuntimeException("Field " + name + " specifies taggedVersions " +
+                    this.taggedVersions + ", which is not open-ended.  taggedVersions must " +
+                    "be either none, or an open-ended range (that ends with a plus sign).");
+            }
+            if (!this.taggedVersions.intersect(this.versions).equals(this.taggedVersions)) {
+                throw new RuntimeException("Field " + name + " specifies taggedVersions " +
+                    this.taggedVersions + ", and versions " + this.versions + ".  " +
+                    "taggedVersions must be a subset of versions.");
+            }
+        } else if (!this.taggedVersions.empty()) {
+            throw new RuntimeException("Field " + name + " does not specify a tag, " +
+                "but specifies tagged versions of " + this.taggedVersions + ".  " +
+                "Please specify a tag, or remove the taggedVersions.");
         }
     }
 
@@ -153,5 +219,32 @@ public final class FieldSpec {
     @JsonProperty("about")
     public String about() {
         return about;
+    }
+
+    @JsonProperty("taggedVersions")
+    public String taggedVersionsString() {
+        return taggedVersions.toString();
+    }
+
+    public Versions taggedVersions() {
+        return taggedVersions;
+    }
+
+    @JsonProperty("flexibleVersions")
+    public String flexibleVersionsString() {
+        return flexibleVersions.isPresent() ? flexibleVersions.get().toString() : null;
+    }
+
+    public Optional<Versions> flexibleVersions() {
+        return flexibleVersions;
+    }
+
+    @JsonProperty("tag")
+    public Integer tagInteger() {
+        return tag.orElse(null);
+    }
+
+    public Optional<Integer> tag() {
+        return tag;
     }
 }

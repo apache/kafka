@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -30,7 +31,8 @@ public class StopReplicaRequestTest {
     public void testStopReplicaRequestNormalization() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
-        assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
+        assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
+            MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
     }
 
 }

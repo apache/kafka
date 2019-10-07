@@ -26,7 +26,10 @@
   // Starting in version 4, on quota violation, brokers send out responses before throttling.
   //
   // Version 5 adds the leader epoch to the committed offset.
-  "validVersions": "0-5",
+  //
+  // Version 6 is the first flexible version.
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

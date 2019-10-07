@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -44,8 +45,32 @@ public final class StructSpec {
             throw new RuntimeException("You must specify the version of the " +
                     name + " structure.");
         }
-        this.fields = Collections.unmodifiableList(fields == null ?
-            Collections.emptyList() : new ArrayList<>(fields));
+        ArrayList<FieldSpec> newFields = new ArrayList<>();
+        if (fields != null) {
+            // Each field should have a unique tag ID (if the field has a tag ID).
+            HashSet<Integer> tags = new HashSet<>();
+            for (FieldSpec field : fields) {
+                if (field.tag().isPresent()) {
+                    if (tags.contains(field.tag().get())) {
+                        throw new RuntimeException("In " + name + ", field " + field.name() +
+                            " has a duplicate tag ID " + field.tag().get() + ".  All tags IDs " +
+                            "must be unique.");
+                    }
+                    tags.add(field.tag().get());
+                }
+                newFields.add(field);
+            }
+            // Tag IDs should be contiguous and start at 0.  This optimizes space on the wire,
+            // since larger numbers take more space.
+            for (int i = 0; i < tags.size(); i++) {
+                if (!tags.contains(i)) {
+                    throw new RuntimeException("In " + name + ", the tag IDs are not " +
+                        "contiguous.  Make use of tag " + i + " before using any " +
+                        "higher tag IDs.");
+                }
+            }
+        }
+        this.fields = Collections.unmodifiableList(newFields);
         this.hasKeys = this.fields.stream().anyMatch(f -> f.mapKey());
     }
 
