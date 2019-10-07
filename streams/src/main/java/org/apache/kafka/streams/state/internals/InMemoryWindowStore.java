@@ -115,6 +115,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         open = true;
     }
 
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());
