@@ -405,6 +405,14 @@ public class TopologyTestDriverTest {
         });
     }
 
+    @Test
+    public void shouldThrowForMissingTime() {
+        testDriver = new TopologyTestDriver(new Topology(), config);
+        assertThrows(IllegalStateException.class, () -> {
+            testDriver.pipeRecord(SINK_TOPIC_1, new TestRecord<String, String>("value"), new StringSerializer(), new StringSerializer(), null);
+        });
+    }
+
     @Deprecated
     @Test
     public void shouldThrowForUnknownTopicDeprecated() {
