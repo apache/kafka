@@ -22,6 +22,7 @@ import java.util.Map.Entry;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -255,6 +256,41 @@ public class PluginsTest {
         String message = "sampling plugin does not have the PluginClassLoader active";
         assertTrue(message, samplingPlugin.staticClassloader() instanceof PluginClassLoader);
         assertTrue(message, samplingPlugin.classloader() instanceof PluginClassLoader);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailToFindConverterInCurrentClassloader() {
+        TestPlugins.assertInitialized();
+        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
+        createConfig();
+    }
+
+    @Test
+    public void shouldConfigureConverterWithPluginClassloader() {
+        TestPlugins.assertInitialized();
+        props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONVERTER);
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
+        createConfig();
+        Plugins.compareAndSwapLoaders(savedLoader);
+
+        Converter plugin = plugins.newConverter(
+            config,
+            WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+            ClassLoaderUsage.PLUGINS
+        );
+
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
+        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
+        // There should be at least 1 (root) + 1 (configure call) = 2 samples
+        assertTrue(samples.size() >= 2);
+        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+            String message = e.getKey() + " does not have the PluginClassLoader active";
+            SamplingTestPlugin sample = e.getValue();
+            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
+            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
+        }
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
