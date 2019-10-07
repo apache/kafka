@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.Metrics
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
-import kafka.common.LongRef
+import kafka.common.{LongRef, RecordValidationException}
 import kafka.message._
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.meterCount
@@ -81,7 +81,7 @@ class LogValidatorTest {
   }
 
   private def checkMismatchMagic(batchMagic: Byte, recordMagic: Byte, compressionType: CompressionType): Unit = {
-    assertThrows[InvalidRecordException] {
+    assertThrows[RecordValidationException] {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
     }
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}")), 1)
@@ -574,7 +574,7 @@ class LogValidatorTest {
     checkCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeNonCompressedV1(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, timestamp = now - 1001L,
@@ -597,7 +597,7 @@ class LogValidatorTest {
       brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeNonCompressedV2(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
@@ -620,7 +620,7 @@ class LogValidatorTest {
       brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeCompressedV1(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, timestamp = now - 1001L,
@@ -643,7 +643,7 @@ class LogValidatorTest {
       brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeCompressedV2(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
@@ -1273,11 +1273,12 @@ class LogValidatorTest {
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         brokerTopicStats = brokerTopicStats)
     } catch {
-      case e: InvalidTimestampException =>
-        assertTrue(!e.getErrorRecords.isEmpty)
-        assertEquals(e.getErrorRecords.size, 1)
-        assertTrue(e.getErrorRecords.containsKey(0));
-        assertEquals(e.getErrorRecords.get(0), "")
+      case e: RecordValidationException =>
+        assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+        assertTrue(e.errorRecords.nonEmpty)
+        assertEquals(e.errorRecords.size, 1)
+        assertEquals(e.errorRecords.head.getRelativeOffset, 0)
+        assertNull(e.errorRecords.head.getMessage)
     }
   }
 
@@ -1288,11 +1289,12 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP),
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
     } catch {
-      case e: InvalidRecordException =>
-        assertTrue(!e.getErrorRecords.isEmpty)
-        assertEquals(e.getErrorRecords.size, 1)
-        assertTrue(e.getErrorRecords.containsKey(0))
-        assertEquals(e.getErrorRecords.get(0), "")
+      case e: RecordValidationException =>
+        assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+        assertTrue(e.errorRecords.nonEmpty)
+        assertEquals(e.errorRecords.size, 1)
+        assertEquals(e.errorRecords.head.getRelativeOffset, 0)
+        assertNull(e.errorRecords.head.getMessage)
     }
   }
 

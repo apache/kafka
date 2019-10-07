@@ -97,8 +97,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
     assertEquals(1, partitionResponse.errorRecords.size())
-    assertTrue(partitionResponse.errorRecords.containsKey(0))
-    assertNull(partitionResponse.errorRecords.get(0))
+    assertEquals(0, partitionResponse.errorRecords.get(0).getRelativeOffset)
+    assertNull(partitionResponse.errorRecords.get(0).getMessage)
     assertNull(partitionResponse.errorMessage)
   }
 
