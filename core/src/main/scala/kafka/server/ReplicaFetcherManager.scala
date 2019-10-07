@@ -37,7 +37,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         numFetchers = brokerConfig.numReplicaFetchers) {
 
   newGauge(
-    "ReassignmentMaxLagOnFollower",
+    "ReassignmentMaxLag",
     new Gauge[Long] {
       // current max lag across all fetchers/topics/partitions
       def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
@@ -50,7 +50,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         if (curMaxAll > curThreadMax) curMaxAll else curThreadMax
       })
     },
-    Map("clientId" -> "Replica")
+    Map("clientId" -> "Replica", "replica" -> "Follower")
   )
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {

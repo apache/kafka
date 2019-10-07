@@ -276,10 +276,11 @@ class ReplicaManager(val config: KafkaConfig,
 
   private val followerReassignmentLagStats = new FollowerLagStats()
   val reassignmentMaxLagOnLeader = newGauge(
-    "ReassignmentMaxLagOnLeader",
+    "ReassignmentMaxLag",
     new Gauge[Long] {
       def value = followerReassignmentLagStats.maxLag()
-    }
+    },
+    Map("replica" -> "Leader")
   )
 
   // Visible for testing
