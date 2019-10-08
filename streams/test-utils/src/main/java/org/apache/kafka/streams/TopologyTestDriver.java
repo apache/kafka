@@ -728,11 +728,13 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        long timestamp = 0;
+        final long timestamp;
         if (time != null) {
             timestamp = time.toEpochMilli();
         } else if (record.timestamp() != null) {
             timestamp = record.timestamp();
+        } else {
+            throw new IllegalStateException("Provided `TestRecord` does not have a timestamp and no timestamp overwrite was provided via `time` parameter.");
         }
 
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
