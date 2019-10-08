@@ -24,11 +24,6 @@ import org.apache.kafka.streams.state.WindowStore;
 
 class KStreamWindowTableSource<K, V> implements ProcessorSupplier<K, V> {
 
-    private final String windowName;
-
-    KStreamWindowTableSource(final String windowName) {
-        this.windowName = windowName;
-    }
 
     @Override
     public Processor<K, V> get() {
@@ -37,13 +32,11 @@ class KStreamWindowTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamJoinWindowProcessor extends AbstractProcessor<K, V> {
 
-        private WindowStore<K, V> window;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            window = (WindowStore<K, V>) context.getStateStore(windowName);
         }
 
         @Override

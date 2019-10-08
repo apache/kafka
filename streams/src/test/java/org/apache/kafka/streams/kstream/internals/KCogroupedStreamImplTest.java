@@ -45,6 +45,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -366,6 +367,46 @@ public class KCogroupedStreamImplTest {
             new KeyValueTimestamp("2", 11, 500),
             new KeyValueTimestamp("3", 2, 500),
             new KeyValueTimestamp("2", 13, 500)
+        )));
+    }
+
+    @Test
+    public void testCogroupKeyMixedAggregators() {
+
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final KStream test = builder.stream("one", stringConsumed);
+        final KStream test2 = builder.stream("two", stringConsumed);
+
+        final KGroupedStream groupedOne = test.groupByKey();
+        final KGroupedStream groupedTwo = test2.groupByKey();
+
+        final KTable<String, String> customers = groupedOne.cogroup(MockAggregator.TOSTRING_REMOVER)
+            .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
+            .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
+
+        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
+
+        builder.stream("to-one", stringConsumed).process(supplier);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
+            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
+            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
+        }
+
+        assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
+            new KeyValueTimestamp("1", "0-1", 0),
+            new KeyValueTimestamp("2", "0-1", 1),
+            new KeyValueTimestamp("1", "0-1-1", 10),
+            new KeyValueTimestamp("2", "0-1-1", 100),
+            new KeyValueTimestamp("1", "0-1-1+2", 500L),
+            new KeyValueTimestamp("2", "0-1-1+2", 500L),
+            new KeyValueTimestamp("1", "0-1-1+2+2", 500L),
+            new KeyValueTimestamp("2", "0-1-1+2+2", 500L)
         )));
     }
 }

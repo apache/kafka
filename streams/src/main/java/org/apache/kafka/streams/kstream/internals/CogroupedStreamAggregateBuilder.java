@@ -67,7 +67,7 @@ class CogroupedStreamAggregateBuilder<K, V> {
         final ProcessorSupplier<K, V> tableSource = windows == null ? new KTableSource<>(
             storeBuilder.name(),
             storeBuilder.name()) :
-            new KStreamWindowTableSource<>(storeBuilder.name());
+            new KStreamWindowTableSource<>();
         final StatefulProcessorNode<K, V> tableSourceNode =
             new StatefulProcessorNode<>(
                 functionName,
