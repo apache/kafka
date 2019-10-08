@@ -50,7 +50,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-processor-node-metrics",
         "The total number of occurrence of suppression-emit operations.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("processor-node-id", "testNode")
         )
@@ -61,7 +61,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-processor-node-metrics",
         "The average number of occurrence of suppression-emit operation per second.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("processor-node-id", "testNode")
         )
@@ -72,7 +72,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The average size of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -83,7 +83,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The current size of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -94,7 +94,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The max size of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -105,7 +105,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The average count of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -116,7 +116,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The current count of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
@@ -127,7 +127,7 @@ public class KTableSuppressProcessorMetricsTest {
         "stream-buffer-metrics",
         "The max count of buffered records.",
         mkMap(
-            mkEntry("client-id", threadId),
+            mkEntry("thread-id", threadId),
             mkEntry("task-id", "0_0"),
             mkEntry("buffer-id", "test-store")
         )
