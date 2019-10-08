@@ -54,7 +54,7 @@ public interface SamplingTestPlugin {
         if (otherSamples != null) {
             for (Entry<String, SamplingTestPlugin> child : otherSamples.entrySet()) {
                 for (Entry<String, SamplingTestPlugin> flattened : child.getValue().flatten().entrySet()) {
-                    out.put(child.getValue() + "." + flattened.getKey(), flattened.getValue());
+                    out.put(child.getKey() + "."  + flattened.getKey(), flattened.getValue());
                 }
             }
         }
