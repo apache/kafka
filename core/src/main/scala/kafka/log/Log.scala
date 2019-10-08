@@ -59,7 +59,7 @@ object LogAppendInfo {
       offsetsMonotonic = false, -1L)
 
   /**
-   * In ProduceRequest V8+, we add two new fields record_errors and error_message (see KIP-467).
+   * In ProduceResponse V8+, we add two new fields record_errors and error_message (see KIP-467).
    * For any record failures with InvalidTimestamp or InvalidRecordException, we construct a LogAppendInfo object like the one
    * in unknownLogAppendInfoWithLogStartOffset, but with additiona fields recordErrors and errorMessage
    */

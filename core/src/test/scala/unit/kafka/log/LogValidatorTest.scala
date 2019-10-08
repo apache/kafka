@@ -1287,7 +1287,6 @@ class LogValidatorTest {
       validateMessages(recordsWithInvalidInnerMagic(
         RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP),
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
-      fail("Should have thrown RecordValidationException")
     }
 
     assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
