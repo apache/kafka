@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -53,6 +52,10 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
@@ -77,7 +80,6 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -116,6 +118,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -686,16 +689,85 @@ public class SaslAuthenticatorTest {
                 setRequestApiKey(ApiKeys.API_VERSIONS.id).
                 setRequestApiVersion(Short.MAX_VALUE).
                 setClientId("someclient").
-                setCorrelationId(1), (short) 1);
+                setCorrelationId(1),
+                (short) 2);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
-        ResponseHeader.parse(responseBuffer, header.headerVersion());
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION, response.error());
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+
+        ApiVersionsResponseKey apiVersion = response.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
+        assertNotNull(apiVersion);
+        assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
+        assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
+        assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
         sendVersionRequestReceiveResponse(node);
+
+        // Test that client can authenticate successfully
+        sendHandshakeRequestReceiveResponse(node, handshakeVersion);
+        authenticateUsingSaslPlainAndCheckConnection(node, handshakeVersion > 0);
+    }
+
+    /**
+     * Tests that invalid ApiVersionRequest is handled by the server correctly and
+     * returns an INVALID_REQUEST error.
+     */
+    @Test
+    public void testInvalidApiVersionsRequest() throws Exception {
+        short handshakeVersion = ApiKeys.SASL_HANDSHAKE.latestVersion();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = createEchoServer(securityProtocol);
+
+        // Send ApiVersionsRequest with invalid version and validate error response.
+        String node = "1";
+        short version = ApiKeys.API_VERSIONS.latestVersion();
+        createClientConnection(SecurityProtocol.PLAINTEXT, node);
+        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
+        ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData().
+                setClientSoftwareName("  ").
+                setClientSoftwareVersion("   "), version);
+        selector.send(request.toSend(node, header));
+        ByteBuffer responseBuffer = waitForResponse();
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
+        ApiVersionsResponse response =
+            ApiVersionsResponse.parse(responseBuffer, version);
+        assertEquals(Errors.INVALID_REQUEST.code(), response.data.errorCode());
+
+        // Send ApiVersionsRequest with a supported version. This should succeed.
+        sendVersionRequestReceiveResponse(node);
+
+        // Test that client can authenticate successfully
+        sendHandshakeRequestReceiveResponse(node, handshakeVersion);
+        authenticateUsingSaslPlainAndCheckConnection(node, handshakeVersion > 0);
+    }
+
+    /**
+     * Tests that valid ApiVersionRequest is handled by the server correctly and
+     * returns an NONE error.
+     */
+    @Test
+    public void testValidApiVersionsRequest() throws Exception {
+        short handshakeVersion = ApiKeys.SASL_HANDSHAKE.latestVersion();
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        server = createEchoServer(securityProtocol);
+
+        // Send ApiVersionsRequest with valid version and validate error response.
+        String node = "1";
+        short version = ApiKeys.API_VERSIONS.latestVersion();
+        createClientConnection(SecurityProtocol.PLAINTEXT, node);
+        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        selector.send(request.toSend(node, header));
+        ByteBuffer responseBuffer = waitForResponse();
+        ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
+        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
 
         // Test that client can authenticate successfully
         sendHandshakeRequestReceiveResponse(node, handshakeVersion);
@@ -1680,15 +1752,25 @@ public class SaslAuthenticatorTest {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
-                        List<ApiVersion> apiVersions = new ArrayList<>(ApiVersionsResponse.defaultApiVersionsResponse().apiVersions());
-                        for (Iterator<ApiVersion> it = apiVersions.iterator(); it.hasNext(); ) {
-                            ApiVersion apiVersion = it.next();
-                            if (apiVersion.apiKey == ApiKeys.SASL_AUTHENTICATE.id) {
-                                it.remove();
-                                break;
+                        ApiVersionsResponse defaultApiVersionResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
+                        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
+                        for (ApiVersionsResponseKey apiVersion : defaultApiVersionResponse.data.apiKeys()) {
+                            if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
+                                // ApiVersionsResponseKey can NOT be reused in second ApiVersionsResponseKeyCollection
+                                // due to the internal pointers it contains.
+                                apiVersions.add(new ApiVersionsResponseKey()
+                                    .setApiKey(apiVersion.apiKey())
+                                    .setMinVersion(apiVersion.minVersion())
+                                    .setMaxVersion(apiVersion.maxVersion())
+                                );
                             }
+
                         }
-                        return new ApiVersionsResponse(0, Errors.NONE, apiVersions);
+                        ApiVersionsResponseData data = new ApiVersionsResponseData()
+                            .setErrorCode(Errors.NONE.code())
+                            .setThrottleTimeMs(0)
+                            .setApiKeys(apiVersions);
+                        return new ApiVersionsResponse(data);
                     }
 
                     @Override
@@ -1790,10 +1872,10 @@ public class SaslAuthenticatorTest {
 
         // Send ApiVersionsRequest and check response
         ApiVersionsResponse versionsResponse = sendVersionRequestReceiveResponse(node);
-        assertEquals(ApiKeys.SASL_HANDSHAKE.oldestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion);
-        assertEquals(ApiKeys.SASL_HANDSHAKE.latestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion);
-        assertEquals(ApiKeys.SASL_AUTHENTICATE.oldestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id).minVersion);
-        assertEquals(ApiKeys.SASL_AUTHENTICATE.latestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id).maxVersion);
+        assertEquals(ApiKeys.SASL_HANDSHAKE.oldestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).minVersion());
+        assertEquals(ApiKeys.SASL_HANDSHAKE.latestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id).maxVersion());
+        assertEquals(ApiKeys.SASL_AUTHENTICATE.oldestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id).minVersion());
+        assertEquals(ApiKeys.SASL_AUTHENTICATE.latestVersion(), versionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id).maxVersion());
 
         // Send SaslHandshakeRequest and check response
         SaslHandshakeResponse handshakeResponse = sendHandshakeRequestReceiveResponse(node, saslHandshakeVersion);
@@ -1951,7 +2033,7 @@ public class SaslAuthenticatorTest {
     private ApiVersionsResponse sendVersionRequestReceiveResponse(String node) throws Exception {
         ApiVersionsRequest handshakeRequest = createApiVersionsRequestV0();
         ApiVersionsResponse response =  (ApiVersionsResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.API_VERSIONS, handshakeRequest);
-        assertEquals(Errors.NONE, response.error());
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
         return response;
     }
 

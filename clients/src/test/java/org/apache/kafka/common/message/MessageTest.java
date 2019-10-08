@@ -37,7 +37,9 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.BoundField;
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -612,16 +614,20 @@ public final class MessageTest {
     }
 
     private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
-        int size = message.size(version);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-        message.write(byteBufferAccessor, version);
-        assertEquals(size, buf.position());
+        message.write(byteBufferAccessor, cache, version);
+        assertEquals("The result of the size function does not match the number of bytes " +
+            "written for version " + version, size, buf.position());
         Message message2 = message.getClass().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
-        assertEquals(size, buf.position());
-        assertEquals(expected, message2);
+        assertEquals("The result of the size function does not match the number of bytes " +
+            "read back in for version " + version, size, buf.position());
+        assertEquals("The message object created after a round trip did not match for " +
+            "version " + version, expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
     }
@@ -794,13 +800,13 @@ public final class MessageTest {
 
     @Test
     public void testDefaultValues() throws Exception {
-        verifySizeRaisesUve((short) 0, "validateOnly",
+        verifyWriteRaisesUve((short) 0, "validateOnly",
             new CreateTopicsRequestData().setValidateOnly(true));
-        verifySizeSucceeds((short) 0,
+        verifyWriteSucceeds((short) 0,
             new CreateTopicsRequestData().setValidateOnly(false));
-        verifySizeSucceeds((short) 0,
+        verifyWriteSucceeds((short) 0,
             new OffsetCommitRequestData().setRetentionTimeMs(123));
-        verifySizeRaisesUve((short) 5, "forgotten",
+        verifyWriteRaisesUve((short) 5, "forgotten",
             new FetchRequestData().setForgotten(singletonList(
                 new FetchRequestData.ForgottenTopic().setName("foo"))));
     }
@@ -808,35 +814,81 @@ public final class MessageTest {
     @Test
     public void testNonIgnorableFieldWithDefaultNull() throws Exception {
         // Test non-ignorable string field `groupInstanceId` with default null
-        verifySizeRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
+        verifyWriteRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId)
                 .setGroupInstanceId(instanceId));
-        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+        verifyWriteSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId)
                 .setGroupInstanceId(null));
-        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+        verifyWriteSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId));
     }
 
-    private void verifySizeRaisesUve(short version, String problemFieldName,
-                                     Message message) throws Exception {
-        try {
-            message.size(version);
-            fail("Expected to see an UnsupportedVersionException when writing " +
-                message + " at version " + version);
-        } catch (UnsupportedVersionException e) {
-            assertTrue("Expected to get an error message about " + problemFieldName,
-                e.getMessage().contains(problemFieldName));
+    @Test
+    public void testWriteNullForNonNullableFieldRaisesException() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
+        for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
+            verifyWriteRaisesNpe(i, createTopics);
         }
+        MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
+        verifyWriteRaisesNpe((short) 0, metadata);
     }
 
-    private void verifySizeSucceeds(short version, Message message) throws Exception {
-        message.size(version);
+    @Test
+    public void testUnknownTaggedFields() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
+        verifyWriteSucceeds((short) 6, createTopics);
+        RawTaggedField field1000 = new RawTaggedField(1000, new byte[] {0x1, 0x2, 0x3});
+        createTopics.unknownTaggedFields().add(field1000);
+        verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
+        verifyWriteSucceeds((short) 6, createTopics);
+    }
+
+    private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        assertThrows(NullPointerException.class, () -> {
+            int size = message.size(cache, version);
+            ByteBuffer buf = ByteBuffer.allocate(size);
+            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+            message.write(byteBufferAccessor, cache, version);
+        });
+    }
+
+    private void verifyWriteRaisesUve(short version,
+                                      String problemText,
+                                     Message message) throws Exception {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        UnsupportedVersionException e =
+            assertThrows(UnsupportedVersionException.class, () -> {
+                int size = message.size(cache, version);
+                ByteBuffer buf = ByteBuffer.allocate(size);
+                ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+                message.write(byteBufferAccessor, cache, version);
+            });
+        assertTrue("Expected to get an error message about " + problemText +
+                ", but got: " + e.getMessage(),
+                e.getMessage().contains(problemText));
+    }
+
+    private void verifyWriteSucceeds(short version, Message message) throws Exception {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size * 2);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        message.write(byteBufferAccessor, cache, version);
+        ByteBuffer alt = buf.duplicate();
+        alt.flip();
+        StringBuilder bld = new StringBuilder();
+        while (alt.hasRemaining()) {
+            bld.append(String.format(" %02x", alt.get()));
+        }
+        assertEquals("Expected the serialized size to be " + size +
+            ", but it was " + buf.position(), size, buf.position());
     }
 }

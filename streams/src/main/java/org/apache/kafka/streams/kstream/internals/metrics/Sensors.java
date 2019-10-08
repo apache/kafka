@@ -38,7 +38,10 @@ public class Sensors {
 
     public static Sensor lateRecordDropSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
+        final String threadId = Thread.currentThread().getName();
+
         final Sensor sensor = metrics.nodeLevelSensor(
+            threadId,
             context.taskId().toString(),
             context.currentNode().name(),
             LATE_RECORD_DROP,
@@ -47,7 +50,13 @@ public class Sensors {
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             sensor,
             PROCESSOR_NODE_METRICS_GROUP,
-            metrics.tagMap("task-id", context.taskId().toString(), PROCESSOR_NODE_ID_TAG, context.currentNode().name()),
+            metrics.tagMap(
+                threadId,
+                "task-id",
+                context.taskId().toString(),
+                PROCESSOR_NODE_ID_TAG,
+                context.currentNode().name()
+            ),
             LATE_RECORD_DROP
         );
         return sensor;
@@ -55,15 +64,19 @@ public class Sensors {
 
     public static Sensor recordLatenessSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
+        final String threadId = Thread.currentThread().getName();
 
         final Sensor sensor = metrics.taskLevelSensor(
+            threadId,
             context.taskId().toString(),
             "record-lateness",
             Sensor.RecordingLevel.DEBUG
         );
 
         final Map<String, String> tags = metrics.tagMap(
-            "task-id", context.taskId().toString()
+            threadId,
+            "task-id",
+            context.taskId().toString()
         );
         sensor.add(
             new MetricName(
@@ -86,8 +99,10 @@ public class Sensors {
 
     public static Sensor suppressionEmitSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
+        final String threadId = Thread.currentThread().getName();
 
         final Sensor sensor = metrics.nodeLevelSensor(
+            threadId,
             context.taskId().toString(),
             context.currentNode().name(),
             "suppression-emit",
@@ -95,8 +110,11 @@ public class Sensors {
         );
 
         final Map<String, String> tags = metrics.tagMap(
-            "task-id", context.taskId().toString(),
-            PROCESSOR_NODE_ID_TAG, context.currentNode().name()
+            threadId,
+            "task-id",
+            context.taskId().toString(),
+            PROCESSOR_NODE_ID_TAG,
+            context.currentNode().name()
         );
 
         sensor.add(

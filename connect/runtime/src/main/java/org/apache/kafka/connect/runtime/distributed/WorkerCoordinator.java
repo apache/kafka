@@ -157,7 +157,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             case EAGER:
                 return ConnectProtocol.metadataRequest(workerState);
             case COMPATIBLE:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState);
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+            case SESSIONED:
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
             default:
                 throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
         }
@@ -292,7 +294,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the current connect protocol version
      */
     public short currentProtocolVersion() {
-        return currentConnectProtocol == EAGER ? (short) 0 : (short) 1;
+        return currentConnectProtocol.protocolVersion();
     }
 
     private class WorkerCoordinatorMetrics {

@@ -17,20 +17,49 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class StopReplicaRequestTest {
 
     @Test
+    public void testUnsupportedVersion() {
+        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
+                (short) (STOP_REPLICA.latestVersion() + 1),
+                0, 0, 0L, false, Collections.emptyList());
+        assertThrows(UnsupportedVersionException.class, builder::build);
+    }
+
+    @Test
+    public void testGetErrorResponse() {
+        for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
+            StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
+                    0, 0, 0L, false, Collections.emptyList());
+            StopReplicaRequest request = builder.build();
+            StopReplicaResponse response = request.getErrorResponse(0,
+                    new ClusterAuthorizationException("Not authorized"));
+            assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+        }
+    }
+
+    @Test
     public void testStopReplicaRequestNormalization() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
-        assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
+        assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
+            MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
     }
 
 }

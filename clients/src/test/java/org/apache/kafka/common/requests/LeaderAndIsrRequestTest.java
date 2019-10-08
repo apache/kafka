@@ -18,10 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -38,9 +42,30 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class LeaderAndIsrRequestTest {
+
+    @Test
+    public void testUnsupportedVersion() {
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
+                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
+                Collections.emptyList(), Collections.emptySet());
+        assertThrows(UnsupportedVersionException.class, builder::build);
+    }
+
+    @Test
+    public void testGetErrorResponse() {
+        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
+                    Collections.emptyList(), Collections.emptySet());
+            LeaderAndIsrRequest request = builder.build();
+            LeaderAndIsrResponse response = request.getErrorResponse(0,
+                    new ClusterAuthorizationException("Not authorized"));
+            assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+        }
+    }
 
     /**
      * Verifies the logic we have in LeaderAndIsrRequest to present a unified interface across the various versions
@@ -104,7 +129,7 @@ public class LeaderAndIsrRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = request.toBytes();
+            ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 
@@ -138,7 +163,10 @@ public class LeaderAndIsrRequestTest {
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);
-        assertTrue("Expected v2 < v1: v2=" + v2.size() + ", v1=" + v1.size(), v2.size() < v1.size());
+        int size2 = MessageTestUtil.messageSize(v2.data(), v2.version());
+        int size1 = MessageTestUtil.messageSize(v1.data(), v1.version());
+
+        assertTrue("Expected v2 < v1: v2=" + size2 + ", v1=" + size1, size2 < size1);
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

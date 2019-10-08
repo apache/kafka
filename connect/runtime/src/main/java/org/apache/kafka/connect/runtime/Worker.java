@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.metrics.Sensor;
@@ -35,7 +36,6 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectorType;
-import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter;
@@ -94,6 +94,7 @@ public class Worker {
     private final Plugins plugins;
     private final ConnectMetrics metrics;
     private final WorkerMetricsGroup workerMetricsGroup;
+    private ConnectorStatusMetricsGroup connectorStatusMetricsGroup;
     private final WorkerConfig config;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
@@ -184,6 +185,8 @@ public class Worker {
         offsetBackingStore.start();
         sourceTaskOffsetCommitter = new SourceTaskOffsetCommitter(config);
 
+        connectorStatusMetricsGroup = new ConnectorStatusMetricsGroup(metrics, tasks, herder);
+
         log.info("Worker started");
     }
 
@@ -215,6 +218,7 @@ public class Worker {
         log.info("Worker stopped");
 
         workerMetricsGroup.close();
+        connectorStatusMetricsGroup.close();
     }
 
     /**
@@ -416,6 +420,7 @@ public class Worker {
             if (tasks.containsKey(id))
                 throw new ConnectException("Task already exists in this worker: " + id);
 
+            connectorStatusMetricsGroup.recordTaskAdded(id);
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
@@ -465,6 +470,7 @@ public class Worker {
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
+                connectorStatusMetricsGroup.recordTaskRemoved(id);
                 workerMetricsGroup.recordTaskFailure();
                 statusListener.onFailure(id, t);
                 return false;
@@ -706,6 +712,7 @@ public class Worker {
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.remove(taskId);
+            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
                 return;
@@ -824,8 +831,82 @@ public class Worker {
         }
     }
 
+    ConnectorStatusMetricsGroup connectorStatusMetricsGroup() {
+        return connectorStatusMetricsGroup;
+    }
+
     WorkerMetricsGroup workerMetricsGroup() {
         return workerMetricsGroup;
+    }
+
+    static class ConnectorStatusMetricsGroup {
+        private ConnectMetrics connectMetrics;
+        private ConnectMetricsRegistry registry;
+        private ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
+        private Herder herder;
+        private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
+
+
+        protected ConnectorStatusMetricsGroup(
+            ConnectMetrics connectMetrics, ConcurrentMap<ConnectorTaskId, WorkerTask> tasks, Herder herder) {
+            this.connectMetrics = connectMetrics;
+            this.registry = connectMetrics.registry();
+            this.tasks = tasks;
+            this.herder = herder;
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskCounter(String connName) {
+            return now -> tasks.keySet()
+                .stream()
+                .filter(taskId -> taskId.connector().equals(connName))
+                .count();
+        }
+
+        protected ConnectMetrics.LiteralSupplier<Long> taskStatusCounter(String connName, TaskStatus.State state) {
+            return now -> tasks.values()
+                .stream()
+                .filter(task ->
+                    task.id().connector().equals(connName) &&
+                    herder.taskStatus(task.id()).state().equalsIgnoreCase(state.toString()))
+                .count();
+        }
+
+        protected synchronized void recordTaskAdded(ConnectorTaskId connectorTaskId) {
+            if (connectorStatusMetrics.containsKey(connectorTaskId.connector())) {
+                return;
+            }
+
+            String connName = connectorTaskId.connector();
+
+            MetricGroup metricGroup = connectMetrics.group(registry.workerGroupName(),
+                registry.connectorTagName(), connName);
+
+            metricGroup.addValueMetric(registry.connectorTotalTaskCount, taskCounter(connName));
+            for (Map.Entry<MetricNameTemplate, TaskStatus.State> statusMetric : registry.connectorStatusMetrics
+                .entrySet()) {
+                metricGroup.addValueMetric(statusMetric.getKey(), taskStatusCounter(connName,
+                    statusMetric.getValue()));
+            }
+            connectorStatusMetrics.put(connectorTaskId.connector(), metricGroup);
+        }
+
+        protected synchronized void recordTaskRemoved(ConnectorTaskId connectorTaskId) {
+            // Unregister connector task count metric if we remove the last task of the connector
+            if (tasks.keySet().stream().noneMatch(id -> id.connector().equals(connectorTaskId.connector()))) {
+                connectorStatusMetrics.get(connectorTaskId.connector()).close();
+                connectorStatusMetrics.remove(connectorTaskId.connector());
+            }
+        }
+
+        protected synchronized void close() {
+            for (MetricGroup metricGroup: connectorStatusMetrics.values()) {
+                metricGroup.close();
+            }
+        }
+
+        protected MetricGroup metricGroup(String connectorId) {
+            return connectorStatusMetrics.get(connectorId);
+        }
     }
 
     class WorkerMetricsGroup {
@@ -843,18 +924,8 @@ public class Worker {
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup = connectMetrics.group(registry.workerGroupName());
 
-            metricGroup.addValueMetric(registry.connectorCount, new LiteralSupplier<Double>() {
-                @Override
-                public Double metricValue(long now) {
-                    return (double) connectors.size();
-                }
-            });
-            metricGroup.addValueMetric(registry.taskCount, new LiteralSupplier<Double>() {
-                @Override
-                public Double metricValue(long now) {
-                    return (double) tasks.size();
-                }
-            });
+            metricGroup.addValueMetric(registry.connectorCount, now -> (double) connectors.size());
+            metricGroup.addValueMetric(registry.taskCount, now -> (double) tasks.size());
 
             MetricName connectorFailurePct = metricGroup.metricName(registry.connectorStartupFailurePercentage);
             MetricName connectorSuccessPct = metricGroup.metricName(registry.connectorStartupSuccessPercentage);

@@ -26,7 +26,10 @@
   // for group or coordinator level errors.
   //
   // Version 3, 4, and 5 are the same as version 2.
-  "validVersions": "0-5",
+  //
+  // Version 6 is the first flexible version.
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group to fetch offsets for." },

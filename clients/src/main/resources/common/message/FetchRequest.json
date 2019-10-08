@@ -45,6 +45,7 @@
   // described in KIP-110.
   //
   "validVersions": "0-11",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },

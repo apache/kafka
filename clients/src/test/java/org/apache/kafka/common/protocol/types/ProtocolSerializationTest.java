@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,11 +45,17 @@ public class ProtocolSerializationTest {
                                  new Field("varint", Type.VARINT),
                                  new Field("varlong", Type.VARLONG),
                                  new Field("string", Type.STRING),
+                                 new Field("compact_string", Type.COMPACT_STRING),
                                  new Field("nullable_string", Type.NULLABLE_STRING),
+                                 new Field("compact_nullable_string", Type.COMPACT_NULLABLE_STRING),
                                  new Field("bytes", Type.BYTES),
+                                 new Field("compact_bytes", Type.COMPACT_BYTES),
                                  new Field("nullable_bytes", Type.NULLABLE_BYTES),
+                                 new Field("compact_nullable_bytes", Type.COMPACT_NULLABLE_BYTES),
                                  new Field("array", new ArrayOf(Type.INT32)),
+                                 new Field("compact_array", new CompactArrayOf(Type.INT32)),
                                  new Field("null_array", ArrayOf.nullable(Type.INT32)),
+                                 new Field("compact_null_array", CompactArrayOf.nullable(Type.INT32)),
                                  new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("boolean", true)
                                              .set("int8", (byte) 1)
@@ -58,11 +65,17 @@ public class ProtocolSerializationTest {
                                              .set("varint", 300)
                                              .set("varlong", 500L)
                                              .set("string", "1")
+                                             .set("compact_string", "1")
                                              .set("nullable_string", null)
+                                             .set("compact_nullable_string", null)
                                              .set("bytes", ByteBuffer.wrap("1".getBytes()))
+                                             .set("compact_bytes", ByteBuffer.wrap("1".getBytes()))
                                              .set("nullable_bytes", null)
+                                             .set("compact_nullable_bytes", null)
                                              .set("array", new Object[] {1})
-                                             .set("null_array", null);
+                                             .set("compact_array", new Object[] {1})
+                                             .set("null_array", null)
+                                             .set("compact_null_array", null);
         this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
     }
 
@@ -77,14 +90,26 @@ public class ProtocolSerializationTest {
         check(Type.STRING, "", "STRING");
         check(Type.STRING, "hello", "STRING");
         check(Type.STRING, "A\u00ea\u00f1\u00fcC", "STRING");
+        check(Type.COMPACT_STRING, "", "COMPACT_STRING");
+        check(Type.COMPACT_STRING, "hello", "COMPACT_STRING");
+        check(Type.COMPACT_STRING, "A\u00ea\u00f1\u00fcC", "COMPACT_STRING");
         check(Type.NULLABLE_STRING, null, "NULLABLE_STRING");
         check(Type.NULLABLE_STRING, "", "NULLABLE_STRING");
         check(Type.NULLABLE_STRING, "hello", "NULLABLE_STRING");
+        check(Type.COMPACT_NULLABLE_STRING, null, "COMPACT_NULLABLE_STRING");
+        check(Type.COMPACT_NULLABLE_STRING, "", "COMPACT_NULLABLE_STRING");
+        check(Type.COMPACT_NULLABLE_STRING, "hello", "COMPACT_NULLABLE_STRING");
         check(Type.BYTES, ByteBuffer.allocate(0), "BYTES");
         check(Type.BYTES, ByteBuffer.wrap("abcd".getBytes()), "BYTES");
+        check(Type.COMPACT_BYTES, ByteBuffer.allocate(0), "COMPACT_BYTES");
+        check(Type.COMPACT_BYTES, ByteBuffer.wrap("abcd".getBytes()), "COMPACT_BYTES");
         check(Type.NULLABLE_BYTES, null, "NULLABLE_BYTES");
         check(Type.NULLABLE_BYTES, ByteBuffer.allocate(0), "NULLABLE_BYTES");
         check(Type.NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()), "NULLABLE_BYTES");
+        check(Type.COMPACT_NULLABLE_BYTES, null, "COMPACT_NULLABLE_BYTES");
+        check(Type.COMPACT_NULLABLE_BYTES, ByteBuffer.allocate(0), "COMPACT_NULLABLE_BYTES");
+        check(Type.COMPACT_NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()),
+                "COMPACT_NULLABLE_BYTES");
         check(Type.VARINT, Integer.MAX_VALUE, "VARINT");
         check(Type.VARINT, Integer.MIN_VALUE, "VARINT");
         check(Type.VARLONG, Long.MAX_VALUE, "VARLONG");
@@ -93,7 +118,16 @@ public class ProtocolSerializationTest {
         check(new ArrayOf(Type.STRING), new Object[] {}, "ARRAY(STRING)");
         check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"},
                 "ARRAY(STRING)");
+        check(new CompactArrayOf(Type.INT32), new Object[] {1, 2, 3, 4},
+                "COMPACT_ARRAY(INT32)");
+        check(new CompactArrayOf(Type.COMPACT_STRING), new Object[] {},
+                "COMPACT_ARRAY(COMPACT_STRING)");
+        check(new CompactArrayOf(Type.COMPACT_STRING),
+                new Object[] {"hello", "there", "beautiful"},
+                "COMPACT_ARRAY(COMPACT_STRING)");
         check(ArrayOf.nullable(Type.STRING), null, "ARRAY(STRING)");
+        check(CompactArrayOf.nullable(Type.COMPACT_STRING), null,
+                "COMPACT_ARRAY(COMPACT_STRING)");
     }
 
     @Test
@@ -124,7 +158,9 @@ public class ProtocolSerializationTest {
     @Test
     public void testNullableDefault() {
         checkNullableDefault(Type.NULLABLE_BYTES, ByteBuffer.allocate(0));
+        checkNullableDefault(Type.COMPACT_NULLABLE_BYTES, ByteBuffer.allocate(0));
         checkNullableDefault(Type.NULLABLE_STRING, "default");
+        checkNullableDefault(Type.COMPACT_NULLABLE_STRING, "default");
     }
 
     private void checkNullableDefault(Type type, Object defaultValue) {
@@ -153,11 +189,47 @@ public class ProtocolSerializationTest {
     }
 
     @Test
+    public void testReadCompactArraySizeTooLarge() {
+        Type type = new CompactArrayOf(Type.INT8);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(
+            ByteUtils.sizeOfUnsignedVarint(Integer.MAX_VALUE) + size);
+        ByteUtils.writeUnsignedVarint(Integer.MAX_VALUE, invalidBuffer);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.put((byte) i);
+        invalidBuffer.rewind();
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
     public void testReadNegativeArraySize() {
         Type type = new ArrayOf(Type.INT8);
         int size = 10;
         ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
         invalidBuffer.putInt(-1);
+        for (int i = 0; i < size; i++)
+            invalidBuffer.put((byte) i);
+        invalidBuffer.rewind();
+        try {
+            type.read(invalidBuffer);
+            fail("Array size not validated");
+        } catch (SchemaException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReadZeroCompactArraySize() {
+        Type type = new CompactArrayOf(Type.INT8);
+        int size = 10;
+        ByteBuffer invalidBuffer = ByteBuffer.allocate(
+            ByteUtils.sizeOfUnsignedVarint(0) + size);
+        ByteUtils.writeUnsignedVarint(0, invalidBuffer);
         for (int i = 0; i < size; i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();

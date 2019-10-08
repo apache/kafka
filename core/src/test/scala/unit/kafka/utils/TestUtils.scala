@@ -795,6 +795,17 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
+  def subscribeAndWaitForRecords(topic: String,
+                                 consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records",
+      waitTimeMs)
+  }
+
   /**
    * Wait for the presence of an optional value.
    *
