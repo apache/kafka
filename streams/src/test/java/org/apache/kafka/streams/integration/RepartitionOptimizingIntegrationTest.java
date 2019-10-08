@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration;
 
 
+import java.time.Duration;
 import kafka.utils.MockTime;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -41,6 +42,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -142,27 +144,39 @@ public class RepartitionOptimizingIntegrationTest {
 
         final KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
 
-        mappedStream.filter((k, v) -> k.equals("B")).mapValues(v -> v.toUpperCase(Locale.getDefault()))
+        mappedStream
+            .filter((k, v) -> k.equals("B"))
+            .mapValues(v -> v.toUpperCase(Locale.getDefault()))
             .process(() -> new SimpleProcessor(processorValueCollector));
 
-        final KStream<String, Long> countStream = mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
+        final KStream<String, Long> countStream = mappedStream
+            .groupByKey()
+            .count(Materialized.as(Stores.inMemoryKeyValueStore("count-store")))
+            .toStream();
 
         countStream.to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
-        mappedStream.groupByKey().aggregate(initializer,
-                                            aggregator,
-                                            Materialized.with(Serdes.String(), Serdes.Integer()))
+        mappedStream
+            .groupByKey()
+            .aggregate(initializer,
+                       aggregator,
+                       Materialized.as(Stores.inMemoryKeyValueStore("aggregate-store")))
             .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
         // adding operators for case where the repartition node is further downstream
-        mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey()
-            .reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
+        mappedStream
+            .filter((k, v) -> true)
+            .peek((k, v) -> System.out.println(k + ":" + v))
+            .groupByKey()
+            .reduce(reducer, Materialized.as(Stores.inMemoryKeyValueStore("reduce-store")))
             .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         mappedStream.filter((k, v) -> k.equals("A"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
-                  StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
+                  StreamJoined.with(Stores.inMemoryWindowStore("join-store", Duration.ofDays(1), ofMillis(5000), true),
+                                    Stores.inMemoryWindowStore("other-join-store",  Duration.ofDays(1), ofMillis(5000), true)))
+                  //StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .to(JOINED_TOPIC);
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);

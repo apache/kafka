@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-
 import java.time.Duration;
 import kafka.utils.MockTime;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -33,7 +32,9 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -68,7 +69,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
     private Properties streamsConfiguration;
-
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -128,8 +128,18 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
 
         final KStream<String, String> mergedStream = mappedAStream.merge(mappedBStream);
 
-        mergedStream.groupByKey().count().toStream().to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
-        mergedStream.groupByKey().count().toStream().mapValues(v -> v.toString()).to(COUNT_STRING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+        mergedStream
+            .groupByKey()
+            .count(Materialized.as(Stores.inMemoryKeyValueStore("count-store-1")))
+            .toStream()
+            .to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
+
+        mergedStream
+            .groupByKey()
+            .count(Materialized.as(Stores.inMemoryKeyValueStore("count-store-2")))
+            .toStream()
+            .mapValues(v -> v.toString())
+            .to(COUNT_STRING_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
 
@@ -150,7 +160,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         } else {
             assertEquals(EXPECTED_UNOPTIMIZED_TOPOLOGY, topologyString);
         }
-
 
         /*
            confirming number of expected repartition topics here
