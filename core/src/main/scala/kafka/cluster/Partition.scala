@@ -274,7 +274,7 @@ class Partition(val topicPartition: TopicPartition,
     tags
   )
 
-  def isUnderReplicated: Boolean = (assignmentState.replicationFactor - inSyncReplicaIds.size) > 0
+  def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - inSyncReplicaIds.size) > 0
 
   def isUnderMinIsr: Boolean = {
     leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
