@@ -274,7 +274,6 @@ class LogCleaner(initialConfig: CleanerConfig,
   // Only for testing
   private[log] def cleanerCount: Int = cleaners.size
 
-  // visible for testing
   /**
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
