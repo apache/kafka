@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindowedKCogroupedStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
@@ -100,9 +99,17 @@ public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implemen
     }
 
     @Override
-    public SessionWindowedKCogroupedStream<K,V> windowedBy(final SessionWindows sessionWindows){
+    public SessionWindowedKCogroupedStream<K, V> windowedBy(final SessionWindows sessionWindows) {
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
-        return new SessionWindowedKCogroupedStreamImpl<K, T, V>(sessionWindows, builder, sourceNodes, name, keySerde, valSerde, aggregateBuilder, streamsGraphNode, groupPatterns);
+        return new SessionWindowedKCogroupedStreamImpl<K, T, V>(sessionWindows,
+                                                                builder,
+                                                                sourceNodes,
+                                                                name,
+                                                                keySerde,
+                                                                valSerde,
+                                                                aggregateBuilder,
+                                                                streamsGraphNode,
+                                                                groupPatterns);
     }
 
 
@@ -112,7 +119,8 @@ public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implemen
         return this.aggregateBuilder.build(groupPatterns,
                                            initializer,
                                            named,
-                                           new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
+                                           new TimestampedKeyValueStoreMaterializer<>(
+                                               materializedInternal).materialize(),
                                            materializedInternal.keySerde(),
                                            materializedInternal.valueSerde(),
                                            null,

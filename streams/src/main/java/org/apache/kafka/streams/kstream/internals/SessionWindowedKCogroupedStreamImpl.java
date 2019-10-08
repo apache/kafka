@@ -66,6 +66,7 @@ public class SessionWindowedKCogroupedStreamImpl<K, T, V> extends
                                             final Merger<? super K, V> sessionMerger,
                                             final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(
             materialized,

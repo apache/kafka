@@ -82,27 +82,27 @@ public class KCogroupedStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullKGroupedStreamOnCogroup() throws Exception {
+    public void shouldNotHaveNullKGroupedStreamOnCogroup() {
         cogroupedStream.cogroup(null, MockAggregator.TOSTRING_ADDER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullAggregatorOnCogroup() throws Exception {
+    public void shouldNotHaveNullAggregatorOnCogroup() {
         cogroupedStream.cogroup(groupedStream, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullInitializerOnAggregate() throws Exception {
+    public void shouldNotHaveNullInitializerOnAggregate() {
         cogroupedStream.aggregate(null, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullMaterMaterializedOnAggregate() throws Exception {
+    public void shouldNotHaveNullMaterMaterializedOnAggregate() {
         cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullMaterStoreSupplierOnAggregate() throws Exception {
+    public void shouldNotHaveNullMaterStoreSupplierOnAggregate() {
         cogroupedStream.aggregate(STRING_INITIALIZER, (StoreSupplier<KeyValueStore>) null);
     }
 
@@ -111,33 +111,16 @@ public class KCogroupedStreamImplTest {
         cogroupedStream.windowedBy((Windows) null);
     }
 
-    private static final Aggregator STRING_AGGREGATOR = new Aggregator<String, String, String>() {
-        @Override
-        public String apply(final String key, final String value, final String aggregate) {
-            return aggregate + value;
-        }
-    };
+    private static final Aggregator STRING_AGGREGATOR = (Aggregator<String, String, String>) (key, value, aggregate) ->
+        aggregate + value;
 
-    private static final Initializer STRING_INITIALIZER = new Initializer() {
-        @Override
-        public Object apply() {
-            return "";
-        }
-    };
+    private static final Initializer STRING_INITIALIZER = () -> "";
 
-    private static final Aggregator<String, String, Integer> STRSUM_AGGREGATOR = new Aggregator<String, String, Integer>() {
-        @Override
-        public Integer apply(final String key, final String value, final Integer aggregate) {
-            return aggregate + Integer.parseInt(value);
-        }
-    };
+    private static final Aggregator<String, String, Integer> STRSUM_AGGREGATOR = (key, value, aggregate) ->
+        aggregate + Integer.parseInt(value);
 
-    private static final Aggregator<String, Integer, Integer> SUM_AGGREGATOR = new Aggregator<String, Integer, Integer>() {
-        @Override
-        public Integer apply(final String key, final Integer value, final Integer aggregate) {
-            return aggregate + value;
-        }
-    };
+    private static final Aggregator<String, Integer, Integer> SUM_AGGREGATOR = (key, value, aggregate) ->
+        aggregate + value;
 
     private static final Initializer SUM_INITIALIZER = new Initializer() {
         @Override

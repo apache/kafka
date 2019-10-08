@@ -74,13 +74,28 @@ public class SessionWindowedKCogroupedStreamImplTest {
 
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         groupedStream2 = stream2.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
-        cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).cogroup(groupedStream2, MockAggregator.TOSTRING_ADDER);
+        cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
         windowedCogroupedStream = cogroupedStream.windowedBy(SessionWindows.with(ofMillis(100)));
     }
 
     @Test
     public void sessionWindowTest() {
         assertNotNull(windowedCogroupedStream);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullInitializerOnAggregate() {
+        windowedCogroupedStream.aggregate( null, sessionMerger);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullSessionMergerOnAggregate() {
+        windowedCogroupedStream.aggregate( MockInitializer.STRING_INIT, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullMaterializedOnAggregate() {
+        windowedCogroupedStream.aggregate( MockInitializer.STRING_INIT, sessionMerger,null);
     }
 
     @Test
@@ -160,7 +175,7 @@ public class SessionWindowedKCogroupedStreamImplTest {
     @Test
     public void sessionWindowMixAggregatorsTest() {
 
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER).windowedBy(SessionWindows.with(ofMillis(100L))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -188,7 +203,7 @@ public class SessionWindowedKCogroupedStreamImplTest {
     @Test
     public void sessionWindowMixAggregatorsManyWindowsTest() {
 
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER).windowedBy(SessionWindows.with(ofMillis(100L))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

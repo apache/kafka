@@ -553,8 +553,8 @@ public interface KGroupedStream<K, V> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
-     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KStream}s
-     * in order to apply one or more aggregation operations on the original {@link KStream}
+     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KGroupedStream}s
+     * in order to apply one or more aggregation operations on the original {@link KGroupedStream}
      * records.
      * <p>
      * It is an intermediate representation after a grouping of {@link KStream}s, before the
@@ -567,8 +567,8 @@ public interface KGroupedStream<K, V> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
-     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KStream}s
-     * in order to apply one or more aggregation operations on the original {@link KStream}
+     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KGroupedStream}s
+     * in order to apply one or more aggregation operations on the original {@link KGroupedStream}
      * records.
      * <p>
      * It is an intermediate representation after a grouping of {@link KStream}s, before the
