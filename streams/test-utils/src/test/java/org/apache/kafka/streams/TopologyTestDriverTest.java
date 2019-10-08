@@ -401,7 +401,15 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(new Topology(), config);
         assertThrows(IllegalArgumentException.class, () -> {
-            pipeRecord(unknownTopic, new TestRecord<byte[], byte[]>(nullValue));
+            testDriver.pipeRecord(unknownTopic, new TestRecord<byte[], byte[]>(nullValue), new ByteArraySerializer(), new ByteArraySerializer(), Instant.now());
+        });
+    }
+
+    @Test
+    public void shouldThrowForMissingTime() {
+        testDriver = new TopologyTestDriver(new Topology(), config);
+        assertThrows(IllegalStateException.class, () -> {
+            testDriver.pipeRecord(SINK_TOPIC_1, new TestRecord<String, String>("value"), new StringSerializer(), new StringSerializer(), null);
         });
     }
 
@@ -584,7 +592,7 @@ public class TopologyTestDriverTest {
                 consumerRecord1,
                 Serdes.Long().serializer(),
                 Serdes.String().serializer(),
-                null);
+                Instant.now());
         final TestRecord<Long, String> result1 =
             testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
@@ -594,7 +602,7 @@ public class TopologyTestDriverTest {
                 consumerRecord2,
                 Serdes.Integer().serializer(),
                 Serdes.Double().serializer(),
-                null);
+                Instant.now());
         final TestRecord<Integer, Double> result2 =
             testDriver.readRecord(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
@@ -627,7 +635,7 @@ public class TopologyTestDriverTest {
                 consumerRecord1,
                 Serdes.Long().serializer(),
                 Serdes.String().serializer(),
-                null);
+                Instant.now());
         final TestRecord<Long, String> result1 =
                 testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
@@ -637,7 +645,7 @@ public class TopologyTestDriverTest {
                 consumerRecord2,
                 Serdes.Integer().serializer(),
                 Serdes.Double().serializer(),
-                null);
+                Instant.now());
         final TestRecord<Integer, Double> result2 =
                 testDriver.readRecord(SINK_TOPIC_2, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
@@ -1345,7 +1353,7 @@ public class TopologyTestDriverTest {
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
             testDriver.pipeRecord("input-topic", new TestRecord<String, Long>("a", 1L),
-                    new StringSerializer(), new LongSerializer(), null);
+                    new StringSerializer(), new LongSerializer(), Instant.now());
             Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
         }
 
@@ -1369,7 +1377,7 @@ public class TopologyTestDriverTest {
             final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
             Assert.assertNotNull(globalStore);
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
-            testDriver.pipeRecord("topic", new TestRecord<String, String>("k1", "value1"), new StringSerializer(), new StringSerializer(), null);
+            testDriver.pipeRecord("topic", new TestRecord<String, String>("k1", "value1"), new StringSerializer(), new StringSerializer(), Instant.now());
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
             Assert.assertEquals("value1", globalStore.get("k1"));
         }
