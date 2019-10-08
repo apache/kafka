@@ -18,11 +18,17 @@
   "type": "request",
   "name": "JoinGroupRequest",
   // Version 1 adds RebalanceTimeoutMs.
+  //
   // Version 2 and 3 are the same as version 1.
+  //
   // Starting from version 4, the client needs to issue a second request to join group
+  //
   // Starting from version 5, we add a new field called groupInstanceId to indicate member identity across restarts.
   // with assigned id.
-  "validVersions": "0-5",
+  //
+  // Version 6 is the first flexible version.
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },

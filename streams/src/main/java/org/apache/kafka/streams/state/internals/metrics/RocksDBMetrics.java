@@ -96,16 +96,24 @@ public class RocksDBMetrics {
     private static final String NUMBER_OF_FILE_ERRORS_DESCRIPTION = "Total number of file errors occurred";
 
     public static class RocksDBMetricContext {
+        private final String threadId;
         private final String taskName;
         private final String metricsScope;
         private final String storeName;
 
-        public RocksDBMetricContext(final String taskName, final String metricsScope, final String storeName) {
+        public RocksDBMetricContext(final String threadId,
+                                    final String taskName,
+                                    final String metricsScope,
+                                    final String storeName) {
+            this.threadId = threadId;
             this.taskName = taskName;
             this.metricsScope = metricsScope;
             this.storeName = storeName;
         }
 
+        public String threadId() {
+            return threadId;
+        }
         public String taskName() {
             return taskName;
         }
@@ -125,14 +133,15 @@ public class RocksDBMetrics {
                 return false;
             }
             final RocksDBMetricContext that = (RocksDBMetricContext) o;
-            return Objects.equals(taskName, that.taskName) &&
+            return Objects.equals(threadId, that.threadId) &&
+                Objects.equals(taskName, that.taskName) &&
                 Objects.equals(metricsScope, that.metricsScope) &&
                 Objects.equals(storeName, that.storeName);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(taskName, metricsScope, storeName);
+            return Objects.hash(threadId, taskName, metricsScope, storeName);
         }
     }
 
@@ -142,8 +151,12 @@ public class RocksDBMetrics {
         addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BYTES_WRITTEN_TO_DB,
             BYTES_WRITTEN_TO_DB_RATE_DESCRIPTION,
             BYTES_WRITTEN_TO_DB_TOTAL_DESCRIPTION
@@ -157,8 +170,12 @@ public class RocksDBMetrics {
         addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BYTES_READ_FROM_DB,
             BYTES_READ_FROM_DB_RATE_DESCRIPTION,
             BYTES_READ_FROM_DB_TOTAL_DESCRIPTION
@@ -172,8 +189,12 @@ public class RocksDBMetrics {
         addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             MEMTABLE_BYTES_FLUSHED,
             MEMTABLE_BYTES_FLUSHED_RATE_DESCRIPTION,
             MEMTABLE_BYTES_FLUSHED_TOTAL_DESCRIPTION
@@ -187,8 +208,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             MEMTABLE_HIT_RATIO,
             MEMTABLE_HIT_RATIO_DESCRIPTION
         );
@@ -201,8 +226,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             MEMTABLE_FLUSH_TIME_AVG,
             MEMTABLE_FLUSH_TIME_AVG_DESCRIPTION
         );
@@ -215,8 +244,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             MEMTABLE_FLUSH_TIME_MIN,
             MEMTABLE_FLUSH_TIME_MIN_DESCRIPTION
         );
@@ -229,8 +262,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             MEMTABLE_FLUSH_TIME_MAX,
             MEMTABLE_FLUSH_TIME_MAX_DESCRIPTION
         );
@@ -243,8 +280,12 @@ public class RocksDBMetrics {
         addAvgAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             WRITE_STALL_DURATION,
             WRITE_STALL_DURATION_AVG_DESCRIPTION,
             WRITE_STALL_DURATION_TOTAL_DESCRIPTION
@@ -258,8 +299,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BLOCK_CACHE_DATA_HIT_RATIO,
             BLOCK_CACHE_DATA_HIT_RATIO_DESCRIPTION
         );
@@ -272,7 +317,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics.storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BLOCK_CACHE_INDEX_HIT_RATIO,
             BLOCK_CACHE_INDEX_HIT_RATIO_DESCRIPTION
         );
@@ -285,8 +335,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BLOCK_CACHE_FILTER_HIT_RATIO,
             BLOCK_CACHE_FILTER_HIT_RATIO_DESCRIPTION
         );
@@ -299,8 +353,12 @@ public class RocksDBMetrics {
         addRateOfSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BYTES_READ_DURING_COMPACTION,
             BYTES_READ_DURING_COMPACTION_DESCRIPTION
         );
@@ -313,8 +371,12 @@ public class RocksDBMetrics {
         addRateOfSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             BYTES_WRITTEN_DURING_COMPACTION,
             BYTES_WRITTEN_DURING_COMPACTION_DESCRIPTION
         );
@@ -327,8 +389,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             COMPACTION_TIME_AVG,
             COMPACTION_TIME_AVG_DESCRIPTION
         );
@@ -341,8 +407,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             COMPACTION_TIME_MIN,
             COMPACTION_TIME_MIN_DESCRIPTION
         );
@@ -355,8 +425,12 @@ public class RocksDBMetrics {
         addValueMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             COMPACTION_TIME_MAX,
             COMPACTION_TIME_MAX_DESCRIPTION
         );
@@ -369,8 +443,12 @@ public class RocksDBMetrics {
         addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             NUMBER_OF_OPEN_FILES,
             false,
             NUMBER_OF_OPEN_FILES_DESCRIPTION
@@ -384,8 +462,12 @@ public class RocksDBMetrics {
         addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
-            streamsMetrics
-                .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
+            streamsMetrics.storeLevelTagMap(
+                metricContext.threadId(),
+                metricContext.taskName(),
+                metricContext.metricsScope(),
+                metricContext.storeName()
+            ),
             NUMBER_OF_FILE_ERRORS,
             NUMBER_OF_FILE_ERRORS_DESCRIPTION
         );
@@ -396,6 +478,7 @@ public class RocksDBMetrics {
                                        final RocksDBMetricContext metricContext,
                                        final String sensorName) {
         return streamsMetrics.storeLevelSensor(
+            metricContext.threadId(),
             metricContext.taskName(),
             metricContext.storeName(),
             sensorName,

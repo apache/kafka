@@ -37,7 +37,7 @@ import org.apache.kafka.streams.kstream.{
   TransformerSupplier,
   ValueJoiner,
   ValueMapper,
-  Joined => JoinedJ,
+  StreamJoined => StreamJoinedJ,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
@@ -327,14 +327,14 @@ class TopologyTest {
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream2)((v1: String, v2: Int) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
-          Joined.`with`(Serdes.String, Serdes.String, Serdes.Integer)
+          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.Integer)
         )
         .to(JOINED_TOPIC)
 
       mappedStream
         .filter((k: String, _: String) => k == "A")
         .join(stream3)((v1: String, v2: String) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
-          Joined.`with`(Serdes.String, Serdes.String, Serdes.String)
+          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.String)
         )
         .to(JOINED_TOPIC)
 
@@ -410,7 +410,7 @@ class TopologyTest {
         .join[Integer, String](stream2,
                                valueJoiner2,
                                JoinWindows.of(Duration.ofMillis(5000)),
-                               JoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Integer))
+                               StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Integer))
         .to(JOINED_TOPIC)
 
       mappedStream
@@ -420,7 +420,7 @@ class TopologyTest {
         .join(stream3,
               valueJoiner3,
               JoinWindows.of(Duration.ofMillis(5000)),
-              JoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.String))
+              StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.String))
         .to(JOINED_TOPIC)
 
       builder

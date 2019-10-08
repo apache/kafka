@@ -342,10 +342,26 @@
       </subpackage>
     </subpackage>
 
+    <subpackage name="mirror">
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <allow pkg="org.apache.kafka.connect.source" />
+      <allow pkg="org.apache.kafka.connect.sink" />
+      <allow pkg="org.apache.kafka.connect.storage" />
+      <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.runtime" />
+      <allow pkg="org.apache.kafka.connect.runtime.distributed" />
+      <allow pkg="org.apache.kafka.connect.util" />
+      <allow pkg="org.apache.kafka.connect.converters" />
+      <allow pkg="net.sourceforge.argparse4j" />
+      <!-- for tests -->
+      <allow pkg="org.apache.kafka.connect.integration" />
+    </subpackage>
+
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
+      <allow pkg="javax.crypto"/>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -354,11 +370,18 @@
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
+        <subpackage name="resources">
+          <allow pkg="org.apache.log4j" />
+        </subpackage>
       </subpackage>
 
       <subpackage name="isolation">
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.maven.artifact.versioning" />
+      </subpackage>
+
+      <subpackage name="distributed">
+        <allow pkg="javax.ws.rs.core" />
       </subpackage>
     </subpackage>
 
@@ -373,6 +396,7 @@
     <subpackage name="storage">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.common.serialization" />
+      <allow pkg="javax.crypto.spec"/>
     </subpackage>
 
     <subpackage name="util">

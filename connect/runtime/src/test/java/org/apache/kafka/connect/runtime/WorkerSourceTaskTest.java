@@ -22,11 +22,11 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -883,7 +883,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-            expectTaskCommitRecord(anyTimes, commitSuccess);
+            expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
         }
 
         return sent;
@@ -932,8 +932,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             });
     }
 
-    private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {
-        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+    private void expectTaskCommitRecordWithOffset(boolean anyTimes, boolean succeed) throws InterruptedException {
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.anyObject(RecordMetadata.class));
         IExpectationSetters<Void> expect = EasyMock.expectLastCall();
         if (!succeed) {
             expect = expect.andThrow(new RuntimeException("Error committing record in source task"));

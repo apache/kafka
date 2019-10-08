@@ -360,6 +360,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (reaperEnabled)
       expirationReaper.shutdown()
     timeoutTimer.shutdown()
+    removeMetric("PurgatorySize", metricsTags)
+    removeMetric("NumDelayedOperations", metricsTags)
   }
 
   /**

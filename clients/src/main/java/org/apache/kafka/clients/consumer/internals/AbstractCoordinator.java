@@ -43,6 +43,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
@@ -1059,6 +1060,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 this.metricGrpName,
                 "The max time taken for a group to complete a successful rebalance, which may be composed of " +
                     "several failed re-trials until it succeeded"), new Max());
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-total",
+                this.metricGrpName,
+                "The total number of milliseconds this consumer has spent in successful rebalances since creation"),
+                new CumulativeSum());
             this.successfulRebalanceSensor.add(
                 metrics.metricName("rebalance-total",
                     this.metricGrpName,

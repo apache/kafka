@@ -116,7 +116,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     createTopic(topic, numPartitions = 1, replicationFactor = 1)
 
     val version = ApiKeys.PRODUCE.latestVersion: Short
-    val (serializedBytes, headerVersion) = {
+    val (serializedBytes, responseHeaderVersion) = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null,
         correlationId)
       val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))
@@ -124,13 +124,13 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.toStruct.sizeOf)
       byteBuffer.put(headerBytes)
       request.toStruct.writeTo(byteBuffer)
-      (byteBuffer.array(), request.api.headerVersion(version))
+      (byteBuffer.array(), request.api.responseHeaderVersion(version))
     }
 
     val response = requestAndReceive(serializedBytes)
 
     val responseBuffer = ByteBuffer.wrap(response)
-    val responseHeader = ResponseHeader.parse(responseBuffer, headerVersion)
+    val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
     val produceResponse = ProduceResponse.parse(responseBuffer, version)
 
     assertEquals("The response should parse completely", 0, responseBuffer.remaining)

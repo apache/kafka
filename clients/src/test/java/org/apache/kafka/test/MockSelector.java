@@ -41,6 +41,7 @@ public class MockSelector implements Selectable {
     private final Time time;
     private final List<Send> initiatedSends = new ArrayList<>();
     private final List<Send> completedSends = new ArrayList<>();
+    private final List<ByteBufferChannel> completedSendBuffers = new ArrayList<>();
     private final List<NetworkReceive> completedReceives = new ArrayList<>();
     private final Map<String, ChannelState> disconnected = new HashMap<>();
     private final List<String> connected = new ArrayList<>();
@@ -99,6 +100,7 @@ public class MockSelector implements Selectable {
     public void clear() {
         this.completedSends.clear();
         this.completedReceives.clear();
+        this.completedSendBuffers.clear();
         this.disconnected.clear();
         this.connected.clear();
     }
@@ -129,6 +131,7 @@ public class MockSelector implements Selectable {
                 send.writeTo(discardChannel);
             }
             completedSends.add(send);
+            completedSendBuffers.add(discardChannel);
         }
     }
 
@@ -152,6 +155,10 @@ public class MockSelector implements Selectable {
 
     public void completeSend(NetworkSend send) {
         this.completedSends.add(send);
+    }
+
+    public List<ByteBufferChannel> completedSendBuffers() {
+        return completedSendBuffers;
     }
 
     @Override

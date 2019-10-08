@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+
 
 <!DOCTYPE suppressions PUBLIC
         "-//Puppy Crawl//DTD Suppressions 1.1//EN"
@@ -67,8 +67,10 @@
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
+    <suppress checks="(UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
+              files="Murmur3.java"/>
 
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|MethodLength|JavaNCSS)"
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
             files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
@@ -89,6 +91,9 @@
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest"/>
+
+    <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
+              files="Murmur3Test.java"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
@@ -132,7 +137,7 @@
               files="Values.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(DistributedHerder|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask).java"/>
+              files="(DistributedHerder|RestClient|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask).java"/>
 
     <suppress checks="MethodLength"
               files="Values.java"/>
@@ -149,7 +154,7 @@
               files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
-              files="StreamsPartitionAssignor.java"/>
+              files="(KTableImpl|StreamsPartitionAssignor.java)"/>
 
     <suppress checks="ParameterNumber"
               files="StreamTask.java"/>
@@ -192,6 +197,9 @@
     <suppress checks="MethodLength"
               files="RocksDBWindowStoreTest.java"/>
 
+    <suppress checks="MemberName"
+              files="StreamsPartitionAssignorTest.java"/>
+
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
 
@@ -229,7 +237,8 @@
 
     <suppress checks="CyclomaticComplexity"
               files="(StreamsResetter|ProducerPerformance|Agent).java"/>
-
+    <suppress checks="BooleanExpressionComplexity"
+              files="StreamsResetter.java"/>
     <suppress checks="NPathComplexity"
               files="(ProducerPerformance|StreamsResetter|Agent).java"/>
     <suppress checks="ImportControl"

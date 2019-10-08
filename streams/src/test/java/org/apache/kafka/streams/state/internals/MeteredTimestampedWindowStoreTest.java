@@ -94,6 +94,7 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
         EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
         EasyMock.replay(innerStoreMock);
@@ -118,6 +119,7 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
         EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
         EasyMock.replay(innerStoreMock);

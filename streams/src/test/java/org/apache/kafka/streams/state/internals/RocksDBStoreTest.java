@@ -34,12 +34,14 @@ import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -75,6 +77,7 @@ import static org.junit.Assert.fail;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
+@Category(IntegrationTest.class)
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBStoreTest {
@@ -554,7 +557,7 @@ public class RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
         try {
             rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
-            fail("Should have thrown NullPointerException on deleting null key");
+            fail("Should have thrown NullPointerException on null range key");
         } catch (final NullPointerException e) {
             // this is good
         }

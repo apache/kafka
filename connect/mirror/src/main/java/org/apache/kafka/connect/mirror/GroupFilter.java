@@ -14,20 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.errors.CorruptRecordException;
+package org.apache.kafka.connect.mirror;
 
-public class InvalidRecordException extends CorruptRecordException {
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import java.util.Map;
 
-    private static final long serialVersionUID = 1;
+/** Defines which consumer groups should be replicated. */
+@InterfaceStability.Evolving
+public interface GroupFilter extends Configurable, AutoCloseable {
 
-    public InvalidRecordException(String s) {
-        super(s);
+    boolean shouldReplicateGroup(String group);
+
+    default void close() {
+        //nop
     }
 
-    public InvalidRecordException(String message, Throwable cause) {
-        super(message, cause);
+    default void configure(Map<String, ?> props) {
+        //nop
     }
-
 }

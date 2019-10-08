@@ -18,7 +18,10 @@
   "type": "request",
   "name": "DeleteTopicsRequest",
   // Versions 0, 1, 2, and 3 are the same.
-  "validVersions": "0-3",
+  //
+  // Version 4 is the first flexible version.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "TopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",
       "about": "The names of the topics to delete" },

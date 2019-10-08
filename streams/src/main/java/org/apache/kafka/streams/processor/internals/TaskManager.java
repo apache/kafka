@@ -60,6 +60,7 @@ public class TaskManager {
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
+    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     // the restore consumer is only ever assigned changelogs from restoring tasks or standbys (but not both)
     private boolean restoreConsumerAssignedStandbys = false;
@@ -129,8 +130,7 @@ public class TaskManager {
         }
 
         // Pause all the new partitions until the underlying state store is ready for all the active tasks.
-        log.trace("Pausing partitions: {}", assignment);
-        consumer.pause(assignment);
+        pausePartitions();
     }
 
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
@@ -145,7 +145,7 @@ public class TaskManager {
                     addedActiveTasks.put(taskId, partitions);
                 }
             } catch (final StreamsException e) {
-                log.error("Failed to resume an active task {} due to the following error:", taskId, e);
+                log.error("Failed to resume a suspended active task {} due to the following error:", taskId, e);
                 throw e;
             }
         }
@@ -304,7 +304,11 @@ public class TaskManager {
         }
     }
 
-    Set<TaskId> activeTaskIds() {
+    public Set<TaskId> previousRunningTaskIds() {
+        return active.previousRunningTaskIds();
+    }
+
+    public Set<TaskId> activeTaskIds() {
         return active.allAssignedTaskIds();
     }
 
@@ -318,10 +322,6 @@ public class TaskManager {
 
     Set<TaskId> revokedStandbyTaskIds() {
         return revokedStandbyTasks.keySet();
-    }
-
-    public Set<TaskId> previousRunningTaskIds() {
-        return active.previousRunningTaskIds();
     }
 
     Set<TaskId> previousActiveTaskIds() {
@@ -366,6 +366,11 @@ public class TaskManager {
         return taskCreator.builder();
     }
 
+    void pausePartitions() {
+        log.trace("Pausing partitions: {}", consumer.assignment());
+        consumer.pause(consumer.assignment());
+    }
+
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -374,9 +379,11 @@ public class TaskManager {
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
-        final Collection<TopicPartition> restored = changelogReader.restore(active);
-        active.updateRestored(restored);
-        removeChangelogsFromRestoreConsumer(restored, false);
+        if (active.hasRestoringTasks()) {
+            final Collection<TopicPartition> restored = changelogReader.restore(active);
+            active.updateRestored(restored);
+            removeChangelogsFromRestoreConsumer(restored, false);
+        }
 
         if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();
@@ -414,6 +421,10 @@ public class TaskManager {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
+    }
+
+    public void setRebalanceInProgress(final boolean rebalanceInProgress) {
+        this.rebalanceInProgress = rebalanceInProgress;
     }
 
     public void setClusterMetadata(final Cluster cluster) {
@@ -489,10 +500,10 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
+     * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
-        final int committed = active.commit();
-        return committed + standby.commit();
+        return rebalanceInProgress ? -1 : active.commit() + standby.commit();
     }
 
     /**
@@ -514,7 +525,7 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      */
     int maybeCommitActiveTasksPerUserRequested() {
-        return active.maybeCommitPerUserRequested();
+        return rebalanceInProgress ? -1 : active.maybeCommitPerUserRequested();
     }
 
     void maybePurgeCommitedRecords() {
@@ -524,7 +535,8 @@ public class TaskManager {
         if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
-                log.debug("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
+                log.debug("Previous delete-records request has failed: {}. Try sending the new request now",
+                    deleteRecordsResult.lowWatermarks());
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();

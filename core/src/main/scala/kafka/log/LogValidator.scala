@@ -23,9 +23,10 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.BrokerTopicStats
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
@@ -162,7 +163,7 @@ private[kafka] object LogValidator extends Logging {
       } catch {
         case e: InvalidRecordException =>
           brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
-          throw new InvalidRecordException(e.getMessage + s" in topic partition $topicPartition.")
+          throw new CorruptRecordException(e.getMessage + s" in topic partition $topicPartition.")
       }
     }
 
