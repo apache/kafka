@@ -31,7 +31,6 @@ class KStreamWindowTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamJoinWindowProcessor extends AbstractProcessor<K, V> {
 
-
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
