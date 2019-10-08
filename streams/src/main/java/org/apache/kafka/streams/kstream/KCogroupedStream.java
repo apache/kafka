@@ -172,5 +172,8 @@ public interface KCogroupedStream<K, T, V> {
 
     <W extends Window> TimeWindowedKCogroupedStream<K, V> windowedBy(final Windows<W> windows);
 
+
+    SessionWindowedKCogroupedStream<K, V> windowedBy(final SessionWindows sessionWindows);
+
 }
 

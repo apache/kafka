@@ -20,7 +20,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 
 class KStreamWindowTableSource<K, V> implements ProcessorSupplier<K, V> {
 

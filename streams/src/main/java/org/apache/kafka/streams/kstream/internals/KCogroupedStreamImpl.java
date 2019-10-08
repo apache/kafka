@@ -28,6 +28,9 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.SessionWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -96,6 +99,12 @@ public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implemen
                                                                 groupPatterns);
     }
 
+    @Override
+    public SessionWindowedKCogroupedStream<K,V> windowedBy(final SessionWindows sessionWindows){
+        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
+        return new SessionWindowedKCogroupedStreamImpl<K, T, V>(sessionWindows, builder, sourceNodes, name, keySerde, valSerde, aggregateBuilder, streamsGraphNode, groupPatterns);
+    }
+
 
     private KTable<K, V> doAggregate(final Initializer<V> initializer,
                                      final NamedInternal named,
@@ -106,6 +115,8 @@ public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implemen
                                            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
                                            materializedInternal.keySerde(),
                                            materializedInternal.valueSerde(),
+                                           null,
+                                           null,
                                            null);
     }
 }

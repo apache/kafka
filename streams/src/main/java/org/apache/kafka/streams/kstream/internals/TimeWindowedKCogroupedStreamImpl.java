@@ -82,7 +82,9 @@ public class TimeWindowedKCogroupedStreamImpl<K, T, V, W extends Window> extends
                                               .keySerde(),
                                           windows.size()) : null,
                                       materializedInternal.valueSerde(),
-                                      windows);
+                                      windows,
+                                      null,
+                                      null);
     }
 
     @Override

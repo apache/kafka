@@ -24,6 +24,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -51,20 +53,22 @@ class CogroupedStreamAggregateBuilder<K, V> {
         final StoreBuilder<? extends StateStore> storeBuilder,
         final Serde<KR> keySerde,
         final Serde<V> valSerde,
-        final Windows<W> windows) {
+        final Windows<W> windows,
+        final SessionWindows sessionWindows,
+        final Merger<? super K, V> sessionMerger) {
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         for (final Entry<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> kGroupedStream : groupPatterns
             .entrySet()) {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
-                kGroupedStream.getValue(), initializer, named, stateCreated, storeBuilder, windows);
+                kGroupedStream.getValue(), initializer, named, stateCreated, storeBuilder, windows, sessionWindows, sessionMerger);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
         }
         final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final ProcessorSupplier<K, V> tableSource = windows == null ? new KTableSource<>(
+        final ProcessorSupplier<K, V> tableSource = (windows == null && sessionWindows == null)? new KTableSource<>(
             storeBuilder.name(),
             storeBuilder.name()) :
             new KStreamWindowTableSource<>();
@@ -92,12 +96,28 @@ class CogroupedStreamAggregateBuilder<K, V> {
     private <T, W extends Window> StatefulProcessorNode getStatefulProcessorNode(
         final Aggregator<? super K, ? super T, V> aggregator,
         final Initializer<V> initializer, final NamedInternal named, final boolean stateCreated,
-        final StoreBuilder<? extends StateStore> storeBuilder, final Windows<W> windows) {
+        final StoreBuilder<? extends StateStore> storeBuilder, final Windows<W> windows, final SessionWindows sessionWindows, final Merger<? super K, V> sessionMerger) {
 
         final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
-        final ProcessorSupplier<K, T> kStreamAggregate = windows == null ?  new KStreamAggregate<K, T, V>(storeBuilder.name(), initializer, aggregator) :
-                new KStreamWindowAggregate<K, T, V, W>(windows, storeBuilder.name(), initializer, aggregator);
+        final ProcessorSupplier<K, T> kStreamAggregate;
+        if (windows == null && sessionWindows == null) {
+            kStreamAggregate = new KStreamAggregate<K, T, V>(storeBuilder.name(),
+                                                             initializer,
+                                                             aggregator);
+        }else if(windows != null && sessionWindows == null){
+            kStreamAggregate = new KStreamWindowAggregate<>(windows,
+                                                            storeBuilder.name(),
+                                                            initializer,
+                                                            aggregator);
+        }else if(windows == null && sessionWindows != null){
+            kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows,
+                                                                   storeBuilder.name(),
+                                                                   initializer,
+                                                                   aggregator, sessionMerger);
+        }else {
+            throw new IllegalArgumentException("must be a TimeWindowedStream or a SessionWindowedStream");
+        }
 
         final StatefulProcessorNode statefulProcessorNode;
         if (!stateCreated) {
