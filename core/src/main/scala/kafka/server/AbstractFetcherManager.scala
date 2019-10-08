@@ -84,8 +84,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }, Map("clientId" -> clientId))
 
-  // visible for testing
-  private[server] def deadThreadCount = lock synchronized { fetcherThreadMap.count(_._2.isThreadFailed) }
+  private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {

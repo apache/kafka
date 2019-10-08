@@ -110,7 +110,6 @@ class LogCleaner(initialConfig: CleanerConfig,
                                         "bytes",
                                         time = time)
 
-  // visible for testing
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
@@ -144,7 +143,6 @@ class LogCleaner(initialConfig: CleanerConfig,
       def value: Int = deadThreadCount
     })
 
-  // visible for testing
   private[log] def deadThreadCount = cleaners.count(_.isThreadFailed)
 
   /**
