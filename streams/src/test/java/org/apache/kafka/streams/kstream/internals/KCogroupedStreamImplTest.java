@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.util.Arrays;
 import java.util.Properties;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -38,7 +39,9 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
@@ -94,17 +97,43 @@ public class KCogroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterMaterializedOnAggregate() throws Exception {
-        cogroupedStream.aggregate(SUM_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterStoreSupplierOnAggregate() throws Exception {
-        cogroupedStream.aggregate(SUM_INITIALIZER, (StoreSupplier<KeyValueStore>) null);
+        cogroupedStream.aggregate(STRING_INITIALIZER, (StoreSupplier<KeyValueStore>) null);
     }
 
-    private static final Aggregator SUM_AGGREGATOR = new Aggregator<String, String, String>() {
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullWindowsOnWindowedAggregate() {
+        cogroupedStream.windowedBy((Windows) null);
+    }
+
+    private static final Aggregator STRING_AGGREGATOR = new Aggregator<String, String, String>() {
         @Override
         public String apply(final String key, final String value, final String aggregate) {
+            return aggregate + value;
+        }
+    };
+
+    private static final Initializer STRING_INITIALIZER = new Initializer() {
+        @Override
+        public Object apply() {
+            return "";
+        }
+    };
+
+    private static final Aggregator<String, String, Integer> STRSUM_AGGREGATOR = new Aggregator<String, String, Integer>() {
+        @Override
+        public Integer apply(final String key, final String value, final Integer aggregate) {
+            return aggregate + Integer.parseInt(value);
+        }
+    };
+
+    private static final Aggregator<String, Integer, Integer> SUM_AGGREGATOR = new Aggregator<String, Integer, Integer>() {
+        @Override
+        public Integer apply(final String key, final Integer value, final Integer aggregate) {
             return aggregate + value;
         }
     };
@@ -112,10 +141,9 @@ public class KCogroupedStreamImplTest {
     private static final Initializer SUM_INITIALIZER = new Initializer() {
         @Override
         public Object apply() {
-            return "";
+            return 0;
         }
     };
-
 
     @Test
     public void testCogroupBassicOneTopic() {
@@ -124,8 +152,8 @@ public class KCogroupedStreamImplTest {
 
         final KGroupedStream groupedOne = test.groupByKey();
 
-        final KTable customers = groupedOne.cogroup(SUM_AGGREGATOR, Materialized.as("store"))
-            .aggregate(SUM_INITIALIZER, Materialized.as("store1"));
+        final KTable customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+            .aggregate(STRING_INITIALIZER, Materialized.as("store1"));
 
         customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
 
@@ -156,9 +184,9 @@ public class KCogroupedStreamImplTest {
         final KGroupedStream groupedOne = test.groupByKey();
         final KGroupedStream groupedTwo = test2.groupByKey();
 
-        final KTable customers = groupedOne.cogroup(SUM_AGGREGATOR, Materialized.as("store"))
-            .cogroup(groupedTwo, SUM_AGGREGATOR)
-            .aggregate(SUM_INITIALIZER, Materialized.as("store1"));
+        final KTable customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER, Materialized.as("store1"));
 
         customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
 
@@ -201,9 +229,9 @@ public class KCogroupedStreamImplTest {
         final KGroupedStream groupedOne = test.groupByKey();
         final KGroupedStream groupedTwo = test2.groupByKey();
 
-        final KTable customers = groupedOne.cogroup(SUM_AGGREGATOR, Materialized.as("store"))
-            .cogroup(groupedTwo, SUM_AGGREGATOR)
-            .aggregate(SUM_INITIALIZER, Materialized.as("store1"));
+        final KTable customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER, Materialized.as("store1"));
 
         customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
 
@@ -237,6 +265,107 @@ public class KCogroupedStreamImplTest {
             new KeyValueTimestamp("2", "AABBBB", 500),
             new KeyValueTimestamp("3", "B", 500),
             new KeyValueTimestamp("2", "AABBBBB", 500)
+        )));
+    }
+
+    @Test
+    public void testCogroupKeyMixedInTopicsandChageTypes() {
+        final Consumed<String, Integer> stringConsume = Consumed.with(Serdes.String(), Serdes.Integer());
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final KStream test = builder.stream("one", stringConsumed);
+        final KStream test2 = builder.stream("two", stringConsumed);
+
+        final KGroupedStream groupedOne = test.groupByKey();
+        final KGroupedStream groupedTwo = test2.groupByKey();
+
+        final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
+            .cogroup(groupedTwo, STRSUM_AGGREGATOR)
+            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, SessionStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+
+        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.Integer()));
+
+        builder.stream("to-one", stringConsume).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
+            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 200L));
+            driver.pipeInput(recordFactory.create("two", "1", "2", 1L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "2", "3", 500L));
+            driver.pipeInput(recordFactory.create("two", "3", "2", 500L));
+            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
+        }
+
+        assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
+            new KeyValueTimestamp("1", 1, 0),
+            new KeyValueTimestamp("2", 1, 1),
+            new KeyValueTimestamp("1", 2, 10),
+            new KeyValueTimestamp("2", 2, 100),
+            new KeyValueTimestamp("2", 4, 100),
+            new KeyValueTimestamp("2", 6, 200),
+            new KeyValueTimestamp("1", 4, 10),
+            new KeyValueTimestamp("2", 8, 500),
+            new KeyValueTimestamp("1", 6, 500),
+            new KeyValueTimestamp("2", 11, 500),
+            new KeyValueTimestamp("3", 2, 500),
+            new KeyValueTimestamp("2", 13, 500)
+        )));
+    }
+    @Test
+    public void testCogroupKeyMixedInTopicsTypesandChageTypes() {
+
+        final Consumed<String, Integer> intergerConsumed = Consumed.with(Serdes.String(), Serdes.Integer());
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final KStream test = builder.stream("one", stringConsumed);
+        final KStream test2 = builder.stream("two", intergerConsumed);
+
+        final KGroupedStream groupedOne = test.groupByKey();
+        final KGroupedStream groupedTwo = test2.groupByKey();
+
+        final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
+            .cogroup(groupedTwo, SUM_AGGREGATOR)
+            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, SessionStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+
+        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.Integer()));
+
+        builder.stream("to-one", intergerConsumed).process(supplier);
+
+        final ConsumerRecordFactory<String, Integer> recordFactory2 =
+            new ConsumerRecordFactory<String, Integer>(new StringSerializer(), new IntegerSerializer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
+            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
+            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
+
+            driver.pipeInput(recordFactory2.create("two", "2", 2, 100L));
+            driver.pipeInput(recordFactory2.create("two", "2", 2, 200L));
+            driver.pipeInput(recordFactory2.create("two", "1", 2, 1L));
+            driver.pipeInput(recordFactory2.create("two", "2", 2, 500L));
+            driver.pipeInput(recordFactory2.create("two", "1", 2, 500L));
+            driver.pipeInput(recordFactory2.create("two", "2", 3, 500L));
+            driver.pipeInput(recordFactory2.create("two", "3", 2, 500L));
+            driver.pipeInput(recordFactory2.create("two", "2", 2, 100L));
+        }
+
+        assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
+            new KeyValueTimestamp("1", 1, 0),
+            new KeyValueTimestamp("2", 1, 1),
+            new KeyValueTimestamp("1", 2, 10),
+            new KeyValueTimestamp("2", 2, 100),
+            new KeyValueTimestamp("2", 4, 100),
+            new KeyValueTimestamp("2", 6, 200),
+            new KeyValueTimestamp("1", 4, 10),
+            new KeyValueTimestamp("2", 8, 500),
+            new KeyValueTimestamp("1", 6, 500),
+            new KeyValueTimestamp("2", 11, 500),
+            new KeyValueTimestamp("3", 2, 500),
+            new KeyValueTimestamp("2", 13, 500)
         )));
     }
 }

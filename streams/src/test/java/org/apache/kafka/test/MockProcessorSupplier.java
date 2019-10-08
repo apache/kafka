@@ -63,7 +63,6 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         // get the captured processors with the expected number
     public List<MockProcessor<K, V>> capturedProcessors(final int expectedNumberOfProcessors) {
         assertEquals(expectedNumberOfProcessors, processors.size());
-
         return processors;
     }
 }

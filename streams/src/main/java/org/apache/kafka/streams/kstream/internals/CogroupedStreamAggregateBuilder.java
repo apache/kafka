@@ -20,93 +20,99 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Map.Entry;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
-import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.Collections;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 
-class CogroupedStreamAggregateBuilder<K, V, T> {
+class CogroupedStreamAggregateBuilder<K, V> {
 
     static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
 
     private final InternalStreamsBuilder builder;
 
-
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
 
-    KTable<K, T> build(final Map<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> groupPatterns,
-                       final Initializer<T> initializer,
-                       final NamedInternal named,
-                       final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    <KR, T, W extends Window> KTable<KR, V> build(
+        final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns,
+        final Initializer<V> initializer,
+        final NamedInternal named,
+        final StoreBuilder<? extends StateStore> storeBuilder,
+        final Serde<KR> keySerde,
+        final Serde<V> valSerde,
+        final Windows<W> windows) {
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
-        for (final Entry<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> kGroupedStream : groupPatterns.entrySet()) {
+        for (final Entry<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> kGroupedStream : groupPatterns
+            .entrySet()) {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
-                kGroupedStream, initializer, named, stateCreated, materializedInternal);
+                kGroupedStream.getValue(), initializer, named, stateCreated, storeBuilder, windows);
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
         }
-        final String functionName = new NamedInternal(named)
-            .orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(
-            materializedInternal.storeName(),
-            materializedInternal
-                .queryableStoreName());
+        final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final ProcessorSupplier<K, V> tableSource = windows == null ? new KTableSource<>(
+            storeBuilder.name(),
+            storeBuilder.name()) :
+            new KStreamWindowTableSource<>(storeBuilder.name());
         final StatefulProcessorNode<K, V> tableSourceNode =
             new StatefulProcessorNode<>(
                 functionName,
                 new ProcessorParameters<>(tableSource, functionName),
-                new String[]{materializedInternal.storeName()}
+                new String[]{storeBuilder.name()}
             );
 
         builder.addGraphNode(processors, tableSourceNode);
 
-        return new KTableImpl<K, V, T>(
+        return new KTableImpl<KR, T, V>(
             functionName,
-            materializedInternal.keySerde(),
-            materializedInternal.valueSerde(),
+            keySerde,
+            valSerde,
             Collections.singleton(tableSourceNode.nodeName()),
-            materializedInternal.queryableStoreName(),
+            storeBuilder.name(),
             tableSource,
             tableSourceNode,
             builder);
 
     }
 
-    private StatefulProcessorNode getStatefulProcessorNode(final Entry<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> kGroupedStream,
-                                                           final Initializer<T> initializer, final NamedInternal named, final boolean stateCreated,
-                                                           final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    private <T, W extends Window> StatefulProcessorNode getStatefulProcessorNode(
+        final Aggregator<? super K, ? super T, V> aggregator,
+        final Initializer<V> initializer, final NamedInternal named, final boolean stateCreated,
+        final StoreBuilder<? extends StateStore> storeBuilder, final Windows<W> windows) {
 
-        final String functionName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final Aggregator<? super K, ? super V, T> aggregator = kGroupedStream.getValue();
+        final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
-        //TODO: switch on stream type
-        final KStreamAggregate<K, V, T> kStreamAggregate = new KStreamAggregate<K, V, T>(
-            materializedInternal.storeName(), initializer, aggregator);
+        final ProcessorSupplier<K, T> kStreamAggregate = windows == null ?  new KStreamAggregate<K, T, V>(storeBuilder.name(), initializer, aggregator) :
+                new KStreamWindowAggregate<K, T, V, W>(windows, storeBuilder.name(), initializer, aggregator);
 
-        StatefulProcessorNode statefulProcessorNode;
+        final StatefulProcessorNode statefulProcessorNode;
         if (!stateCreated) {
             statefulProcessorNode =
                 new StatefulProcessorNode<>(
                     functionName,
                     new ProcessorParameters<>(kStreamAggregate, functionName),
-                    new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize()
+                    storeBuilder
                 );
         } else {
             statefulProcessorNode =
                 new StatefulProcessorNode<>(
                     functionName,
                     new ProcessorParameters<>(kStreamAggregate, functionName),
-                    new String[]{materializedInternal.storeName()}
+                    new String[]{storeBuilder.name()}
                 );
         }
         return statefulProcessorNode;

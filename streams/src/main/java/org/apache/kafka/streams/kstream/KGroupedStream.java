@@ -580,6 +580,6 @@ public interface KGroupedStream<K, V> {
      *                     Cannot be {@code null}.
      */
     <T> KCogroupedStream<K, V, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator,
-                                          final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                                          final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized);
 
 }

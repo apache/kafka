@@ -38,9 +38,8 @@ import org.apache.kafka.streams.state.StoreSupplier;
  *
  * @param <K> Type of keys
  * @param <V> Type of values
- * @param <T> Type that the aggregator creates
  */
-public interface KCogroupedStream<K, V, T> {
+public interface KCogroupedStream<K, T, V> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
@@ -55,8 +54,8 @@ public interface KCogroupedStream<K, V, T> {
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
      * @return a KCogroupedStream with the new grouopStream and aggregator linked
      */
-    KCogroupedStream<K, V, T> cogroup(final KGroupedStream<K, V> groupedStream,
-                                      final Aggregator<? super K, ? super V, T> aggregator);
+    KCogroupedStream<K, T, V> cogroup(final KGroupedStream<K, T> groupedStream,
+                                      final Aggregator<? super K, ? super T, V> aggregator);
     /**
      * Aggregate the values of records in this stream by the grouped key. Records with {@code null}
      * key or value are ignored. Aggregating is a generalization of Reducing combining via
@@ -112,8 +111,8 @@ public interface KCogroupedStream<K, V, T> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, T> aggregate(final Initializer<T> initializer,
-                           final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, V> aggregate(final Initializer<V> initializer,
+                           final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
     /**
      * Aggregate the values of records in this stream by the grouped key. Records with {@code null}
      * key or value are ignored. Aggregating is a generalization of Reducing combining via
@@ -168,8 +167,10 @@ public interface KCogroupedStream<K, V, T> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, T> aggregate(final Initializer<T> initializer,
+    KTable<K, V> aggregate(final Initializer<V> initializer,
                            final StoreSupplier<KeyValueStore> storeSupplier);
+
+    <W extends Window> TimeWindowedKCogroupedStream<K, V> windowedBy(final Windows<W> windows);
 
 }
 
