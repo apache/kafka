@@ -27,10 +27,10 @@ import java.util.StringJoiner;
 
 /**
  * {@code TestInputTopic} is used to pipe records to topic in {@link TopologyTestDriver}.
- * To use {@code TestInputTopic} create a new instance via {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}
- * In actual test code, you can pipe new record values, keys and values or list of {@link KeyValue} pairs
+ * To use {@code TestInputTopic} create a new instance via
+ * {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}.
+ * In actual test code, you can pipe new record values, keys and values or list of {@link KeyValue} pairs.
  * If you have multiple source topics, you need to create a {@code TestInputTopic} for each.
- *
  *
  * <h2>Processing messages</h2>
  * <pre>{@code
@@ -77,13 +77,16 @@ public class TestInputTopic<K, V> {
             throw new IllegalArgumentException("autoAdvance must be positive");
         }
         this.advanceDuration = autoAdvance;
-
     }
 
     /**
-     * Advances the internally tracked event time of this input topic. Each time a record without explicitly defined timestamp is piped, the current topic event time is used as record timestamp.
+     * Advances the internally tracked event time of this input topic.
+     * Each time a record without explicitly defined timestamp is piped,
+     * the current topic event time is used as record timestamp.
      * <p>
-     * Note: advancing the event time on the input topic, does not advance the tracked stream time in {@link TopologyTestDriver} as long as no new input records are piped. Furthermore, it does not advance the wall-clock time of {@link TopologyTestDriver}.
+     * Note: advancing the event time on the input topic, does not advance the tracked stream time in
+     * {@link TopologyTestDriver} as long as no new input records are piped.
+     * Furthermore, it does not advance the wall-clock time of {@link TopologyTestDriver}.
      *
      * @param advance the duration of time to advance
      */
@@ -102,7 +105,7 @@ public class TestInputTopic<K, V> {
 
     /**
      * Send an input record with the given record on the topic and then commit the records.
-     * May auto advance topic time
+     * May auto advance topic time.
      *
      * @param record the record to sent
      */
@@ -114,7 +117,7 @@ public class TestInputTopic<K, V> {
 
     /**
      * Send an input record with the given value on the topic and then commit the records.
-     * May auto advance topic time
+     * May auto advance topic time.
      *
      * @param value the record value
      */
@@ -129,7 +132,8 @@ public class TestInputTopic<K, V> {
      * @param key   the record key
      * @param value the record value
      */
-    public void pipeInput(final K key, final V value) {
+    public void pipeInput(final K key,
+                          final V value) {
         pipeInput(new TestRecord<>(key, value));
     }
 
@@ -142,7 +146,7 @@ public class TestInputTopic<K, V> {
      */
     public void pipeInput(final V value,
                           final Instant timestamp) {
-        pipeInput(new TestRecord<K, V>(null, value, timestamp));
+        pipeInput(new TestRecord<>(null, value, timestamp));
     }
 
     /**
@@ -156,7 +160,7 @@ public class TestInputTopic<K, V> {
     public void pipeInput(final K key,
                           final V value,
                           final long timestampMs) {
-        pipeInput(new TestRecord<K, V>(key, value, null, timestampMs));
+        pipeInput(new TestRecord<>(key, value, null, timestampMs));
     }
 
     /**
@@ -170,7 +174,7 @@ public class TestInputTopic<K, V> {
     public void pipeInput(final K key,
                           final V value,
                           final Instant timestamp) {
-        pipeInput(new TestRecord<K, V>(key, value, timestamp));
+        pipeInput(new TestRecord<>(key, value, timestamp));
     }
 
     /**
@@ -187,7 +191,8 @@ public class TestInputTopic<K, V> {
 
     /**
      * Send input records with the given KeyValue list on the topic then commit each record individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on
+     * {@link #TestInputTopic(TopologyTestDriver, String, Serializer, Serializer, Instant, Duration) autoAdvance} setting.
      *
      * @param keyValues the {@link List} of {@link KeyValue} records
      */
@@ -199,7 +204,8 @@ public class TestInputTopic<K, V> {
 
     /**
      * Send input records with the given value list on the topic then commit each record individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on
+     * {@link #TestInputTopic(TopologyTestDriver, String, Serializer, Serializer, Instant, Duration) autoAdvance} setting.
      *
      * @param values the {@link List} of {@link KeyValue} records
      */
@@ -229,7 +235,8 @@ public class TestInputTopic<K, V> {
 
     /**
      * Send input records with the given value list on the topic then commit each record individually.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on autoAdvance setting.
+     * The timestamp will be generated based on the constructor provided start time and time will auto advance based on
+     * {@link #TestInputTopic(TopologyTestDriver, String, Serializer, Serializer, Instant, Duration) autoAdvance} setting.
      *
      * @param values         the {@link List} of values
      * @param startTimestamp the timestamp for the first generated record
