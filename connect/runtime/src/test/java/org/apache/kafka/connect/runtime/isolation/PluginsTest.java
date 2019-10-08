@@ -293,6 +293,31 @@ public class PluginsTest {
         }
     }
 
+    @Test
+    public void shouldConfigureConverterWithPluginClassloaderInNewPlugins() {
+        TestPlugins.assertInitialized();
+        List<Configurable> converters = plugins.newPlugins(
+            Collections.singletonList(TestPlugins.SAMPLING_CONFIGURABLE),
+            config,
+            Configurable.class
+        );
+
+        assertEquals(1, converters.size());
+        for (Configurable plugin : converters) {
+            assertTrue(plugin instanceof SamplingTestPlugin);
+            SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
+            Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
+            // There should be at least 1 (root) + 1 (configure call) = 2 samples
+            for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+                String message = e.getKey() + " does not have the PluginClassLoader active";
+                SamplingTestPlugin sample = e.getValue();
+                assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
+                assertTrue(message, sample.classloader() instanceof PluginClassLoader);
+            }
+            assertTrue(samples.toString() + " is incomplete", samples.size() >= 2);
+        }
+    }
+
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
         converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
