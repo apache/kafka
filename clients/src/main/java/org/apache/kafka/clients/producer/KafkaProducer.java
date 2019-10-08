@@ -324,7 +324,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors interceptors,
                   Time time) {
         ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer,
-                valueSerializer));
+                valueSerializer), false);
         try {
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
@@ -423,6 +423,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
+            producerConfig.postUpdateConfigs(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+            producerConfig.logAll();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka producer started");
         } catch (Throwable t) {
@@ -469,6 +471,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 logContext);
         int retries = configureRetries(producerConfig, transactionManager != null, log);
         short acks = configureAcks(producerConfig, transactionManager != null, log);
+        Map<String, Object> updateConfigs = new HashMap<>(2);
+        updateConfigs.put(ProducerConfig.ACKS_CONFIG, acks);
+        updateConfigs.put(ProducerConfig.RETRIES_CONFIG, retries);
+        producerConfig.postUpdateConfigs(updateConfigs);
+
         return new Sender(logContext,
                 client,
                 metadata,

@@ -143,6 +143,10 @@ public class AbstractConfig {
 
     }
 
+    public void postUpdateConfigs(Map<String, Object> configs) {
+        this.values.putAll(configs);
+    }
+
     /**
      * Called directly after user configs got parsed (and thus default values got set).
      * This allows to change default values for "secondary defaults" if required.
@@ -331,7 +335,7 @@ public class AbstractConfig {
         return new RecordingMap<>(values);
     }
 
-    private void logAll() {
+    public void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());
         b.append(" values: ");
