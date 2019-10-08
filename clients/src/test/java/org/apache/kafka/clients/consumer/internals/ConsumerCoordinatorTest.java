@@ -2279,6 +2279,10 @@ public class ConsumerCoordinatorTest {
                 coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
     }
 
+    @Test
+    public void testConsumerRejoinAfterRebalance() {
+    }
+
     private void receiveFencedInstanceIdException() {
         subscriptions.assignFromUser(singleton(t1p));
 
