@@ -764,8 +764,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         final Timer timer) {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
-        final Generation generation = generationIfStable();
-        if (pendingCommittedOffsetRequest != null && !pendingCommittedOffsetRequest.sameRequest(partitions, generation)) {
+        final Generation generationForOffsetRequest = generationIfStable();
+        if (pendingCommittedOffsetRequest != null &&
+            !pendingCommittedOffsetRequest.sameRequest(partitions, generationForOffsetRequest)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
         }
@@ -779,7 +780,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 future = pendingCommittedOffsetRequest.response;
             } else {
                 future = sendOffsetFetchRequest(partitions);
-                pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generation, future);
+                pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generationForOffsetRequest, future);
 
             }
             client.poll(future, timer);

@@ -607,7 +607,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
                 );
-        log.debug("Sending follower SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
+        log.debug("Sending follower SyncGroup to coordinator {} at generation {}: {}", this.coordinator, this.generation, requestBuilder);
         return sendSyncGroupRequest(requestBuilder);
     }
 
@@ -634,7 +634,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
-            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
+            log.debug("Sending leader SyncGroup to coordinator {} at generation {}: {}", this.coordinator, this.generation, requestBuilder);
             return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);
@@ -788,7 +788,9 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Get the current generation state
+     * Get the current generation state, regardless of whether it is currently stable.
+     * Note that the generation information can be updated while we are still in the middle
+     * of a rebalance, after the join-group response is received.
      *
      * @return the current generation
      */
