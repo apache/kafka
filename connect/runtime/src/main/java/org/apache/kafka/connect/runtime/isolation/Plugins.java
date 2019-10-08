@@ -71,18 +71,10 @@ public class Plugins {
         return Utils.join(plugins, ", ");
     }
 
-    protected <T> T newPlugin(Class<T> klass) {
-        ClassLoader classLoader = delegatingLoader.pluginClassLoader(klass.getName());
-        if (classLoader == null) {
-            classLoader = delegatingLoader;
-        }
-        return newPlugin(classLoader, klass);
-    }
-
-    protected static <T> T newPlugin(ClassLoader classLoader, Class<T> klass) {
+    protected static <T> T newPlugin(Class<T> klass) {
         // KAFKA-8340: The thread classloader is used during static initialization and must be
         // set to the plugin's classloader during instantiation
-        ClassLoader savedLoader = compareAndSwapLoaders(classLoader);
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
@@ -102,7 +94,7 @@ public class Plugins {
         if (pluginClass.isAssignableFrom(klass)) {
             return (Class<? extends U>) klass;
         }
-        throw new ClassNotFoundException(
+        throw new ClassCastException(
             "Requested class for property: "
                 + propertyName
                 + " does not extend " + pluginClass.getSimpleName()
