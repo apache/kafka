@@ -58,7 +58,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -92,7 +91,6 @@ public class EosIntegrationTest {
     private AtomicBoolean errorInjected;
     private AtomicBoolean gcInjected;
     private volatile boolean doGC = true;
-    private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
     private int testNumber = 0;
@@ -331,15 +329,10 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
-
-            TestUtils.waitForCondition(
-                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "StreamsTasks did not request commit.");
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             writeInputData(uncommittedDataBeforeFailure);
-
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(committedRecords, committedDataBeforeFailure);
             checkResultPerKey(uncommittedRecords, dataBeforeFailure);
@@ -399,15 +392,10 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
-
-            TestUtils.waitForCondition(
-                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             writeInputData(uncommittedDataBeforeFailure);
-
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
             checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
@@ -477,15 +465,10 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterSecondRebalance = prepareData(20L, 30L, 0L, 1L);
 
             writeInputData(committedDataBeforeGC);
-
-            TestUtils.waitForCondition(
-                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeGC.size(), CONSUMER_GROUP_ID);
 
             writeInputData(uncommittedDataBeforeGC);
-
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeGC.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeGC.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(committedRecords, committedDataBeforeGC);
             checkResultPerKey(uncommittedRecords, dataBeforeGC);
@@ -553,7 +536,6 @@ public class EosIntegrationTest {
     private KafkaStreams getKafkaStreams(final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads) {
-        commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -576,12 +558,13 @@ public class EosIntegrationTest {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
                     ProcessorContext context;
                     KeyValueStore<Long, Long> state = null;
+                    final boolean hasState = withState;
 
                     @Override
                     public void init(final ProcessorContext context) {
                         this.context = context;
 
-                        if (withState) {
+                        if (hasState) {
                             state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
                         }
                     }
@@ -601,7 +584,6 @@ public class EosIntegrationTest {
 
                         if ((value + 1) % 10 == 0) {
                             context.commit();
-                            commitRequested.incrementAndGet();
                         }
 
                         if (state != null) {
