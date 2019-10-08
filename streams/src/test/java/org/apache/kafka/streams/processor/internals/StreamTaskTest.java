@@ -669,7 +669,6 @@ public class StreamTaskTest {
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(false));
 
-        task.initializeTaskTime();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
         assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
@@ -695,7 +694,6 @@ public class StreamTaskTest {
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(true));
 
-        task.initializeTaskTime();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
         assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
