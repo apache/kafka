@@ -53,38 +53,13 @@ import static org.junit.Assert.assertEquals;
 @Category(IntegrationTest.class)
 public class RestExtensionIntegrationTest {
 
-    private static final int NUM_WORKERS = 3;
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testImmediateRequestForListOfConnectors() throws IOException, InterruptedException {
-        // setup Connect worker properties
-        Map<String, String> workerProps = new HashMap<>();
-        workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
-
-        // build a Connect cluster backed by Kafka and Zk
-        connect = new EmbeddedConnectCluster.Builder()
-            .name("connect-cluster")
-            .numWorkers(NUM_WORKERS)
-            .numBrokers(1)
-            .workerProps(workerProps)
-            .build();
-
-        // start the clusters
-        connect.start();
-
-        waitForCondition(
-            this::extensionIsRegistered,
-            REST_EXTENSION_REGISTRATION_TIMEOUT_MS,
-            "REST extension was never registered"
-        );
-    }
-
-    @Test
-    public void testConnectorHealthAndConfig() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws IOException, InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -178,13 +153,15 @@ public class RestExtensionIntegrationTest {
             IntegrationTestRestExtension.instance.restPluginContext.clusterState();
         
         ConnectorHealth actualHealth = clusterState.connectorHealth(connectorName);
+        if (actualHealth.tasksState().isEmpty()) {
+            // Happens if the task has been started but its status has not yet been picked up from
+            // the status topic by the worker.
+            return false;
+        }
         Map<String, String> actualConfig = clusterState.connectorConfig(connectorName);
 
-        // If the health and config are both available, they should immediately match the expected
-        // values. If they don't, throw an exception; this enables fail-fast behavior and more
-        // informative error messages/stack traces should the test fail
-        assertEquals(expectedHealth, actualHealth);
         assertEquals(expectedConfig, actualConfig);
+        assertEquals(expectedHealth, actualHealth);
 
         return true;
     }
@@ -198,7 +175,11 @@ public class RestExtensionIntegrationTest {
         public void register(ConnectRestExtensionContext restPluginContext) {
             instance = this;
             this.restPluginContext = restPluginContext;
+            // Immediately request a list of connectors to confirm that the context and its fields
+            // has been fully initialized and there is no risk of deadlock
             restPluginContext.clusterState().connectors();
+            // Install a new REST resource that can be used to confirm that the extension has been
+            // successfully registered
             restPluginContext.configurable().register(new IntegrationTestRestExtensionResource());
         }
     
