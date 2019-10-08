@@ -159,6 +159,7 @@ object Partition extends KafkaMetricsGroup {
 sealed trait AssignmentState {
   def replicas: Seq[Int]
   def replicationFactor: Int = replicas.size
+  def isAddingReplica(brokerId: Int): Boolean = false
 }
 
 case class OngoingReassignmentState(addingReplicas: Seq[Int],
@@ -166,7 +167,9 @@ case class OngoingReassignmentState(addingReplicas: Seq[Int],
                                     originalReplicas: Seq[Int],
                                     replicas: Seq[Int]) extends AssignmentState {
 
-  override def replicationFactor = originalReplicas.size
+  override def replicationFactor: Int = originalReplicas.size
+  override def isAddingReplica(replicaId: Int): Boolean = addingReplicas.contains(replicaId)
+
 }
 
 case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
@@ -283,15 +286,9 @@ class Partition(val topicPartition: TopicPartition,
 
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
-  def isAddingLocalReplica: Boolean = assignmentState match {
-    case state: OngoingReassignmentState => state.addingReplicas.contains(localBrokerId)
-    case _ => false
-  }
+  def isAddingLocalReplica: Boolean = assignmentState.isAddingReplica(localBrokerId)
 
-  def isAddingReplica(replicaId: Int): Boolean = assignmentState match {
-    case state: OngoingReassignmentState => state.addingReplicas.contains(replicaId)
-    case _ => false
-  }
+  def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
