@@ -368,8 +368,7 @@ private[kafka] object LogValidator extends Logging {
         for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new RecordValidationException(
-              new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-                s"compression attribute set: $record"),
+              new InvalidRecordException(s"Compressed outer record should not have an inner record with a compression attribute set: $record"),
               List(new RecordError(batchIndex)))
 
           validateRecord(batch, topicPartition, record, batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)

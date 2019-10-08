@@ -360,7 +360,11 @@ public class ProduceResponse extends AbstractResponse {
             b.append(", recordErrors: ");
             b.append(recordErrors);
             b.append(", errorMessage: ");
-            b.append(errorMessage);
+            if (errorMessage != null) {
+                b.append(errorMessage);
+            } else {
+                b.append("null");
+            }
             b.append('}');
             return b.toString();
         }
