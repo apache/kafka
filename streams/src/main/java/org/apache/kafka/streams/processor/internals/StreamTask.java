@@ -111,8 +111,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, metrics);
 
             // add the operation metrics with additional tags
-            final Map<String, String> tagMap = metrics.taskLevelTagMap(Thread.currentThread().getName(), taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
+            final Map<String, String> tagMap = metrics.taskLevelTagMap(threadId, taskName);
+            taskCommitTimeSensor =
+                metrics.taskLevelSensor(threadId, taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
             taskCommitTimeSensor.add(
                 new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
                 new Avg()

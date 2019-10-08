@@ -461,7 +461,7 @@ public abstract class SessionBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("threa-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry(metricScope + "-state-id", sessionStore.name())
             )

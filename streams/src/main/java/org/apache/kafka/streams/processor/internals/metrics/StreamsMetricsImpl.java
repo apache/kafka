@@ -226,10 +226,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_23, threadName);
+        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_23, threadId);
         return tagMap;
     }
-
 
     public Map<String, String> threadLevelTagMap(final String threadId, final String... tags) {
         final Map<String, String> tagMap = threadLevelTagMap(threadId);
@@ -261,25 +260,33 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    public Map<String, String> nodeLevelTagMap(final String threadId, final String taskName, final String processorNodeName) {
+    public Map<String, String> nodeLevelTagMap(final String threadId,
+                                               final String taskName,
+                                               final String processorNodeName) {
         final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
         tagMap.put(PROCESSOR_NODE_ID_TAG, processorNodeName);
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String threadId, final String taskName, final String storeType, final String storeName) {
+    public Map<String, String> storeLevelTagMap(final String threadId,
+                                                final String taskName,
+                                                final String storeType,
+                                                final String storeName) {
         final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }
 
-    public Map<String, String> bufferLevelTagMap(final threadId, final String taskName, final String bufferName) {
+    public Map<String, String> bufferLevelTagMap(final String threadId,
+                                                 final String taskName,
+                                                 final String bufferName) {
         final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
         tagMap.put(BUFFER_ID_TAG, bufferName);
         return tagMap;
     }
 
-    private Map<String, String> addTags(final Map<String, String> tagMap, final String... tags) {
+    private Map<String, String> addTags(final Map<String, String> tagMap,
+                                        final String... tags) {
         if (tags != null) {
             if ((tags.length % 2) != 0) {
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
@@ -293,7 +300,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public final Sensor taskLevelSensor(final String threadId,
-					final String taskName,
+                                        final String taskId,
                                         final String sensorName,
                                         final RecordingLevel recordingLevel,
                                         final Sensor... parents) {

@@ -436,7 +436,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final String taskName = "test-task";
         final String storeType = "remote-window";
         final String storeName = "window-keeper";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_NAME, builtInMetricsVersion);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID, builtInMetricsVersion);
 
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(THREAD_ID, taskName, storeType, storeName);
 
@@ -444,7 +444,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         final boolean isMetricsLatest = builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST);
         assertThat(
             tagMap.get(isMetricsLatest ? StreamsMetricsImpl.THREAD_ID_TAG : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23),
-            equalTo(THREAD_NAME));
+            equalTo(THREAD_ID));
         assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
         assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
     }
@@ -488,15 +488,15 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     private void shouldGetThreadLevelTagMap(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_NAME, builtInMetricsVersion);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID, builtInMetricsVersion);
 
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap();
+        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(THREAD_ID);
 
         assertThat(tagMap.size(), equalTo(1));
         assertThat(
             tagMap.get(builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? StreamsMetricsImpl.THREAD_ID_TAG
                 : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_23),
-            equalTo(THREAD_NAME)
+            equalTo(THREAD_ID)
         );
     }
 
