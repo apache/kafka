@@ -27,7 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{After, Before}
@@ -70,14 +70,10 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
     props.put("group.id", group)
     val consumer = new KafkaConsumer(props, new StringDeserializer, new StringDeserializer)
     try {
-      consumer.partitionsFor(topic).asScala.flatMap { partitionInfo =>
-        val tp = new TopicPartition(partitionInfo.topic, partitionInfo.partition)
-        val committed = consumer.committed(tp)
-        if (committed == null)
-          None
-        else
-          Some(tp -> committed.offset)
-      }.toMap
+      val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
+        .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
+
+      consumer.committed(partitions.asJava).asScala.mapValues(_.offset()).toMap
     } finally {
       consumer.close()
     }
@@ -94,8 +90,9 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
                                topic: String = topic,
                                group: String = group,
                                strategy: String = classOf[RangeAssignor].getName,
-                               customPropsOpt: Option[Properties] = None): ConsumerGroupExecutor = {
-    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy, customPropsOpt)
+                               customPropsOpt: Option[Properties] = None,
+                               syncCommit: Boolean = false): ConsumerGroupExecutor = {
+    val executor = new ConsumerGroupExecutor(brokerList, numConsumers, group, topic, strategy, customPropsOpt, syncCommit)
     addExecutor(executor)
     executor
   }
@@ -116,7 +113,8 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
 object ConsumerGroupCommandTest {
 
-  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None) extends Runnable {
+  abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None,
+                                          syncCommit: Boolean = false) extends Runnable {
     val props = new Properties
     configure(props)
     customPropsOpt.foreach(props.asScala ++= _.asScala)
@@ -134,8 +132,11 @@ object ConsumerGroupCommandTest {
     def run(): Unit = {
       try {
         subscribe()
-        while (true)
+        while (true) {
           consumer.poll(Duration.ofMillis(Long.MaxValue))
+          if (syncCommit)
+            consumer.commitSync()
+        }
       } catch {
         case _: WakeupException => // OK
       } finally {
@@ -148,8 +149,9 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String, customPropsOpt: Option[Properties] = None)
-    extends AbstractConsumerRunnable(broker, groupId, customPropsOpt) {
+  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String,
+                         customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
+    extends AbstractConsumerRunnable(broker, groupId, customPropsOpt, syncCommit) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
@@ -186,11 +188,11 @@ object ConsumerGroupCommandTest {
   }
 
   class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String, strategy: String,
-                              customPropsOpt: Option[Properties] = None)
+                              customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
     extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
-      submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt))
+      submit(new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt, syncCommit))
     }
 
   }

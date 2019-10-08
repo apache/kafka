@@ -1110,24 +1110,37 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (isPending) {
+      // The group has been unloaded and invalid, we should complete the heartbeat.
+      if (group.is(Dead)) {
+        forceComplete()
+      } else if (isPending) {
         // complete the heartbeat if the member has joined the group
         if (group.has(memberId)) {
           forceComplete()
         } else false
-      }
-      else {
-        val member = group.get(memberId)
-        if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving) {
+      } else {
+        if (shouldCompleteNonPendingHeartbeat(group, memberId, heartbeatDeadline)) {
           forceComplete()
         } else false
       }
     }
   }
 
+  def shouldCompleteNonPendingHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long): Boolean = {
+    if (group.has(memberId)) {
+      val member = group.get(memberId)
+      member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving
+    } else {
+      info(s"Member id $memberId was not found in ${group.groupId} during heartbeat expiration.")
+      false
+    }
+  }
+
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long): Unit = {
     group.inLock {
-      if (isPending) {
+      if (group.is(Dead)) {
+        info(s"Received notification of heartbeat expiration for member $memberId after group ${group.groupId} had already been unloaded or deleted.")
+      } else if (isPending) {
         info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
         removePendingMemberAndUpdateGroup(group, memberId)
       } else if (!group.has(memberId)) {

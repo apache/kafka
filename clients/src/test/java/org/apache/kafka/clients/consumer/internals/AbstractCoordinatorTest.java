@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -163,6 +162,7 @@ public class AbstractCoordinatorTest {
         assertNotNull(getMetric("sync-total"));
         assertNotNull(getMetric("rebalance-latency-avg"));
         assertNotNull(getMetric("rebalance-latency-max"));
+        assertNotNull(getMetric("rebalance-latency-total"));
         assertNotNull(getMetric("rebalance-rate-per-hour"));
         assertNotNull(getMetric("rebalance-total"));
         assertNotNull(getMetric("last-rebalance-seconds-ago"));
@@ -207,6 +207,7 @@ public class AbstractCoordinatorTest {
 
         assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
+        assertEquals(9.0d, getMetric("rebalance-latency-total").metricValue());
         assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("rebalance-total").metricValue());
 
@@ -500,8 +501,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHandleSingleLeaveGroupRequest() {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-        mockClient.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-            new ApiVersionsResponse.ApiVersion(ApiKeys.LEAVE_GROUP, (short) 2, (short) 2))));
+        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.LEAVE_GROUP.id, (short) 2, (short) 2));
 
         LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
             new MemberResponse()

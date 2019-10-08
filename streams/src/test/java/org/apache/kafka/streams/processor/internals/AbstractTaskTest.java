@@ -227,13 +227,7 @@ public class AbstractTaskTest {
             public void commit() {}
 
             @Override
-            public void suspend() {}
-
-            @Override
             public void close(final boolean clean, final boolean isZombie) {}
-
-            @Override
-            public void closeSuspended(final boolean clean, final boolean isZombie, final RuntimeException e) {}
 
             @Override
             public boolean initializeStateStores() {

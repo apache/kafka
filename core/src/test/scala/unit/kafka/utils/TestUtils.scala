@@ -795,6 +795,17 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
+  def subscribeAndWaitForRecords(topic: String,
+                                 consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records",
+      waitTimeMs)
+  }
+
   /**
    * Wait for the presence of an optional value.
    *
@@ -910,16 +921,14 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
-          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
-          partitionStateOpt match {
-            case None => false
-            case Some(partitionState) =>
-              leader = partitionState.basePartitionState.leader
-              result && Request.isValidBrokerId(leader)
-          }
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
+            leader = partitionState.leader
+            true
+          case _ => false
+        }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
@@ -1432,11 +1441,12 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+    val committed = consumer.committed(consumer.assignment).asScala.mapValues(_.offset)
+
     consumer.assignment.asScala.foreach { topicPartition =>
-      val offset = consumer.committed(topicPartition)
-      if (offset != null)
-        consumer.seek(topicPartition, offset.offset)
+      if (committed.contains(topicPartition))
+        consumer.seek(topicPartition, committed(topicPartition))
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }

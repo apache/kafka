@@ -54,7 +54,7 @@ class ConnectDistributedTest(Test):
     STATUS_REPLICATION_FACTOR = "1"
     STATUS_PARTITIONS = "1"
     SCHEDULED_REBALANCE_MAX_DELAY_MS = "60000"
-    CONNECT_PROTOCOL="compatible"
+    CONNECT_PROTOCOL="sessioned"
 
     # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
     # across all nodes.
@@ -157,7 +157,7 @@ class ConnectDistributedTest(Test):
         return self._task_has_state(task_id, status, 'RUNNING')
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['compatible', 'eager'])
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_restart_failed_connector(self, connect_protocol):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -176,7 +176,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'sink'], connect_protocol=['compatible', 'eager'])
+    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_restart_failed_task(self, connector_type, connect_protocol):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -201,7 +201,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['compatible', 'eager'])
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_pause_and_resume_source(self, connect_protocol):
         """
         Verify that source connectors stop producing records when paused and begin again after
@@ -242,7 +242,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['compatible', 'eager'])
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_pause_and_resume_sink(self, connect_protocol):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
@@ -290,7 +290,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['compatible', 'eager'])
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_pause_state_persistent(self, connect_protocol):
         """
         Verify that paused state is preserved after a cluster restart.
@@ -322,7 +322,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], connect_protocol=['compatible', 'eager'])
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_file_source_and_sink(self, security_protocol, connect_protocol):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
@@ -360,7 +360,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=timeout_sec, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['compatible', 'eager'])
+    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_bounce(self, clean, connect_protocol):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
@@ -470,7 +470,7 @@ class ConnectDistributedTest(Test):
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
     @cluster(num_nodes=6)
-    @matrix(connect_protocol=['compatible', 'eager'])
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
     def test_transformations(self, connect_protocol):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime')
@@ -527,6 +527,11 @@ class ConnectDistributedTest(Test):
             assert obj['payload'][ts_fieldname] == ts
 
     @cluster(num_nodes=5)
+    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='sessioned')
+    @parametrize(broker_version=str(LATEST_0_11_0), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='sessioned')
+    @parametrize(broker_version=str(LATEST_0_10_2), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='sessioned')
+    @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='sessioned')
+    @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='sessioned')
     @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='compatible')
     @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='compatible')

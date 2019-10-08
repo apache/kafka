@@ -62,7 +62,7 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaConfigBackingStore.class)
-@PowerMockIgnore("javax.management.*")
+@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaConfigBackingStoreTest {
     private static final String TOPIC = "connect-configs";

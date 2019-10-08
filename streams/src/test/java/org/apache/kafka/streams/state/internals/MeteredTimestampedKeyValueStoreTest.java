@@ -64,9 +64,10 @@ import static org.junit.Assert.fail;
 @RunWith(EasyMockRunner.class)
 public class MeteredTimestampedKeyValueStoreTest {
 
+    private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0);
     private final Map<String, String> tags = mkMap(
-        mkEntry("client-id", "test"),
+        mkEntry("thread-id", threadId),
         mkEntry("task-id", taskId.toString()),
         mkEntry("scope-state-id", "metered")
     );
@@ -110,10 +111,10 @@ public class MeteredTimestampedKeyValueStoreTest {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", "test", taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", "test", taskId.toString(), "scope", "all")));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
+                "scope", threadId, taskId.toString(), "scope", "metered")));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
+                "scope", threadId, taskId.toString(), "scope", "all")));
     }
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {

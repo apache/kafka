@@ -35,7 +35,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -56,8 +56,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class SessionWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final Merger<String, String> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + "+" + aggTwo;
     private SessionWindowedKStream<String, String> stream;
@@ -295,10 +293,12 @@ public class SessionWindowedKStreamImplTest {
     }
 
     private void processData(final TopologyTestDriver driver) {
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "2", 15));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "3", 600));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "1", 600));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 599));
+        final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+        inputTopic.pipeInput("1", "1", 10);
+        inputTopic.pipeInput("1", "2", 15);
+        inputTopic.pipeInput("1", "3", 600);
+        inputTopic.pipeInput("2", "1", 600);
+        inputTopic.pipeInput("2", "2", 599);
     }
 }

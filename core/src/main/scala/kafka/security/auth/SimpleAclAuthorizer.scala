@@ -19,6 +19,7 @@ package kafka.security.auth
 import java.util
 
 import kafka.network.RequestChannel.Session
+import kafka.security.auth.SimpleAclAuthorizer.BaseAuthorizer
 import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.utils._
 import kafka.zk.ZkVersion
@@ -50,6 +51,22 @@ object SimpleAclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
+
+  private[auth] class BaseAuthorizer extends AclAuthorizer {
+    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
+      val principal = requestContext.principal
+      val host = requestContext.clientAddress.getHostAddress
+      val operation = Operation.fromJava(action.operation)
+      val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
+      def logMessage: String = {
+        val authResult = if (authorized) "Allowed" else "Denied"
+        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
+      }
+
+      if (authorized) authorizerLogger.debug(logMessage)
+      else authorizerLogger.info(logMessage)
+    }
+  }
 }
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
@@ -155,21 +172,5 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       throw e.getCause
     else
       throw e
-  }
-
-  class BaseAuthorizer extends AclAuthorizer {
-    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
-      val principal = requestContext.principal
-      val host = requestContext.clientAddress.getHostAddress
-      val operation = Operation.fromJava(action.operation)
-      val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
-      def logMessage: String = {
-        val authResult = if (authorized) "Allowed" else "Denied"
-        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
-      }
-
-      if (authorized) authorizerLogger.debug(logMessage)
-      else authorizerLogger.info(logMessage)
-    }
   }
 }
