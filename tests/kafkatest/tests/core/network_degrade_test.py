@@ -57,13 +57,20 @@ class NetworkDegradeTest(Test):
         zk1 = self.zk.nodes[1]
 
         r = re.compile(r".*time=(?P<time>[\d.]+)\sms.*")
+        # PING ducker01 (172.24.0.2) 56(84) bytes of data.
+        # 64 bytes from ducker01 (172.24.0.2): icmp_seq=1 ttl=64 time=0.325 ms
+        # 64 bytes from ducker01 (172.24.0.2): icmp_seq=2 ttl=64 time=0.197 ms
+        # 64 bytes from ducker01 (172.24.0.2): icmp_seq=3 ttl=64 time=0.145 ms
         times = []
+
+        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 example.com"))
+
         for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.externally_routable_ip):
             self.logger.debug("Ping output: %s" % line)
             m = r.match(line)
             if m is not None and m.group("time"):
                 times.append(float(m.group("time")))
-                self.logger.debug("Parsed ping time of %d" % float(m.group("time")))
+                self.logger.info("Parsed ping time of %d" % float(m.group("time")))
 
         # We expect to see some low ping times (before and after the task runs)
         # as well as high ping times (during the task)
@@ -95,14 +102,18 @@ class NetworkDegradeTest(Test):
         iperf_server = zk1.account.ssh_capture("iperf -s")
 
         r = re.compile(r"^.*\s(?P<rate>[\d.]+)\sKbits/sec$")
+        # [ ID] Interval       Transfer     Bandwidth
+        # [  3]  0.0- 1.0 sec  2952576 KBytes  24187503 Kbits/sec
+        # [  3]  1.0- 2.0 sec  2899072 KBytes  23749198 Kbits/sec
+        # [  3]  2.0- 3.0 sec  2998784 KBytes  24566039 Kbits/sec
         measured_rates = []
         for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.account.externally_routable_ip):
-            self.logger.debug("iperf output %s" % line)
+            self.logger.info("iperf output %s" % line)
             m = r.match(line)
             if m is not None:
                 measured_rate = float(m.group("rate"))
                 measured_rates.append(measured_rate)
-                self.logger.debug("Parsed rate of %d kbit/s from iperf" % measured_rate)
+                self.logger.info("Parsed rate of %d kbit/s from iperf" % measured_rate)
 
         zk1.account.kill_process("iperf")
         # consume the output
