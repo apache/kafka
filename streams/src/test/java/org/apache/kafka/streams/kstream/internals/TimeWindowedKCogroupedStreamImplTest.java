@@ -26,10 +26,10 @@ import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KCogroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -37,9 +37,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -60,8 +58,6 @@ public class TimeWindowedKCogroupedStreamImplTest {
     private KCogroupedStream<String, String, String> cogroupedStream;
     private TimeWindowedKCogroupedStream<String, String> windowedCogroupedStream;
 
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
 
@@ -99,10 +95,11 @@ public class TimeWindowedKCogroupedStreamImplTest {
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 1));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 2));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 1);
+            testInputTopic.pipeInput("1", "A", 2);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
@@ -121,14 +118,15 @@ public class TimeWindowedKCogroupedStreamImplTest {
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 1));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 2));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "B", 4));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 4));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 1);
+            testInputTopic.pipeInput("1", "A", 2);
+            testInputTopic.pipeInput("1", "B", 3);
+            testInputTopic.pipeInput("11", "B", 3);
+            testInputTopic.pipeInput("11", "B", 4);
+            testInputTopic.pipeInput("1", "B", 4);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
@@ -147,14 +145,16 @@ public class TimeWindowedKCogroupedStreamImplTest {
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 1));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 2));
-            driver.pipeInput(recordFactory.create(TOPIC2, "1", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC2, "11", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC2, "11", "B", 4));
-            driver.pipeInput(recordFactory.create(TOPIC2, "1", "B", 4));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 1);
+            testInputTopic.pipeInput("1", "A", 2);
+            testInputTopic2.pipeInput("1", "B", 3);
+            testInputTopic2.pipeInput("11", "B", 3);
+            testInputTopic2.pipeInput("11", "B", 4);
+            testInputTopic2.pipeInput("1", "B", 4);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
@@ -173,10 +173,11 @@ public class TimeWindowedKCogroupedStreamImplTest {
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 501L));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 501L));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 501L);
+            testInputTopic.pipeInput("1", "A", 501L);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
@@ -204,14 +205,16 @@ public class TimeWindowedKCogroupedStreamImplTest {
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "11", "A", 1));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 2));
-            driver.pipeInput(recordFactory.create(TOPIC2, "1", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC2, "11", "B", 3));
-            driver.pipeInput(recordFactory.create(TOPIC2, "11", "B", 501));
-            driver.pipeInput(recordFactory.create(TOPIC2, "1", "B", 501));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 1);
+            testInputTopic.pipeInput("1", "A", 2);
+            testInputTopic2.pipeInput("1", "B", 3);
+            testInputTopic2.pipeInput("11", "B", 3);
+            testInputTopic2.pipeInput("11", "B", 501);
+            testInputTopic2.pipeInput("1", "B", 501);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey

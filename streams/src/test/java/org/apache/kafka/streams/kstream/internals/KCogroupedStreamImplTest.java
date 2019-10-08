@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -43,7 +44,6 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -62,8 +62,6 @@ public class KCogroupedStreamImplTest {
     private KGroupedStream<String, String> groupedStream;
     private KCogroupedStream<String, String, String> cogroupedStream;
 
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
 
@@ -144,10 +142,11 @@ public class KCogroupedStreamImplTest {
         builder.stream("to-one", stringConsumed).process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "A", 0));
-            driver.pipeInput(recordFactory.create("one", "11", "A", 0));
-            driver.pipeInput(recordFactory.create("one", "11", "A", 0));
-            driver.pipeInput(recordFactory.create("one", "1", "A", 0));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("11", "A", 0);
+            testInputTopic.pipeInput("1", "A", 0);
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
@@ -177,16 +176,19 @@ public class KCogroupedStreamImplTest {
         builder.stream("to-one", stringConsumed).process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "A", 0));
-            driver.pipeInput(recordFactory.create("one", "1", "A", 1));
-            driver.pipeInput(recordFactory.create("one", "1", "A", 10));
-            driver.pipeInput(recordFactory.create("one", "1", "A", 100));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 100L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 200L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 1L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 100L));
+
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0);
+            testInputTopic.pipeInput("1", "A", 1);
+            testInputTopic.pipeInput("1", "A", 10);
+            testInputTopic.pipeInput( "1", "A", 100);
+            testInputTopic2.pipeInput("2", "B", 100L);
+            testInputTopic2.pipeInput("2", "B", 200L);
+            testInputTopic2.pipeInput("2", "B", 1L);
+            testInputTopic2.pipeInput("2", "B", 500L);
+            testInputTopic2.pipeInput("2", "B", 500L);
+            testInputTopic2.pipeInput("2", "B", 100L);
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
@@ -222,18 +224,20 @@ public class KCogroupedStreamImplTest {
         builder.stream("to-one", stringConsumed).process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "A", 0L));
-            driver.pipeInput(recordFactory.create("one", "2", "A", 1L));
-            driver.pipeInput(recordFactory.create("one", "1", "A", 10L));
-            driver.pipeInput(recordFactory.create("one", "2", "A", 100L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 100L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 200L));
-            driver.pipeInput(recordFactory.create("two", "1", "B", 1L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "1", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "3", "B", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "B", 100L));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "A", 0L);
+            testInputTopic.pipeInput("2", "A", 1L);
+            testInputTopic.pipeInput("1", "A", 10L);
+            testInputTopic.pipeInput("2", "A", 100L);
+            testInputTopic2.pipeInput("2", "B", 100L);
+            testInputTopic2.pipeInput("2", "B", 200L);
+            testInputTopic2.pipeInput("1", "B", 1L);
+            testInputTopic2.pipeInput("2", "B", 500L);
+            testInputTopic2.pipeInput("1", "B", 500L);
+            testInputTopic2.pipeInput("2", "B", 500L);
+            testInputTopic2.pipeInput("3", "B", 500L);
+            testInputTopic2.pipeInput("2", "B", 100L);
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
@@ -271,18 +275,20 @@ public class KCogroupedStreamImplTest {
         builder.stream("to-one", stringConsume).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
-            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 200L));
-            driver.pipeInput(recordFactory.create("two", "1", "2", 1L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "3", 500L));
-            driver.pipeInput(recordFactory.create("two", "3", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "1", 0L);
+            testInputTopic.pipeInput("2", "1", 1L);
+            testInputTopic.pipeInput("1", "1", 10L);
+            testInputTopic.pipeInput("2", "1", 100L);
+            testInputTopic2.pipeInput("2", "2", 100L);
+            testInputTopic2.pipeInput("2", "2", 200L);
+            testInputTopic2.pipeInput("1", "2", 1L);
+            testInputTopic2.pipeInput("2", "2", 500L);
+            testInputTopic2.pipeInput("1", "2", 500L);
+            testInputTopic2.pipeInput("2", "3", 500L);
+            testInputTopic2.pipeInput("3", "2", 500L);
+            testInputTopic2.pipeInput("2", "2", 100L);
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
@@ -319,22 +325,22 @@ public class KCogroupedStreamImplTest {
 
         builder.stream("to-one", intergerConsumed).process(supplier);
 
-        final ConsumerRecordFactory<String, Integer> recordFactory2 =
-            new ConsumerRecordFactory<String, Integer>(new StringSerializer(), new IntegerSerializer());
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
-            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, Integer> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new IntegerSerializer());
+            testInputTopic.pipeInput("1", "1", 0L);
+            testInputTopic.pipeInput("2", "1", 1L);
+            testInputTopic.pipeInput("1", "1", 10L);
+            testInputTopic.pipeInput("2", "1", 100L);
 
-            driver.pipeInput(recordFactory2.create("two", "2", 2, 100L));
-            driver.pipeInput(recordFactory2.create("two", "2", 2, 200L));
-            driver.pipeInput(recordFactory2.create("two", "1", 2, 1L));
-            driver.pipeInput(recordFactory2.create("two", "2", 2, 500L));
-            driver.pipeInput(recordFactory2.create("two", "1", 2, 500L));
-            driver.pipeInput(recordFactory2.create("two", "2", 3, 500L));
-            driver.pipeInput(recordFactory2.create("two", "3", 2, 500L));
-            driver.pipeInput(recordFactory2.create("two", "2", 2, 100L));
+            testInputTopic2.pipeInput("2", 2, 100L);
+            testInputTopic2.pipeInput("2", 2, 200L);
+            testInputTopic2.pipeInput("1", 2, 1L);
+            testInputTopic2.pipeInput("2", 2, 500L);
+            testInputTopic2.pipeInput("1", 2, 500L);
+            testInputTopic2.pipeInput("2", 3, 500L);
+            testInputTopic2.pipeInput("3", 2, 500L);
+            testInputTopic2.pipeInput("2", 2, 100L);
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
@@ -371,14 +377,16 @@ public class KCogroupedStreamImplTest {
 
         builder.stream("to-one", stringConsumed).process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("one", "1", "1", 0L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 1L));
-            driver.pipeInput(recordFactory.create("one", "1", "1", 10L));
-            driver.pipeInput(recordFactory.create("one", "2", "1", 100L));
-            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "1", "2", 500L));
-            driver.pipeInput(recordFactory.create("two", "2", "2", 100L));
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            testInputTopic.pipeInput("1", "1", 0L);
+            testInputTopic.pipeInput("2", "1", 1L);
+            testInputTopic.pipeInput("1", "1", 10L);
+            testInputTopic.pipeInput("2", "1", 100L);
+            testInputTopic2.pipeInput("1", "2", 500L);
+            testInputTopic2.pipeInput("2", "2", 500L);
+            testInputTopic2.pipeInput("1", "2", 500L);
+            testInputTopic2.pipeInput("2", "2", 100L);
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
