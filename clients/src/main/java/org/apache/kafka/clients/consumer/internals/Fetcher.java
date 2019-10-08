@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -56,12 +58,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -753,7 +753,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     private boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
-        ApiVersionsResponse.ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+        ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         if (apiVersion == null)
             return false;
 
@@ -1422,7 +1422,7 @@ public class Fetcher<K, V> implements Closeable {
             if (checkCrcs && currentBatch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                 try {
                     batch.ensureValid();
-                } catch (InvalidRecordException e) {
+                } catch (CorruptRecordException e) {
                     throw new KafkaException("Record batch for partition " + partition + " at offset " +
                             batch.baseOffset() + " is invalid, cause: " + e.getMessage());
                 }
@@ -1433,7 +1433,7 @@ public class Fetcher<K, V> implements Closeable {
             if (checkCrcs) {
                 try {
                     record.ensureValid();
-                } catch (InvalidRecordException e) {
+                } catch (CorruptRecordException e) {
                     throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
                             + " is invalid, cause: " + e.getMessage());
                 }
@@ -1742,8 +1742,10 @@ public class Fetcher<K, V> implements Closeable {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
                         if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) ->
-                                subscription.preferredReadReplica(tp, 0L).orElse(-1));
+                            metrics.addMetric(
+                                metricName,
+                                (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
+                            );
                         }
                     }
                 }

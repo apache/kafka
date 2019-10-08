@@ -95,10 +95,11 @@ public class MeteredWindowStoreTest {
         store.init(context, store);
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", "test", context.taskId().toString(), "scope", "mocked-store")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
-                "scope", "test", context.taskId().toString(), "scope", "all")));
+        final String threadId = Thread.currentThread().getName();
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
+                "scope", threadId, context.taskId().toString(), "scope", "mocked-store")));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
+                "scope", threadId, context.taskId().toString(), "scope", "all")));
     }
 
     @Test
@@ -113,6 +114,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));

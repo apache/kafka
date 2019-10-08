@@ -25,6 +25,7 @@ import kafka.common.LongRef
 import kafka.message._
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils.meterCount
+import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._

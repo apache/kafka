@@ -389,7 +389,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val producer2 = transactionalProducers(1)
     producer2.initTransactions()
 
-    assertEquals(offsetAndMetadata, consumer.committed(tp))
+    assertEquals(offsetAndMetadata, consumer.committed(Set(tp).asJava).get(tp))
   }
 
   @Test

@@ -617,7 +617,9 @@ def connectPkgs = [
     'connect:file',
     'connect:json',
     'connect:runtime',
-    'connect:transforms'
+    'connect:transforms',
+    'connect:mirror',
+    'connect:mirror-client'
 ]
 
 def pkgs = [
@@ -860,6 +862,10 @@ project(':core') {
     from(project(':connect:file').configurations.runtime) { into("libs/") }
     from(project(':connect:basic-auth-extension').jar) { into("libs/") }
     from(project(':connect:basic-auth-extension').configurations.runtime) { into("libs/") }
+    from(project(':connect:mirror').jar) { into("libs/") }
+    from(project(':connect:mirror').configurations.runtime) { into("libs/") }
+    from(project(':connect:mirror-client').jar) { into("libs/") }
+    from(project(':connect:mirror-client').configurations.runtime) { into("libs/") }
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:streams-scala').jar) { into("libs/") }
@@ -1123,6 +1129,7 @@ project(':tools') {
 
 project(':streams') {
   archivesBaseName = "kafka-streams"
+  ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   dependencies {
     compile project(':clients')
@@ -1170,7 +1177,46 @@ project(':streams') {
     duplicatesStrategy 'exclude'
   }
 
+  task determineCommitId {
+    def takeFromHash = 16
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("$rootDir/.git/$headRef").exists()) {
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+        }
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId = "unknown"
+    }
+  }
+
+  task createStreamsVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
   jar {
+    dependsOn 'createStreamsVersionFile'
+    from("$buildDir") {
+      include "kafka/$buildStreamsVersionFileName"
+    }
     dependsOn 'copyDependantLibs'
   }
 
@@ -1183,6 +1229,12 @@ project(':streams') {
     main = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
+
+  test {
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
   }
 }
 
@@ -1238,6 +1290,7 @@ project(':streams:test-utils') {
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.hamcrest
 
     testRuntime libs.slf4jlog4j
   }
@@ -1750,6 +1803,84 @@ project(':connect:basic-auth-extension') {
 
   javadoc {
     enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:mirror') {
+  archivesBaseName = "connect-mirror"
+
+  dependencies {
+    compile project(':connect:api')
+    compile project(':connect:runtime')
+    compile project(':connect:mirror-client')
+    compile project(':clients')
+    compile libs.argparse4j
+    compile libs.slf4jApi
+
+    testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+    testCompile project(':connect:runtime').sourceSets.test.output
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
+
+    testRuntime project(':connect:runtime')
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+      exclude('connect-*')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
+  }
+}
+
+project(':connect:mirror-client') {
+  archivesBaseName = "connect-mirror-client"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.slf4jApi
+
+    testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = true
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {

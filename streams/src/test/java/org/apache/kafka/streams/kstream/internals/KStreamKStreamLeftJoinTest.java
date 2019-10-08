@@ -20,20 +20,22 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -49,8 +51,6 @@ public class KStreamKStreamLeftJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final ConsumerRecordFactory<Integer, String> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
@@ -70,7 +70,7 @@ public class KStreamKStreamLeftJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(100)),
-            Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
@@ -80,6 +80,10 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty
@@ -88,7 +92,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0, 1:A1 }
             // --> w2 = {}
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "A" + expectedKeys[i]));
+                inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
                 new KeyValueTimestamp<>(1, "A1+null", 0));
@@ -98,7 +102,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0, 1:A1 }
             // --> w2 = { 0:a0, 1:a1 }
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "a" + expectedKeys[i]));
+                inputTopic2.pipeInput(expectedKeys[i], "a" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+a0", 0),
                 new KeyValueTimestamp<>(1, "A1+a1", 0));
@@ -108,7 +112,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
             // --> w2 = { 0:a0, 1:a1 }
             for (int i = 0; i < 3; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "B" + expectedKeys[i]));
+                inputTopic1.pipeInput(expectedKeys[i], "B" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "B0+a0", 0),
                 new KeyValueTimestamp<>(1, "B1+a1", 0),
@@ -119,7 +123,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
             // --> w2 = { 0:a0, 1:a1, 0:b0, 1:b1, 2:b2, 3:b3 }
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "b" + expectedKey));
+                inputTopic2.pipeInput(expectedKey, "b" + expectedKey);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+b0", 0),
                 new KeyValueTimestamp<>(0, "B0+b0", 0),
@@ -132,7 +136,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 0:C0, 1:C1, 2:C2, 3:C3 }
             // --> w2 = { 0:a0, 1:a1, 0:b0, 1:b1, 2:b2, 3:b3 }
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "C" + expectedKey));
+                inputTopic1.pipeInput(expectedKey, "C" + expectedKey);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "C0+a0", 0),
                 new KeyValueTimestamp<>(0, "C0+b0", 0),
@@ -159,7 +163,7 @@ public class KStreamKStreamLeftJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(100)),
-            Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
@@ -169,6 +173,10 @@ public class KStreamKStreamLeftJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
             final long time = 0L;
 
@@ -178,7 +186,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = {}
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "A" + expectedKeys[i], time));
+                inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i], time);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+null", 0),
                 new KeyValueTimestamp<>(1, "A1+null", 0));
@@ -188,7 +196,7 @@ public class KStreamKStreamLeftJoinTest {
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0) }
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "a" + expectedKey, time));
+                inputTopic2.pipeInput(expectedKey, "a" + expectedKey, time);
             }
             processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "A0+a0", 0),
                 new KeyValueTimestamp<>(1, "A1+a1", 0));
@@ -202,6 +210,11 @@ public class KStreamKStreamLeftJoinTest {
                                       final MockProcessor<Integer, String> processor) {
         long time;
 
+        final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
         // push four items with larger and increasing timestamp (out of window) to the other stream; this should produce no items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
         // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0) }
@@ -210,7 +223,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time = 1000L;
         for (int i = 0; i < expectedKeys.length; i++) {
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "b" + expectedKeys[i], time + i));
+            inputTopic2.pipeInput(expectedKeys[i], "b" + expectedKeys[i], time + i);
         }
         processor.checkAndClearProcessResult(EMPTY);
 
@@ -224,7 +237,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time = 1000L + 100L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "B" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "B" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "B0+b0", 1100),
             new KeyValueTimestamp<>(1, "B1+b1", 1100),
@@ -242,7 +255,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "C" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "C" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "C0+null", 1101),
             new KeyValueTimestamp<>(1, "C1+b1", 1101),
@@ -262,7 +275,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "D" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "D" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "D0+null", 1102),
             new KeyValueTimestamp<>(1, "D1+null", 1102),
@@ -284,7 +297,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "E" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "E" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "E0+null", 1103),
             new KeyValueTimestamp<>(1, "E1+null", 1103),
@@ -308,7 +321,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "F" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "F0+null", 1104),
             new KeyValueTimestamp<>(1, "F1+null", 1104),
@@ -320,6 +333,8 @@ public class KStreamKStreamLeftJoinTest {
                                       final TopologyTestDriver driver,
                                       final MockProcessor<Integer, String> processor) {
         long time;
+        final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
+        final TestInputTopic<Integer, String> inputTopic2 = driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer());
         // push four items with smaller timestamp (before the window) to the primary stream; this should produce four left-join and no full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
@@ -340,7 +355,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time = 1000L - 100L - 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "G" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "G" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "G0+null", 899),
             new KeyValueTimestamp<>(1, "G1+null", 899), new KeyValueTimestamp<>(2, "G2+null", 899),
@@ -367,7 +382,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "H" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "H" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "H0+b0", 1000),
             new KeyValueTimestamp<>(1, "H1+null", 900), new KeyValueTimestamp<>(2, "H2+null", 900),
@@ -396,7 +411,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "I" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "I" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "I0+b0", 1000),
             new KeyValueTimestamp<>(1, "I1+b1", 1001), new KeyValueTimestamp<>(2, "I2+null", 901),
@@ -427,7 +442,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "J" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "J" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "J0+b0", 1000),
             new KeyValueTimestamp<>(1, "J1+b1", 1001), new KeyValueTimestamp<>(2, "J2+b2", 1002),
@@ -460,7 +475,7 @@ public class KStreamKStreamLeftJoinTest {
         //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
-            driver.pipeInput(recordFactory.create(topic1, expectedKey, "K" + expectedKey, time));
+            inputTopic1.pipeInput(expectedKey, "K" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "K0+b0", 1000),
             new KeyValueTimestamp<>(1, "K1+b1", 1001), new KeyValueTimestamp<>(2, "K2+b2", 1002),

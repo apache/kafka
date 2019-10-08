@@ -25,6 +25,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
@@ -68,6 +69,7 @@ import org.apache.kafka.common.message.CreateDelegationTokenRequestData.Creatabl
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -78,9 +80,9 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -107,21 +109,21 @@ import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsRequest;
-import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
+import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
 import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
+import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
-import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
@@ -142,8 +144,8 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
@@ -156,7 +158,6 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
-import org.apache.kafka.common.requests.OffsetDeleteRequest.Builder;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -188,21 +189,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
-import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
+import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics;
-import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
+import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import static org.apache.kafka.common.requests.MetadataRequest.convertToMetadataRequestTopic;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
@@ -313,9 +315,18 @@ public class KafkaAdminClient extends AdminClient {
      * @param <T>       The KafkaFutureImpl result type.
      */
     private static <T> void completeAllExceptionally(Collection<KafkaFutureImpl<T>> futures, Throwable exc) {
-        for (KafkaFutureImpl<?> future : futures) {
-            future.completeExceptionally(exc);
-        }
+        completeAllExceptionally(futures.stream(), exc);
+    }
+
+    /**
+     * Send an exception to all futures in the provided stream
+     *
+     * @param futures   The stream of KafkaFutureImpl objects.
+     * @param exc       The exception
+     * @param <T>       The KafkaFutureImpl result type.
+     */
+    private static <T> void completeAllExceptionally(Stream<KafkaFutureImpl<T>> futures, Throwable exc) {
+        futures.forEach(future -> future.completeExceptionally(exc));
     }
 
     /**
@@ -1309,11 +1320,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
                     newTopic.name() + "' cannot be represented in a request."));
                 topicFutures.put(newTopic.name(), future);
@@ -1348,7 +1359,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 // Handle server responses for particular topics.
                 for (CreatableTopicResult result : response.data().topics()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(result.name());
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = topicFutures.get(result.name());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", result.name());
                     } else {
@@ -1358,13 +1369,33 @@ public class KafkaAdminClient extends AdminClient {
                         if (exception != null) {
                             future.completeExceptionally(exception);
                         } else {
-                            future.complete(null);
+                            TopicMetadataAndConfig topicMetadataAndConfig;
+                            if (result.topicConfigErrorCode() != Errors.NONE.code()) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(Errors.forCode(result.topicConfigErrorCode()).exception());
+                            } else if (result.numPartitions() == CreateTopicsResult.UNKNOWN) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(new UnsupportedVersionException(
+                                        "Topic metadata and configs in CreateTopics response not supported"));
+                            } else {
+                                List<CreatableTopicConfigs> configs = result.configs();
+                                Config topicConfig = new Config(configs.stream()
+                                        .map(config -> new ConfigEntry(config.name(),
+                                                config.value(),
+                                                configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
+                                                config.isSensitive(),
+                                                config.readOnly(),
+                                                Collections.emptyList()))
+                                        .collect(Collectors.toSet()));
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
+                                        result.replicationFactor(),
+                                        topicConfig);
+                            }
+                            future.complete(topicMetadataAndConfig);
                         }
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -2342,39 +2373,31 @@ public class KafkaAdminClient extends AdminClient {
                 Map<String, Errors> errors = response.errors();
                 Cluster cluster = response.cluster();
 
-                // completing futures for topics with errors
-                for (Map.Entry<String, Errors> topicError: errors.entrySet()) {
-
-                    for (Map.Entry<TopicPartition, KafkaFutureImpl<DeletedRecords>> future: futures.entrySet()) {
-                        if (future.getKey().topic().equals(topicError.getKey())) {
-                            future.getValue().completeExceptionally(topicError.getValue().exception());
-                        }
-                    }
-                }
-
-                // grouping topic partitions per leader
+                // Group topic partitions by leader
                 Map<Node, Map<TopicPartition, Long>> leaders = new HashMap<>();
                 for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
+                    KafkaFutureImpl<DeletedRecords> future = futures.get(entry.getKey());
 
-                    // avoiding to send deletion request for topics with errors
-                    if (!errors.containsKey(entry.getKey().topic())) {
-
+                    // Fail partitions with topic errors
+                    Errors topicError = errors.get(entry.getKey().topic());
+                    if (errors.containsKey(entry.getKey().topic())) {
+                        future.completeExceptionally(topicError.exception());
+                    } else {
                         Node node = cluster.leaderFor(entry.getKey());
                         if (node != null) {
                             if (!leaders.containsKey(node))
                                 leaders.put(node, new HashMap<>());
                             leaders.get(node).put(entry.getKey(), entry.getValue().beforeOffset());
                         } else {
-                            KafkaFutureImpl<DeletedRecords> future = futures.get(entry.getKey());
                             future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
                         }
                     }
                 }
 
-                for (final Map.Entry<Node, Map<TopicPartition, Long>> entry: leaders.entrySet()) {
+                final long deleteRecordsCallTimeMs = time.milliseconds();
 
-                    final long nowDelete = time.milliseconds();
-
+                for (final Map.Entry<Node, Map<TopicPartition, Long>> entry : leaders.entrySet()) {
+                    final Map<TopicPartition, Long> partitionDeleteOffsets = entry.getValue();
                     final int brokerId = entry.getKey().id();
 
                     runnable.call(new Call("deleteRecords", deadline,
@@ -2382,7 +2405,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DeleteRecordsRequest.Builder(timeoutMs, entry.getValue());
+                            return new DeleteRecordsRequest.Builder(timeoutMs, partitionDeleteOffsets);
                         }
 
                         @Override
@@ -2401,9 +2424,11 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         void handleFailure(Throwable throwable) {
-                            completeAllExceptionally(futures.values(), throwable);
+                            Stream<KafkaFutureImpl<DeletedRecords>> callFutures =
+                                    partitionDeleteOffsets.keySet().stream().map(futures::get);
+                            completeAllExceptionally(callFutures, throwable);
                         }
-                    }, nowDelete);
+                    }, deleteRecordsCallTimeMs);
                 }
             }
 

@@ -29,8 +29,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
@@ -1149,21 +1150,45 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized Collection<Set<String>> copartitionGroups() {
-        final List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
-        for (final Set<String> nodeNames : copartitionSourceGroups) {
-            final Set<String> copartitionGroup = new HashSet<>();
-            for (final String node : nodeNames) {
-                final List<String> topics = nodeToSourceTopics.get(node);
-                if (topics != null) {
-                    copartitionGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+        // compute transitive closures of copartitionGroups to relieve registering code to know all members
+        // of a copartitionGroup at the same time
+        final List<Set<String>> copartitionSourceTopics =
+            copartitionSourceGroups
+                .stream()
+                .map(sourceGroup ->
+                         sourceGroup
+                             .stream()
+                             .flatMap(node -> maybeDecorateInternalSourceTopics(nodeToSourceTopics.get(node)).stream())
+                             .collect(Collectors.toSet())
+                ).collect(Collectors.toList());
+
+        final Map<String, Set<String>> topicsToCopartitionGroup = new LinkedHashMap<>();
+        for (final Set<String> topics : copartitionSourceTopics) {
+            if (topics != null) {
+                Set<String> coparititonGroup = null;
+                for (final String topic : topics) {
+                    coparititonGroup = topicsToCopartitionGroup.get(topic);
+                    if (coparititonGroup != null) {
+                        break;
+                    }
+                }
+                if (coparititonGroup == null) {
+                    coparititonGroup = new HashSet<>();
+                }
+                coparititonGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+                for (final String topic : topics) {
+                    topicsToCopartitionGroup.put(topic, coparititonGroup);
                 }
             }
-            list.add(Collections.unmodifiableSet(copartitionGroup));
         }
-        return Collections.unmodifiableList(list);
+        final Set<Set<String>> uniqueCopartitionGroups = new HashSet<>(topicsToCopartitionGroup.values());
+        return Collections.unmodifiableList(new ArrayList<>(uniqueCopartitionGroups));
     }
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
+        if (sourceTopics == null) {
+            return Collections.emptyList();
+        }
         final List<String> decoratedTopics = new ArrayList<>();
         for (final String topic : sourceTopics) {
             if (internalTopicNames.contains(topic)) {

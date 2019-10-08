@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -944,6 +945,33 @@ public class ConfigDef {
 
         public String toString() {
             return "[" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
+    public static class CaseInsensitiveValidString implements Validator {
+
+        final Set<String> validStrings;
+
+        private CaseInsensitiveValidString(List<String> validStrings) {
+            this.validStrings = validStrings.stream()
+                .map(s -> s.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        }
+
+        public static CaseInsensitiveValidString in(String... validStrings) {
+            return new CaseInsensitiveValidString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+            }
+        }
+
+        public String toString() {
+            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
         }
     }
 

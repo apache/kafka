@@ -64,6 +64,7 @@ import java.util.regex.Pattern;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -444,6 +445,33 @@ public class TestUtils {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
+        Set<TopicPartition> tps = new HashSet<>();
+        for (int i = 0; i < numTopic; i++) {
+            String topic = randomString(32);
+            for (int j = 0; j < numPartitionPerTopic; j++) {
+                tps.add(new TopicPartition(topic, j));
+            }
+        }
+        return tps;
+    }
+
+    /**
+     * Assert that a future raises an expected exception cause type. Return the exception cause
+     * if the assertion succeeds; otherwise raise AssertionError.
+     *
+     * @param future The future to await
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param <T> Exception cause type parameter
+     * @return The caught exception cause
+     */
+    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
+        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
+        assertTrue("Unexpected exception cause " + exception.getCause(),
+                exceptionCauseClass.isInstance(exception.getCause()));
+        return exceptionCauseClass.cast(exception.getCause());
     }
 
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)

@@ -414,10 +414,18 @@ public class StreamTaskTest {
         assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
 
+        final String threadId = Thread.currentThread().getName();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-task-metrics,client-id=test,task-id=%s", task.id.toString())));
-        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=test,task-id=all"));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=%s",
+            threadId,
+            task.id.toString()
+        )));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=all",
+            threadId
+        )));
     }
 
     private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
@@ -425,7 +433,7 @@ public class StreamTaskTest {
             String.format(nameFormat, "commit"),
             "stream-task-metrics",
             String.format(descriptionFormat, "commit"),
-            mkMap(mkEntry("task-id", taskId), mkEntry("client-id", "test"))
+            mkMap(mkEntry("task-id", taskId), mkEntry("thread-id", Thread.currentThread().getName()))
         ));
     }
 
@@ -657,7 +665,7 @@ public class StreamTaskTest {
     public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
         createTaskWithProcessAndCommit(false);
 
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(partition1).metadata()));
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(Collections.singleton(partition1)).get(partition1).metadata()));
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(false));
 
@@ -760,7 +768,11 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        final MetricName enforcedProcessMetric = metrics.metricName("enforced-processing-total", "stream-task-metrics", mkMap(mkEntry("client-id", "test"), mkEntry("task-id", taskId00.toString())));
+        final MetricName enforcedProcessMetric = metrics.metricName(
+            "enforced-processing-total",
+            "stream-task-metrics",
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+        );
 
         assertFalse(task.isProcessable(0L));
         assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
@@ -1585,7 +1597,7 @@ public class StreamTaskTest {
     private Consumer<byte[], byte[]> mockConsumerWithCommittedException(final RuntimeException toThrow) {
         return new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public OffsetAndMetadata committed(final TopicPartition partition) {
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw toThrow;
             }
         };

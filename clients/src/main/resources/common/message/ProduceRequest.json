@@ -28,7 +28,10 @@
   // Version 5 and 6 are the same as version 3.
   //
   // Starting in version 7, records can be produced using ZStandard compression.  See KIP-110.
-  "validVersions": "0-7",
+  //
+  // Version 8 is the same as version 7 (but see KIP-467 for the response changes).
+  "validVersions": "0-8",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional ID, or null if the producer is not transactional." },
