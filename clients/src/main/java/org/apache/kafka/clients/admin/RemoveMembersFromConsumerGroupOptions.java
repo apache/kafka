@@ -16,34 +16,35 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 
-import java.util.concurrent.ExecutionException;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * The result of the {@link KafkaAdminClient#removeMemberFromConsumerGroup(String, RemoveMemberFromConsumerGroupOptions)} call.
+ * Options for {@link AdminClient#removeMembersFromConsumerGroup(String, RemoveMembersFromConsumerGroupOptions)}.
+ * It carries the members to be removed from the consumer group.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class MembershipChangeResult {
+public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private KafkaFuture<RemoveMemberFromGroupResult> future;
+    private List<MemberIdentity> members;
 
-    MembershipChangeResult(KafkaFuture<RemoveMemberFromGroupResult> future) {
-        this.future = future;
+    public RemoveMembersFromConsumerGroupOptions(Collection<String> groupInstanceIds) {
+        members = groupInstanceIds.stream().map(
+            instanceId -> new MemberIdentity()
+                              .setGroupInstanceId(instanceId)
+                              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        ).collect(Collectors.toList());
     }
 
-    /**
-     * Return a future which contains the member removal results.
-     */
-    public RemoveMemberFromGroupResult all() throws ExecutionException, InterruptedException {
-        return future.get();
-    }
-
-    // Visible for testing
-    public KafkaFuture<RemoveMemberFromGroupResult> future() {
-        return future;
+    public List<MemberIdentity> members() {
+        return members;
     }
 }
+

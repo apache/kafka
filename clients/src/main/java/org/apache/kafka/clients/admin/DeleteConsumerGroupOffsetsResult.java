@@ -18,8 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Set;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.KafkaFuture.BaseFunction;
-import org.apache.kafka.common.KafkaFuture.BiConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -35,9 +33,12 @@ import org.apache.kafka.common.protocol.Errors;
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupOffsetsResult {
     private final KafkaFuture<Map<TopicPartition, Errors>> future;
+    private final Set<TopicPartition> partitions;
 
-    DeleteConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
+
+    DeleteConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
         this.future = future;
+        this.partitions = partitions;
     }
 
     /**
@@ -46,27 +47,13 @@ public class DeleteConsumerGroupOffsetsResult {
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        this.future.whenComplete(new BiConsumer<Map<TopicPartition, Errors>, Throwable>() {
-            @Override
-            public void accept(final Map<TopicPartition, Errors> topicPartitions, final Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new IllegalArgumentException(
-                        "Group offset deletion for partition \"" + partition +
-                        "\" was not attempted"));
-                } else {
-                    final Errors error = topicPartitions.get(partition);
-                    if (error == Errors.NONE) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(error.exception());
-                    }
-                }
-
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else if (!hasPartitionLevelError(topicPartitions, partition, result)) {
+                result.complete(null);
             }
         });
-
         return result;
     }
 
@@ -74,11 +61,31 @@ public class DeleteConsumerGroupOffsetsResult {
      * Return a future which succeeds only if all the deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {
-            @Override
-            public Void apply(final Map<TopicPartition, Errors> topicPartitionErrorsMap) {
-                return null;
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else for (TopicPartition partition : partitions) {
+                if (hasPartitionLevelError(topicPartitions, partition, result)) {
+                    return;
+                }
             }
+            result.complete(null);
         });
+        return result;
+    }
+
+    private boolean hasPartitionLevelError(Map<TopicPartition, Errors> partitionLevelErrors,
+                                           TopicPartition partition,
+                                           KafkaFutureImpl<Void> result) {
+        Throwable exception = KafkaAdminClient.getSubLevelError(partitionLevelErrors, partition,
+            "Group offset deletion for partition \"" + partition + "\" was not attempted");
+        if (exception != null) {
+            result.completeExceptionally(exception);
+            return true;
+        } else {
+            return false;
+        }
     }
 }

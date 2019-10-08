@@ -403,8 +403,8 @@ object ConsumerGroupCommand extends Logging {
       result
     }
 
-    def deleteOffsets(groupId: String, topics: List[String]): Map[TopicPartition, Throwable] = {
-      var result: Map[TopicPartition, Throwable] = mutable.HashMap()
+    def deleteOffsets(groupId: String, topics: List[String]): (Errors, Map[TopicPartition, Throwable]) = {
+      var partitionLevelResult: Map[TopicPartition, Throwable] = mutable.HashMap()
 
       val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
 
@@ -426,7 +426,7 @@ object ConsumerGroupCommand extends Logging {
             new TopicPartition(topic, partition.partition())
           }
           case Failure(e) =>
-            result += new TopicPartition(topic, -1) -> e
+            partitionLevelResult += new TopicPartition(topic, -1) -> e
             List.empty
         }
       }
@@ -439,46 +439,54 @@ object ConsumerGroupCommand extends Logging {
         withTimeoutMs(new DeleteConsumerGroupOffsetsOptions)
       )
 
-      deleteResult.all().get()
+      var topLevelException = Errors.NONE
+      Try(deleteResult.all.get) match {
+        case Success(_) =>
+        case Failure(e) => topLevelException = Errors.forException(e.getCause)
+      }
 
       partitions.foreach { partition =>
         Try(deleteResult.partitionResult(partition).get()) match {
-          case Success(_) => result += partition -> null
-          case Failure(e) => result += partition -> e
+          case Success(_) => partitionLevelResult += partition -> null
+          case Failure(e) => partitionLevelResult += partition -> e
         }
       }
 
-      result
+      (topLevelException, partitionLevelResult)
     }
 
     def deleteOffsets(): Unit = {
       val groupId = opts.options.valueOf(opts.groupOpt)
       val topics = opts.options.valuesOf(opts.topicOpt).asScala.toList
 
-      try {
-        val result = deleteOffsets(groupId, topics)
+      val (topLevelResult, partitionLevelResult) = deleteOffsets(groupId, topics)
 
-        println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
-        result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
-          println("%-30s %-15s %-15s".format(
-            tp.topic,
-            if (tp.partition >= 0) tp.partition else "Not Provided",
-            if (error != null) s"Error: ${error.getMessage}" else "Successful"
-          ))
-        }
-      } catch {
-        case e: ExecutionException =>
-          Errors.forException(e.getCause) match {
-            case Errors.INVALID_GROUP_ID =>
-              printError(s"'$groupId' is not valid.")
-            case Errors.GROUP_ID_NOT_FOUND =>
-              printError(s"'$groupId' does not exist.")
-            case Errors.GROUP_AUTHORIZATION_FAILED =>
-              printError(s"Access to '$groupId' is not authorized.")
-            case Errors.NON_EMPTY_GROUP =>
-              printError(s"Deleting offsets of a non consumer group '$groupId' is forbidden if the group is not empty.")
-            case _ => throw e
-          }
+      topLevelResult match {
+        case Errors.NONE =>
+          println(s"Request succeed for deleting offsets with topic ${topics.mkString(", ")} group $groupId")
+        case Errors.INVALID_GROUP_ID =>
+          printError(s"'$groupId' is not valid.")
+        case Errors.GROUP_ID_NOT_FOUND =>
+          printError(s"'$groupId' does not exist.")
+        case Errors.GROUP_AUTHORIZATION_FAILED =>
+          printError(s"Access to '$groupId' is not authorized.")
+        case Errors.NON_EMPTY_GROUP =>
+          printError(s"Deleting offsets of a consumer group '$groupId' is forbidden if the group is not empty.")
+        case Errors.GROUP_SUBSCRIBED_TO_TOPIC |
+             Errors.TOPIC_AUTHORIZATION_FAILED |
+             Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+          printError(s"Encounter some partition level error, see the follow-up details:")
+        case _ =>
+          printError(s"Encounter some unknown error: $topLevelResult")
+      }
+
+      println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
+      partitionLevelResult.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
+        println("%-30s %-15s %-15s".format(
+          tp.topic,
+          if (tp.partition >= 0) tp.partition else "Not Provided",
+          if (error != null) s"Error: ${error.getMessage}" else "Successful"
+        ))
       }
     }
 

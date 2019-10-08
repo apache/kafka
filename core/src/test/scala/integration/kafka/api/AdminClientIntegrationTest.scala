@@ -41,6 +41,7 @@ import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
@@ -1235,7 +1236,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
-            !matching.isEmpty
+            matching.nonEmpty
           }, s"Expected to be able to list $testGroupId")
 
           val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
@@ -1247,7 +1248,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
 
           assertEquals(testGroupId, testGroupDescription.groupId())
-          assertFalse(testGroupDescription.isSimpleConsumerGroup())
+          assertFalse(testGroupDescription.isSimpleConsumerGroup)
           assertEquals(1, testGroupDescription.members().size())
           val member = testGroupDescription.members().iterator().next()
           assertEquals(testClientId, member.clientId())
@@ -1281,25 +1282,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
-          var removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
+          var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
             Collections.singletonList(invalidInstanceId)
-          )).all()
+          ))
 
-          assertTrue(removeMemberResult.hasError)
-          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
-
-          val firstMemberFutures = removeMemberResult.memberFutures()
-          assertEquals(1, firstMemberFutures.size)
-          firstMemberFutures.values.asScala foreach { case value =>
-            try {
-              value.get()
-            } catch {
-              case e: ExecutionException =>
-                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case t: Throwable =>
-                fail(s"Should have caught exception in getting member future: $t")
-            }
-          }
+          TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
+          val firstMemberFuture = removeMembersResult.memberResult(new MemberIdentity()
+            .setGroupInstanceId(invalidInstanceId))
+          TestUtils.assertFutureExceptionTypeEquals(firstMemberFuture, classOf[UnknownMemberIdException])
 
           // Test consumer group deletion
           var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -1316,25 +1306,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             classOf[GroupNotEmptyException])
 
           // Test delete correct member
-          removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
+          removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
             Collections.singletonList(testInstanceId)
-          )).all()
+          ))
 
-          assertFalse(removeMemberResult.hasError)
-          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
-
-          val deletedMemberFutures = removeMemberResult.memberFutures()
-          assertEquals(1, firstMemberFutures.size)
-          deletedMemberFutures.values.asScala foreach { case value =>
-            try {
-              value.get()
-            } catch {
-              case e: ExecutionException =>
-                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case t: Throwable =>
-                fail(s"Should have caught exception in getting member future: $t")
-            }
-          }
+          assertNull(removeMembersResult.all().get())
+          val validMemberFuture = removeMembersResult.memberResult(new MemberIdentity().setGroupInstanceId(testInstanceId))
+          assertNull(validMemberFuture.get())
 
           // The group should contain no member now.
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
@@ -1404,7 +1382,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         // Test offset deletion while consuming
         val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
 
-        assertNull(offsetDeleteResult.all().get())
+        // Top level error will equal to the first partition level error
+        assertFutureExceptionTypeEquals(offsetDeleteResult.all(), classOf[GroupSubscribedToTopicException])
         assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
           classOf[GroupSubscribedToTopicException])
         assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
