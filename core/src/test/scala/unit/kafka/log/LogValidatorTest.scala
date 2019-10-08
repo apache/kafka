@@ -1251,11 +1251,11 @@ class LogValidatorTest {
   }
 
   @Test
-  def testInvalidTimestampExceptionHasRelativeOffset(): Unit = {
+  def testInvalidTimestampExceptionHasBatchIndex(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
       codec = CompressionType.GZIP)
-    try {
+    val e = intercept[RecordValidationException] {
       LogValidator.validateMessagesAndAssignOffsets(
         records,
         topicPartition,
@@ -1272,30 +1272,29 @@ class LogValidatorTest {
         isFromClient = true,
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         brokerTopicStats = brokerTopicStats)
-    } catch {
-      case e: RecordValidationException =>
-        assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
-        assertTrue(e.errorRecords.nonEmpty)
-        assertEquals(e.errorRecords.size, 1)
-        assertEquals(e.errorRecords.head.getRelativeOffset, 0)
-        assertNull(e.errorRecords.head.getMessage)
     }
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertTrue(e.recordErrors.nonEmpty)
+    assertEquals(e.recordErrors.size, 1)
+    assertEquals(e.recordErrors.head.batchIndex, 0)
+    assertNull(e.recordErrors.head.message)
   }
 
   @Test
-  def testInvalidRecordExceptionHasRelativeOffset(): Unit = {
-    try {
+  def testInvalidRecordExceptionHasBatchIndex(): Unit = {
+    val e = intercept[RecordValidationException] {
       validateMessages(recordsWithInvalidInnerMagic(
         RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP),
         RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
-    } catch {
-      case e: RecordValidationException =>
-        assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
-        assertTrue(e.errorRecords.nonEmpty)
-        assertEquals(e.errorRecords.size, 1)
-        assertEquals(e.errorRecords.head.getRelativeOffset, 0)
-        assertNull(e.errorRecords.head.getMessage)
+      fail("Should have thrown RecordValidationException")
     }
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertTrue(e.recordErrors.nonEmpty)
+    assertEquals(e.recordErrors.size, 1)
+    assertEquals(e.recordErrors.head.batchIndex, 0)
+    assertNull(e.recordErrors.head.message)
   }
 
   private def testBatchWithoutRecordsNotAllowed(sourceCodec: CompressionCodec, targetCodec: CompressionCodec): Unit = {

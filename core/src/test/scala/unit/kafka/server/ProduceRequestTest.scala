@@ -57,7 +57,7 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
       assertEquals(-1, partitionResponse.logAppendTime)
-      assertTrue(partitionResponse.errorRecords.isEmpty)
+      assertTrue(partitionResponse.recordErrors.isEmpty)
       partitionResponse
     }
 
@@ -96,9 +96,9 @@ class ProduceRequestTest extends BaseRequestTest {
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
-    assertEquals(1, partitionResponse.errorRecords.size())
-    assertEquals(0, partitionResponse.errorRecords.get(0).getRelativeOffset)
-    assertNull(partitionResponse.errorRecords.get(0).getMessage)
+    assertEquals(1, partitionResponse.recordErrors.size())
+    assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
+    assertNull(partitionResponse.recordErrors.get(0).message)
     assertNull(partitionResponse.errorMessage)
   }
 
