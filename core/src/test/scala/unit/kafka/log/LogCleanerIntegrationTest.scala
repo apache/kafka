@@ -206,22 +206,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
       }), "Threads didn't terminate unexpectedly"
     )
     assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
-  }
-
-  @Test
-  def testDeadThreadCountMetricIncrementsOnUnexpectedError(): Unit = {
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
-    cleaner.startup()
-    assertEquals(0, cleaner.deadThreadCount)
-    // we simulate the unexpected error with an interrupt
-    cleaner.cleaners.foreach(_.interrupt())
-    // wait until interruption is propagated to all the threads
-    TestUtils.waitUntilTrue(
-      () => cleaner.cleaners.foldLeft(true)((result, thread) => {
-        thread.isThreadFailed && result
-      }), "Threads didn't terminate unexpectedly"
-    )
-    val metricValue: Int = getGauge("DeadThreadCount").value()
-    assertEquals(cleaner.cleaners.size.toLong, metricValue)
+    // test the metric directly (metrics are registered in a singleton object, therefore not reset between tests)
+    assertEquals(cleaner.cleaners.size, getGauge[Int]("DeadThreadCount").value())
   }
 }
