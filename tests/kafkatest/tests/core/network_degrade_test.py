@@ -22,6 +22,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.trogdor.degraded_network_fault_spec import DegradedNetworkFaultSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.utils.remote_account import network_device
 
 
 class NetworkDegradeTest(Test):
@@ -47,7 +48,8 @@ class NetworkDegradeTest(Test):
     def test_latency(self, task_name, latency_ms, rate_limit_kbit):
         spec = DegradedNetworkFaultSpec(0, 10000, {})
         for node in self.zk.nodes:
-            spec.add_node_spec(node.name, "eth0", latency_ms, rate_limit_kbit)
+            device = network_device(node)
+            spec.add_node_spec(node.name, device, latency_ms, rate_limit_kbit)
 
         latency = self.trogdor.create_task(task_name, spec)
 
@@ -56,7 +58,7 @@ class NetworkDegradeTest(Test):
 
         r = re.compile(r".*time=(?P<time>[\d.]+)\sms.*")
         times = []
-        for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.name):
+        for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.externally_routable_ip):
             self.logger.debug("Ping output: %s" % line)
             m = r.match(line)
             if m is not None and m.group("time"):
@@ -81,7 +83,8 @@ class NetworkDegradeTest(Test):
         zk1 = self.zk.nodes[1]
 
         spec = DegradedNetworkFaultSpec(0, 60000, {})
-        spec.add_node_spec(zk0.name, "eth0", latency_ms, rate_limit_kbit)
+        device = network_device(zk0)
+        spec.add_node_spec(zk0.name, device, latency_ms, rate_limit_kbit)
 
         # start the task and wait
         rate_limit = self.trogdor.create_task(task_name, spec)
@@ -93,7 +96,7 @@ class NetworkDegradeTest(Test):
 
         r = re.compile(r"^.*\s(?P<rate>[\d.]+)\sKbits/sec$")
         measured_rates = []
-        for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.name):
+        for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.account.externally_routable_ip):
             self.logger.debug("iperf output %s" % line)
             m = r.match(line)
             if m is not None:

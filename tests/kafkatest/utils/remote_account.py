@@ -37,3 +37,12 @@ def line_count(node, file):
         raise Exception("Expected single line of output from wc -l")
 
     return int(out[0].strip().split(" ")[0])
+
+
+def network_device(node):
+    """Return the network device used to reach an external address"""
+    device = node.account.ssh_output("ip route get 8.8.8.8 | head -n1 | awk '{ print $5 }'").strip()
+    if device:
+        return device
+    else:
+        raise Exception("Could not determine the network device")
