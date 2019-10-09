@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -29,7 +29,6 @@ import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
@@ -46,19 +45,19 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
+import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
+import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse, DescribeLogDirsResponse, EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, LeaderAndIsrResponse, OffsetsForLeaderEpochRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
-import org.apache.kafka.common.replica.{ClientMetadata, _}
 
-import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -273,18 +272,6 @@ class ReplicaManager(val config: KafkaConfig,
       def value = reassigningPartitionsCount
     }
   )
-
-  private val followerReassignmentLagStats = new FollowerLagStats()
-  val reassignmentMaxLagOnLeader = newGauge(
-    "ReassignmentMaxLag",
-    new Gauge[Long] {
-      def value = followerReassignmentLagStats.maxLag()
-    },
-    Map("replica" -> "Leader")
-  )
-
-  // Visible for testing
-  def followerReassignmentMaxLag: Long = followerReassignmentLagStats.maxLag()
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
@@ -1173,7 +1160,6 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         val deletedPartitions = metadataCache.updateMetadata(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
-        followerReassignmentLagStats.removeStats(deletedPartitions)
         deletedPartitions
       }
     }
@@ -1284,14 +1270,6 @@ class ReplicaManager(val config: KafkaConfig,
 
         // remove metrics for brokers which are not followers of a topic
         leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
-
-        // remove reassignment lag stats from old leaders and followers
-        followerReassignmentLagStats.removeStats(allPartitions.flatMap {
-          case (_, hostedPartition) => hostedPartition match {
-            case Online(partition) => Some(partition)
-            case _ => None
-        }}.filter(!_.isReassigning)
-          .map(_.topicPartition))
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1590,9 +1568,6 @@ class ReplicaManager(val config: KafkaConfig,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
               leaderEndOffset = readResult.leaderLogEndOffset)) {
-              if (partition.isAddingReplica(followerId)) {
-                followerReassignmentLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
-              }
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
@@ -1792,17 +1767,4 @@ class ReplicaManager(val config: KafkaConfig,
 
     controller.electLeaders(partitions, electionType, electionCallback)
   }
-
-  class FollowerLagStats {
-    private val lagStats = new ConcurrentHashMap[TopicPartition, Long]()
-
-    def updateLag(partition: TopicPartition, lag: Long): Unit = lagStats.put(partition, lag)
-
-    def maxLag(): Long = if (lagStats.isEmpty) 0 else lagStats.asScala.maxBy(_._2)._2
-
-    def resetLag(): Unit = lagStats.clear()
-
-    def removeStats(traversable: Traversable[TopicPartition]): Unit = traversable.foreach(lagStats.remove(_))
-  }
-
 }
