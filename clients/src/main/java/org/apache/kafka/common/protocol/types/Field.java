@@ -97,9 +97,21 @@ public class Field {
         }
     }
 
+    public static class CompactStr extends Field {
+        public CompactStr(String name, String docString) {
+            super(name, Type.COMPACT_STRING, docString, false, null);
+        }
+    }
+
     public static class NullableStr extends Field {
         public NullableStr(String name, String docString) {
             super(name, Type.NULLABLE_STRING, docString, false, null);
+        }
+    }
+
+    public static class CompactNullableStr extends Field {
+        public CompactNullableStr(String name, String docString) {
+            super(name, Type.COMPACT_NULLABLE_STRING, docString, false, null);
         }
     }
 
@@ -112,6 +124,32 @@ public class Field {
     public static class Array extends Field {
         public Array(String name, Type elementType, String docString) {
             super(name, new ArrayOf(elementType), docString, false, null);
+        }
+    }
+
+    public static class CompactArray extends Field {
+        public CompactArray(String name, Type elementType, String docString) {
+            super(name, new CompactArrayOf(elementType), docString, false, null);
+        }
+    }
+
+    public static class TaggedFieldsSection extends Field {
+        private static final String NAME = "_tagged_fields";
+        private static final String DOC_STRING = "The tagged fields";
+
+        /**
+         * Create a new TaggedFieldsSection with the given tags and fields.
+         *
+         * @param fields    This is an array containing Integer tags followed
+         *                  by associated Field objects.
+         * @return          The new {@link TaggedFieldsSection}
+         */
+        public static TaggedFieldsSection of(Object... fields) {
+            return new TaggedFieldsSection(TaggedFields.of(fields));
+        }
+
+        public TaggedFieldsSection(Type type) {
+            super(NAME, type, DOC_STRING, false, null);
         }
     }
 

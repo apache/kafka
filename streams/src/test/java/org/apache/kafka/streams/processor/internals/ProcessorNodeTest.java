@@ -104,13 +104,14 @@ public class ProcessorNodeTest {
         final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
         node.init(context);
 
+        final String threadId = Thread.currentThread().getName();
         final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         final String throughputOperation = "forward";
         final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("processor-node-id", node.name());
         metricTags.put("task-id", context.taskId().toString());
-        metricTags.put("client-id", "mock");
+        metricTags.put("thread-id", threadId);
 
         for (final String opName : latencyOperations) {
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
@@ -137,8 +138,8 @@ public class ProcessorNodeTest {
 
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=mock,task-id=%s,processor-node-id=%s",
-                groupName, context.taskId().toString(), node.name())));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,thread-id=%s,task-id=%s,processor-node-id=%s",
+                groupName, threadId, context.taskId().toString(), node.name())));
     }
 
 }

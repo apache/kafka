@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -705,7 +706,8 @@ public class NetworkClient implements KafkaClient {
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
                                                                     Sensor throttleTimeSensor, long now) {
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, requestHeader.headerVersion());
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
+            requestHeader.apiKey().responseHeaderVersion(requestHeader.apiVersion()));
         // Always expect the response version id to be the same as the request version id
         Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
@@ -853,18 +855,28 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.error() != Errors.NONE) {
-            if (req.request.version() == 0 || apiVersionsResponse.error() != Errors.UNSUPPORTED_VERSION) {
+        if (apiVersionsResponse.data.errorCode() != Errors.NONE.code()) {
+            if (req.request.version() == 0 || apiVersionsResponse.data.errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
-                        apiVersionsResponse.error(), node, req.header.correlationId());
+                        Errors.forCode(apiVersionsResponse.data.errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {
-                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder((short) 0));
+                // Starting from Apache Kafka 2.4, ApiKeys field is populated with the supported versions of
+                // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
+                // If not provided, the client falls back to version 0.
+                short maxApiVersion = 0;
+                if (apiVersionsResponse.data.apiKeys().size() > 0) {
+                    ApiVersionsResponseKey apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
+                    if (apiVersion != null) {
+                        maxApiVersion = apiVersion.maxVersion();
+                    }
+                }
+                nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder(maxApiVersion));
             }
             return;
         }
-        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
+        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
         log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);

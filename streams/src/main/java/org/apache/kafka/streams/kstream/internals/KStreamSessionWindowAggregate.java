@@ -94,7 +94,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             internalProcessorContext = (InternalProcessorContext) context;
             metrics = (StreamsMetricsImpl) context.metrics();
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
-            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);

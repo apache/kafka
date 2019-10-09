@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
@@ -53,6 +54,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -144,6 +146,7 @@ public class KafkaStreams implements AutoCloseable {
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
+    private final StreamsMetricsImpl streamsMetrics;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -672,6 +675,16 @@ public class KafkaStreams implements AutoCloseable {
                 Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
         reporters.add(new JmxReporter(JMX_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time);
+        streamsMetrics =
+            new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
+        ClientMetrics.addVersionMetric(streamsMetrics);
+        ClientMetrics.addCommitIdMetric(streamsMetrics);
+        ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, internalTopologyBuilder.describe().toString());
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        log.info("Kafka Streams version: {}", ClientMetrics.version());
+        log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
         // re-write the physical topology according to the config
         internalTopologyBuilder.rewriteTopology(config);
@@ -712,11 +725,10 @@ public class KafkaStreams implements AutoCloseable {
                 clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
-                metrics,
+                streamsMetrics,
                 time,
                 globalThreadId,
-                delegatingStateRestoreListener,
-                rocksDBMetricsRecordingTrigger
+                delegatingStateRestoreListener
             );
             globalThreadState = globalStreamThread.state();
         }
@@ -734,14 +746,13 @@ public class KafkaStreams implements AutoCloseable {
                 adminClient,
                 processId,
                 clientId,
-                metrics,
+                streamsMetrics,
                 time,
                 streamsMetadataState,
                 cacheSizePerThread,
                 stateDirectory,
                 delegatingStateRestoreListener,
                 i + 1);
-            threads[i].setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -928,6 +939,7 @@ public class KafkaStreams implements AutoCloseable {
 
                 adminClient.close();
 
+                streamsMetrics.removeAllClientLevelMetrics();
                 metrics.close();
                 setState(State.NOT_RUNNING);
             }, "kafka-streams-close-thread");

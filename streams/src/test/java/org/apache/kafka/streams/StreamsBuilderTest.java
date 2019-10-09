@@ -41,7 +41,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -50,6 +49,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -254,11 +254,10 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         source.process(processorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic.pipeInput("A", "aa");
         }
 
         // no exception was thrown
@@ -277,11 +276,10 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic.pipeInput("A", "aa");
         }
 
         assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), sourceProcessorSupplier.theCapturedProcessor().processed);
@@ -300,14 +298,16 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
-            driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
-            driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
-            driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<String, String> inputTopic2 =
+                    driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            inputTopic1.pipeInput("A", "aa");
+            inputTopic2.pipeInput("B", "bb");
+            inputTopic2.pipeInput("C", "cc");
+            inputTopic1.pipeInput("D", "dd");
         }
 
         assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 0),
@@ -326,12 +326,11 @@ public class StreamsBuilderTest {
                 .withValueSerde(Serdes.String()))
                 .toStream().foreach(action);
 
-        final ConsumerRecordFactory<Long, String> recordFactory =
-            new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
-            driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
+            final TestInputTopic<Long, String> inputTopic =
+                    driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
+            inputTopic.pipeInput(1L, "value1");
+            inputTopic.pipeInput(2L, "value2");
 
             final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
             assertThat(store.get(1L), equalTo("value1"));
@@ -348,12 +347,11 @@ public class StreamsBuilderTest {
                 .withKeySerde(Serdes.Long())
                 .withValueSerde(Serdes.String()));
 
-        final ConsumerRecordFactory<Long, String> recordFactory =
-            new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
-
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
-            driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
+            final TestInputTopic<Long, String> inputTopic =
+                    driver.createInputTopic(topic, new LongSerializer(), new StringSerializer());
+            inputTopic.pipeInput(1L, "value1");
+            inputTopic.pipeInput(2L, "value2");
             final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
 
             assertThat(store.get(1L), equalTo("value1"));

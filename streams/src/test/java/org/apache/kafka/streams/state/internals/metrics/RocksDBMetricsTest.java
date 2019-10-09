@@ -44,9 +44,10 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private final String taskName = "task";
-    private final String storeType = "test-state-id";
-    private final String storeName = "store";
+    private static final String THREAD_ID = "test-thread";
+    private static final String TASK_ID = "test-task";
+    private static final String STORE_TYPE = "test-store-type";
+    private static final String STORE_NAME = "store";
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final StreamsMetricsImpl streamsMetrics = createStrictMock(StreamsMetricsImpl.class);
@@ -267,15 +268,17 @@ public class RocksDBMetricsTest {
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.storeLevelSensor(
-            taskName,
-            storeName,
+            THREAD_ID,
+            TASK_ID,
+            STORE_NAME,
             metricNamePrefix,
             RecordingLevel.DEBUG
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
-            taskName,
-            storeType,
-            storeName
+            THREAD_ID,
+            TASK_ID,
+            STORE_TYPE,
+            STORE_NAME
         )).andReturn(tags);
     }
 
@@ -284,7 +287,7 @@ public class RocksDBMetricsTest {
         replay(StreamsMetricsImpl.class);
 
         final Sensor sensor =
-            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(taskName, storeType, storeName));
+            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME));
 
         verifyAll();
         verify(StreamsMetricsImpl.class);

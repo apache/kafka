@@ -358,7 +358,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData().setAuthBytes(new Array[Byte](0)))
 
         case ApiKeys.API_VERSIONS =>
-          new ApiVersionsRequest.Builder
+          new ApiVersionsRequest.Builder()
 
         case ApiKeys.CREATE_TOPICS => {
           new CreateTopicsRequest.Builder(

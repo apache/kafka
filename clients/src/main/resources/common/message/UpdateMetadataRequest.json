@@ -26,7 +26,8 @@
   // Version 4 adds the offline replica list.
   //
   // Version 5 adds the broker epoch field and normalizes partitions by topic.
-  "validVersions": "0-5",
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },

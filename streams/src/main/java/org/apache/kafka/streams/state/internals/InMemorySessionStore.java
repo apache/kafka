@@ -75,8 +75,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
+        final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = metrics.storeLevelSensor(
+            threadId,
             taskName,
             name(),
             EXPIRED_WINDOW_RECORD_DROP,
@@ -85,7 +87,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         addInvocationRateAndCountToSensor(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
-            metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
+            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
             EXPIRED_WINDOW_RECORD_DROP
         );
 

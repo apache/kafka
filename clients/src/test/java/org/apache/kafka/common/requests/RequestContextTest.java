@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -27,7 +29,6 @@ import org.junit.Test;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -55,8 +56,10 @@ public class RequestContextTest {
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
 
-        Send send = context.buildResponse(new ApiVersionsResponse(0, Errors.UNSUPPORTED_VERSION,
-                Collections.<ApiVersionsResponse.ApiVersion>emptyList()));
+        Send send = context.buildResponse(new ApiVersionsResponse(new ApiVersionsResponseData()
+            .setThrottleTimeMs(0)
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+            .setApiKeys(new ApiVersionsResponseKeyCollection())));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
 
@@ -64,14 +67,15 @@ public class RequestContextTest {
         responseBuffer.flip();
         responseBuffer.getInt(); // strip off the size
 
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, header.headerVersion());
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
+            ApiKeys.API_VERSIONS.responseHeaderVersion(header.apiVersion()));
         assertEquals(correlationId, responseHeader.correlationId());
 
         Struct struct = ApiKeys.API_VERSIONS.parseResponse((short) 0, responseBuffer);
         ApiVersionsResponse response = (ApiVersionsResponse)
             AbstractResponse.parseResponse(ApiKeys.API_VERSIONS, struct, (short) 0);
-        assertEquals(Errors.UNSUPPORTED_VERSION, response.error());
-        assertTrue(response.apiVersions().isEmpty());
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+        assertTrue(response.data.apiKeys().isEmpty());
     }
 
 }

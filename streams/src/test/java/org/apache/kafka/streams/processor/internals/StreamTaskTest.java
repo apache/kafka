@@ -414,10 +414,18 @@ public class StreamTaskTest {
         assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
 
+        final String threadId = Thread.currentThread().getName();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-task-metrics,client-id=test,task-id=%s", task.id.toString())));
-        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=test,task-id=all"));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=%s",
+            threadId,
+            task.id.toString()
+        )));
+        assertTrue(reporter.containsMbean(String.format(
+            "kafka.streams:type=stream-task-metrics,thread-id=%s,task-id=all",
+            threadId
+        )));
     }
 
     private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
@@ -425,7 +433,7 @@ public class StreamTaskTest {
             String.format(nameFormat, "commit"),
             "stream-task-metrics",
             String.format(descriptionFormat, "commit"),
-            mkMap(mkEntry("task-id", taskId), mkEntry("client-id", "test"))
+            mkMap(mkEntry("task-id", taskId), mkEntry("thread-id", Thread.currentThread().getName()))
         ));
     }
 
@@ -760,7 +768,11 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        final MetricName enforcedProcessMetric = metrics.metricName("enforced-processing-total", "stream-task-metrics", mkMap(mkEntry("client-id", "test"), mkEntry("task-id", taskId00.toString())));
+        final MetricName enforcedProcessMetric = metrics.metricName(
+            "enforced-processing-total",
+            "stream-task-metrics",
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+        );
 
         assertFalse(task.isProcessable(0L));
         assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());

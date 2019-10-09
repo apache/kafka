@@ -63,7 +63,8 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
-        closeTaskSensor = metrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+        closeTaskSensor = metrics
+            .threadLevelSensor(Thread.currentThread().getName(), "task-closed", Sensor.RecordingLevel.INFO);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
 
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
@@ -119,18 +120,6 @@ public class StandbyTask extends AbstractTask {
         commitNeeded = false;
     }
 
-    /**
-     * <pre>
-     * - flush store
-     * - checkpoint store
-     * </pre>
-     */
-    @Override
-    public void suspend() {
-        log.debug("Suspending");
-        flushAndCheckpointState();
-    }
-
     private void flushAndCheckpointState() {
         stateMgr.flush();
         stateMgr.checkpoint(Collections.emptyMap());
@@ -160,13 +149,6 @@ public class StandbyTask extends AbstractTask {
         }
 
         taskClosed = true;
-    }
-
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               final RuntimeException e) {
-        close(clean, isZombie);
     }
 
     /**

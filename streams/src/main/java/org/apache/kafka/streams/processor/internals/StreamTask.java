@@ -96,19 +96,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
         final Sensor taskEnforcedProcessSensor;
+        private final String threadId;
         private final String taskName;
 
-        TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
-            taskName = id.toString();
+        TaskMetrics(final String threadId,
+                    final TaskId taskId,
+                    final StreamsMetricsImpl metrics) {
+            this.threadId = threadId;
+            taskName = taskId.toString();
             this.metrics = metrics;
             final String group = "stream-task-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
-            final Sensor parent = ThreadMetrics.commitOverTasksSensor(metrics);
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, metrics);
 
             // add the operation metrics with additional tags
-            final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
+            final Map<String, String> tagMap = metrics.taskLevelTagMap(threadId, taskName);
+            taskCommitTimeSensor =
+                metrics.taskLevelSensor(threadId, taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
             taskCommitTimeSensor.add(
                 new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
                 new Avg()
@@ -127,7 +132,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
 
             // add the metrics for enforced processing
-            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-processing", Sensor.RecordingLevel.DEBUG, parent);
+            taskEnforcedProcessSensor = metrics.taskLevelSensor(
+                threadId,
+                taskName,
+                "enforced-processing",
+                Sensor.RecordingLevel.DEBUG,
+                parent
+            );
             taskEnforcedProcessSensor.add(
                     new MetricName("enforced-processing-rate", group, "The average number of occurrence of enforced-processing operation per second.", tagMap),
                     new Rate(TimeUnit.SECONDS, new WindowedCount())
@@ -140,7 +151,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         void removeAllSensors() {
-            metrics.removeAllTaskLevelSensors(taskName);
+            metrics.removeAllTaskLevelSensors(threadId, taskName);
         }
     }
 
@@ -179,9 +190,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.time = time;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
-        this.taskMetrics = new TaskMetrics(id, streamsMetrics);
+        final String threadId = Thread.currentThread().getName();
+        this.taskMetrics = new TaskMetrics(threadId, id, streamsMetrics);
 
-        closeTaskSensor = ThreadMetrics.closeTaskSensor(streamsMetrics);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
@@ -190,7 +202,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
-                ThreadMetrics.skipRecordSensor(streamsMetrics));
+                ThreadMetrics.skipRecordSensor(threadId, streamsMetrics));
         } else {
             this.recordCollector = recordCollector;
         }
@@ -560,7 +572,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    @Override
     public void suspend() {
         log.debug("Suspending");
         suspend(true, false);
@@ -674,10 +685,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               RuntimeException firstException) {
+    void closeSuspended(final boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -729,7 +737,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("Could not close task due to the following error:", e);
         }
 
-        closeSuspended(clean, isZombie, firstException);
+        closeSuspended(clean, firstException);
 
         taskClosed = true;
     }

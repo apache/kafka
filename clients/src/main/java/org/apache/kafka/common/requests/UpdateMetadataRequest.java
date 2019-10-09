@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataT
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -188,12 +187,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     @Override
     public UpdateMetadataResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        if (version <= 5)
-            return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.forException(e).code()));
-        else
-            throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                version, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
+        UpdateMetadataResponseData data = new UpdateMetadataResponseData()
+                .setErrorCode(Errors.forException(e).code());
+        return new UpdateMetadataResponse(data);
     }
 
     public Iterable<UpdateMetadataPartitionState> partitionStates() {
@@ -213,19 +209,12 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    protected ByteBuffer toBytes() {
-        ByteBuffer bytes = ByteBuffer.allocate(size());
-        data.write(new ByteBufferAccessor(bytes), version());
-        bytes.flip();
-        return bytes;
-    }
-
-    protected int size() {
-        return data.size(version());
+    // Visible for testing
+    UpdateMetadataRequestData data() {
+        return data;
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
     }
-
 }
