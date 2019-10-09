@@ -17,13 +17,9 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
-import kafka.server.HostedPartition.Online
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
-
-import scala.collection.Map
 
 class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
@@ -35,23 +31,6 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         name = "ReplicaFetcherManager on broker " + brokerConfig.brokerId,
         clientId = "Replica",
         numFetchers = brokerConfig.numReplicaFetchers) {
-
-  newGauge(
-    "ReassignmentMaxLag",
-    new Gauge[Long] {
-      // current max lag across all fetchers/topics/partitions
-      def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-        val curThreadMax = fetcherThreadMapEntry._2.fetcherLagStats.stats.maxBy {
-          case (tp, lagMetrics) => replicaManager.getPartition(tp.topicPartition) match {
-            case Online(partition) => if (partition.isAddingLocalReplica) lagMetrics.lag else curMaxAll
-            case _ => curMaxAll
-          }
-        }._2.lag
-        if (curMaxAll > curThreadMax) curMaxAll else curThreadMax
-      })
-    },
-    Map("clientId" -> "Replica", "replica" -> "Follower")
-  )
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
