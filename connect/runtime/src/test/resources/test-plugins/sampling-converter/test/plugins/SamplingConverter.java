@@ -44,51 +44,18 @@ public class SamplingConverter implements Converter, SamplingTestPlugin {
 
   @Override
   public void configure(final Map<String, ?> configs, final boolean isKey) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("configure." + configs + "." + isKey, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
   }
 
   @Override
   public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("fromConnectData." + topic + "." + schema + "." + value, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
     return new byte[0];
   }
 
   @Override
   public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("toConnectData." + topic + "." + value, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
     return null;
   }
 

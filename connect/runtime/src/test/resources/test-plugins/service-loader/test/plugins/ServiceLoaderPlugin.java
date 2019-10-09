@@ -41,9 +41,8 @@ public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
     Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
     while (it.hasNext()) {
       ServiceLoadedClass loaded = it.next();
-      SAMPLES.put("static:" + loaded.getClass().getName(), loaded);
+      SAMPLES.put(loaded.getClass().getSimpleName() + ".static", loaded);
     }
-    SAMPLES.put("static:" + ServiceLoadedClass.class.getName(), new ServiceLoadedClass());
   }
 
   {
@@ -51,9 +50,8 @@ public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
     Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
     while (it.hasNext()) {
       ServiceLoadedClass loaded = it.next();
-      SAMPLES.put("dynamic:" + loaded.getClass().getName(), loaded);
+      SAMPLES.put(loaded.getClass().getSimpleName() + ".dynamic", loaded);
     }
-    SAMPLES.put("dynamic:" + ServiceLoadedClass.class.getName(), new ServiceLoadedClass());
   }
 
   @Override

@@ -54,11 +54,46 @@ public interface SamplingTestPlugin {
         if (otherSamples != null) {
             for (Entry<String, SamplingTestPlugin> child : otherSamples.entrySet()) {
                 for (Entry<String, SamplingTestPlugin> flattened : child.getValue().flatten().entrySet()) {
-                    out.put(child.getKey() + "."  + flattened.getKey(), flattened.getValue());
+                    String key = child.getKey();
+                    if (flattened.getKey().length() > 0) {
+                        key += "." + flattened.getKey();
+                    }
+                    out.put(key, flattened.getValue());
                 }
             }
         }
-        out.put("this", this);
+        out.put("", this);
         return out;
+    }
+
+    /**
+     * Log the parent method call as a child sample.
+     * Stores only the last invocation of each method if there are multiple invocations.
+     * @param samples The collection of samples to which this method call should be added
+     */
+    default void logMethodCall(Map<String, SamplingTestPlugin> samples) {
+        String methodName = "unknown";
+        StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
+        // 0 is inside getStackTrace
+        // 1 is this method
+        // 2 is our caller method
+        if (stackTraces.length >= 2) {
+            StackTraceElement caller = stackTraces[2];
+            methodName = caller.getMethodName();
+        }
+
+        ClassLoader staticClassloader = getClass().getClassLoader();
+        ClassLoader dynamicClassloader = Thread.currentThread().getContextClassLoader();
+        samples.put(methodName, new SamplingTestPlugin() {
+            @Override
+            public ClassLoader staticClassloader() {
+                return staticClassloader;
+            }
+
+            @Override
+            public ClassLoader classloader() {
+                return dynamicClassloader;
+            }
+        });
     }
 }

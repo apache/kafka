@@ -45,18 +45,7 @@ public class SamplingConfigurable implements Converter, SamplingTestPlugin, Conf
 
   @Override
   public void configure(final Map<String, ?> configs) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("configure." + configs, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
   }
 
   @Override

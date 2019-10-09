@@ -46,85 +46,30 @@ public class SamplingHeaderConverter implements HeaderConverter, SamplingTestPlu
 
   @Override
   public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("toConnectHeader." + topic + "." + headerKey + "." + value, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
     return null;
   }
 
   @Override
   public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("fromConnectHeader." + topic + "." + headerKey + "." + schema + "." + value, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
     return new byte[0];
   }
 
   @Override
   public ConfigDef config() {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("config", new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
     return null;
   }
 
   @Override
   public void configure(final Map<String, ?> configs) {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("configure." + configs, new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
   }
 
   @Override
   public void close() {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-    samples.put("close", new SamplingTestPlugin() {
-      @Override
-      public ClassLoader staticClassloader() {
-        return STATIC_CLASS_LOADER;
-      }
-
-      @Override
-      public ClassLoader classloader() {
-        return classLoader;
-      }
-    });
+    logMethodCall(samples);
   }
 
   @Override

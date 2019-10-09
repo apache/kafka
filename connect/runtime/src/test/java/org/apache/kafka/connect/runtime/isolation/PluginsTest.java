@@ -220,7 +220,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void shouldPerformServiceLoadingWithPluginClassloader() {
+    public void newPluginShouldServiceLoadWithPluginClassLoader() {
         TestPlugins.assertInitialized();
         Converter plugin = plugins.newPlugin(
             TestPlugins.SERVICE_LOADER,
@@ -229,20 +229,15 @@ public class PluginsTest {
         );
 
         assertTrue(plugin instanceof SamplingTestPlugin);
-        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
-        // There should be at least 1 (root) + 4 (service loaded) = 5 samples
-        assertTrue(samples.size() >= 5);
-        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-            String message = e.getKey() + " does not have the PluginClassLoader active";
-            SamplingTestPlugin sample = e.getValue();
-            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
-            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
-        }
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        // Assert that the service loaded subclass is found in both environments
+        assertTrue(samples.containsKey("ServiceLoadedSubclass.static"));
+        assertTrue(samples.containsKey("ServiceLoadedSubclass.dynamic"));
+        assertPluginClassLoaderAlwaysActive(samples);
     }
 
     @Test
-    public void shouldLoadPluginWithPluginClassloader() {
+    public void newPluginShouldInstantiateWithPluginClassLoader() {
         TestPlugins.assertInitialized();
         Converter plugin = plugins.newPlugin(
             TestPlugins.SAMPLING,
@@ -251,11 +246,8 @@ public class PluginsTest {
         );
 
         assertTrue(plugin instanceof SamplingTestPlugin);
-        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-
-        String message = "sampling plugin does not have the PluginClassLoader active";
-        assertTrue(message, samplingPlugin.staticClassloader() instanceof PluginClassLoader);
-        assertTrue(message, samplingPlugin.classloader() instanceof PluginClassLoader);
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertPluginClassLoaderAlwaysActive(samples);
     }
 
     @Test(expected = ConfigException.class)
@@ -266,7 +258,7 @@ public class PluginsTest {
     }
 
     @Test
-    public void shouldConfigureConverterWithPluginClassloader() {
+    public void newConverterShouldConfigureWithPluginClassLoader() {
         TestPlugins.assertInitialized();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONVERTER);
@@ -281,20 +273,13 @@ public class PluginsTest {
         );
 
         assertTrue(plugin instanceof SamplingTestPlugin);
-        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
-        // There should be at least 1 (root) + 1 (configure call) = 2 samples
-        assertTrue(samples.size() >= 2);
-        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-            String message = e.getKey() + " does not have the PluginClassLoader active";
-            SamplingTestPlugin sample = e.getValue();
-            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
-            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
-        }
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertTrue(samples.containsKey("configure"));
+        assertPluginClassLoaderAlwaysActive(samples);
     }
 
     @Test
-    public void shouldCreateNewHeaderConverterWithPluginClassloader() {
+    public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
         TestPlugins.assertInitialized();
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_HEADER_CONVERTER);
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_HEADER_CONVERTER);
@@ -309,40 +294,39 @@ public class PluginsTest {
         );
 
         assertTrue(plugin instanceof SamplingTestPlugin);
-        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
-        // There should be at least 1 (root) + 1 (configure call) = 2 samples
-        assertTrue(samples.size() >= 2);
-        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-            String message = e.getKey() + " does not have the PluginClassLoader active";
-            SamplingTestPlugin sample = e.getValue();
-            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
-            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
-        }
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertTrue(samples.containsKey("configure")); // HeaderConverter::configure was called
+        assertPluginClassLoaderAlwaysActive(samples);
     }
 
     @Test
-    public void shouldConfigureConverterWithPluginClassloaderInNewPlugins() {
+    public void newPluginsShouldConfigureWithPluginClassLoader() {
         TestPlugins.assertInitialized();
-        List<Configurable> converters = plugins.newPlugins(
+        List<Configurable> configurables = plugins.newPlugins(
             Collections.singletonList(TestPlugins.SAMPLING_CONFIGURABLE),
             config,
             Configurable.class
         );
+        assertEquals(1, configurables.size());
+        Configurable plugin = configurables.get(0);
 
-        assertEquals(1, converters.size());
-        for (Configurable plugin : converters) {
-            assertTrue(plugin instanceof SamplingTestPlugin);
-            SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
-            Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
-            // There should be at least 1 (root) + 1 (configure call) = 2 samples
-            for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-                String message = e.getKey() + " does not have the PluginClassLoader active";
-                SamplingTestPlugin sample = e.getValue();
-                assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
-                assertTrue(message, sample.classloader() instanceof PluginClassLoader);
-            }
-            assertTrue(samples.toString() + " is incomplete", samples.size() >= 2);
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertTrue(samples.containsKey("configure")); // Configurable::configure was called
+        assertPluginClassLoaderAlwaysActive(samples);
+    }
+
+    protected void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {
+        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+            String sampleName = e.getKey() + " (" + e.getValue() + ")";
+            assertTrue(
+                sampleName + " does not have the PluginClassLoader active during static initialization",
+                e.getValue().staticClassloader() instanceof PluginClassLoader
+            );
+            assertTrue(
+                sampleName + " does not have the PluginClassLoader active during dynamic initialization",
+                e.getValue().classloader() instanceof PluginClassLoader
+            );
         }
     }
 
