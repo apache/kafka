@@ -429,18 +429,24 @@ public class Plugins {
                                        + "name matches %s", pluginKlass, klassName);
             throw new ConnectException(msg);
         }
-        plugin = newPlugin(klass);
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate '" + klassName + "'");
-        }
-        if (plugin instanceof Versioned) {
-            Versioned versionedPlugin = (Versioned) plugin;
-            if (versionedPlugin.version() == null || versionedPlugin.version().trim().isEmpty()) {
-                throw new ConnectException("Version not defined for '" + klassName + "'");
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
+            if (plugin == null) {
+                throw new ConnectException("Unable to instantiate '" + klassName + "'");
             }
-        }
-        if (plugin instanceof Configurable) {
-            ((Configurable) plugin).configure(config.originals());
+            if (plugin instanceof Versioned) {
+                Versioned versionedPlugin = (Versioned) plugin;
+                if (versionedPlugin.version() == null || versionedPlugin.version().trim()
+                    .isEmpty()) {
+                    throw new ConnectException("Version not defined for '" + klassName + "'");
+                }
+            }
+            if (plugin instanceof Configurable) {
+                ((Configurable) plugin).configure(config.originals());
+            }
+        } finally {
+            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
