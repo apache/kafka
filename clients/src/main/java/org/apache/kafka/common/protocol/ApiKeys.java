@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
@@ -89,8 +92,6 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
@@ -122,6 +123,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
@@ -150,7 +153,7 @@ public enum ApiKeys {
             DescribeGroupsResponseData.SCHEMAS),
     LIST_GROUPS(16, "ListGroups", ListGroupsRequestData.SCHEMAS, ListGroupsResponseData.SCHEMAS),
     SASL_HANDSHAKE(17, "SaslHandshake", SaslHandshakeRequestData.SCHEMAS, SaslHandshakeResponseData.SCHEMAS),
-    API_VERSIONS(18, "ApiVersions", ApiVersionsRequest.schemaVersions(), ApiVersionsResponse.schemaVersions()) {
+    API_VERSIONS(18, "ApiVersions", ApiVersionsRequestData.SCHEMAS, ApiVersionsResponseData.SCHEMAS) {
         @Override
         public Struct parseResponse(short version, ByteBuffer buffer) {
             // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
@@ -334,12 +337,12 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
-    public short headerVersion(short apiVersion) {
-        if ((this == CONTROLLED_SHUTDOWN) && (apiVersion == 0)) {
-            return 0;
-        } else {
-            return 1;
-        }
+    public short requestHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).requestHeaderVersion(apiVersion);
+    }
+
+    public short responseHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).responseHeaderVersion(apiVersion);
     }
 
     private static String toHtml() {
@@ -372,7 +375,8 @@ public enum ApiKeys {
         Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
-                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS ||
+                    field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES)
                     hasBuffer.set(true);
             }
         };

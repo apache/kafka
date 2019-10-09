@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
@@ -107,11 +108,10 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true),
             0,
-            new Metrics(),
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
             new MockTime(),
             "clientId",
-            stateRestoreListener,
-            null
+            stateRestoreListener
         );
     }
 
@@ -143,11 +143,10 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true),
             0,
-            new Metrics(),
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
             new MockTime(),
             "clientId",
-            stateRestoreListener,
-            null
+            stateRestoreListener
         );
 
         try {

@@ -65,7 +65,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
 
             otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
         }

@@ -44,6 +44,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 
 /**
@@ -99,15 +100,20 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Max config offset root: {}, local snapshot config offsets root: {}",
                   maxOffset, coordinator.configSnapshot().offset());
 
+        short protocolVersion = memberConfigs.values().stream()
+            .allMatch(state -> state.assignment().version() == CONNECT_PROTOCOL_V2)
+                ? CONNECT_PROTOCOL_V2
+                : CONNECT_PROTOCOL_V1;
+
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
         if (leaderOffset == null) {
             Map<String, ExtendedAssignment> assignments = fillAssignments(
                     memberConfigs.keySet(), Assignment.CONFIG_MISMATCH,
                     leaderId, memberConfigs.get(leaderId).url(), maxOffset, Collections.emptyMap(),
-                    Collections.emptyMap(), Collections.emptyMap(), 0);
+                    Collections.emptyMap(), Collections.emptyMap(), 0, protocolVersion);
             return serializeAssignments(assignments);
         }
-        return performTaskAssignment(leaderId, leaderOffset, memberConfigs, coordinator);
+        return performTaskAssignment(leaderId, leaderOffset, memberConfigs, coordinator, protocolVersion);
     }
 
     private Long ensureLeaderConfig(long maxOffset, WorkerCoordinator coordinator) {
@@ -140,12 +146,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * round of rebalancing
      * @param coordinator the worker coordinator instance that provide the configuration snapshot
      * and get assigned the leader state during this assignment
+     * @param protocolVersion the Connect subprotocol version
      * @return the serialized assignment of tasks to the whole group, including assigned or
      * revoked tasks
      */
     protected Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset,
                                                             Map<String, ExtendedWorkerState> memberConfigs,
-                                                            WorkerCoordinator coordinator) {
+                                                            WorkerCoordinator coordinator, short protocolVersion) {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
@@ -281,7 +288,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, ExtendedAssignment> assignments =
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
-                                incrementalTaskAssignments, toRevoke, delay);
+                                incrementalTaskAssignments, toRevoke, delay, protocolVersion);
 
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
 
@@ -491,7 +498,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                                             Map<String, Collection<String>> connectorAssignments,
                                                             Map<String, Collection<ConnectorTaskId>> taskAssignments,
                                                             Map<String, ConnectorsAndTasks> revoked,
-                                                            int delay) {
+                                                            int delay, short protocolVersion) {
         Map<String, ExtendedAssignment> groupAssignment = new HashMap<>();
         for (String member : members) {
             Collection<String> connectorsToStart = connectorAssignments.getOrDefault(member, Collections.emptyList());
@@ -499,7 +506,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             Collection<String> connectorsToStop = revoked.getOrDefault(member, ConnectorsAndTasks.EMPTY).connectors();
             Collection<ConnectorTaskId> tasksToStop = revoked.getOrDefault(member, ConnectorsAndTasks.EMPTY).tasks();
             ExtendedAssignment assignment =
-                    new ExtendedAssignment(CONNECT_PROTOCOL_V1, error, leaderId, leaderUrl, maxOffset,
+                    new ExtendedAssignment(protocolVersion, error, leaderId, leaderUrl, maxOffset,
                             connectorsToStart, tasksToStart, connectorsToStop, tasksToStop, delay);
             log.debug("Filling assignment: {} -> {}", member, assignment);
             groupAssignment.put(member, assignment);

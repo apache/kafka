@@ -42,7 +42,7 @@ public class RequestHeader extends AbstractRequestResponse {
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
                 setCorrelationId(correlationId),
-            ApiKeys.forId(requestApiKey.id).headerVersion(requestVersion));
+            ApiKeys.forId(requestApiKey.id).requestHeaderVersion(requestVersion));
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
@@ -79,7 +79,8 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public ResponseHeader toResponseHeader() {
-        return new ResponseHeader(data.correlationId(), headerVersion);
+        return new ResponseHeader(data.correlationId(),
+            apiKey().responseHeaderVersion(apiVersion()));
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
@@ -87,7 +88,7 @@ public class RequestHeader extends AbstractRequestResponse {
         try {
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
-            short headerVersion = ApiKeys.forId(apiKey).headerVersion(apiVersion);
+            short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
             buffer.rewind();
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);

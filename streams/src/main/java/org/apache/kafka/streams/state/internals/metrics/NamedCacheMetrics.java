@@ -35,6 +35,7 @@ public class NamedCacheMetrics {
 
 
     public static Sensor hitRatioSensor(final StreamsMetricsImpl streamsMetrics,
+                                        final String threadId,
                                         final String taskName,
                                         final String storeName) {
 
@@ -43,6 +44,7 @@ public class NamedCacheMetrics {
         if (streamsMetrics.version() == FROM_100_TO_23) {
             hitRatioName = HIT_RATIO_0100_TO_23;
             final Sensor taskLevelHitRatioSensor = streamsMetrics.taskLevelSensor(
+                threadId,
                 taskName,
                 hitRatioName,
                 Sensor.RecordingLevel.DEBUG
@@ -50,13 +52,14 @@ public class NamedCacheMetrics {
             addAvgAndMinAndMaxToSensor(
                 taskLevelHitRatioSensor,
                 CACHE_LEVEL_GROUP,
-                streamsMetrics.cacheLevelTagMap(taskName, ROLLUP_VALUE),
+                streamsMetrics.cacheLevelTagMap(threadId, taskName, ROLLUP_VALUE),
                 hitRatioName,
                 HIT_RATIO_AVG_DESCRIPTION,
                 HIT_RATIO_MIN_DESCRIPTION,
                 HIT_RATIO_MAX_DESCRIPTION
             );
             hitRatioSensor = streamsMetrics.cacheLevelSensor(
+                threadId,
                 taskName,
                 storeName,
                 hitRatioName,
@@ -66,6 +69,7 @@ public class NamedCacheMetrics {
         } else {
             hitRatioName = HIT_RATIO;
             hitRatioSensor = streamsMetrics.cacheLevelSensor(
+                threadId,
                 taskName,
                 storeName,
                 hitRatioName,
@@ -75,7 +79,7 @@ public class NamedCacheMetrics {
         addAvgAndMinAndMaxToSensor(
             hitRatioSensor,
             CACHE_LEVEL_GROUP,
-            streamsMetrics.cacheLevelTagMap(taskName, storeName),
+            streamsMetrics.cacheLevelTagMap(threadId, taskName, storeName),
             hitRatioName,
             HIT_RATIO_AVG_DESCRIPTION,
             HIT_RATIO_MIN_DESCRIPTION,

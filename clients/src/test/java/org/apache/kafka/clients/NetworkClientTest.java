@@ -20,6 +20,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
@@ -29,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -171,7 +175,7 @@ public class NetworkClientTest {
         assertEquals(1, networkClient.inFlightRequestCount());
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
-                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -189,19 +193,217 @@ public class NetworkClientTest {
                 request.correlationId(), handler.response.requestHeader().correlationId());
     }
 
-    private void setExpectedApiVersionsResponse(ApiVersionsResponse response) {
-        short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
-        ByteBuffer buffer = response.serialize(ApiKeys.API_VERSIONS, apiVersionsResponseVersion, 0);
+    private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
+        ByteBuffer buffer = response.serialize(ApiKeys.API_VERSIONS, version, correlationId);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+    }
+
+    private void setExpectedApiVersionsResponse(ApiVersionsResponse response) {
+        short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion();
+        delayedApiVersionsResponse(0, apiVersionsResponseVersion, response);
     }
 
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
-            setExpectedApiVersionsResponse(ApiVersionsResponse.defaultApiVersionsResponse());
+            setExpectedApiVersionsResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
+    }
+
+    @Test
+    public void testInvalidApiVersionsRequest() {
+        // initiate the connection
+        client.ready(node, time.milliseconds());
+
+        // handle the connection, send the ApiVersionsRequest
+        client.poll(0, time.milliseconds());
+
+        // check that the ApiVersionsRequest has been initiated
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // prepare response
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
+            new ApiVersionsResponse(
+                new ApiVersionsResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setThrottleTimeMs(0)
+            ));
+
+        // handle completed receives
+        client.poll(0, time.milliseconds());
+
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+
+        // various assertions
+        assertFalse(client.isReady(node, time.milliseconds()));
+    }
+
+    @Test
+    public void testApiVersionsRequest() {
+        // initiate the connection
+        client.ready(node, time.milliseconds());
+
+        // handle the connection, send the ApiVersionsRequest
+        client.poll(0, time.milliseconds());
+
+        // check that the ApiVersionsRequest has been initiated
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // prepare response
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(),
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+
+        // handle completed receives
+        client.poll(0, time.milliseconds());
+
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+
+        // various assertions
+        assertTrue(client.isReady(node, time.milliseconds()));
+    }
+
+    @Test
+    public void testUnsupportedApiVersionsRequestWithVersionProvidedByTheBroker() {
+        // initiate the connection
+        client.ready(node, time.milliseconds());
+
+        // handle the connection, initiate first ApiVersionsRequest
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest is in flight but not sent yet
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // completes initiated sends
+        client.poll(0, time.milliseconds());
+        assertEquals(1, selector.completedSends().size());
+
+        ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
+        RequestHeader header = parseHeader(buffer);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(3, header.apiVersion());
+
+        // prepare response
+        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
+        apiKeys.add(new ApiVersionsResponseKey()
+            .setApiKey(ApiKeys.API_VERSIONS.id)
+            .setMinVersion((short) 0)
+            .setMaxVersion((short) 2));
+        delayedApiVersionsResponse(0, (short) 0,
+            new ApiVersionsResponse(
+                new ApiVersionsResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+                    .setApiKeys(apiKeys)
+            ));
+
+        // handle ApiVersionResponse, initiate second ApiVersionRequest
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest is in flight but not sent yet
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // ApiVersionsResponse has been received
+        assertEquals(1, selector.completedReceives().size());
+
+        // clean up the buffers
+        selector.completedSends().clear();
+        selector.completedSendBuffers().clear();
+        selector.completedReceives().clear();
+
+        // completes initiated sends
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest has been sent
+        assertEquals(1, selector.completedSends().size());
+
+        buffer = selector.completedSendBuffers().get(0).buffer();
+        header = parseHeader(buffer);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(2, header.apiVersion());
+
+        // prepare response
+        delayedApiVersionsResponse(1, (short) 0,
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+
+        // handle completed receives
+        client.poll(0, time.milliseconds());
+
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertEquals(1, selector.completedReceives().size());
+
+        // the client is ready
+        assertTrue(client.isReady(node, time.milliseconds()));
+    }
+
+    @Test
+    public void testUnsupportedApiVersionsRequestWithoutVersionProvidedByTheBroker() {
+        // initiate the connection
+        client.ready(node, time.milliseconds());
+
+        // handle the connection, initiate first ApiVersionsRequest
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest is in flight but not sent yet
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // completes initiated sends
+        client.poll(0, time.milliseconds());
+        assertEquals(1, selector.completedSends().size());
+
+        ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
+        RequestHeader header = parseHeader(buffer);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(3, header.apiVersion());
+
+        // prepare response
+        delayedApiVersionsResponse(0, (short) 0,
+            new ApiVersionsResponse(
+                new ApiVersionsResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+            ));
+
+        // handle ApiVersionResponse, initiate second ApiVersionRequest
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest is in flight but not sent yet
+        assertTrue(client.hasInFlightRequests(node.idString()));
+
+        // ApiVersionsResponse has been received
+        assertEquals(1, selector.completedReceives().size());
+
+        // clean up the buffers
+        selector.completedSends().clear();
+        selector.completedSendBuffers().clear();
+        selector.completedReceives().clear();
+
+        // completes initiated sends
+        client.poll(0, time.milliseconds());
+
+        // ApiVersionsRequest has been sent
+        assertEquals(1, selector.completedSends().size());
+        
+        buffer = selector.completedSendBuffers().get(0).buffer();
+        header = parseHeader(buffer);
+        assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
+        assertEquals(0, header.apiVersion());
+
+        // prepare response
+        delayedApiVersionsResponse(1, (short) 0,
+            ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE);
+
+        // handle completed receives
+        client.poll(0, time.milliseconds());
+
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertEquals(1, selector.completedReceives().size());
+
+        // the client is ready
+        assertTrue(client.isReady(node, time.milliseconds()));
     }
 
     @Test
@@ -257,7 +459,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
-                request.apiKey().headerVersion(PRODUCE.latestVersion()));
+                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, 100);
@@ -288,15 +490,24 @@ public class NetworkClientTest {
     // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
     // key is set to the specified version.
     private ApiVersionsResponse createExpectedApiVersionsResponse(ApiKeys key, short maxVersion) {
-        List<ApiVersionsResponse.ApiVersion> versionList = new ArrayList<>();
+        ApiVersionsResponseKeyCollection versionList = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == key) {
-                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey, (short) 0, maxVersion));
+                versionList.add(new ApiVersionsResponseKey()
+                    .setApiKey(apiKey.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion(maxVersion));
             } else {
-                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey));
+                versionList.add(new ApiVersionsResponseKey()
+                    .setApiKey(apiKey.id)
+                    .setMinVersion(apiKey.oldestVersion())
+                    .setMaxVersion(apiKey.latestVersion()));
             }
         }
-        return new ApiVersionsResponse(0, Errors.NONE, versionList);
+        return new ApiVersionsResponse(new ApiVersionsResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setApiKeys(versionList));
     }
 
     @Test
@@ -346,7 +557,7 @@ public class NetworkClientTest {
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
         sendResponse(new ResponseHeader(correlationId,
-            PRODUCE.headerVersion(PRODUCE.latestVersion())),
+            PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
             resp);
     }
 
@@ -591,6 +802,11 @@ public class NetworkClientTest {
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());
         assertTrue(client.canConnect(node, time.milliseconds()));
+    }
+
+    private RequestHeader parseHeader(ByteBuffer buffer) {
+        buffer.getInt(); // skip size
+        return RequestHeader.parse(buffer.slice());
     }
 
     private void awaitInFlightApiVersionRequest() throws Exception {

@@ -65,7 +65,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
             store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,

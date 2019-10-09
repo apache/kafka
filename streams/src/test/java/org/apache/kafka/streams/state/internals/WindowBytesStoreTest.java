@@ -663,6 +663,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testPutSameKeyTimestamp() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -771,6 +772,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testDeleteAndUpdate() {
 
         final long currentTime = 0;
@@ -792,6 +794,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         windowStore.put(null, "anyValue");
     }
@@ -892,15 +895,16 @@ public abstract class WindowBytesStoreTest {
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
         final String metricScope = getMetricsScope();
+        final String threadId = Thread.currentThread().getName();
 
         final Metric dropTotal = metrics.get(new MetricName(
             "expired-window-record-drop-total",
             "stream-" + metricScope + "-metrics",
             "The total number of occurrence of expired-window-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
+                mkEntry(metricScope + "-state-id", windowStore.name())
             )
         ));
 
@@ -909,9 +913,9 @@ public abstract class WindowBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
+                mkEntry(metricScope + "-state-id", windowStore.name())
             )
         ));
 
@@ -932,6 +936,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testWindowIteratorPeek() {
         final long currentTime = 0;
         setCurrentTime(currentTime);
@@ -962,6 +967,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowConcurrentModificationException() {
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -990,6 +996,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testFetchDuplicates() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -1019,6 +1026,7 @@ public abstract class WindowBytesStoreTest {
     }
 
 
+    @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {
@@ -1034,6 +1042,7 @@ public abstract class WindowBytesStoreTest {
         store.put(5, "five");
     }
 
+    @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {

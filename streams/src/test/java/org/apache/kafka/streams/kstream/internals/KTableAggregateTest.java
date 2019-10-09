@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -38,6 +38,9 @@ import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
+
+import java.time.Duration;
+import java.time.Instant;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -78,18 +81,18 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
-            final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+                Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 15L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "3", 20L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "4", 18L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "5", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "6", 25L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "7", 15L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "8", 10L));
+            inputTopic.pipeInput("A", "1", 10L);
+            inputTopic.pipeInput("B", "2", 15L);
+            inputTopic.pipeInput("A", "3", 20L);
+            inputTopic.pipeInput("B", "4", 18L);
+            inputTopic.pipeInput("C", "5", 5L);
+            inputTopic.pipeInput("D", "6", 25L);
+            inputTopic.pipeInput("B", "7", 15L);
+            inputTopic.pipeInput("C", "8", 10L);
 
             assertEquals(
                 asList(
@@ -145,18 +148,18 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
-            final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+                Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 12L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 20L));
-            driver.pipeInput(recordFactory.create(topic1, "null", "3", 25L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "4", 23L));
-            driver.pipeInput(recordFactory.create(topic1, "NULL", "5", 24L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "7", 22L));
+            inputTopic.pipeInput("A", "1", 10L);
+            inputTopic.pipeInput("A", (String) null, 15L);
+            inputTopic.pipeInput("A", "1", 12L);
+            inputTopic.pipeInput("B", "2", 20L);
+            inputTopic.pipeInput("null", "3", 25L);
+            inputTopic.pipeInput("B", "4", 23L);
+            inputTopic.pipeInput("NULL", "5", 24L);
+            inputTopic.pipeInput("B", "7", 22L);
 
             assertEquals(
                 asList(
@@ -183,15 +186,15 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
-            final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+                Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            driver.pipeInput(recordFactory.create(input, "A", "green", 10L));
-            driver.pipeInput(recordFactory.create(input, "B", "green", 9L));
-            driver.pipeInput(recordFactory.create(input, "A", "blue", 12L));
-            driver.pipeInput(recordFactory.create(input, "C", "yellow", 15L));
-            driver.pipeInput(recordFactory.create(input, "D", "green", 11L));
+            inputTopic.pipeInput("A", "green", 10L);
+            inputTopic.pipeInput("B", "green", 9L);
+            inputTopic.pipeInput("A", "blue", 12L);
+            inputTopic.pipeInput("C", "yellow", 15L);
+            inputTopic.pipeInput("D", "green", 11L);
 
             assertEquals(
                 asList(
@@ -266,16 +269,16 @@ public class KTableAggregateTest {
                     mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
-                0L)) {
-            final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+                Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
 
-            driver.pipeInput(recordFactory.create(input, "11", "A", 10L));
-            driver.pipeInput(recordFactory.create(input, "12", "B", 8L));
-            driver.pipeInput(recordFactory.create(input, "11", (String) null, 12L));
-            driver.pipeInput(recordFactory.create(input, "12", "C", 6L));
+            inputTopic.pipeInput("11", "A", 10L);
+            inputTopic.pipeInput("12", "B", 8L);
+            inputTopic.pipeInput("11", (String) null, 12L);
+            inputTopic.pipeInput("12", "C", 6L);
 
             assertEquals(
                 asList(

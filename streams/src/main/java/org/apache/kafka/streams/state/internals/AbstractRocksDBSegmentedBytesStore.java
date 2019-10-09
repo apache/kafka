@@ -174,9 +174,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         this.context = (InternalProcessorContext) context;
 
         final StreamsMetricsImpl metrics = this.context.metrics();
+        final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
         expiredRecordSensor = metrics.storeLevelSensor(
+            threadId,
             taskName,
             name(),
             EXPIRED_WINDOW_RECORD_DROP,
@@ -185,7 +187,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         addInvocationRateAndCountToSensor(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
-            metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
+            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
             EXPIRED_WINDOW_RECORD_DROP
         );
 

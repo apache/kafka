@@ -61,6 +61,12 @@ private[scala] object FunctionsCompatConversions {
     }
   }
 
+  implicit class FunctionFromFunction[V, VR](val f: V => VR) extends AnyVal {
+    def asJavaFunction: java.util.function.Function[V, VR] = new java.util.function.Function[V, VR] {
+      override def apply(value: V): VR = f(value)
+    }
+  }
+
   implicit class ValueMapperFromFunction[V, VR](val f: V => VR) extends AnyVal {
     def asValueMapper: ValueMapper[V, VR] = new ValueMapper[V, VR] {
       override def apply(value: V): VR = f(value)
