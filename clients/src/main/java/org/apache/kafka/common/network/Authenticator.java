@@ -54,7 +54,8 @@ public interface Authenticator extends Closeable {
 
     /**
      * Returns the ClientSoftwareName extracted from the ApiVersionsRequest which may
-     * have been received by the Authenticator or an empty String.
+     * have been received by the Authenticator or an empty String if the remote end
+     * did not provide it.
      */
     default String clientSoftwareName() {
         return "";
@@ -62,7 +63,8 @@ public interface Authenticator extends Closeable {
 
     /**
      * Returns the ClientSoftwareVersion extracted from the ApiVersionsRequest which may
-     * have been received by the Authenticator or an empty String.
+     * have been received by the Authenticator or an empty String if the remote end
+     * did not provide it.
      */
     default String clientSoftwareVersion() {
         return "";

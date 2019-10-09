@@ -41,7 +41,7 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", correlationId);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL);
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, "", "");
         assertEquals(0, context.apiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat

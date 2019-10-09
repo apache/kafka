@@ -832,7 +832,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol, "", "")
   }
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {

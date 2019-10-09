@@ -160,7 +160,8 @@ public class KafkaChannel implements AutoCloseable {
 
     /**
      * Returns the ClientSoftwareName extracted from the ApiVersionsRequest which may
-     * have been received by the Authenticator or an empty String.
+     * have been received by the Authenticator or an empty String if the remote end
+     * did not provide it.
      */
     public String clientSoftwareName() {
         return authenticator.clientSoftwareName();
@@ -168,7 +169,8 @@ public class KafkaChannel implements AutoCloseable {
 
     /**
      * Returns the ClientSoftwareVersion extracted from the ApiVersionsRequest which may
-     * have been received by the Authenticator or an empty String.
+     * have been received by the Authenticator or an empty String if the remote end
+     * did not provide it.
      */
     public String clientSoftwareVersion() {
         return authenticator.clientSoftwareVersion();

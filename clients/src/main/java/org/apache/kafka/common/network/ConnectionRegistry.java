@@ -124,8 +124,6 @@ public class ConnectionRegistry {
 
     /**
      * Register metadata about a connection.
-     *
-     * Note that the method is synchronized to guard the counters.
      */
     public synchronized ConnectionMetadata register(
             String connectionId,
@@ -156,8 +154,6 @@ public class ConnectionRegistry {
 
     /**
      * Updates the client software name and version.
-     *
-     * Note that the method is synchronized to guard the counters.
      */
     public synchronized ConnectionMetadata updateClientSoftwareNameAndVersion(
             String connectionId,
@@ -177,8 +173,6 @@ public class ConnectionRegistry {
 
     /**
      * Removes metadata about a connection.
-     *
-     * Note that the method is synchronized to guard the counters.
      */
     public synchronized void remove(String connectionId) {
         ConnectionMetadata connection = connections.remove(connectionId);
@@ -203,15 +197,8 @@ public class ConnectionRegistry {
 
     /**
      * Gets metadata about a connection.
-     *
-     * Note that the method is NOT synchronized. A lookup is made for each request in the
-     * processor to enrich the request with the metadata (e.g. client software name and version).
-     * We have made the choice to not synchronize this to minimize the contention between the
-     * processor threads, risking that metadata could be stale or inconsistent for few requests. This
-     * should rarely happen in practice because the metadata is only updated by the ApiVersionsRequest
-     * and there are normally no concurrent requests within the connection.
      */
-    public ConnectionMetadata get(String connectionId) {
+    public synchronized ConnectionMetadata get(String connectionId) {
         return connections.get(connectionId);
     }
 
