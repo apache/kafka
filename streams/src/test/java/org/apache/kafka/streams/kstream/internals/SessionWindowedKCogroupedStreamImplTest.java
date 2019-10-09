@@ -83,17 +83,17 @@ public class SessionWindowedKCogroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() {
-        windowedCogroupedStream.aggregate( null, sessionMerger);
+        windowedCogroupedStream.aggregate(null, sessionMerger);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullSessionMergerOnAggregate() {
-        windowedCogroupedStream.aggregate( MockInitializer.STRING_INIT, null);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate( MockInitializer.STRING_INIT, sessionMerger,null);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, null);
     }
 
     @Test

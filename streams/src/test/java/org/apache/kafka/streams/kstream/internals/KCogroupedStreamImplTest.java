@@ -182,7 +182,7 @@ public class KCogroupedStreamImplTest {
             testInputTopic.pipeInput("1", "A", 0);
             testInputTopic.pipeInput("1", "A", 1);
             testInputTopic.pipeInput("1", "A", 10);
-            testInputTopic.pipeInput( "1", "A", 100);
+            testInputTopic.pipeInput("1", "A", 100);
             testInputTopic2.pipeInput("2", "B", 100L);
             testInputTopic2.pipeInput("2", "B", 200L);
             testInputTopic2.pipeInput("2", "B", 1L);
