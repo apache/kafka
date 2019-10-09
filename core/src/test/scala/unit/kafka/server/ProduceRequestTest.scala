@@ -99,7 +99,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(1, partitionResponse.recordErrors.size())
     assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
     assertNull(partitionResponse.recordErrors.get(0).message)
-    assertNull(partitionResponse.errorMessage)
+    assertNotNull(partitionResponse.errorMessage)
   }
 
   @Test
