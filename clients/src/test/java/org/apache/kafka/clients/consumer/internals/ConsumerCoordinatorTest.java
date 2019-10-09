@@ -2282,6 +2282,8 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testConsumerRejoinAfterRebalance() throws Exception {
+        long waitTimeout = 5_000;
+
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
 
@@ -2304,16 +2306,16 @@ public class ConsumerCoordinatorTest {
 
             th.start();
 
-            client.waitForRequests(1, 5_000);
+            client.waitForRequests(1, waitTimeout);
             client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
 
             waitForCondition(() -> coordinator.generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                5_000L, "JoinGroup response handled.");
+                waitTimeout, "JoinGroup response handled.");
 
-            client.waitForRequests(1, 5_000);
+            client.waitForRequests(1, waitTimeout);
             client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
 
-            client.waitForRequests(1, 5_000);
+            client.waitForRequests(1, waitTimeout);
 
             // Imitating heartbeat thread.
             coordinator.maybeLeaveGroup("Clear generation data.");
