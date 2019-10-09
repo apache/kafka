@@ -617,7 +617,6 @@ public abstract class AbstractCoordinator implements Closeable {
                             joinResponse.data().memberId(), null);
                     AbstractCoordinator.this.resetStateAndRejoin();
                 }
-
                 future.raise(error);
             } else {
                 // unexpected error, throw the exception
