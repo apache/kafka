@@ -298,8 +298,8 @@ public class MetricsIntegrationTest {
     }
 
     @Test
-    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To23() throws Exception {
-        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To24() throws Exception {
+        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldAddMetricsOnAllLevels(final String builtInMetricsVersion) throws Exception {

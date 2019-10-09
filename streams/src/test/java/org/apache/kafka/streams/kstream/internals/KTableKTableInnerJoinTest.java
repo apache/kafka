@@ -271,7 +271,7 @@ public class KTableKTableInnerJoinTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To23() {
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To24() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
@@ -280,7 +280,7 @@ public class KTableKTableInnerJoinTest {
             null
         ).get();
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         final MockProcessorContext context = new MockProcessorContext(props);
         context.setRecordMetadata("left", -1, -2, null, -3);
         join.init(context);

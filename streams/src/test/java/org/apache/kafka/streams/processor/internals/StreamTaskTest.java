@@ -407,8 +407,8 @@ public class StreamTaskTest {
 
 
     @Test
-    public void testMetricsWithBuiltInMetricsVersion0100To23() {
-        testMetrics(StreamsConfig.METRICS_0100_TO_23);
+    public void testMetricsWithBuiltInMetricsVersion0100To24() {
+        testMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
@@ -438,7 +438,7 @@ public class StreamTaskTest {
             builtInMetricsVersion
         ));
 
-        if (StreamsConfig.METRICS_0100_TO_23.equals(builtInMetricsVersion)) {
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertNotNull(getMetric(
                 "%s-latency-avg",
                 "The average latency of %s operation.",
@@ -489,7 +489,7 @@ public class StreamTaskTest {
             threadId,
             task.id.toString()
         )));
-        if (StreamsConfig.METRICS_0100_TO_23.equals(builtInMetricsVersion)) {
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
             assertTrue(reporter.containsMbean(String.format(
                 "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
                 threadIdTag,

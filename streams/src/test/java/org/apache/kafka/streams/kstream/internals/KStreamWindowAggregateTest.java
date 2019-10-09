@@ -292,7 +292,7 @@ public class KStreamWindowAggregateTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To23() {
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -307,7 +307,7 @@ public class KStreamWindowAggregateTest {
             );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());

@@ -368,9 +368,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To23() {
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
         final InternalMockProcessorContext context =
-            createInternalMockProcessorContext(StreamsConfig.METRICS_0100_TO_23);
+            createInternalMockProcessorContext(StreamsConfig.METRICS_0100_TO_24);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)

@@ -195,8 +195,8 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersion0100To23() {
-        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
@@ -213,7 +213,7 @@ public class KStreamKTableJoinTest {
         inputTopic.pipeInput(null, "A");
         LogCaptureAppender.unregister(appender);
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23)) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertEquals(
                 1.0,
                 getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
@@ -231,20 +231,20 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersion0100To23() {
-        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         driver = new TopologyTestDriver(builder.build(), props);
         final TestInputTopic<Integer, String> inputTopic =
             driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
         inputTopic.pipeInput(1, null);
         LogCaptureAppender.unregister(appender);
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23)) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertEquals(
                 1.0,
                 getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()

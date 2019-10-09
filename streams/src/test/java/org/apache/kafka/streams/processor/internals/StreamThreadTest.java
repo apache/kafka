@@ -274,8 +274,8 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testMetricsCreatedAtStartupWithBuiltInMetricsVersion0100To23() {
-        testMetricsCreatedAtStartup(StreamsConfig.METRICS_0100_TO_23);
+    public void testMetricsCreatedAtStartupWithBuiltInMetricsVersion0100To24() {
+        testMetricsCreatedAtStartup(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void testMetricsCreatedAtStartup(final String builtInMetricsVersion) {
@@ -330,7 +330,7 @@ public class StreamThreadTest {
             "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName(
             "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23)) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
                 "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -345,7 +345,7 @@ public class StreamThreadTest {
         final String taskGroupName = "stream-task-metrics";
         final Map<String, String> taskTags =
             mkMap(mkEntry("task-id", "all"), mkEntry(getThreadTagKey(builtInMetricsVersion), thread.getName()));
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23)) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertNotNull(metrics.metrics().get(metrics.metricName(
                 "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -369,7 +369,7 @@ public class StreamThreadTest {
             getThreadTagKey(builtInMetricsVersion),
             thread.getName())
         ));
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23)) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
             assertTrue(reporter.containsMbean(String.format(
                 "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
                 getThreadTagKey(builtInMetricsVersion),
@@ -383,12 +383,12 @@ public class StreamThreadTest {
     }
 
     private String getGroupName(final String builtInMetricsVersion) {
-        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23) ? "stream-metrics"
+        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "stream-metrics"
             : "stream-thread-metrics";
     }
 
     private String getThreadTagKey(final String builtInMetricsVersion) {
-        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_23) ? "client-id" : "thread-id";
+        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "client-id" : "thread-id";
     }
 
     @Test
@@ -1553,7 +1553,16 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
+    public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
+        shouldRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersion0100To24() {
+        shouldRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -1565,7 +1574,7 @@ public class StreamThreadTest {
         );
         config.setProperty(
             StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
-            StreamsConfig.METRICS_LATEST
+            builtInMetricsVersion
         );
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
@@ -1585,6 +1594,21 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            final MetricName skippedTotalMetric = metrics.metricName(
+                "skipped-records-total",
+                "stream-metrics",
+                Collections.singletonMap("client-id", thread.getName())
+            );
+            final MetricName skippedRateMetric = metrics.metricName(
+                "skipped-records-rate",
+                "stream-metrics",
+                Collections.singletonMap("client-id", thread.getName())
+            );
+            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
 
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(
@@ -1609,77 +1633,6 @@ public class StreamThreadTest {
             new byte[0],
             "I am not an integer.".getBytes()));
         thread.runOnce();
-
-        verifyLogMessagesSkippedRecordsForDeserializationException(appender);
-    }
-
-    @Test
-    public void shouldRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersion0100To23() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        final Properties config = configProps(false);
-        config.setProperty(
-            StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-            LogAndContinueExceptionHandler.class.getName()
-        );
-        config.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
-        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-
-        final TaskId task1 = new TaskId(0, t1p1.partition());
-        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
-        thread.taskManager().setAssignmentMetadata(
-            Collections.singletonMap(task1, assignedPartitions),
-            Collections.emptyMap());
-
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
-        mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce();
-
-        final MetricName skippedTotalMetric = metrics.metricName(
-            "skipped-records-total",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName(
-            "skipped-records-rate",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
-        long offset = -1;
-        mockConsumer.addRecord(new ConsumerRecord<>(
-            t1p1.topic(),
-            t1p1.partition(),
-            ++offset, -1,
-            TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
-            -1,
-            -1,
-            new byte[0],
-            "I am not an integer.".getBytes()));
-        mockConsumer.addRecord(new ConsumerRecord<>(
-            t1p1.topic(),
-            t1p1.partition(),
-            ++offset,
-            -1,
-            TimestampType.CREATE_TIME,
-            ConsumerRecord.NULL_CHECKSUM,
-            -1,
-            -1,
-            new byte[0],
-            "I am not an integer.".getBytes()));
-        thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
         verifyLogMessagesSkippedRecordsForDeserializationException(appender);
     }
@@ -1692,7 +1645,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldReportSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To23() {
+    public void shouldReportSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -1704,7 +1657,7 @@ public class StreamThreadTest {
         );
         config.setProperty(
             StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
-            StreamsConfig.METRICS_0100_TO_23
+            StreamsConfig.METRICS_0100_TO_24
         );
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
 

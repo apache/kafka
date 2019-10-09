@@ -433,8 +433,8 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldGetStoreLevelTagMapForBuiltInMetricsVersion0100To23() {
-        shouldGetStoreLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldGetStoreLevelTagMapForBuiltInMetricsVersion0100To24() {
+        shouldGetStoreLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldGetStoreLevelTagMap(final String builtInMetricsVersion) {
@@ -460,8 +460,8 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To23() {
-        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldGetCacheLevelTagMapForBuiltInMetricsVersion0100To24() {
+        shouldGetCacheLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldGetCacheLevelTagMap(final String builtInMetricsVersion) {
@@ -488,8 +488,8 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldGetThreadLevelTagMapForBuiltInMetricsVersion0100To23() {
-        shouldGetThreadLevelTagMap(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldGetThreadLevelTagMapForBuiltInMetricsVersion0100To24() {
+        shouldGetThreadLevelTagMap(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldGetThreadLevelTagMap(final String builtInMetricsVersion) {
@@ -598,7 +598,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     @Test
     public void shouldReturnMetricsVersionFrom100To23() {
         assertThat(
-            new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_0100_TO_23).version(),
+            new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_0100_TO_24).version(),
             equalTo(Version.FROM_100_TO_23)
         );
     }

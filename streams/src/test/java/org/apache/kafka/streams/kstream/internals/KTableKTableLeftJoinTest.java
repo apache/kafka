@@ -533,7 +533,7 @@ public class KTableKTableLeftJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To23() {
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To24() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
@@ -543,7 +543,7 @@ public class KTableKTableLeftJoinTest {
             null
         ).get();
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         final MockProcessorContext context = new MockProcessorContext(props);
         context.setRecordMetadata("left", -1, -2, null, -3);
         join.init(context);

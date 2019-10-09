@@ -68,8 +68,8 @@ public class KStreamKStreamJoinTest {
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
-    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersion0100To23() {
-        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterOnSkippedRecordsWithNullValue(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
@@ -103,7 +103,7 @@ public class KStreamKStreamJoinTest {
                 hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] "
                     + "offset=[0]")
             );
-            if (StreamsConfig.METRICS_0100_TO_23.equals(builtInMetricsVersion)) {
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 assertEquals(
                     1.0,
                     getMetricByName(

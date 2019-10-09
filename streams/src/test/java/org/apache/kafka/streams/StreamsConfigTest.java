@@ -487,7 +487,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldAcceptBuiltInMetricsVersion0100To23() {
+    public void shouldAcceptBuiltInMetricsVersion0100To24() {
         // don't use `StreamsConfig.METRICS_0100_TO_23` to actually do a useful test
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.3");
         new StreamsConfig(props);

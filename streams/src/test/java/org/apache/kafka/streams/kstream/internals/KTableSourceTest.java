@@ -86,12 +86,12 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetrics0100To23() {
+    public void kTableShouldLogAndMeterOnSkippedRecordsWithBuiltInMetrics0100To24() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -128,7 +128,7 @@ public class KTableSourceTest {
         final String topic = "topic";
         builder.table(topic, stringConsumed);
 
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_23);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =

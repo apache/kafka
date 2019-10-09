@@ -435,8 +435,8 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersion0100To23() {
-        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldLogAndMeasureSkipsInAggregateWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInAggregate(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
@@ -452,7 +452,7 @@ public class KGroupedStreamImplTest {
             processData(driver);
             LogCaptureAppender.unregister(appender);
 
-            if (StreamsConfig.METRICS_0100_TO_23.equals(builtInMetricsVersion)) {
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 final Map<MetricName, ? extends Metric> metrics = driver.metrics();
                 assertEquals(
                     1.0,
@@ -502,8 +502,8 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersion0100To23() {
-        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldLogAndMeasureSkipsInReduceWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureSkipsInReduce(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
@@ -525,7 +525,7 @@ public class KGroupedStreamImplTest {
             processData(driver);
             LogCaptureAppender.unregister(appender);
 
-            if (StreamsConfig.METRICS_0100_TO_23.equals(builtInMetricsVersion)) {
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 final Map<MetricName, ? extends Metric> metrics = driver.metrics();
                 assertEquals(
                     1.0,
