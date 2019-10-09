@@ -30,7 +30,9 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
+    // Due to the way we handle compatibility for ApiVersionsRequest, the
+    // ClientId string needs to use the old-style string serialization.
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
-      "about": "The client ID string." }
+      "flexibleVersions": "none", "about": "The client ID string." }
   ]
 }
