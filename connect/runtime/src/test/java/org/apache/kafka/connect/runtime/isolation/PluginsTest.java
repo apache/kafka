@@ -205,7 +205,7 @@ public class PluginsTest {
             Converter.class
         );
 
-        assertTrue(firstPlugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, firstPlugin, "Cannot collect samples");
 
         Converter secondPlugin = plugins.newPlugin(
             TestPlugins.SAMPLING,
@@ -213,7 +213,7 @@ public class PluginsTest {
             Converter.class
         );
 
-        assertTrue(secondPlugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, secondPlugin, "Cannot collect samples");
         assertSame(
             ((SamplingTestPlugin) firstPlugin).otherSamples(),
             ((SamplingTestPlugin) secondPlugin).otherSamples()
@@ -229,7 +229,7 @@ public class PluginsTest {
             Converter.class
         );
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         // Assert that the service loaded subclass is found in both environments
         assertTrue(samples.containsKey("ServiceLoadedSubclass.static"));
@@ -246,7 +246,7 @@ public class PluginsTest {
             Converter.class
         );
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertPluginClassLoaderAlwaysActive(samples);
     }
@@ -273,7 +273,7 @@ public class PluginsTest {
             ClassLoaderUsage.PLUGINS
         );
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure"));
         assertPluginClassLoaderAlwaysActive(samples);
@@ -293,11 +293,11 @@ public class PluginsTest {
 
         ConfigProvider plugin = plugins.newConfigProvider(
             config,
-            WorkerConfig.CONFIG_PROVIDERS_CONFIG,
+            providerPrefix,
             ClassLoaderUsage.PLUGINS
         );
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure"));
         assertPluginClassLoaderAlwaysActive(samples);
@@ -318,7 +318,7 @@ public class PluginsTest {
             ClassLoaderUsage.PLUGINS
         );
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // HeaderConverter::configure was called
         assertPluginClassLoaderAlwaysActive(samples);
@@ -335,24 +335,33 @@ public class PluginsTest {
         assertEquals(1, configurables.size());
         Configurable plugin = configurables.get(0);
 
-        assertTrue(plugin instanceof SamplingTestPlugin);
+        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
         Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
         assertTrue(samples.containsKey("configure")); // Configurable::configure was called
         assertPluginClassLoaderAlwaysActive(samples);
     }
 
-    protected void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {
+    public static void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {
         for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
-            String sampleName = e.getKey() + " (" + e.getValue() + ")";
-            assertTrue(
-                sampleName + " does not have the PluginClassLoader active during static initialization",
-                e.getValue().staticClassloader() instanceof PluginClassLoader
+            String sampleName = "\"" + e.getKey() + "\" (" + e.getValue() + ")";
+            assertInstanceOf(
+                PluginClassLoader.class,
+                e.getValue().staticClassloader(),
+                sampleName + " has incorrect static classloader"
             );
-            assertTrue(
-                sampleName + " does not have the PluginClassLoader active during dynamic initialization",
-                e.getValue().classloader() instanceof PluginClassLoader
+            assertInstanceOf(
+                PluginClassLoader.class,
+                e.getValue().classloader(),
+                sampleName + " has incorrect dynamic classloader"
             );
         }
+    }
+
+    public static void assertInstanceOf(Class<?> expected, Object actual, String message) {
+        assertTrue(
+            "Expected an instance of " + expected.getSimpleName() + ", found " + actual + " instead: " + message,
+            expected.isInstance(actual)
+        );
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
