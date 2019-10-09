@@ -57,7 +57,6 @@ import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.collection.{Map, Seq}
 
 class KafkaApisTest {
