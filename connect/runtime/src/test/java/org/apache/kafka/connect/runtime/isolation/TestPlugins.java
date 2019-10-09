@@ -82,6 +82,10 @@ public class TestPlugins {
      */
     public static final String SAMPLING_CONFIGURABLE = "test.plugins.SamplingConfigurable";
     /**
+     * Class name of a header converter which samples information about it's method calls.
+     */
+    public static final String SAMPLING_HEADER_CONVERTER = "test.plugins.SamplingHeaderConverter";
+    /**
      * Class name of a plugin which samples information during service loading
      */
     public static final String SERVICE_LOADER = "test.plugins.ServiceLoaderPlugin";
@@ -97,6 +101,7 @@ public class TestPlugins {
             pluginJars.put(SAMPLING, createPluginJar("sampling"));
             pluginJars.put(SAMPLING_CONVERTER, createPluginJar("sampling-converter"));
             pluginJars.put(SAMPLING_CONFIGURABLE, createPluginJar("sampling-configurable"));
+            pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
             pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);

@@ -294,6 +294,34 @@ public class PluginsTest {
     }
 
     @Test
+    public void shouldCreateNewHeaderConverterWithPluginClassloader() {
+        TestPlugins.assertInitialized();
+        props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_HEADER_CONVERTER);
+        ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_HEADER_CONVERTER);
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
+        createConfig();
+        Plugins.compareAndSwapLoaders(savedLoader);
+
+        HeaderConverter plugin = plugins.newHeaderConverter(
+            config,
+            WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+            ClassLoaderUsage.PLUGINS
+        );
+
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
+        Map<String, SamplingTestPlugin> samples = samplingPlugin.flatten();
+        // There should be at least 1 (root) + 1 (configure call) = 2 samples
+        assertTrue(samples.size() >= 2);
+        for (Entry<String, SamplingTestPlugin> e : samples.entrySet()) {
+            String message = e.getKey() + " does not have the PluginClassLoader active";
+            SamplingTestPlugin sample = e.getValue();
+            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
+            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
+        }
+    }
+
+    @Test
     public void shouldConfigureConverterWithPluginClassloaderInNewPlugins() {
         TestPlugins.assertInitialized();
         List<Configurable> converters = plugins.newPlugins(
