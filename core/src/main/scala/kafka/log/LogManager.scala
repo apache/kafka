@@ -82,10 +82,6 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
-  /**
-   * Lock object to protect modification to partitionsInitializing variable.
-   */
-  private val configUpdateLock = new Object
   // Visible for testing
   private[log] val partitionsInitializing = new ConcurrentHashMap[TopicPartition, Boolean]().asScala
 
@@ -671,7 +667,7 @@ class LogManager(logDirs: Seq[File],
    * This method should always be followed by [[kafka.log.LogManager#finishedInitializingLog]] to indicate that log
    * initialization is done.
    */
-  def initializingLog(topicPartition: TopicPartition): Unit = configUpdateLock synchronized {
+  def initializingLog(topicPartition: TopicPartition): Unit = {
     partitionsInitializing(topicPartition) = false
   }
 
@@ -679,7 +675,7 @@ class LogManager(logDirs: Seq[File],
    * Mark the partition configuration for partitions that are getting initialized for topic
    * as dirty. That will result in reloading of configuration once initialization is done.
    */
-  def topicConfigUpdated(topic: String): Unit = configUpdateLock synchronized {
+  def topicConfigUpdated(topic: String): Unit = {
     partitionsInitializing.collect {
       case (topicPartition, _) if topicPartition.topic() == topic => partitionsInitializing(topicPartition) = true
     }
@@ -688,7 +684,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Mark all in progress partitions having dirty configuration if broker configuration is updated.
    */
-  def brokerConfigUpdated(): Unit = configUpdateLock synchronized {
+  def brokerConfigUpdated(): Unit = {
     partitionsInitializing.foreach {
       case (topicPartition, _) => partitionsInitializing(topicPartition) = true
     }
@@ -700,20 +696,12 @@ class LogManager(logDirs: Seq[File],
    */
   def finishedInitializingLog(topicPartition: TopicPartition,
                               maybeLog: Option[Log],
-                              config: => LogConfig): Unit = {
-    /*
-     * Keep on reloading config as long as it keeps changing. A topic or broker config change
-     * event (in ConfigHandler::processConfigChanges or DynamicLogConfig::reconfigure) can
-     * arrive while we are loading config. If that happens reload the configuration.
-     */
-    while (partitionsInitializing(topicPartition)) {
-      partitionsInitializing(topicPartition) = false;
-      maybeLog.foreach(_.config = config)
+                              fetchLogConfig: () => LogConfig): Unit = {
+    if (partitionsInitializing(topicPartition)) {
+      maybeLog.foreach(_.updateConfig(Set(), fetchLogConfig()))
     }
 
-    configUpdateLock synchronized {
-      partitionsInitializing -= topicPartition
-    }
+    partitionsInitializing -= topicPartition
   }
 
   /**
@@ -1013,7 +1001,7 @@ class LogManager(logDirs: Seq[File],
 
   def logsByTopic(topic: String): Seq[Log] = {
     (currentLogs.toList ++ futureLogs.toList).collect {
-      case (topicPartition, log) if topicPartition.topic() == topic => log
+      case (topicPartition, log) if topicPartition.topic == topic => log
     }
   }
 

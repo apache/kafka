@@ -315,7 +315,7 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing
   private[cluster] def createLog(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-    def fetchLogConfig: LogConfig = {
+    val fetchLogConfig = () => {
       val props = stateStore.fetchTopicConfig()
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
@@ -323,7 +323,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[Log] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig, isNew, isFutureReplica)
+      val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig(), isNew, isFutureReplica)
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.dir.getParent, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L

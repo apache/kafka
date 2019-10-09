@@ -1546,24 +1546,6 @@ class PartitionTest {
   }
 
   /**
-   * Mockito matchers and scala call-by-name args don't go along well. Basically Mockito maintains a stack
-   * of all matchers for a method, and matches them  to actual parameters of the method. The stack
-   * is populated as each matcher is created (e.g. by call to ArgumentMatchers.eq). But with scala
-   * call-by-name arguments, the parameter isn't evaluated. Hence the matcher isn't created and Matchers
-   * stack isn't populated. This method is a workaround for finishedInitializingLog, which takes it's last
-   * argument by call-by-name. It pushes two Matchers on stack when second argument of finishedInitializingLog
-   * is evaluated.
-   *
-   * NOTE: This workaround will not work for methods with only call-by-name parameters, as the
-   * Matchers can be pushed to stack only in context of "verify/when" Mockito calls.
-   */
-  def twoMatchersArg(): Option[Log] = {
-    val secondArg = ArgumentMatchers.any(classOf[Option[Log]])
-    ArgumentMatchers.any()
-    secondArg
-  }
-
-  /**
    * Test when log is getting initialized, its config remains untouched after initialization is done.
    */
   @Test
@@ -1584,7 +1566,7 @@ class PartitionTest {
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
     verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      twoMatchersArg(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should get config from ZK only once
@@ -1618,7 +1600,7 @@ class PartitionTest {
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
     verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      twoMatchersArg(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should get config from ZK twice, once before log is created, and second time once
@@ -1653,7 +1635,7 @@ class PartitionTest {
     // Validate that initializingLog and finishedInitializingLog was called
     verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
     verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
-      twoMatchersArg(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should get config from ZK twice, once before log is created, and second time once

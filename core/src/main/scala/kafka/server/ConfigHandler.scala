@@ -50,24 +50,27 @@ trait ConfigHandler {
   */
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers, kafkaController: KafkaController) extends ConfigHandler with Logging  {
 
+  private def updateLogConfig(topic: String,
+                              topicConfig: Properties,
+                              configNamesToExclude: Set[String]): Unit = {
+    logManager.topicConfigUpdated(topic)
+    val logs = logManager.logsByTopic(topic)
+    if (logs.nonEmpty) {
+      /* combine the default properties with the overrides in zk to create the new LogConfig */
+      val props = new Properties()
+      topicConfig.asScala.foreach { case (key, value) =>
+        if (!configNamesToExclude.contains(key)) props.put(key, value)
+      }
+      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
+      logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
+    }
+  }
+
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
-    def updateLogConfig: Unit = {
-      logManager.topicConfigUpdated(topic)
-      val logs = logManager.logsByTopic(topic)
-      if (logs.nonEmpty) {
-        /* combine the default properties with the overrides in zk to create the new LogConfig */
-        val props = new Properties()
-        topicConfig.asScala.foreach { case (key, value) =>
-          if (!configNamesToExclude.contains(key)) props.put(key, value)
-        }
-        val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-        logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
-      }
-    }
-    updateLogConfig
+    updateLogConfig(topic, topicConfig, configNamesToExclude)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {

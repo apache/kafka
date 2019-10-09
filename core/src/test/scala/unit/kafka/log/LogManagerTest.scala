@@ -488,14 +488,14 @@ class LogManagerTest {
 
     val logConfig: LogConfig = null
     var configUpdated = false
-    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), {
+    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
       configUpdated = true
       logConfig
     })
     assertTrue(configUpdated)
 
     var configNotUpdated = true
-    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), {
+    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
       configNotUpdated = false
       logConfig
     })
@@ -514,7 +514,7 @@ class LogManagerTest {
 
     val logConfig: LogConfig = null
     var configUpdateNotCalled = true
-    logManager.finishedInitializingLog(testTopicPartition, None, {
+    logManager.finishedInitializingLog(testTopicPartition, None, () => {
       configUpdateNotCalled = false
       logConfig
     })
@@ -542,11 +542,11 @@ class LogManagerTest {
 
     val logConfig: LogConfig = null
     var totalChanges = 0
-    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), {
+    logManager.finishedInitializingLog(testTopicOnePartition, Some(mockLog), () => {
       totalChanges += 1
       logConfig
     })
-    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), {
+    logManager.finishedInitializingLog(testTopicTwoPartition, Some(mockLog), () => {
       totalChanges += 1
       logConfig
     })

@@ -985,13 +985,8 @@ class ReplicaManagerTest {
     }
     EasyMock.expect(mockLogMgr.initializingLog(topicPartitionObj)).anyTimes
 
-    def twoMatchersArg(): Option[Log] = {
-      val secondArg = EasyMock.anyObject(classOf[Option[Log]])
-      EasyMock.anyObject()
-      secondArg
-    }
     EasyMock.expect(mockLogMgr.finishedInitializingLog(
-      EasyMock.eq(topicPartitionObj), twoMatchersArg(), EasyMock.anyObject())).anyTimes
+      EasyMock.eq(topicPartitionObj), EasyMock.anyObject(), EasyMock.anyObject())).anyTimes
 
     EasyMock.replay(mockLogMgr)
 
