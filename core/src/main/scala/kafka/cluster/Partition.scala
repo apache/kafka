@@ -643,7 +643,7 @@ class Partition(val topicPartition: TopicPartition,
 
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        if (!inSyncReplicaIds(followerId))
+        if (!inSyncReplicaIds.contains(followerId))
           maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
         // check if the HW of the partition can now be incremented
@@ -715,7 +715,7 @@ class Partition(val topicPartition: TopicPartition,
       // check if this replica needs to be added to the ISR
       leaderLogIfLocal.foreach { leaderLog =>
         val leaderHighwatermark = leaderLog.highWatermark
-        if (!inSyncReplicaIds(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+        if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
           val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
           info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
             s"to ${newInSyncReplicaIds.mkString(",")}")
@@ -803,7 +803,7 @@ class Partition(val topicPartition: TopicPartition,
       var newHighWatermark = leaderLog.logEndOffsetMetadata
       remoteReplicasMap.values.foreach { replica =>
         if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds(replica.brokerId))) {
+          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId))) {
           newHighWatermark = replica.logEndOffsetMetadata
         }
       }
