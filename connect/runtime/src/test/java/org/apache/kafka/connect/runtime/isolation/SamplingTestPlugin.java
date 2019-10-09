@@ -72,28 +72,51 @@ public interface SamplingTestPlugin {
      * @param samples The collection of samples to which this method call should be added
      */
     default void logMethodCall(Map<String, SamplingTestPlugin> samples) {
-        String methodName = "unknown";
         StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
+        if (stackTraces.length < 2) {
+            return;
+        }
         // 0 is inside getStackTrace
         // 1 is this method
         // 2 is our caller method
-        if (stackTraces.length >= 2) {
-            StackTraceElement caller = stackTraces[2];
-            methodName = caller.getMethodName();
+        StackTraceElement caller = stackTraces[2];
+
+        samples.put(caller.getMethodName(), new MethodCallSample(
+            caller,
+            Thread.currentThread().getContextClassLoader(),
+            getClass().getClassLoader()
+        ));
+    }
+
+    class MethodCallSample implements SamplingTestPlugin {
+
+        private final StackTraceElement caller;
+        private final ClassLoader staticClassLoader;
+        private final ClassLoader dynamicClassLoader;
+
+        public MethodCallSample(
+            StackTraceElement caller,
+            ClassLoader staticClassLoader,
+            ClassLoader dynamicClassLoader
+        ) {
+            this.caller = caller;
+            this.staticClassLoader = staticClassLoader;
+            this.dynamicClassLoader = dynamicClassLoader;
         }
 
-        ClassLoader staticClassloader = getClass().getClassLoader();
-        ClassLoader dynamicClassloader = Thread.currentThread().getContextClassLoader();
-        samples.put(methodName, new SamplingTestPlugin() {
-            @Override
-            public ClassLoader staticClassloader() {
-                return staticClassloader;
-            }
+        @Override
+        public ClassLoader staticClassloader() {
+            return staticClassLoader;
+        }
 
-            @Override
-            public ClassLoader classloader() {
-                return dynamicClassloader;
-            }
-        });
+        @Override
+        public ClassLoader classloader() {
+            return dynamicClassLoader;
+        }
+
+        @Override
+        public String toString() {
+            return caller.toString();
+        }
     }
 }
