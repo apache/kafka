@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -47,11 +49,6 @@ public class KStreamRepartitionTest {
     private final String inputTopic = "input-topic";
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(
-        Serdes.Integer().serializer(),
-        Serdes.String().serializer(),
-        0L
-    );
 
     private StreamsBuilder builder;
 
@@ -81,8 +78,14 @@ public class KStreamRepartitionTest {
         repartitionedStream.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> testInputTopic = driver.createInputTopic(
+                inputTopic,
+                new IntegerSerializer(),
+                new StringSerializer()
+            );
+
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(inputTopic, expectedKeys[i], "X" + expectedKeys[i], i + 10));
+                testInputTopic.pipeInput(expectedKeys[i], "X" + expectedKeys[i], i + 10);
             }
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
             proc.checkAndClearProcessResult(
