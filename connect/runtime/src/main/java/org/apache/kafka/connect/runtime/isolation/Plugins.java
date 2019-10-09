@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
@@ -238,7 +237,6 @@ public class Plugins {
             // it does not represent an internal converter (which has a default available)
             return null;
         }
-        Converter plugin = null;
         Class<? extends Converter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -265,32 +263,32 @@ public class Plugins {
             throw new ConnectException("Unable to initialize the Converter specified in '" + classPropertyName + "'");
         }
 
+        // Determine whether this is a key or value converter based upon the supplied property name ...
+        @SuppressWarnings("deprecation")
+        final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
+                                     || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
+
+        // Configure the Converter using only the old configuration mechanism ...
+        String configPrefix = classPropertyName + ".";
+        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
+        log.debug("Configuring the {} converter with configuration keys:{}{}",
+                  isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
+
+        // Have to override schemas.enable from true to false for internal JSON converters
+        // Don't have to warn the user about anything since all deprecation warnings take place in the
+        // WorkerConfig class
+        if (JsonConverter.class.isAssignableFrom(klass) && isInternalConverter(classPropertyName)) {
+            // If they haven't explicitly specified values for internal.key.converter.schemas.enable
+            // or internal.value.converter.schemas.enable, we can safely default them to false
+            if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
+                converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
+            }
+        }
+
+        Converter plugin;
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
-
-            // Determine whether this is a key or value converter based upon the supplied property name ...
-            @SuppressWarnings("deprecation")
-            final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
-                                         || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
-
-            // Configure the Converter using only the old configuration mechanism ...
-            String configPrefix = classPropertyName + ".";
-            Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-            log.debug("Configuring the {} converter with configuration keys:{}{}",
-                      isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
-
-            // Have to override schemas.enable from true to false for internal JSON converters
-            // Don't have to warn the user about anything since all deprecation warnings take place in the
-            // WorkerConfig class
-            if (plugin instanceof JsonConverter && isInternalConverter(classPropertyName)) {
-                // If they haven't explicitly specified values for internal.key.converter.schemas.enable
-                // or internal.value.converter.schemas.enable, we can safely default them to false
-                if (!converterConfig.containsKey(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG)) {
-                    converterConfig.put(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, false);
-                }
-            }
-
             plugin.configure(converterConfig, isKeyConverter);
         } finally {
             compareAndSwapLoaders(savedLoader);
@@ -309,7 +307,6 @@ public class Plugins {
      * @throws ConnectException if the {@link HeaderConverter} implementation class could not be found
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        HeaderConverter plugin = null;
         Class<? extends HeaderConverter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -349,6 +346,8 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
+
+        HeaderConverter plugin;
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
@@ -366,7 +365,6 @@ public class Plugins {
             // This configuration does not define the config provider via the specified property name
             return null;
         }
-        ConfigProvider plugin = null;
         Class<? extends ConfigProvider> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
@@ -390,16 +388,15 @@ public class Plugins {
         if (klass == null) {
             throw new ConnectException("Unable to initialize the ConfigProvider specified in '" + classPropertyName + "'");
         }
-        plugin = newPlugin(klass);
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate the ConfigProvider specified in '" + classPropertyName + "'");
-        }
 
+        // Configure the ConfigProvider
+        String configPrefix = providerPrefix + ".param.";
+        Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+
+        ConfigProvider plugin;
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
-            // Configure the ConfigProvider
-            String configPrefix = providerPrefix + ".param.";
-            Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+            plugin = newPlugin(klass);
             plugin.configure(configProviderConfig);
         } finally {
             compareAndSwapLoaders(savedLoader);
@@ -440,9 +437,6 @@ public class Plugins {
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             plugin = newPlugin(klass);
-            if (plugin == null) {
-                throw new ConnectException("Unable to instantiate '" + klassName + "'");
-            }
             if (plugin instanceof Versioned) {
                 Versioned versionedPlugin = (Versioned) plugin;
                 if (versionedPlugin.version() == null || versionedPlugin.version().trim()
@@ -457,26 +451,6 @@ public class Plugins {
             compareAndSwapLoaders(savedLoader);
         }
         return plugin;
-    }
-
-    /**
-     * Get an instance of the give class specified by the given configuration key.
-     *
-     * @param key The configuration key for the class
-     * @param t The interface the class should implement
-     * @return A instance of the class
-     */
-    private <T> T getInstance(AbstractConfig config, String key, Class<T> t) {
-        Class<?> c = config.getClass(key);
-        if (c == null) {
-            return null;
-        }
-        // Instantiate the class, but we don't know if the class extends the supplied type
-        Object o = Utils.newInstance(c);
-        if (!t.isInstance(o)) {
-            throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
-        }
-        return t.cast(o);
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
