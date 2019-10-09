@@ -88,10 +88,10 @@ public class ApiMessageTypeTest {
         assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 1));
         assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 1));
 
-        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
-        assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 4));
+        assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 4));
 
-        assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 6));
-        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 6));
+        assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
     }
 }
