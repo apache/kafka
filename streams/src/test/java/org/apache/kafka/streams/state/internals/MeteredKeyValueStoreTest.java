@@ -63,7 +63,7 @@ public class MeteredKeyValueStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
     private final Map<String, String> tags = mkMap(
-        mkEntry("client-id", Thread.currentThread().getName()),
+        mkEntry("thread-id", Thread.currentThread().getName()),
         mkEntry("task-id", taskId.toString()),
         mkEntry("scope-state-id", "metered")
     );
@@ -105,9 +105,9 @@ public class MeteredKeyValueStoreTest {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", Thread.currentThread().getName(), taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,thread-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", Thread.currentThread().getName(), taskId.toString(), "scope", "all")));
     }
 

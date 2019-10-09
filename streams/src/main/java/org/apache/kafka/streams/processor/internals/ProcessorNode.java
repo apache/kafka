@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
@@ -169,20 +169,8 @@ public class ProcessorNode<K, V> {
 
             final String threadId = Thread.currentThread().getName();
             final String taskName = context.taskId().toString();
-            final Map<String, String> tagMap = metrics.tagMap(
-                threadId,
-                "task-id",
-                context.taskId().toString(),
-                PROCESSOR_NODE_ID_TAG,
-                processorNodeName
-            );
-            final Map<String, String> allTagMap = metrics.tagMap(
-                threadId,
-                "task-id",
-                context.taskId().toString(),
-                PROCESSOR_NODE_ID_TAG,
-                "all"
-            );
+            final Map<String, String> tagMap = metrics.nodeLevelTagMap(threadId, context.taskId().toString(), processorNodeName);
+            final Map<String, String> allTagMap = metrics.nodeLevelTagMap(threadId, context.taskId().toString(), ROLLUP_VALUE);
 
             nodeProcessTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "process",

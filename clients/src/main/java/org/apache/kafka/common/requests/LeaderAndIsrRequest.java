@@ -146,18 +146,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setErrorCode(error.code()));
         }
         responseData.setPartitionErrors(partitions);
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-                return new LeaderAndIsrResponse(responseData);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LEADER_AND_ISR.latestVersion()));
-        }
+        return new LeaderAndIsrResponse(responseData);
     }
 
     @Override

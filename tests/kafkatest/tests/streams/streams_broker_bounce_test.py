@@ -19,7 +19,6 @@ from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
 from ducktape.mark import parametrize, ignore
 from kafkatest.services.kafka import KafkaService
-from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 import time

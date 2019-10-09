@@ -103,7 +103,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         addInvocationRateAndCountToSensor(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
-            metrics.tagMap(threadId, "task-id", taskName, metricScope + "-id", name()),
+            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
             EXPIRED_WINDOW_RECORD_DROP
         );
 
@@ -115,6 +115,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         open = true;
     }
 
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

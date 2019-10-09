@@ -443,7 +443,6 @@ public class StandbyTaskTest {
             singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
         );
 
-        task.suspend();
         task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
@@ -813,28 +812,6 @@ public class StandbyTaskTest {
         final boolean clean = true;
         final boolean isZombie = false;
         task.close(clean, isZombie);
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-    }
-
-    @Test
-    public void shouldRecordTaskClosedMetricOnCloseSuspended() throws IOException {
-        final MetricName metricName = setupCloseTaskMetric();
-        final StandbyTask task = new StandbyTask(
-            taskId,
-            ktablePartitions,
-            ktableTopology,
-            consumer,
-            changelogReader,
-            createConfig(baseDir),
-            streamsMetrics,
-            stateDirectory
-        );
-
-        final boolean clean = true;
-        final boolean isZombie = false;
-        task.closeSuspended(clean, isZombie, new RuntimeException());
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

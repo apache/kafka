@@ -116,16 +116,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 .setErrorCode(error.code()));
         }
         data.setPartitionErrors(partitions);
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new StopReplicaResponse(data);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.STOP_REPLICA.latestVersion()));
-        }
+        return new StopReplicaResponse(data);
     }
 
     public boolean deletePartitions() {
