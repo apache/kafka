@@ -187,7 +187,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         addInvocationRateAndCountToSensor(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
-            metrics.tagMap(threadId, "task-id", taskName, metricScope + "-id", name()),
+            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
             EXPIRED_WINDOW_RECORD_DROP
         );
 

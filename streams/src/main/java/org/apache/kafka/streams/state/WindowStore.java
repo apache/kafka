@@ -46,7 +46,13 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param value The value to update, it can be null;
      *              if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException if the given key is {@code null}
+     *
+     * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
+     * to identify the window frame to which the key belongs.
+     * Use {@link #put(Object, Object, long)} instead.
+     *
      */
+    @Deprecated
     void put(K key, V value);
 
     /**

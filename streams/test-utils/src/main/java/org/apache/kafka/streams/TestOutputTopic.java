@@ -131,7 +131,7 @@ public class TestOutputTopic<K, V> {
         while (!isEmpty()) {
             outputRow = readRecord();
             if (outputRow.key() == null) {
-                throw new NullPointerException("Null keys not allowed");
+                throw new IllegalStateException("Null keys not allowed with readKeyValuesToMap method");
             }
             output.put(outputRow.key(), outputRow.value());
         }

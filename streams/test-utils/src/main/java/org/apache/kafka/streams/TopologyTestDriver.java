@@ -315,12 +315,12 @@ public class TopologyTestDriver implements Closeable {
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
                                                 threadLevelGroup,
                                                 "The average per-second number of skipped records",
-                                                streamsMetrics.tagMap(threadId)),
+                                                streamsMetrics.threadLevelTagMap(threadId)),
                                  new Rate(TimeUnit.SECONDS, new WindowedCount()));
         skippedRecordsSensor.add(new MetricName("skipped-records-total",
                                                 threadLevelGroup,
                                                 "The total number of skipped records",
-                                                streamsMetrics.tagMap(threadId)),
+                                                streamsMetrics.threadLevelTagMap(threadId)),
                                  new CumulativeSum());
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
@@ -728,11 +728,13 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        long timestamp = 0;
+        final long timestamp;
         if (time != null) {
             timestamp = time.toEpochMilli();
         } else if (record.timestamp() != null) {
             timestamp = record.timestamp();
+        } else {
+            throw new IllegalStateException("Provided `TestRecord` does not have a timestamp and no timestamp overwrite was provided via `time` parameter.");
         }
 
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());

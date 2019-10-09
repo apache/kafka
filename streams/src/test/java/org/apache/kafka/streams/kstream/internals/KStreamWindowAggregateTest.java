@@ -411,7 +411,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -423,7 +423,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -435,7 +435,7 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The max observed lateness of records.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );
@@ -446,7 +446,7 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The average observed lateness of records.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );

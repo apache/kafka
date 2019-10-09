@@ -128,10 +128,12 @@ public class CachingWindowStoreTest {
             .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
                 private WindowStore<String, String> store;
                 private int numRecordsProcessed;
+                private ProcessorContext context;
 
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext processorContext) {
+                    this.context = processorContext;
                     this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
                     int count = 0;
 
@@ -155,7 +157,7 @@ public class CachingWindowStoreTest {
                     }
                     assertThat(count, equalTo(numRecordsProcessed));
 
-                    store.put(value, value);
+                    store.put(value, value, context.timestamp());
 
                     numRecordsProcessed++;
 
@@ -206,6 +208,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPutFetchFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         cachingStore.put(bytesKey("b"), bytesValue("b"));
@@ -244,6 +247,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPutFetchRangeFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         cachingStore.put(bytesKey("b"), bytesValue("b"));
@@ -263,6 +267,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldGetAllFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         cachingStore.put(bytesKey("b"), bytesValue("b"));
@@ -285,6 +290,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
@@ -342,6 +348,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -358,6 +365,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldForwardOldValuesWhenEnabled() {
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
@@ -386,6 +394,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -473,6 +482,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldClearNamespaceCacheOnClose() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         assertEquals(1, cache.size());
@@ -493,6 +503,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -569,11 +580,13 @@ public class CachingWindowStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         cachingStore.put(null, bytesValue("anyValue"));
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         cachingStore.put(bytesKey("a"), null);
     }
@@ -616,6 +629,7 @@ public class CachingWindowStoreTest {
             bytesValue(value));
     }
 
+    @SuppressWarnings("deprecation")
     private int addItemsToCache() {
         int cachedSize = 0;
         int i = 0;

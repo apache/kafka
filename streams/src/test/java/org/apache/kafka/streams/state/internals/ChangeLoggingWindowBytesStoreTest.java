@@ -83,6 +83,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldLogPuts() {
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall();
@@ -122,6 +123,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true);
         inner.put(bytesKey, value, 0);

@@ -422,9 +422,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             "stream-metrics-scope-metrics",
             "The total number of occurrence of expired-window-record-drop operations.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry("metrics-scope-id", "bytes-store")
+                mkEntry("metrics-scope-state-id", "bytes-store")
             )
         ));
 
@@ -433,9 +433,9 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             "stream-metrics-scope-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("client-id", threadId),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry("metrics-scope-id", "bytes-store")
+                mkEntry("metrics-scope-state-id", "bytes-store")
             )
         ));
 
