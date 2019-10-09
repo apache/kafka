@@ -204,49 +204,49 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   // used for testing only
   def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
 
-  def messagesInRate = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
+  def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
 
-  def bytesInRate = metricTypeMap.get(BrokerTopicStats.BytesInPerSec).meter()
+  def bytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesInPerSec).meter()
 
-  def bytesOutRate = metricTypeMap.get(BrokerTopicStats.BytesOutPerSec).meter()
+  def bytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesOutPerSec).meter()
 
-  def bytesRejectedRate = metricTypeMap.get(BrokerTopicStats.BytesRejectedPerSec).meter()
+  def bytesRejectedRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesRejectedPerSec).meter()
 
-  private[server] def replicationBytesInRate =
+  private[server] def replicationBytesInRate: Option[Meter] =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesInPerSec).meter())
     else None
 
-  private[server] def replicationBytesOutRate =
+  private[server] def replicationBytesOutRate: Option[Meter] =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesOutPerSec).meter())
     else None
 
-  private[server] def reassignmentBytesInPerSec =
+  private[server] def reassignmentBytesInPerSec: Option[Meter] =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
     else None
 
-  private[server] def reassignmentBytesOutPerSec =
+  private[server] def reassignmentBytesOutPerSec: Option[Meter] =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
     else None
 
-  def failedProduceRequestRate = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
+  def failedProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
 
-  def failedFetchRequestRate = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
+  def failedFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
 
-  def totalProduceRequestRate = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).meter()
+  def totalProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).meter()
 
-  def totalFetchRequestRate = metricTypeMap.get(BrokerTopicStats.TotalFetchRequestsPerSec).meter()
+  def totalFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalFetchRequestsPerSec).meter()
 
-  def fetchMessageConversionsRate = metricTypeMap.get(BrokerTopicStats.FetchMessageConversionsPerSec).meter()
+  def fetchMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.FetchMessageConversionsPerSec).meter()
 
-  def produceMessageConversionsRate = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
+  def produceMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
 
-  def noKeyCompactedTopicRecordsPerSec = metricTypeMap.get(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec).meter()
+  def noKeyCompactedTopicRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec).meter()
 
-  def invalidMagicNumberRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidMagicNumberRecordsPerSec).meter()
+  def invalidMagicNumberRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMagicNumberRecordsPerSec).meter()
 
-  def invalidMessageCrcRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidMessageCrcRecordsPerSec).meter()
+  def invalidMessageCrcRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMessageCrcRecordsPerSec).meter()
 
-  def invalidOffsetOrSequenceRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
+  def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
