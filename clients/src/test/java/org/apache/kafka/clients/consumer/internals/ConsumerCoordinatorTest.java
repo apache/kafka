@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.concurrent.CountDownLatch;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
@@ -2280,7 +2281,55 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testConsumerRejoinAfterRebalance() {
+    public void testConsumerRejoinAfterRebalance() throws Exception {
+        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+            rebalanceTimeoutMs,
+            heartbeatIntervalMs,
+            groupId,
+            groupInstanceId,
+            retryBackoffMs,
+            !groupInstanceId.isPresent());
+
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, rebalanceConfig)) {
+            coordinator.ensureActiveGroup();
+
+            System.out.println("ConsumerCoordinatorTest.testConsumerRejoinAfterRebalance");
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
+
+            assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(
+                singletonMap(t1p, new OffsetAndMetadata(100L)),
+                time.timer(Long.MAX_VALUE)));
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicBoolean res = new AtomicBoolean();
+
+            Thread th = new Thread(() -> {
+                latch.countDown();
+
+                coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+                res.set(true);
+            });
+
+            th.start();
+
+            latch.await(5, TimeUnit.SECONDS);
+
+            time.sleep(rebalanceTimeoutMs * 2);
+
+            client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+
+            th.join();
+
+            assertTrue(res.get());
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+        }
     }
 
     private void receiveFencedInstanceIdException() {
@@ -2296,10 +2345,17 @@ public class ConsumerCoordinatorTest {
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
-                                                               final boolean autoCommit,
-                                                               final Optional<String> groupInstanceId) {
-        final String consumerId = "consumer";
+        final boolean autoCommit,
+        final Optional<String> groupInstanceId) {
         rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+
+        return prepareCoordinatorForCloseTest(useGroupManagement, autoCommit, rebalanceConfig);
+    }
+
+    private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
+                                                               final boolean autoCommit,
+                                                               final GroupRebalanceConfig rebalanceConfig) {
+        final String consumerId = "consumer";
         ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
                                                            new Metrics(),
                                                            assignors,
