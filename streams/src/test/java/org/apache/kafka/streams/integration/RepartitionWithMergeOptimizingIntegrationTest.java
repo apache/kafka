@@ -18,17 +18,20 @@
 package org.apache.kafka.streams.integration;
 
 import java.time.Duration;
-import kafka.utils.MockTime;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -39,10 +42,9 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -53,31 +55,33 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class RepartitionWithMergeOptimizingIntegrationTest {
 
-    // Allow for twice the default timeout as the records must make more than one roundtrip given the repartitioning
-    private static final long TIMEOUT = DEFAULT_TIMEOUT * 2;
-
-    private static final int NUM_BROKERS = 1;
     private static final String INPUT_A_TOPIC = "inputA";
     private static final String INPUT_B_TOPIC = "inputB";
     private static final String COUNT_TOPIC = "outputTopic_0";
-    private static final String COUNT_STRING_TOPIC = "outputTopic_1";
+    private static final String STRING_COUNT_TOPIC = "outputTopic_1";
 
     private static final int ONE_REPARTITION_TOPIC = 1;
     private static final int TWO_REPARTITION_TOPICS = 2;
 
+    private static final Serializer<String> stringSerializer = new StringSerializer();
+    private static final Deserializer<String> stringDeserializer = new StringDeserializer();
+
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
     private Properties streamsConfiguration;
+    private TopologyTestDriver topologyTestDriver;
 
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private final MockTime mockTime = CLUSTER.time;
+    private final List<KeyValue<String, Long>> expectedCountKeyValues =
+        Arrays.asList(KeyValue.pair("A", 6L), KeyValue.pair("B", 6L), KeyValue.pair("C", 6L));
+    private final List<KeyValue<String, String>> expectedStringCountKeyValues =
+        Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
 
     @Before
     public void setUp() throws Exception {
@@ -87,22 +91,21 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             "maybe-optimized-with-merge-test-app",
-            CLUSTER.bootstrapServers(),
+            "dummy-bootstrap-servers-config",
             Serdes.String().getClass().getName(),
             Serdes.String().getClass().getName(),
             props);
-
-        CLUSTER.createTopics(COUNT_TOPIC,
-                             COUNT_STRING_TOPIC,
-                             INPUT_A_TOPIC,
-                             INPUT_B_TOPIC);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @After
-    public void tearDown() throws Exception {
-        CLUSTER.deleteAllTopicsAndWait(30_000L);
+    public void tearDown() {
+        try {
+            topologyTestDriver.close();
+        } catch (final RuntimeException e) {
+            // KAFKA-6647 causes exception when executed in Windows, swallow and move on
+        }
     }
 
     @Test
@@ -120,6 +123,8 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
 
     private void runIntegrationTest(final String optimizationConfig,
                                     final int expectedNumberRepartitionTopics) throws Exception {
+
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -147,41 +152,40 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
             .count(Named.as("string-count"), Materialized.as(Stores.inMemoryKeyValueStore("string-store")))
             .toStream(Named.as("string-toStream"))
             .mapValues(v -> v.toString(), Named.as("string-mapValues"))
-            .to(COUNT_STRING_TOPIC, Produced.with(Serdes.String(), Serdes.String()).withName("string-to"));
-
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
-
-        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
-
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_A_TOPIC, getKeyValues(), producerConfig, mockTime);
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_B_TOPIC, getKeyValues(), producerConfig, mockTime);
-
-        final Properties consumerConfig1 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
-        final Properties consumerConfig2 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
+            .to(STRING_COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.String()).withName("string-to"));
 
         final Topology topology = builder.build(streamsConfiguration);
+
+        topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
+
+        final TestInputTopic<String, String> inputTopicA = topologyTestDriver.createInputTopic(INPUT_A_TOPIC, stringSerializer, stringSerializer);
+        final TestInputTopic<String, String> inputTopicB = topologyTestDriver.createInputTopic(INPUT_B_TOPIC, stringSerializer, stringSerializer);
+
+        final TestOutputTopic<String, Long> countOutputTopic = topologyTestDriver.createOutputTopic(COUNT_TOPIC, stringDeserializer, new LongDeserializer());
+        final TestOutputTopic<String, String> stringCountOutputTopic = topologyTestDriver.createOutputTopic(STRING_COUNT_TOPIC, stringDeserializer, stringDeserializer);
+
+        inputTopicA.pipeKeyValueList(getKeyValues());
+        inputTopicB.pipeKeyValueList(getKeyValues());
+
+        final KafkaStreams streams = new KafkaStreams(topology, streamsConfiguration);
+        streams.start();
+
         final String topologyString = topology.describe().toString();
         System.out.println(topologyString);
 
+        // Verify the topology
         if (optimizationConfig.equals(StreamsConfig.OPTIMIZE)) {
             assertEquals(EXPECTED_OPTIMIZED_TOPOLOGY, topologyString);
         } else {
             assertEquals(EXPECTED_UNOPTIMIZED_TOPOLOGY, topologyString);
         }
 
-        /*
-           confirming number of expected repartition topics here
-         */
+        // Verify the number of repartition topics
         assertEquals(expectedNumberRepartitionTopics, getCountOfRepartitionTopicsFound(topologyString));
 
-        final KafkaStreams streams = new KafkaStreams(topology, streamsConfiguration);
-        streams.start();
-
-        final List<KeyValue<String, Long>> expectedCountKeyValues = Arrays.asList(KeyValue.pair("A", 6L), KeyValue.pair("B", 6L), KeyValue.pair("C", 6L));
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig1, COUNT_TOPIC, expectedCountKeyValues, TIMEOUT);
-
-        final List<KeyValue<String, String>> expectedStringCountKeyValues = Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig2, COUNT_STRING_TOPIC, expectedStringCountKeyValues, TIMEOUT);
+        // Verify the expected output
+        assertThat(countOutputTopic.readKeyValuesToList(), equalTo(expectedCountKeyValues));
+        assertThat(stringCountOutputTopic.readKeyValuesToList(), equalTo(expectedStringCountKeyValues));
 
         streams.close(Duration.ofSeconds(5));
     }
