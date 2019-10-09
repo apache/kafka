@@ -58,7 +58,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
@@ -91,6 +93,7 @@ public class EosIntegrationTest {
     private AtomicBoolean errorInjected;
     private AtomicBoolean gcInjected;
     private volatile boolean doGC = true;
+    private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
     private int testNumber = 0;
@@ -168,7 +171,7 @@ public class EosIntegrationTest {
                 properties);
 
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-                streams.start();
+                startAndWaitForRunningState(streams);
 
                 final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
 
@@ -251,7 +254,7 @@ public class EosIntegrationTest {
             properties);
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-            streams.start();
+            startAndWaitForRunningState(streams);
 
             final List<KeyValue<Long, Long>> firstBurstOfData = prepareData(0L, 5L, 0L);
             final List<KeyValue<Long, Long>> secondBurstOfData = prepareData(5L, 8L, 0L);
@@ -317,7 +320,7 @@ public class EosIntegrationTest {
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
         try (final KafkaStreams streams = getKafkaStreams(false, "appDir", 2)) {
-            streams.start();
+            startAndWaitForRunningState(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
@@ -329,10 +332,15 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+
+            waitForCondition(
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit.");
 
             writeInputData(uncommittedDataBeforeFailure);
+
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(committedRecords, committedDataBeforeFailure);
             checkResultPerKey(uncommittedRecords, dataBeforeFailure);
@@ -340,7 +348,7 @@ public class EosIntegrationTest {
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
 
-            TestUtils.waitForCondition(
+            waitForCondition(
                 () -> uncaughtException != null, MAX_WAIT_TIME_MS,
                 "Should receive uncaught exception from one StreamThread.");
 
@@ -380,7 +388,7 @@ public class EosIntegrationTest {
         // per key (even if some records got processed twice)
 
         try (final KafkaStreams streams = getKafkaStreams(true, "appDir", 2)) {
-            streams.start();
+            startAndWaitForRunningState(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
@@ -392,10 +400,15 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterFailure = prepareData(15L, 20L, 0L, 1L);
 
             writeInputData(committedDataBeforeFailure);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+
+            waitForCondition(
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "SteamsTasks did not request commit.");
 
             writeInputData(uncommittedDataBeforeFailure);
+
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
             checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
@@ -405,7 +418,7 @@ public class EosIntegrationTest {
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
 
-            TestUtils.waitForCondition(
+            waitForCondition(
                 () -> uncaughtException != null, MAX_WAIT_TIME_MS,
                 "Should receive uncaught exception from one StreamThread.");
 
@@ -450,8 +463,8 @@ public class EosIntegrationTest {
             final KafkaStreams streams1 = getKafkaStreams(false, "appDir1", 1);
             final KafkaStreams streams2 = getKafkaStreams(false, "appDir2", 1)
         ) {
-            streams1.start();
-            streams2.start();
+            startAndWaitForRunningState(streams1);
+            startAndWaitForRunningState(streams2);
 
             final List<KeyValue<Long, Long>> committedDataBeforeGC = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeGC = prepareData(10L, 15L, 0L, 1L);
@@ -465,10 +478,15 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> dataAfterSecondRebalance = prepareData(20L, 30L, 0L, 1L);
 
             writeInputData(committedDataBeforeGC);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeGC.size(), CONSUMER_GROUP_ID);
+
+            waitForCondition(
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "SteamsTasks did not request commit.");
 
             writeInputData(uncommittedDataBeforeGC);
+
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeGC.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeGC.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(committedRecords, committedDataBeforeGC);
             checkResultPerKey(uncommittedRecords, dataBeforeGC);
@@ -476,7 +494,7 @@ public class EosIntegrationTest {
             gcInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
 
-            TestUtils.waitForCondition(
+            waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
                     && (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
@@ -494,7 +512,7 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
             doGC = false;
-            TestUtils.waitForCondition(
+            waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
                     && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
@@ -536,6 +554,7 @@ public class EosIntegrationTest {
     private KafkaStreams getKafkaStreams(final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads) {
+        commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         gcInjected = new AtomicBoolean(false);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -558,13 +577,12 @@ public class EosIntegrationTest {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
                     ProcessorContext context;
                     KeyValueStore<Long, Long> state = null;
-                    final boolean hasState = withState;
 
                     @Override
                     public void init(final ProcessorContext context) {
                         this.context = context;
 
-                        if (hasState) {
+                        if (withState) {
                             state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
                         }
                     }
@@ -584,6 +602,7 @@ public class EosIntegrationTest {
 
                         if ((value + 1) % 10 == 0) {
                             context.commit();
+                            commitRequested.incrementAndGet();
                         }
 
                         if (state != null) {
@@ -650,6 +669,14 @@ public class EosIntegrationTest {
         return streams;
     }
 
+    private void startAndWaitForRunningState(final KafkaStreams streams) throws Exception {
+        final AtomicBoolean isRunning = new AtomicBoolean(false);
+        streams.setStateListener((newState, oldState) -> isRunning.set(newState == KafkaStreams.State.RUNNING));
+
+        streams.start();
+
+        waitForCondition(isRunning::get, MAX_WAIT_TIME_MS, "KafkaStreams did not transit to RUNNING state");
+    }
     private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             MULTI_PARTITION_INPUT_TOPIC,
