@@ -252,7 +252,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (eosEnabled) {
             initializeTransactions();
         }
+    }
 
+    @Override
+    public void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions);
             initializeCommittedOffsets(offsetsAndMetadata);
@@ -303,7 +306,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         }
 
-        final Set<TopicPartition> nonCommitted = new HashSet<>(partitionGroup.partitions());
+        final Set<TopicPartition> nonCommitted = new HashSet<>(partitions);
         nonCommitted.removeAll(offsetsAndMetadata.keySet());
         for (final TopicPartition partition : nonCommitted) {
             log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
@@ -369,6 +372,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw new ProcessorStateException(format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
+        initializeMetadata();
     }
 
     /**

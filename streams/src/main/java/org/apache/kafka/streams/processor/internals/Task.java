@@ -27,6 +27,8 @@ import java.util.Set;
 
 public interface Task {
 
+    void initializeMetadata();
+
     /**
      * Initialize the task and return {@code true} if the task is ready to run, i.e, it has no state stores
      * @return true if this task has no state stores that may need restoring.

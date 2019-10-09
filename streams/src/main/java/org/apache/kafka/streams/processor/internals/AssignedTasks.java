@@ -68,6 +68,7 @@ abstract class AssignedTasks<T extends Task> {
             final Map.Entry<TaskId, T> entry = it.next();
             try {
                 final T task = entry.getValue();
+                task.initializeMetadata();
                 if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     ((AssignedStreamsTasks) this).addToRestoring((StreamTask) task);

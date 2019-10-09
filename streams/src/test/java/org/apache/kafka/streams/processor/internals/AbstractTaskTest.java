@@ -219,6 +219,9 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
+            public void initializeMetadata() {}
+
+            @Override
             public void resume() {}
 
             @Override

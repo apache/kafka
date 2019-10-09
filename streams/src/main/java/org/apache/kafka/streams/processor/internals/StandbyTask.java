@@ -80,6 +80,9 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void initializeMetadata() {}
+
+    @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
