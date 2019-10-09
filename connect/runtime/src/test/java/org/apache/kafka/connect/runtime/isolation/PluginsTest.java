@@ -23,6 +23,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -269,6 +270,30 @@ public class PluginsTest {
         Converter plugin = plugins.newConverter(
             config,
             WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+            ClassLoaderUsage.PLUGINS
+        );
+
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertTrue(samples.containsKey("configure"));
+        assertPluginClassLoaderAlwaysActive(samples);
+    }
+
+    @Test
+    public void newConfigProviderShouldConfigureWithPluginClassLoader() {
+        TestPlugins.assertInitialized();
+        String providerPrefix = "some.provider";
+        props.put(providerPrefix + ".class", TestPlugins.SAMPLING_CONFIG_PROVIDER);
+
+        PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONFIG_PROVIDER);
+        assertNotNull(classLoader);
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
+        createConfig();
+        Plugins.compareAndSwapLoaders(savedLoader);
+
+        ConfigProvider plugin = plugins.newConfigProvider(
+            config,
+            WorkerConfig.CONFIG_PROVIDERS_CONFIG,
             ClassLoaderUsage.PLUGINS
         );
 
