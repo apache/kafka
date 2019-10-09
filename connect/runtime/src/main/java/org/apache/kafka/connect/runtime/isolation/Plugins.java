@@ -85,19 +85,20 @@ public class Plugins {
     }
 
     @SuppressWarnings("unchecked")
-    protected static <U> Class<? extends U> pluginClassFromConfig(
+    protected <U> Class<? extends U> pluginClassFromConfig(
             AbstractConfig config,
             String propertyName,
             Class<U> pluginClass
-    ) throws ClassNotFoundException {
+    ) {
         Class<?> klass = config.getClass(propertyName);
         if (pluginClass.isAssignableFrom(klass)) {
             return (Class<? extends U>) klass;
         }
-        throw new ClassCastException(
-            "Requested class for property: "
-                + propertyName
-                + " does not extend " + pluginClass.getSimpleName()
+        throw new ConnectException(
+            "Failed to find any class that implements " + pluginClass.getSimpleName()
+                + " for the config "
+                + propertyName + ", available converters are: "
+                + pluginNames(delegatingLoader.converters())
         );
     }
 
@@ -244,16 +245,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-
-                try {
-                    klass = pluginClassFromConfig(config, classPropertyName, Converter.class);
-                } catch (ClassNotFoundException e) {
-                    throw new ConnectException(
-                        "Failed to find any class that implements Converter for the config "
-                        + classPropertyName + ", available converters are: "
-                        + pluginNames(delegatingLoader.converters())
-                    );
-                }
+                klass = pluginClassFromConfig(config, classPropertyName, Converter.class);
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
@@ -328,15 +320,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                try {
-                    klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class);
-                } catch (ClassNotFoundException e) {
-                    throw new ConnectException(
-                        "Failed to find any class that implements HeaderConverter for the config "
-                        + classPropertyName + ", available converters are: "
-                        + pluginNames(delegatingLoader.converters())
-                    );
-                }
+                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class);
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
