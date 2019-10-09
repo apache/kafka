@@ -367,15 +367,15 @@ public class Plugins {
             return null;
         }
         ConfigProvider plugin = null;
+        Class<? extends ConfigProvider> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
-                plugin = getInstance(config, classPropertyName, ConfigProvider.class);
+                klass = pluginClassFromConfig(config, classPropertyName, ConfigProvider.class);
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
                 String configProviderClassOrAlias = originalConfig.get(classPropertyName);
-                Class<? extends ConfigProvider> klass;
                 try {
                     klass = pluginClass(delegatingLoader, configProviderClassOrAlias, ConfigProvider.class);
                 } catch (ClassNotFoundException e) {
@@ -385,17 +385,25 @@ public class Plugins {
                                     + pluginNames(delegatingLoader.configProviders())
                     );
                 }
-                plugin = newPlugin(klass);
                 break;
         }
+        if (klass == null) {
+            throw new ConnectException("Unable to initialize the ConfigProvider specified in '" + classPropertyName + "'");
+        }
+        plugin = newPlugin(klass);
         if (plugin == null) {
             throw new ConnectException("Unable to instantiate the ConfigProvider specified in '" + classPropertyName + "'");
         }
 
-        // Configure the ConfigProvider
-        String configPrefix = providerPrefix + ".param.";
-        Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
-        plugin.configure(configProviderConfig);
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            // Configure the ConfigProvider
+            String configPrefix = providerPrefix + ".param.";
+            Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
+            plugin.configure(configProviderConfig);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
         return plugin;
     }
 

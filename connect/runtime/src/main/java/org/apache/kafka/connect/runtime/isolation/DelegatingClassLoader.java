@@ -357,10 +357,16 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (T pluginImpl : serviceLoader) {
-            result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(), versionFor(pluginImpl), loader));
+        try {
+            ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+            for (T pluginImpl : serviceLoader) {
+                result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(),
+                    versionFor(pluginImpl), loader));
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
         }
         return result;
     }
