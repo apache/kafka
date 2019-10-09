@@ -1467,8 +1467,8 @@ class ReplicaManagerTest {
     EasyMock.verify(mockTopicStats1)
   }
 
-  private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats = new BrokerTopicStats,
-                                              brokerTopicStats2: BrokerTopicStats = new BrokerTopicStats): (ReplicaManager, ReplicaManager) = {
+  private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats,
+                                              brokerTopicStats2: BrokerTopicStats): (ReplicaManager, ReplicaManager) = {
     val props0 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     val props1 = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
 

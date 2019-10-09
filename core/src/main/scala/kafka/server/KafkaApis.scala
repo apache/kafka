@@ -709,6 +709,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
           abortedTransactions, data.records))
+        // record any outgoing reassignment rate if the fetch request came from an addingReplica of the partition
+        if (fetchRequest.isFromFollower && data.isReassignmentFetch)
+          brokerTopicStats.updateReassignmentBytesOut(data.records.sizeInBytes)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
@@ -734,14 +737,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         response.responseData.asScala.foreach { case (topicPartition, data) =>
           // record the bytes out metrics only when the response is being sent
           brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
-          // record any outgoing reassignment rate if the fetch request came from an addingReplica of the partition
-          if (fetchRequest.isFromFollower) {
-            replicaManager.getPartition(topicPartition) match {
-              case HostedPartition.Online(p) => if (p.isAddingReplica(fetchRequest.replicaId))
-                brokerTopicStats.updateReassignmentBytesOut(data.records.sizeInBytes)
-              case _ =>
-            }
-          }
         }
         response
       }

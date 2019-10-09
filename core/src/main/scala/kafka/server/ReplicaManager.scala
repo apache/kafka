@@ -29,6 +29,7 @@ import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
@@ -118,7 +119,8 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
-                              preferredReadReplica: Option[Int])
+                              preferredReadReplica: Option[Int],
+                              isReassignmentFetch: Boolean)
 
 
 /**
@@ -414,6 +416,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getPartition(topicPartition: TopicPartition): HostedPartition = {
     Option(allPartitions.get(topicPartition)).getOrElse(HostedPartition.None)
+  }
+
+  def isAddingReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
+    getPartition(topicPartition) match {
+      case Online(partition) => partition.isAddingReplica(replicaId)
+      case _ => false
+    }
   }
 
   // Visible for testing
@@ -915,7 +924,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isAddingReplica(tp, replicaId))
       }
       maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {
