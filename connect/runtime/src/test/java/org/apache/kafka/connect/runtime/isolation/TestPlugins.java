@@ -70,29 +70,35 @@ public class TestPlugins {
      */
     public static final String ALWAYS_THROW_EXCEPTION = "test.plugins.AlwaysThrowException";
     /**
-     * Class name of a plugin which samples information about it's initialization.
+     * Class name of a plugin which samples information about its initialization.
      */
     public static final String SAMPLING = "test.plugins.Sampling";
     /**
-     * Class name of a converter which samples information about it's method calls.
+     * Class name of a {@link org.apache.kafka.connect.storage.Converter}
+     * which samples information about its method calls.
      */
     public static final String SAMPLING_CONVERTER = "test.plugins.SamplingConverter";
     /**
-     * Class name of a configurable object which samples information about it's method calls.
+     * Class name of a {@link org.apache.kafka.common.Configurable}
+     * which samples information about its method calls.
      */
     public static final String SAMPLING_CONFIGURABLE = "test.plugins.SamplingConfigurable";
     /**
-     * Class name of a header converter which samples information about it's method calls.
+     * Class name of a {@link org.apache.kafka.connect.storage.HeaderConverter}
+     * which samples information about its method calls.
      */
     public static final String SAMPLING_HEADER_CONVERTER = "test.plugins.SamplingHeaderConverter";
     /**
-     * Class name of a configprovider which samples information about it's method calls.
+     * Class name of a {@link org.apache.kafka.common.config.provider.ConfigProvider}
+     * which samples information about its method calls.
      */
     public static final String SAMPLING_CONFIG_PROVIDER = "test.plugins.SamplingConfigProvider";
     /**
-     * Class name of a plugin which samples information during service loading
+     * Class name of a plugin which uses a {@link java.util.ServiceLoader}
+     * to load internal classes, and samples information about their initialization.
      */
     public static final String SERVICE_LOADER = "test.plugins.ServiceLoaderPlugin";
+
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
     private static final Map<String, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
