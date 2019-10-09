@@ -36,7 +36,7 @@ public class AlterConsumerGroupOffsetsResult {
 
     private final KafkaFuture<Map<TopicPartition, Errors>> future;
 
-    public AlterConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
+    AlterConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
         this.future = future;
     }
 

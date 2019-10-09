@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
  * @param <O> The type of configuration option. Different for different consumer group commands.
  */
 public final class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>> {
-    final String groupId;
+    final private String groupId;
     final private O options;
     final private long deadline;
     final private KafkaFutureImpl<T> future;
@@ -71,17 +71,17 @@ public final class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>
         return node;
     }
 
-    public void node(Node node) {
+    public void setNode(Node node) {
         this.node = Optional.ofNullable(node);
     }
 
-    public boolean hasCoordinatorMoved(AbstractResponse response) {
+    public static boolean hasCoordinatorMoved(AbstractResponse response) {
         return response.errorCounts().keySet()
                 .stream()
                 .anyMatch(error -> error == Errors.NOT_COORDINATOR);
     }
 
-    public boolean shouldRefreshCoordinator(Errors error) {
+    public static boolean shouldRefreshCoordinator(Errors error) {
         return error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE;
     }
 }

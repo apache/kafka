@@ -2604,7 +2604,7 @@ public class KafkaAdminClient extends AdminClient {
         log.info("Node {} is no longer the Coordinator. Retrying with new coordinator.",
                 context.node().orElse(null));
         // Requeue the task so that we can try with new coordinator
-        context.node(null);
+        context.setNode(null);
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
@@ -2612,7 +2612,7 @@ public class KafkaAdminClient extends AdminClient {
     private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls) {
         log.info("Retrying to fetch metadata.");
         // Requeue the task so that we can re-attempt fetching metadata
-        context.response(Optional.empty());
+        context.setResponse(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
         runnable.call(metadataCall, time.milliseconds());
     }
@@ -2670,7 +2670,7 @@ public class KafkaAdminClient extends AdminClient {
      * @param <O> The type of configuration option, like DescribeConsumerGroupsOptions, ListConsumerGroupsOptions etc
      */
     private <T, O extends AbstractOptions<O>> Call getFindCoordinatorCall(ConsumerGroupOperationContext<T, O> context,
-                                               Supplier<Call> nextCall) {
+                                                                          Supplier<Call> nextCall) {
         return new Call("findCoordinator", context.deadline(), new LeastLoadedNodeProvider()) {
             @Override
             FindCoordinatorRequest.Builder createRequest(int timeoutMs) {
@@ -2687,7 +2687,7 @@ public class KafkaAdminClient extends AdminClient {
                 if (handleGroupRequestError(response.error(), context.future()))
                     return;
 
-                context.node(response.node());
+                context.setNode(response.node());
 
                 runnable.call(nextCall.get(), time.milliseconds());
             }
@@ -2734,7 +2734,7 @@ public class KafkaAdminClient extends AdminClient {
                 final DescribedGroup describedGroup = describedGroups.get(0);
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context, () -> getDescribeConsumerGroupsCall(context));
                     return;
                 }
@@ -2803,12 +2803,12 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
-                context.response(Optional.of(response));
-
-                if (context.shouldRefreshMetadata()) {
+                if (MetadataOperationContext.shouldRefreshMetadata(response)) {
                     rescheduleMetadataTask(context, nextCalls);
                     return;
                 }
+
+                context.setResponse(Optional.of(response));
 
                 for (Call call : nextCalls.get()) {
                     runnable.call(call, time.milliseconds());
@@ -3004,7 +3004,7 @@ public class KafkaAdminClient extends AdminClient {
                 final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context, () -> getListConsumerGroupOffsetsCall(context));
                     return;
                 }
@@ -3078,7 +3078,7 @@ public class KafkaAdminClient extends AdminClient {
                 final DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context, () -> getDeleteConsumerGroupsCall(context));
                     return;
                 }
@@ -3154,7 +3154,7 @@ public class KafkaAdminClient extends AdminClient {
                 final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context, () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
                     return;
                 }
@@ -3505,7 +3505,7 @@ public class KafkaAdminClient extends AdminClient {
                 final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context, () -> getRemoveMembersFromGroupCall(context));
                     return;
                 }
@@ -3569,7 +3569,6 @@ public class KafkaAdminClient extends AdminClient {
                                 .setCommittedOffset(oam.offset())
                                 .setCommittedLeaderEpoch(oam.leaderEpoch().orElse(-1))
                                 .setCommittedMetadata(oam.metadata())
-                                .setCommitTimestamp(System.nanoTime())
                                 .setPartitionIndex(entry.getKey().partition());
                         value.add(partition);
                         return value;
@@ -3592,7 +3591,7 @@ public class KafkaAdminClient extends AdminClient {
                 final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
 
                 // If coordinator changed since we fetched it, retry
-                if (context.hasCoordinatorMoved(response)) {
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
                     rescheduleFindCoordinatorTask(context,
                         () -> getAlterConsumerGroupOffsetsCall(context, offsets));
                     return;
@@ -3602,7 +3601,7 @@ public class KafkaAdminClient extends AdminClient {
                 for (OffsetCommitResponseTopic topic : response.data().topics()) {
                     for (OffsetCommitResponsePartition partition : topic.partitions()) {
                         Errors error = Errors.forCode(partition.errorCode());
-                        if (context.shouldRefreshCoordinator(error)) {
+                        if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
                             rescheduleFindCoordinatorTask(context,
                                 () -> getAlterConsumerGroupOffsetsCall(context, offsets));
                             return;
@@ -3676,8 +3675,8 @@ public class KafkaAdminClient extends AdminClient {
             if (!mr.errors().containsKey(tp.topic())) {
                 Node node = mr.cluster().leaderFor(tp);
                 if (node != null) {
-                    leaders.computeIfAbsent(node, k -> new HashMap<>());
-                    leaders.get(node).put(tp, new ListOffsetRequest.PartitionData(offsetQuery, Optional.empty()));
+                    Map<TopicPartition, ListOffsetRequest.PartitionData> leadersOnNode = leaders.computeIfAbsent(node, k -> new HashMap<>());
+                    leadersOnNode.put(tp, new ListOffsetRequest.PartitionData(offsetQuery, Optional.empty()));
                 } else {
                     future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
                 }
@@ -3687,8 +3686,8 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         for (final Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry: leaders.entrySet()) {
-
             final int brokerId = entry.getKey().id();
+            final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionsToQuery = entry.getValue();
 
             calls.add(new Call("listOffsets on broker " + brokerId, context.deadline(), new ConstantNodeIdProvider(brokerId)) {
 
@@ -3696,31 +3695,46 @@ public class KafkaAdminClient extends AdminClient {
                 ListOffsetRequest.Builder createRequest(int timeoutMs) {
                     return ListOffsetRequest.Builder
                             .forConsumer(true, context.options().isolationLevel())
-                            .setTargetTimes(entry.getValue());
+                            .setTargetTimes(partitionsToQuery);
                 }
 
                 @Override
                 void handleResponse(AbstractResponse abstractResponse) {
                     ListOffsetResponse response = (ListOffsetResponse) abstractResponse;
-                    for (Entry<TopicPartition, PartitionData> result : response.responseData().entrySet()) {
+                    Set<TopicPartition> partitionsWithErrors = new HashSet<>();
 
-                        KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(result.getKey());
+                    for (Entry<TopicPartition, PartitionData> result : response.responseData().entrySet()) {
+                        TopicPartition tp = result.getKey();
                         PartitionData partitionData = result.getValue();
+
+                        KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
                         Errors error = partitionData.error;
-                        if (context.shouldRefreshMetadata(error)) {
-                            rescheduleMetadataTask(context, () -> calls);
-                            return;
-                        }
-                        if (partitionData.error == Errors.NONE) {
+                        if (MetadataOperationContext.shouldRefreshMetadata(error)) {
+                            partitionsWithErrors.add(tp);
+                        } else if (error == Errors.NONE) {
                             future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
                         } else {
-                            future.completeExceptionally(result.getValue().error.exception());
+                            future.completeExceptionally(error.exception());
                         }
+                    }
+
+                    if (!partitionsWithErrors.isEmpty()) {
+                        partitionsToQuery.keySet().retainAll(partitionsWithErrors);
+                        Set<String> retryTopics = partitionsWithErrors.stream().map(tp -> tp.topic()).collect(Collectors.toSet());
+                        Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> retryFutures =
+                                futures.entrySet()
+                                       .stream()
+                                       .filter(entry -> partitionsWithErrors.contains(entry.getKey()))
+                                       .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
+                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
+                                new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), retryFutures);
+                        rescheduleMetadataTask(retryContext, () -> Collections.singletonList(this));
                     }
                 }
 
                 @Override
                 void handleFailure(Throwable throwable) {
+                    throwable.printStackTrace();
                     for (TopicPartition tp : entry.getValue().keySet()) {
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
                         future.completeExceptionally(throwable);

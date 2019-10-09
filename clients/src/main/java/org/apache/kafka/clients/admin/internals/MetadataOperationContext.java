@@ -58,7 +58,7 @@ public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
         this.response = Optional.empty();
     }
 
-    public void response(Optional<MetadataResponse> response) {
+    public void setResponse(Optional<MetadataResponse> response) {
         this.response = response;
     }
 
@@ -82,19 +82,18 @@ public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
         return topics;
     }
 
-    public boolean shouldRefreshMetadata() {
-        MetadataResponse mr = response.orElseThrow(() -> new IllegalStateException("No Metadata response"));
-        Set<Errors> allErrors = new HashSet<>(mr.errors().values());
-        for (TopicMetadata tm : mr.topicMetadata()) {
+    public static boolean shouldRefreshMetadata(MetadataResponse response) {
+        Set<Errors> allErrors = new HashSet<>(response.errors().values());
+        for (TopicMetadata tm : response.topicMetadata()) {
             for (PartitionMetadata pm : tm.partitionMetadata()) {
                 if (pm.error() != Errors.NONE)
                     allErrors.add(pm.error());
             }
         }
-        return allErrors.stream().anyMatch(this::shouldRefreshMetadata);
+        return allErrors.stream().anyMatch(error -> MetadataOperationContext.shouldRefreshMetadata(error));
     }
 
-    public boolean shouldRefreshMetadata(Errors error) {
+    public static boolean shouldRefreshMetadata(Errors error) {
         return error.exception() instanceof InvalidMetadataException;
     }
 }
