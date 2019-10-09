@@ -141,6 +141,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
+    public static final String TOTAL_DESCRIPTION = "The total number of ";
+    public static final String RATE_DESCRIPTION = "The average per-second number of ";
+
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
 
@@ -689,8 +692,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             group,
             tags,
             operation,
-            "The average per-second number of " + operation,
-            "The total number of " + operation
+            RATE_DESCRIPTION + operation,
+            TOTAL_DESCRIPTION + operation
         );
     }
 
