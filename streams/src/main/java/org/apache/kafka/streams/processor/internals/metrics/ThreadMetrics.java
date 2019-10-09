@@ -23,20 +23,16 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GROUP_PREFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GROUP_PREFIX_WO_DELIMITER;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GROUP_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP_0100_TO_23;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class ThreadMetrics {
     private ThreadMetrics() {}
-
-    private static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + "thread" + GROUP_SUFFIX;
-    private static final String THREAD_LEVEL_GROUP_0100_TO_23 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
 
     private static final String COMMIT = "commit";
     private static final String COMMIT_LATENCY = COMMIT + LATENCY_SUFFIX;

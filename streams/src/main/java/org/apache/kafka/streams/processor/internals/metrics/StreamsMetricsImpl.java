@@ -133,9 +133,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
     public static final String GROUP_SUFFIX = "-metrics";
-    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
     public static final String CLIENT_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + "thread" + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP_0100_TO_23 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
+    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
