@@ -106,6 +106,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.test.TestUtils.toSet;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -2277,6 +2278,55 @@ public class ConsumerCoordinatorTest {
                 coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback()));
         assertThrows(FencedInstanceIdException.class, () ->
                 coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
+    }
+
+    @Test
+    public void testConsumerRejoinAfterRebalance() throws Exception {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
+
+            assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(
+                singletonMap(t1p, new OffsetAndMetadata(100L)),
+                time.timer(Long.MAX_VALUE)));
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            AtomicBoolean res = new AtomicBoolean();
+
+            Thread th = new Thread(() -> {
+                coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+                res.set(true);
+            });
+
+            th.start();
+
+            client.waitForRequests(1, 5_000);
+            client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+
+            waitForCondition(() -> coordinator.generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID,
+                5_000L, "JoinGroup response handled.");
+
+            client.waitForRequests(1, 5_000);
+            client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+
+            client.waitForRequests(1, 5_000);
+
+            // Imitating heartbeat thread.
+            coordinator.maybeLeaveGroup("Clear generation data.");
+
+            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            th.join();
+
+            assertTrue(res.get());
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+        }
     }
 
     private void receiveFencedInstanceIdException() {
