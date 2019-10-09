@@ -191,7 +191,7 @@ public class GlobalStateManagerImplTest {
         checkpoint.write(startOffsets);
 
         // initialize will throw exception
-        StreamsException e = assertThrows(StreamsException.class, () -> stateManager.initialize());
+        final StreamsException e = assertThrows(StreamsException.class, () -> stateManager.initialize());
         assertThat(e.getMessage(), equalTo("Encountered a topic-partition not associated with any global state store"));
     }
 
