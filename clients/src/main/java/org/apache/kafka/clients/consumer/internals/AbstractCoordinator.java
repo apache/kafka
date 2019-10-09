@@ -411,7 +411,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (future.succeeded()) {
                 synchronized (this) {
                     // Generation data maybe concurrently cleared by Heartbeat thread.
-                    if (generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID) {
+                    if (generation != Generation.NO_GENERATION) {
                         // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                         ByteBuffer memberAssignment = future.value().duplicate();
 
@@ -477,7 +477,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // even if the consumer is woken up before finishing the rebalance
                     synchronized (AbstractCoordinator.this) {
                         // Generation data maybe concurrently cleared by Heartbeat thread.
-                        if (generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID) {
+                        if (generation != Generation.NO_GENERATION) {
                             log.info("Successfully joined group with generation {}", generation.generationId);
                             state = MemberState.STABLE;
                             rejoinNeeded = false;
@@ -497,16 +497,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    failure();
-                }
-
-                private void failure() {
                     // we handle failures below after the request finishes. if the join completes
                     // after having been woken up, the exception is ignored and we will rejoin
                     synchronized (AbstractCoordinator.this) {
-                        state = MemberState.UNJOINED;
-                        sensors.failedRebalanceSensor.record();
+                        failure();
                     }
+                }
+
+                private void failure() {
+                    state = MemberState.UNJOINED;
+                    sensors.failedRebalanceSensor.record();
                 }
             });
         }
