@@ -164,12 +164,10 @@ sealed trait AssignmentState {
 
 case class OngoingReassignmentState(addingReplicas: Seq[Int],
                                     removingReplicas: Seq[Int],
-                                    originalReplicas: Seq[Int],
                                     replicas: Seq[Int]) extends AssignmentState {
 
-  override def replicationFactor: Int = originalReplicas.size
+  override def replicationFactor: Int = replicas.diff(addingReplicas).size // keep the size of the original replicas
   override def isAddingReplica(replicaId: Int): Boolean = addingReplicas.contains(replicaId)
-
 }
 
 case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
@@ -687,17 +685,12 @@ class Partition(val topicPartition: TopicPartition,
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
-    // if we're already in a reassignment then let's carry the original replicas
-    val originalAssignment = assignmentState match {
-      case OngoingReassignmentState(_, _, originalReplicas, _) => originalReplicas
-      case SimpleAssignmentState(replicas) => replicas
-    }
     assignment
       .filter(_ != localBrokerId)
       .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     removedReplicas.foreach(remoteReplicasMap.remove)
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
-      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, originalAssignment, assignment)
+      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment)
     else
       assignmentState = SimpleAssignmentState(assignment)
     inSyncReplicaIds = isr
@@ -1239,9 +1232,10 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("; Replicas: " + assignmentState.replicas.mkString(","))
     partitionString.append("; ISR: " + inSyncReplicaIds.mkString(","))
     assignmentState match {
-      case OngoingReassignmentState(adding, removing, _, _) =>
+      case OngoingReassignmentState(adding, removing, _) =>
         partitionString.append("; AddingReplicas: " + adding.mkString(","))
         partitionString.append("; RemovingReplicas: " + removing.mkString(","))
+      case _ =>
     }
     partitionString.toString
   }
