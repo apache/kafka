@@ -17,8 +17,11 @@
 
 package org.apache.kafka.common.serialization;
 
-public class NothingSerializer implements Serializer<Void> {
+public class VoidSerializer implements Serializer<Void> {
     @Override public byte[] serialize(String topic, Void data) {
-        return new byte[0];
+        if (data != null)
+            throw new IllegalArgumentException("Data should be null for a VoidSerializer.");
+
+        return null;
     }
 }

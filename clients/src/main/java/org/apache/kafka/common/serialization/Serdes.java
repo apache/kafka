@@ -59,9 +59,9 @@ public class Serdes {
         }
     }
 
-    static public final class NothingSerde extends WrapperSerde<Void> {
-        public NothingSerde() {
-            super(new NothingSerializer(), new NothingDeserializer());
+    static public final class VoidSerde extends WrapperSerde<Void> {
+        public VoidSerde() {
+            super(new VoidSerializer(), new VoidDeserializer());
         }
     }
 
