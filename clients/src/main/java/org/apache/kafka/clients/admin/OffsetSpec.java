@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
+
 /** 
- * This class allows to specify the desired offsets when using {@link #listOffsets(Map, ListOffsetsOptions)}
+ * This class allows to specify the desired offsets when using {@link KafkaAdminClient#listOffsets(Map, ListOffsetsOptions)}
  */
 public class OffsetSpec {
 

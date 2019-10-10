@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.KafkaFuture.BaseFunction;
@@ -76,9 +78,15 @@ public class AlterConsumerGroupOffsetsResult {
         return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {
             @Override
             public Void apply(final Map<TopicPartition, Errors> topicPartitionErrorsMap) {
+                List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
+                        .stream()
+                        .filter(e -> e.getValue() != Errors.NONE)
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toList());
                 for (Errors error : topicPartitionErrorsMap.values()) {
                     if (error != Errors.NONE) {
-                        throw error.exception();
+                        throw error.exception(
+                            "Failed altering consumer group offsets for the following partitions: " + partitionsFailed);
                     }
                 }
                 return null;
