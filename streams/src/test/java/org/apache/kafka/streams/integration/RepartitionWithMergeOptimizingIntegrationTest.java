@@ -17,14 +17,12 @@
 
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -70,8 +68,8 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
     private static final int ONE_REPARTITION_TOPIC = 1;
     private static final int TWO_REPARTITION_TOPICS = 2;
 
-    private static final Serializer<String> stringSerializer = new StringSerializer();
-    private static final Deserializer<String> stringDeserializer = new StringDeserializer();
+    private final Serializer<String> stringSerializer = new StringSerializer();
+    private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
@@ -105,24 +103,25 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
             topologyTestDriver.close();
         } catch (final RuntimeException e) {
             // KAFKA-6647 causes exception when executed in Windows, swallow and move on
+            System.out.println("An exception was thrown while trying to close the TopologyTestDriver, note that " +
+                "KAFKA-6647 causes this when running on Windows.");
         }
     }
 
     @Test
-    public void shouldSendCorrectRecords_OPTIMIZED() throws Exception {
+    public void shouldSendCorrectRecords_OPTIMIZED() {
         runIntegrationTest(StreamsConfig.OPTIMIZE,
                            ONE_REPARTITION_TOPIC);
     }
 
     @Test
-    public void shouldSendCorrectResults_NO_OPTIMIZATION() throws Exception {
+    public void shouldSendCorrectResults_NO_OPTIMIZATION() {
         runIntegrationTest(StreamsConfig.NO_OPTIMIZATION,
                            TWO_REPARTITION_TOPICS);
     }
 
 
-    private void runIntegrationTest(final String optimizationConfig,
-                                    final int expectedNumberRepartitionTopics) throws Exception {
+    private void runIntegrationTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
 
@@ -167,11 +166,7 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         inputTopicA.pipeKeyValueList(getKeyValues());
         inputTopicB.pipeKeyValueList(getKeyValues());
 
-        final KafkaStreams streams = new KafkaStreams(topology, streamsConfiguration);
-        streams.start();
-
         final String topologyString = topology.describe().toString();
-        System.out.println(topologyString);
 
         // Verify the topology
         if (optimizationConfig.equals(StreamsConfig.OPTIMIZE)) {
@@ -186,8 +181,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         // Verify the expected output
         assertThat(countOutputTopic.readKeyValuesToList(), equalTo(expectedCountKeyValues));
         assertThat(stringCountOutputTopic.readKeyValuesToList(), equalTo(expectedStringCountKeyValues));
-
-        streams.close(Duration.ofSeconds(5));
     }
 
 
