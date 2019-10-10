@@ -22,6 +22,8 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorTest;
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorTest.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
@@ -409,7 +411,7 @@ public class KafkaConsumerTest {
 
         assertEquals(singleton(tp0), consumer.assignment());
 
-        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator);
+        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator, Errors.NONE);
 
         // heartbeat interval is 2 seconds
         time.sleep(heartbeatIntervalMs);
@@ -444,7 +446,7 @@ public class KafkaConsumerTest {
         client.poll(0, time.milliseconds());
 
         client.prepareResponseFrom(fetchResponse(tp0, 5, 0), node);
-        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator);
+        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator, Errors.NONE);
 
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
@@ -661,7 +663,6 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
 
         ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
@@ -1067,11 +1068,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         // initial subscription
-        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
-
-        // verify that subscription has changed but assignment is still unchanged
-        assertEquals(singleton(topic), consumer.subscription());
-        assertEquals(Collections.emptySet(), consumer.assignment());
+        initializeSubscription(consumer, getConsumerRebalanceListener(consumer));
 
         // mock rebalance responses
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -1109,6 +1106,86 @@ public class KafkaConsumerTest {
 
         client.requests().clear();
         consumer.close();
+    }
+
+    @Test
+    public void testUnsubscribeWillTriggerPartitionsRevokeWithNoGeneration() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+
+        initializeSubscription(consumer, getExceptionConsumerRebalanceListener());
+
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        try {
+            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+            consumer.poll(Duration.ZERO);
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("Hit partition assign", e.getCause().getMessage());
+        }
+        try {
+            consumer.unsubscribe();
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("Hit partition revoke", e.getCause().getMessage());
+        }
+    }
+
+    @Test
+    public void testUnsubscribeWillTriggerPartitionsLostWithNoGeneration() throws InterruptedException {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+
+        initializeSubscription(consumer, getExceptionConsumerRebalanceListener());
+        Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        try {
+            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+            consumer.poll(Duration.ZERO);
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("Hit partition assign", e.getCause().getMessage());
+        }
+
+        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator, Errors.UNKNOWN_MEMBER_ID);
+
+        time.sleep(heartbeatIntervalMs);
+        Thread.sleep(heartbeatIntervalMs);
+
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        assertTrue(heartbeatReceived.get());
+
+        try {
+            consumer.unsubscribe();
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("Hit partition lost", e.getCause().getMessage());
+        }
+    }
+
+    private void initializeSubscription(KafkaConsumer<String, String> consumer,
+                                        ConsumerRebalanceListener consumerRebalanceListener) {
+        consumer.subscribe(singleton(topic), consumerRebalanceListener);
+        // verify that subscription has changed but assignment is still unchanged
+        assertEquals(singleton(topic), consumer.subscription());
+        assertEquals(Collections.emptySet(), consumer.assignment());
     }
 
     @Test
@@ -1666,7 +1743,7 @@ public class KafkaConsumerTest {
             consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
             fail("Should throw exception");
         } catch (Throwable e) {
-            assertEquals("boom!", e.getCause().getMessage());
+            assertEquals("Hit partition assign", e.getCause().getMessage());
         }
 
         // the assignment is still updated regardless of the exception
@@ -1677,7 +1754,7 @@ public class KafkaConsumerTest {
             consumer.close(Duration.ofMillis(0));
             fail("Should throw exception");
         } catch (Throwable e) {
-            assertEquals("boom!", e.getCause().getCause().getMessage());
+            assertEquals("Hit partition revoke", e.getCause().getCause().getMessage());
         }
 
         consumer.close(Duration.ofMillis(0));
@@ -1713,6 +1790,11 @@ public class KafkaConsumerTest {
                 for (TopicPartition partition : partitions)
                     consumer.seek(partition, 0);
             }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                System.out.println("hit partitions lost " + partitions);
+            }
         };
     }
 
@@ -1720,12 +1802,17 @@ public class KafkaConsumerTest {
         return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                throw new RuntimeException("boom!");
+                throw new RuntimeException("Hit partition revoke");
             }
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                throw new RuntimeException("boom!");
+                throw new RuntimeException("Hit partition assign");
+            }
+
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                throw new RuntimeException("Hit partition lost");
             }
         };
     }
@@ -1779,7 +1866,7 @@ public class KafkaConsumerTest {
         return coordinator;
     }
 
-    private AtomicBoolean prepareHeartbeatResponse(MockClient client, Node coordinator) {
+    private AtomicBoolean prepareHeartbeatResponse(MockClient client, Node coordinator, Errors error) {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
@@ -1787,7 +1874,7 @@ public class KafkaConsumerTest {
                 heartbeatReceived.set(true);
                 return true;
             }
-        }, new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(Errors.NONE.code())), coordinator);
+        }, new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code())), coordinator);
         return heartbeatReceived;
     }
 

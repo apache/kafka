@@ -655,6 +655,42 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldHaveTaskClosedOnTaskMigratedException() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        assignedPartitions.add(t1p2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
+        mockConsumer.assign(assignedPartitions);
+        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        beginOffsets.put(t1p1, 0L);
+        beginOffsets.put(t1p2, 0L);
+        mockConsumer.updateBeginningOffsets(beginOffsets);
+
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+
+        thread.shutdown();
+        thread.run();
+
+        for (final Task task : thread.tasks().values()) {
+            assertTrue(((MockProducer) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
+        }
+    }
+
+    @Test
     public void shouldShutdownTaskManagerOnClose() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);

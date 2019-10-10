@@ -950,6 +950,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+        log.info("Trying to subscribe to {}", topics);
+        System.out.println("start subscription");
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
@@ -957,6 +959,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
             if (topics.isEmpty()) {
                 // treat subscribing to empty topic list as the same as unsubscribing
+                log.info("Treat empty sub {}", topics);
+
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
@@ -967,6 +971,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throwIfNoAssignorsConfigured();
                 fetcher.clearBufferedDataForUnassignedTopics(topics);
                 log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
+                System.out.println("start subscription to new");
+
                 if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
             }
@@ -1069,11 +1075,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
-            this.subscriptions.unsubscribe();
             if (this.coordinator != null) {
                 this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
             }
+            this.subscriptions.unsubscribe();
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();
