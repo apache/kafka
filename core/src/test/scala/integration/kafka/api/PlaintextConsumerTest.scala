@@ -211,11 +211,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         if (!partitions.isEmpty && partitions.contains(tp)) {
           // on the second rebalance (after we have joined the group initially), sleep longer
-          // than session timeout and then try a commit. We should still be in the group,
-          // so the commit should succeed
+          // than session timeout and then try a commit. We in synchronized block
+          // (that means hearbeat not happen, see AbstractCoordinator#joinGroupIfNeeded), so commit should fail.
           Utils.sleep(1500)
           committedPosition = consumer.position(tp)
-          consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
+          assertThrows(classOf[CommitFailedException],
+            () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava))
           commitCompleted = true
         }
         super.onPartitionsRevoked(partitions)
@@ -245,7 +246,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
     val listener = new TestConsumerReassignmentListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        // sleep longer than the session timeout, we should still be in the group after invocation
         Utils.sleep(1500)
         super.onPartitionsAssigned(partitions)
       }
@@ -255,8 +255,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
-    // We should still be in the group after this invocation
-    ensureNoRebalance(consumer, listener)
+    // We in synchronized block
+    // (that means hearbeat not happen, see AbstractCoordinator#joinGroupIfNeeded), so commit should fail.
+    val committedPosition = consumer.position(tp)
+
+    assertThrows(classOf[CommitFailedException],
+      () => consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava))
   }
 
   @Test
