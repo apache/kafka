@@ -1821,10 +1821,7 @@ class KafkaController(val config: KafkaConfig,
 
       partitionsToList.foreach { tp =>
         val assignment = controllerContext.partitionFullReplicaAssignment(tp)
-        if (assignment.replicas.isEmpty) {
-          callback(Right(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
-          return
-        } else if (assignment.isBeingReassigned) {
+        if (assignment.isBeingReassigned) {
           results += tp -> assignment
         }
       }
