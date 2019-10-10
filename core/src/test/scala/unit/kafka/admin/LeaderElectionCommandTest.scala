@@ -96,7 +96,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == broker3,
+      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
       "failed to elect new leader within timeout")
     }
   }
@@ -129,7 +129,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == broker3,
+      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
         "failed to elect new leader within timeout")
     }
   }
@@ -163,7 +163,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == broker3,
+      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
         "failed to elect new leader within timeout")
     }
   }
@@ -194,7 +194,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Option(broker2),
+      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker2),
         "Failed to elect preferred leader within timeout")
     }
   }
