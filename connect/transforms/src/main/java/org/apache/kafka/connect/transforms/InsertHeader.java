@@ -31,7 +31,7 @@ import java.util.Map;
 public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
-        "Insert header as a literal value.";
+        "Insert in every record a header with a constant literal value.";
 
     private interface ConfigName {
         String HEADER_NAME_CONFIG = "header";
