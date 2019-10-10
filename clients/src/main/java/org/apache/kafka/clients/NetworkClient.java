@@ -702,11 +702,12 @@ public class NetworkClient implements KafkaClient {
 
     private static AbstractResponse parseResponse(RequestHeader requestHeader, ByteBuffer responseBuffer,
                                                   Sensor throttleTimeSensor, long now) {
+        // Always expect the response version to be the same as the request version
+        short responseVersion = requestHeader.apiVersion();
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-            requestHeader.apiKey().responseHeaderVersion(requestHeader.apiVersion()));
-        // Always expect the response version id to be the same as the request version id
+                requestHeader.apiKey().responseHeaderVersion(responseVersion));
         AbstractResponse response = AbstractResponse.parseResponse(requestHeader.apiKey(), responseBuffer,
-            requestHeader.apiVersion());
+                responseVersion);
         // We correlate after parsing the response to avoid spurious correlation errors when receiving malformed
         // responses
         correlate(requestHeader, responseHeader);
