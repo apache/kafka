@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -65,6 +67,7 @@ import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class RepartitionOptimizingIntegrationTest {
@@ -229,12 +232,19 @@ public class RepartitionOptimizingIntegrationTest {
         assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
 
         // Verify the expected output
-        assertThat(countOutputTopic.readKeyValuesToList(), equalTo(expectedCountKeyValues));
-        assertThat(aggregationOutputTopic.readKeyValuesToList(), equalTo(expectedAggKeyValues));
-        assertThat(reduceOutputTopic.readKeyValuesToList(), equalTo(expectedReduceKeyValues));
-        assertThat(joinedOutputTopic.readKeyValuesToList(), equalTo(expectedJoinKeyValues));
+        assertThat(countOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedCountKeyValues)));
+        assertThat(aggregationOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedAggKeyValues)));
+        assertThat(reduceOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedReduceKeyValues)));
+        assertThat(joinedOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedJoinKeyValues)));
     }
 
+    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
+        final Map<K, V> map = new HashMap<>();
+        for (final KeyValue<K, V> pair : keyValuePairs) {
+            map.put(pair.key, pair.value);
+        }
+        return map;
+    }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
@@ -244,7 +254,6 @@ public class RepartitionOptimizingIntegrationTest {
         }
         return repartitionTopicsFound.size();
     }
-
 
     private List<KeyValue<String, String>> getKeyValues() {
         final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
@@ -257,7 +266,6 @@ public class RepartitionOptimizingIntegrationTest {
         }
         return keyValueList;
     }
-
 
     private static class SimpleProcessor extends AbstractProcessor<String, String> {
 
@@ -272,7 +280,6 @@ public class RepartitionOptimizingIntegrationTest {
             valueList.add(value);
         }
     }
-
 
     private static final String EXPECTED_OPTIMIZED_TOPOLOGY = "Topologies:\n"
                                                               + "   Sub-topology: 0\n"

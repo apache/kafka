@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -179,10 +181,17 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         assertEquals(expectedNumberRepartitionTopics, getCountOfRepartitionTopicsFound(topologyString));
 
         // Verify the expected output
-        assertThat(countOutputTopic.readKeyValuesToList(), equalTo(expectedCountKeyValues));
-        assertThat(stringCountOutputTopic.readKeyValuesToList(), equalTo(expectedStringCountKeyValues));
+        assertThat(countOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedCountKeyValues)));
+        assertThat(stringCountOutputTopic.readKeyValuesToMap(), equalTo(keyValueListToMap(expectedStringCountKeyValues)));
     }
 
+    private <K, V> Map<K, V> keyValueListToMap(final List<KeyValue<K, V>> keyValuePairs) {
+        final Map<K, V> map = new HashMap<>();
+        for (final KeyValue<K, V> pair : keyValuePairs) {
+            map.put(pair.key, pair.value);
+        }
+        return map;
+    }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
@@ -192,7 +201,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         }
         return repartitionTopicsFound.size();
     }
-
 
     private List<KeyValue<String, String>> getKeyValues() {
         final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
@@ -205,7 +213,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         }
         return keyValueList;
     }
-
 
     private static final String EXPECTED_OPTIMIZED_TOPOLOGY = "Topologies:\n"
                                                               + "   Sub-topology: 0\n"
