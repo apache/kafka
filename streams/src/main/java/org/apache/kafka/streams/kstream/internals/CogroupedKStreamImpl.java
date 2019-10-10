@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.HashMap;
@@ -23,31 +24,29 @@ import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.SessionWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreSupplier;
 
-public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implements
-    KCogroupedStream<K, T, V> {
+public class CogroupedKStreamImpl<K, Vin, Vout> extends AbstractStream<K, Vout> implements CogroupedKStream<K, Vin, Vout> {
 
-    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
 
-    final private Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns;
-    final private CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    final private Map<KGroupedStreamImpl<K, Vin>, Aggregator<? super K, ? super Vin, Vout>> groupPatterns;
+    final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
-    KCogroupedStreamImpl(final String name,
+    CogroupedKStreamImpl(final String name,
                          final Serde<K> keySerde,
-                         final Serde<V> valueSerde,
+                         final Serde<Vout> valueSerde,
                          final Set<String> sourceNodes,
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
@@ -57,65 +56,64 @@ public class KCogroupedStreamImpl<K, T, V> extends AbstractStream<K, V> implemen
     }
 
     @Override
-    public KCogroupedStream<K, T, V> cogroup(final KGroupedStream<K, T> groupedStream,
-                                             final Aggregator<? super K, ? super T, V> aggregator) {
+    public CogroupedKStream<K, Vin, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
+                                                  final Aggregator<? super K, ? super Vin, Vout> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        groupPatterns.put((KGroupedStreamImpl<K, T>) groupedStream, aggregator);
+        groupPatterns.put((KGroupedStreamImpl<K, Vin>) groupedStream, aggregator);
         return this;
     }
 
     @Override
-    public KTable<K, V> aggregate(final Initializer<V> initializer,
-                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KTable<K, Vout> aggregate(final Initializer<Vout> initializer,
+                                     final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
         return doAggregate(initializer, named,
-                           new MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>(
-                               materialized, builder,
-                               AGGREGATE_NAME));
+                new MaterializedInternal<>(
+                        materialized, builder,
+                        AGGREGATE_NAME));
     }
 
     @Override
-    public KTable<K, V> aggregate(final Initializer<V> initializer,
-                                  final StoreSupplier<KeyValueStore> storeSupplier) {
-        return aggregate(initializer, Materialized.as(storeSupplier.get().name()));
+    public KTable<K, Vout> aggregate(final Initializer<Vout> initializer) {
+        return aggregate(initializer, Materialized.with(keySerde, valSerde));
     }
 
     @Override
-    public <W extends Window> TimeWindowedKCogroupedStream<K, V> windowedBy(
+    public <W extends Window> TimeWindowedCogroupedKStream<K, Vout> windowedBy(
         final Windows<W> windows) {
         Objects.requireNonNull(windows, "windows can't be null");
-        return new TimeWindowedKCogroupedStreamImpl<K, T, V, W>(windows,
-                                                                builder,
-                                                                sourceNodes,
-                                                                name,
-                                                                keySerde,
-                                                                valSerde,
-                                                                aggregateBuilder,
-                                                                streamsGraphNode,
-                                                                groupPatterns);
+        return new TimeWindowedCogroupedKStreamImpl<>(windows,
+                builder,
+                sourceNodes,
+                name,
+                keySerde,
+                valSerde,
+                aggregateBuilder,
+                streamsGraphNode,
+                groupPatterns);
     }
 
     @Override
-    public SessionWindowedKCogroupedStream<K, V> windowedBy(final SessionWindows sessionWindows) {
+    public SessionWindowedCogroupedKStream<K, Vout> windowedBy(final SessionWindows sessionWindows) {
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
-        return new SessionWindowedKCogroupedStreamImpl<K, T, V>(sessionWindows,
-                                                                builder,
-                                                                sourceNodes,
-                                                                name,
-                                                                keySerde,
-                                                                valSerde,
-                                                                aggregateBuilder,
-                                                                streamsGraphNode,
-                                                                groupPatterns);
+        return new SessionWindowedCogroupedKStreamImpl<>(sessionWindows,
+                builder,
+                sourceNodes,
+                name,
+                keySerde,
+                valSerde,
+                aggregateBuilder,
+                streamsGraphNode,
+                groupPatterns);
     }
 
 
-    private KTable<K, V> doAggregate(final Initializer<V> initializer,
-                                     final NamedInternal named,
-                                     final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    private KTable<K, Vout> doAggregate(final Initializer<Vout> initializer,
+                                        final NamedInternal named,
+                                        final MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return this.aggregateBuilder.build(groupPatterns,
                                            initializer,
                                            named,

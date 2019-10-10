@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import static java.time.Duration.ofMillis;
@@ -29,12 +30,12 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
-import org.apache.kafka.streams.kstream.SessionWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -45,8 +46,8 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-@SuppressWarnings("unchecked")
-public class SessionWindowedKCogroupedStreamImplTest {
+
+public class SessionWindowedCogroupedKStreamImplTest {
 
     private final MockProcessorSupplier<Windowed<String>, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
@@ -57,8 +58,8 @@ public class SessionWindowedKCogroupedStreamImplTest {
     private KGroupedStream<String, String> groupedStream;
 
     private KGroupedStream<String, String> groupedStream2;
-    private KCogroupedStream<String, String, String> cogroupedStream;
-    private SessionWindowedKCogroupedStream<String, String> windowedCogroupedStream;
+    private CogroupedKStream<String, String, String> cogroupedStream;
+    private SessionWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
@@ -99,106 +100,106 @@ public class SessionWindowedKCogroupedStreamImplTest {
     @Test
     public void sessionWindowAggregateTest() {
 
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(SessionWindows.with(ofMillis(500))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(SessionWindows.with(ofMillis(500))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
 
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "B", 599);
-            testInputTopic.pipeInput("1", "B", 607);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k11", "A", 0);
+            testInputTopic.pipeInput("k11", "B", 599);
+            testInputTopic.pipeInput("k1", "B", 607);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(0, 0))),
+                .get(new Windowed<>("k1", new SessionWindow(0, 0))),
             equalTo(ValueAndTimestamp.make("0+A", 0)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new SessionWindow(599, 599))),
+                .get(new Windowed<>("k11", new SessionWindow(599, 599))),
             equalTo(ValueAndTimestamp.make("0+B", 599)));
     }
 
     @Test
     public void sessionWindowAggregate2Test() {
 
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(SessionWindows.with(ofMillis(500))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(SessionWindows.with(ofMillis(500))).aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "B", 599);
-            testInputTopic.pipeInput("1", "B", 607);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k11", "B", 599);
+            testInputTopic.pipeInput("k1", "B", 607);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(0, 0))),
+                .get(new Windowed<>("k1", new SessionWindow(0, 0))),
             equalTo(ValueAndTimestamp.make("0+0+A+A", 0)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new SessionWindow(599, 599))),
+                .get(new Windowed<>("k11", new SessionWindow(599, 599))),
             equalTo(ValueAndTimestamp.make("0+B", 599)));
     }
 
     @Test
     public void sessionWindowAggregateTest2StreamsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("1", "A", 84);
-            testInputTopic.pipeInput("1", "A", 113);
-            testInputTopic.pipeInput("1", "A", 199);
-            testInputTopic.pipeInput("1", "B", 300);
-            testInputTopic.pipeInput("11", "B", 301);
-            testInputTopic.pipeInput("11", "B", 400);
-            testInputTopic.pipeInput("1", "B", 400);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k1", "A", 84);
+            testInputTopic.pipeInput("k1", "A", 113);
+            testInputTopic.pipeInput("k1", "A", 199);
+            testInputTopic.pipeInput("k1", "B", 300);
+            testInputTopic.pipeInput("k11", "B", 301);
+            testInputTopic.pipeInput("k11", "B", 400);
+            testInputTopic.pipeInput("k1", "B", 400);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(0, 199))),
+                .get(new Windowed<>("k1", new SessionWindow(0, 199))),
             equalTo(ValueAndTimestamp.make("0+0+0+0+A+A+A+A", 199)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(300, 400))),
+                .get(new Windowed<>("k1", new SessionWindow(300, 400))),
             equalTo(ValueAndTimestamp.make("0+0+B+B", 400)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new SessionWindow(301, 400))),
+                .get(new Windowed<>("k11", new SessionWindow(301, 400))),
             equalTo(ValueAndTimestamp.make("0+0+B+B", 400)));
     }
 
     @Test
     public void sessionWindowMixAggregatorsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
-            testInputTopic2.pipeInput("1", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 444);
-            testInputTopic2.pipeInput("1", "B", 444);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k11", "A", 0);
+            testInputTopic.pipeInput("k11", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+            testInputTopic2.pipeInput("k1", "B", 3);
+            testInputTopic2.pipeInput("k11", "B", 3);
+            testInputTopic2.pipeInput("k11", "B", 444);
+            testInputTopic2.pipeInput("k1", "B", 444);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(0, 3))),
+                .get(new Windowed<>("k1", new SessionWindow(0, 3))),
             equalTo(ValueAndTimestamp.make("0+0+0+A+A-B", 3)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new SessionWindow(444, 444))),
+                .get(new Windowed<>("k11", new SessionWindow(444, 444))),
             equalTo(ValueAndTimestamp.make("0-B", 444)));
     }
 
@@ -207,32 +208,32 @@ public class SessionWindowedKCogroupedStreamImplTest {
     @Test
     public void sessionWindowMixAggregatorsManyWindowsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
-            testInputTopic2.pipeInput("1", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 500);
-            testInputTopic2.pipeInput("11", "B", 501);
-            testInputTopic2.pipeInput("1", "B", 501);
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k11", "A", 0);
+            testInputTopic.pipeInput("k11", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+            testInputTopic2.pipeInput("k1", "B", 3);
+            testInputTopic2.pipeInput("k11", "B", 500);
+            testInputTopic2.pipeInput("k11", "B", 501);
+            testInputTopic2.pipeInput("k1", "B", 501);
         }
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(0, 3))),
+                .get(new Windowed<>("k1", new SessionWindow(0, 3))),
             equalTo(ValueAndTimestamp.make("0+0+0+A+A-B", 3)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new SessionWindow(500, 501))),
+                .get(new Windowed<>("k11", new SessionWindow(500, 501))),
             equalTo(ValueAndTimestamp.make("0+0-B-B", 501)));
         assertThat(
             processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new SessionWindow(501, 501))),
+                .get(new Windowed<>("k1", new SessionWindow(501, 501))),
             equalTo(ValueAndTimestamp.make("0-B", 501)));
 
 

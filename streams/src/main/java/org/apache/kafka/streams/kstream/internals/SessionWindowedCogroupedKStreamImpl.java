@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import java.time.Duration;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
-import org.apache.kafka.streams.kstream.SessionWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
@@ -37,24 +38,24 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
-public class SessionWindowedKCogroupedStreamImpl<K, T, V> extends
+public class SessionWindowedCogroupedKStreamImpl<K, T, V> extends
     AbstractStream<K, V> implements
-    SessionWindowedKCogroupedStream<K, V> {
+        SessionWindowedCogroupedKStream<K, V> {
 
-    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
     private final SessionWindows sessionWindows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns;
 
-    SessionWindowedKCogroupedStreamImpl(final SessionWindows sessionWindows,
-                                     final InternalStreamsBuilder builder,
-                                     final Set<String> sourceNodes,
-                                     final String name,
-                                     final Serde<K> keySerde,
-                                     final Serde<V> valSerde,
-                                     final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                     final StreamsGraphNode streamsGraphNode,
-                                     final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns) {
+    SessionWindowedCogroupedKStreamImpl(final SessionWindows sessionWindows,
+                                        final InternalStreamsBuilder builder,
+                                        final Set<String> sourceNodes,
+                                        final String name,
+                                        final Serde<K> keySerde,
+                                        final Serde<V> valSerde,
+                                        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+                                        final StreamsGraphNode streamsGraphNode,
+                                        final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.sessionWindows = sessionWindows;
         this.aggregateBuilder = aggregateBuilder;
@@ -76,11 +77,10 @@ public class SessionWindowedKCogroupedStreamImpl<K, T, V> extends
                                       initializer,
                                       NamedInternal.empty(),
                                       materialize(materializedInternal),
-                                      materializedInternal.keySerde()
-                                          != null
-                                          ? new WindowedSerdes.SessionWindowedSerde<>(
-                                          materializedInternal
-                                              .keySerde()) : null,
+                                      materializedInternal.keySerde() != null ?
+                                              new WindowedSerdes.SessionWindowedSerde<>(
+                                                materializedInternal.keySerde()) :
+                                              null,
                                       materializedInternal.valueSerde(),
                                       null,
                                       sessionWindows,

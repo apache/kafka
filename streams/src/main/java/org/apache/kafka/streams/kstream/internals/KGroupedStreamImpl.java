@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -226,20 +227,20 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     @Override
-    public <T> KCogroupedStream<K, V, T> cogroup(
-        final Aggregator<? super K, ? super V, T> aggregator) {
+    public <Vout> CogroupedKStream<K, V, Vout> cogroup(
+        final Aggregator<? super K, ? super V, Vout> aggregator) {
         return cogroup(aggregator, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <T> KCogroupedStream<K, V, T> cogroup(
-        final Aggregator<? super K, ? super V, T> aggregator,
-        final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <Vout> CogroupedKStream<K, V, Vout> cogroup(
+        final Aggregator<? super K, ? super V, Vout> aggregator,
+        final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>>(
+        final MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>>(
             materialized, builder, AGGREGATE_NAME);
-        return new KCogroupedStreamImpl<K, V, T>(
+        return new CogroupedKStreamImpl<K, V, Vout>(
             name, materializedInternal.keySerde(), null, sourceNodes,
             streamsGraphNode, builder).cogroup(this, aggregator);
     }

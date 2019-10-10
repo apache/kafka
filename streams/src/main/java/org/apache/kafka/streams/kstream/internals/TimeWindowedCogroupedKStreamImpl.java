@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import java.time.Duration;
@@ -26,7 +27,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -38,16 +39,16 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
-public class TimeWindowedKCogroupedStreamImpl<K, T, V, W extends Window> extends
+public class TimeWindowedCogroupedKStreamImpl<K, T, V, W extends Window> extends
     AbstractStream<K, V> implements
-    TimeWindowedKCogroupedStream<K, V> {
+        TimeWindowedCogroupedKStream<K, V> {
 
-    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns;
 
-    TimeWindowedKCogroupedStreamImpl(final Windows<W> windows,
+    TimeWindowedCogroupedKStreamImpl(final Windows<W> windows,
                                      final InternalStreamsBuilder builder,
                                      final Set<String> sourceNodes,
                                      final String name,

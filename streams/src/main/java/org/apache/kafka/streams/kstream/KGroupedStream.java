@@ -553,7 +553,8 @@ public interface KGroupedStream<K, V> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
-     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KGroupedStream}s
+     * {@link KeyValue} pairs.
+     * It is an intermediate representation of one or more {@link KGroupedStream}s
      * in order to apply one or more aggregation operations on the original {@link KGroupedStream}
      * records.
      * <p>
@@ -562,12 +563,15 @@ public interface KGroupedStream<K, V> {
      * <p>
      *
      * @param aggregator an {@link Aggregator} that computes a new aggregate result
+     * @param  <Vout> the type of the output values
+     *
      */
-    <T> KCogroupedStream<K, V, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator);
+    <Vout> CogroupedKStream<K, V, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
-     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KGroupedStream}s
+     * {@link KeyValue} pairs.
+     * It is an intermediate representation of one or more {@link KGroupedStream}s
      * in order to apply one or more aggregation operations on the original {@link KGroupedStream}
      * records.
      * <p>
@@ -578,8 +582,9 @@ public interface KGroupedStream<K, V> {
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
      * @param materialized an instance of {@link Materialized} used to materialize a state store.
      *                     Cannot be {@code null}.
+     * @param  <Vout> the type of the output values
      */
-    <T> KCogroupedStream<K, V, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator,
-                                          final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized);
+    <Vout> CogroupedKStream<K, V, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator,
+                                                final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized);
 
 }

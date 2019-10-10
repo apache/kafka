@@ -30,11 +30,11 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.TimeWindowedKCogroupedStream;
+import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -45,8 +45,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-@SuppressWarnings("unchecked")
-public class TimeWindowedKCogroupedStreamImplTest {
+public class TimeWindowedCogroupedKStreamImplTest {
 
     private final MockProcessorSupplier<Windowed<String>, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
@@ -55,8 +54,8 @@ public class TimeWindowedKCogroupedStreamImplTest {
     private KGroupedStream<String, String> groupedStream;
 
     private KGroupedStream<String, String> groupedStream2;
-    private KCogroupedStream<String, String, String> cogroupedStream;
-    private TimeWindowedKCogroupedStream<String, String> windowedCogroupedStream;
+    private CogroupedKStream<String, String, String> cogroupedStream;
+    private TimeWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
@@ -91,7 +90,7 @@ public class TimeWindowedKCogroupedStreamImplTest {
 
     @Test
     public void timeWindowAggregateTest() {
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -114,7 +113,7 @@ public class TimeWindowedKCogroupedStreamImplTest {
     @Test
     public void timeWindowAggregateTest2StreamsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -141,7 +140,7 @@ public class TimeWindowedKCogroupedStreamImplTest {
     @Test
     public void timeWindowMixAggregatorsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -169,7 +168,7 @@ public class TimeWindowedKCogroupedStreamImplTest {
     @Test
     public void timeWindowAggregateManyWindowsTest() {
 
-        final KTable customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -201,7 +200,7 @@ public class TimeWindowedKCogroupedStreamImplTest {
     @Test
     public void timeWindowMixAggregatorsManyWindowsTest() {
 
-        final KTable customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
         customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

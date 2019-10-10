@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
-/**
- * {@code TimeWindowedCogroupKStream} is an abstraction of a <i>windowed</i> record stream of {@link org.apache.kafka.streams.KeyValue} pairs.
+/** {@code TimeWindowedCogroupKStream} is an abstraction of a <i>windowed</i> record stream of {@link org.apache.kafka.streams.KeyValue} pairs.
  * It is an intermediate representation of a {@link KGroupedStream} in order to apply a windowed aggregation operation on the original
  * {@link KGroupedStream} records.
  * <p>
@@ -38,7 +38,7 @@ package org.apache.kafka.streams.kstream;
  * A {@code WindowedKStream} must be obtained from a {@link KGroupedStream} via {@link KGroupedStream#windowedBy(Windows)} .
  *
  * @param <K> Type of keys
- * @param <T> Type of values
+ * @param <V> Type of values
  * @see KStream
  * @see KGroupedStream
  * @see KCogroupedStream
@@ -51,7 +51,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
 
-public interface TimeWindowedKCogroupedStream<K, V> {
+public interface TimeWindowedCogroupedKStream<K, V> {
     /**
      * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.

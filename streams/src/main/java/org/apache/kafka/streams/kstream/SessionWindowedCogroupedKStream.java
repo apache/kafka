@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
 /**
@@ -37,7 +38,7 @@ package org.apache.kafka.streams.kstream;
  * A {@code WindowedKStream} must be obtained from a {@link KGroupedStream} via {@link KGroupedStream#windowedBy(Windows)} .
  *
  * @param <K> Type of keys
- * @param <T> Type of values
+ * @param <V> Type of values
  * @see KStream
  * @see KGroupedStream
  * @see KCogroupedStream
@@ -47,7 +48,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.SessionStore;
 
-public interface SessionWindowedKCogroupedStream<K, V> {
+public interface SessionWindowedCogroupedKStream<K, V> {
     /**
      * Aggregate the values of records in these streams by the grouped key and defined {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.

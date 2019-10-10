@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
@@ -23,7 +24,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.StoreSupplier;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link
@@ -37,9 +37,10 @@ import org.apache.kafka.streams.state.StoreSupplier;
  * KGroupedStream#cogroup(Aggregator, Materialized) cogroup(...)}.
  *
  * @param <K> Type of keys
- * @param <V> Type of values
+ * @param <Vin> Type of input values
+ * @param <Vout> Type of values after agg
  */
-public interface KCogroupedStream<K, T, V> {
+public interface CogroupedKStream<K, Vin, Vout> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
@@ -54,8 +55,8 @@ public interface KCogroupedStream<K, T, V> {
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
      * @return a KCogroupedStream with the new grouopStream and aggregator linked
      */
-    KCogroupedStream<K, T, V> cogroup(final KGroupedStream<K, T> groupedStream,
-                                      final Aggregator<? super K, ? super T, V> aggregator);
+    CogroupedKStream<K, Vin, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
+                                           final Aggregator<? super K, ? super Vin, Vout> aggregator);
     /**
      * Aggregate the values of records in these streams by the grouped key. Records with {@code null}
      * key or value are ignored. Aggregating is a generalization of Reducing combining via
@@ -111,8 +112,8 @@ public interface KCogroupedStream<K, T, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, V> aggregate(final Initializer<V> initializer,
-                           final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, Vout> aggregate(final Initializer<Vout> initializer,
+                              final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized);
     /**
      * Aggregate the values of records in these streams by the grouped key. Records with {@code null}
      * key or value are ignored. Aggregating is a generalization of Reducing combining via
@@ -163,32 +164,30 @@ public interface KCogroupedStream<K, T, V> {
      *
      * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
      *                     result
-     * @param storeSupplier an {@link StoreSupplier} that set up the state store.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, V> aggregate(final Initializer<V> initializer,
-                           final StoreSupplier<KeyValueStore> storeSupplier);
+    KTable<K, Vout> aggregate(final Initializer<Vout> initializer);
 
 
     /**
-     * Create a new {@link TimeWindowedKCogroupedStream} instance that can be used to perform windowed
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
      *
      * @param windows the specification of the aggregation {@link Windows}
      * @param <W>     the window type
-     * @return an instance of {@link TimeWindowedKCogroupedStream}
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
-    <W extends Window> TimeWindowedKCogroupedStream<K, V> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedCogroupedKStream<K, Vout> windowedBy(final Windows<W> windows);
 
     /**
-     * Create a new {@link SessionWindowedKCogroupedStream} instance that can be used to perform session
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
      * windowed aggregations.
      *
      * @param sessionWindows the specification of the aggregation {@link SessionWindows}
      * @return an instance of {@link TimeWindowedKStream}
      */
-    SessionWindowedKCogroupedStream<K, V> windowedBy(final SessionWindows sessionWindows);
+    SessionWindowedCogroupedKStream<K, Vout> windowedBy(final SessionWindows sessionWindows);
 
 }
 
