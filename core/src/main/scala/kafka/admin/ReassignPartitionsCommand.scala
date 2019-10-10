@@ -56,6 +56,7 @@ object ReassignPartitionsCommand extends Logging {
 
     val adminClientOpt = createAdminClient(opts)
 
+    var exitCode = 0
     try {
       if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkClient, adminClientOpt, opts)
@@ -67,7 +68,11 @@ object ReassignPartitionsCommand extends Logging {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
-    } finally zkClient.close()
+        exitCode = 1
+    } finally{
+      zkClient.close()
+      Exit.exit(exitCode)
+    }
   }
 
   private def createAdminClient(opts: ReassignPartitionsCommandOptions): Option[Admin] = {
