@@ -21,20 +21,21 @@ import java.io.PrintWriter
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, MetricName}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.{Iterable, JavaConverters, Seq}
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.{Iterable, JavaConverters, Seq}
 
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
+class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
 
   val codec: CompressionType = CompressionType.LZ4
 
@@ -194,6 +195,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
   @Test
   def testIsThreadFailed(): Unit = {
+    val metricName = "DeadThreadCount"
+    removeMetric(metricName) // remove the existing metric so it will be attached to this object below on creation
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
@@ -205,8 +208,13 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
         thread.isThreadFailed && result
       }), "Threads didn't terminate unexpectedly"
     )
+    assertEquals(cleaner.cleaners.size, getGauge[Int](metricName).value())
     assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
-    // test the metric directly (metrics are registered in a singleton object, therefore not reset between tests)
-    assertEquals(cleaner.cleaners.size, getGauge[Int]("DeadThreadCount").value())
+  }
+
+  private def removeMetric(name: String): Unit = {
+    val metricName = Metrics.defaultRegistry().allMetrics()
+      .asScala.find(p => p._1.getName.endsWith(name)).get._1
+    Metrics.defaultRegistry().removeMetric(metricName)
   }
 }
