@@ -37,10 +37,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.ConsumerGroupState
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.TopicPartitionReplica
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
@@ -296,15 +293,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
 
     // without includeAuthorizedOperations flag
-    var topicResult = client.describeTopics(Seq(topic).asJava).values
-    assertEquals(Set().asJava, topicResult.get(topic).get().authorizedOperations())
+    var topicResult = getTopicMetadata(client, topic)
+    assertEquals(Set().asJava, topicResult.authorizedOperations)
 
     //with includeAuthorizedOperations flag
-    topicResult = client.describeTopics(Seq(topic).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).values
+    topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
     expectedOperations = Topic.supportedOperations
       .map(operation => operation.toJava).asJava
-    assertEquals(expectedOperations, topicResult.get(topic).get().authorizedOperations())
+    assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
   def configuredClusterPermissions() : Set[AclOperation] = {
@@ -559,17 +555,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     createTopic(topic2, numPartitions = 1, replicationFactor = 2)
 
     // assert that both the topics have 1 partition
-    assertEquals(1, client.describeTopics(Set(topic1).asJava).values.get(topic1).get.partitions.size)
-    assertEquals(1, client.describeTopics(Set(topic2).asJava).values.get(topic2).get.partitions.size)
+    val topic1_metadata = getTopicMetadata(client, topic1)
+    val topic2_metadata = getTopicMetadata(client, topic2)
+    assertEquals(1, topic1_metadata.partitions.size)
+    assertEquals(1, topic2_metadata.partitions.size)
 
     val validateOnly = new CreatePartitionsOptions().validateOnly(true)
     val actuallyDoIt = new CreatePartitionsOptions().validateOnly(false)
 
-    def partitions(topic: String) =
-      client.describeTopics(Set(topic).asJava).values.get(topic).get.partitions
+    def partitions(topic: String, expectedNumPartitionsOpt: Option[Int] = None): util.List[TopicPartitionInfo] = {
+      getTopicMetadata(client, topic, expectedNumPartitionsOpt = expectedNumPartitionsOpt).partitions
+    }
 
-    def numPartitions(topic: String) =
-      partitions(topic).size
+    def numPartitions(topic: String): Int = partitions(topic).size
 
     // validateOnly: try creating a new partition (no assignments), to bring the total to 3 partitions
     var alterResult = client.createPartitions(Map(topic1 ->
@@ -594,7 +592,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     alterResult = client.createPartitions(Map(topic2 ->
       NewPartitions.increaseTo(3, newPartition2Assignments)).asJava, actuallyDoIt)
     altered = alterResult.values.get(topic2).get
-    val actualPartitions2 = partitions(topic2)
+    val actualPartitions2 = partitions(topic2, expectedNumPartitionsOpt = Some(3))
     assertEquals(3, actualPartitions2.size)
     assertEquals(Seq(0, 1), actualPartitions2.get(1).replicas.asScala.map(_.id).toList)
     assertEquals(Seq(1, 2), actualPartitions2.get(2).replicas.asScala.map(_.id).toList)
@@ -1452,9 +1450,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val partition2 = new TopicPartition("elect-preferred-leaders-topic-2", 0)
     TestUtils.createTopic(zkClient, partition2.topic, Map[Int, Seq[Int]](partition2.partition -> prefer0), servers)
 
-    def preferredLeader(topicPartition: TopicPartition) =
-      client.describeTopics(asList(topicPartition.topic)).values.get(topicPartition.topic).
-        get.partitions.get(topicPartition.partition).replicas.get(0).id
+    def preferredLeader(topicPartition: TopicPartition): Int =
+      getTopicMetadata(client, topicPartition.topic)
+        .partitions
+        .get(topicPartition.partition)
+        .replicas
+        .get(0)
+        .id
 
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
     def changePreferredLeader(newAssignment: Seq[Int]) = {
@@ -2427,5 +2429,24 @@ object AdminClientIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
 
     assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+  }
+
+  private def getTopicMetadata(client: Admin,
+                               topic: String,
+                               describeOptions: DescribeTopicsOptions = new DescribeTopicsOptions,
+                               expectedNumPartitionsOpt: Option[Int] = None): TopicDescription = {
+    var result: TopicDescription = null
+
+    TestUtils.waitUntilTrue(() => {
+      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).values.get(topic)
+      if (topicResult.isCompletedExceptionally) {
+        false
+      } else {
+        result = topicResult.get
+        expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)
+      }
+    }, s"Timed out waiting for metadata for $topic")
+
+    result
   }
 }
