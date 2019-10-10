@@ -109,14 +109,12 @@ public class RepartitionWithMergeOptimizingTest {
 
     @Test
     public void shouldSendCorrectRecords_OPTIMIZED() {
-        runTest(StreamsConfig.OPTIMIZE,
-                           ONE_REPARTITION_TOPIC);
+        runTest(StreamsConfig.OPTIMIZE, ONE_REPARTITION_TOPIC);
     }
 
     @Test
     public void shouldSendCorrectResults_NO_OPTIMIZATION() {
-        runTest(StreamsConfig.NO_OPTIMIZATION,
-                           TWO_REPARTITION_TOPICS);
+        runTest(StreamsConfig.NO_OPTIMIZATION, TWO_REPARTITION_TOPICS);
     }
 
 

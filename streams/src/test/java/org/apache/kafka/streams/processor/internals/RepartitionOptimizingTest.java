@@ -133,14 +133,12 @@ public class RepartitionOptimizingTest {
 
     @Test
     public void shouldSendCorrectRecords_OPTIMIZED() {
-        runTest(StreamsConfig.OPTIMIZE,
-                           ONE_REPARTITION_TOPIC);
+        runTest(StreamsConfig.OPTIMIZE, ONE_REPARTITION_TOPIC);
     }
 
     @Test
     public void shouldSendCorrectResults_NO_OPTIMIZATION() {
-        runTest(StreamsConfig.NO_OPTIMIZATION,
-                           FOUR_REPARTITION_TOPICS);
+        runTest(StreamsConfig.NO_OPTIMIZATION, FOUR_REPARTITION_TOPICS);
     }
 
 
@@ -176,7 +174,8 @@ public class RepartitionOptimizingTest {
                        Materialized.<String, Integer>as(Stores.inMemoryKeyValueStore("aggregate-store"))
                                                     .withKeySerde(Serdes.String())
                                                     .withValueSerde(Serdes.Integer()))
-            .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()).withName("reduce-to"));
+            .toStream(Named.as("aggregate-toStream"))
+            .to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()).withName("reduce-to"));
 
         // adding operators for case where the repartition node is further downstream
         mappedStream
@@ -186,9 +185,11 @@ public class RepartitionOptimizingTest {
             .reduce(reducer,
                     Named.as("reducer"),
                     Materialized.as(Stores.inMemoryKeyValueStore("reduce-store")))
-            .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+            .toStream(Named.as("reduce-toStream"))
+            .to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
-        mappedStream.filter((k, v) -> k.equals("A"), Named.as("join-filter"))
+        mappedStream
+            .filter((k, v) -> k.equals("A"), Named.as("join-filter"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
                   StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1), ofMillis(10000), true),
@@ -303,7 +304,7 @@ public class RepartitionOptimizingTest {
                                                               + "      --> reducer\n"
                                                               + "      <-- reduce-filter\n"
                                                               + "    Processor: aggregate (stores: [aggregate-store])\n"
-                                                              + "      --> KTABLE-TOSTREAM-0000000014\n"
+                                                              + "      --> aggregate-toStream\n"
                                                               + "      <-- KSTREAM-SOURCE-0000000036\n"
                                                               + "    Processor: join-other-join (stores: [join-store])\n"
                                                               + "      --> join-merge\n"
@@ -312,25 +313,25 @@ public class RepartitionOptimizingTest {
                                                               + "      --> join-merge\n"
                                                               + "      <-- join-this-windowed\n"
                                                               + "    Processor: reducer (stores: [reduce-store])\n"
-                                                              + "      --> KTABLE-TOSTREAM-0000000022\n"
+                                                              + "      --> reduce-toStream\n"
                                                               + "      <-- reduce-peek\n"
-                                                              + "    Processor: KTABLE-TOSTREAM-0000000014 (stores: [])\n"
+                                                              + "    Processor: aggregate-toStream (stores: [])\n"
                                                               + "      --> reduce-to\n"
                                                               + "      <-- aggregate\n"
-                                                              + "    Processor: KTABLE-TOSTREAM-0000000022 (stores: [])\n"
-                                                              + "      --> KSTREAM-SINK-0000000023\n"
-                                                              + "      <-- reducer\n"
                                                               + "    Processor: join-merge (stores: [])\n"
                                                               + "      --> join-to\n"
                                                               + "      <-- join-this-join, join-other-join\n"
+                                                              + "    Processor: reduce-toStream (stores: [])\n"
+                                                              + "      --> KSTREAM-SINK-0000000023\n"
+                                                              + "      <-- reducer\n"
                                                               + "    Sink: KSTREAM-SINK-0000000023 (topic: outputTopic_2)\n"
-                                                              + "      <-- KTABLE-TOSTREAM-0000000022\n"
+                                                              + "      <-- reduce-toStream\n"
                                                               + "    Sink: count-to (topic: outputTopic_0)\n"
                                                               + "      <-- count-toStream\n"
                                                               + "    Sink: join-to (topic: joinedOutputTopic)\n"
                                                               + "      <-- join-merge\n"
                                                               + "    Sink: reduce-to (topic: outputTopic_1)\n"
-                                                              + "      <-- KTABLE-TOSTREAM-0000000014\n"
+                                                              + "      <-- aggregate-toStream\n"
                                                               + "\n"
                                                               + "  Sub-topology: 1\n"
                                                               + "    Source: sourceStream (topics: [input])\n"
@@ -391,25 +392,25 @@ public class RepartitionOptimizingTest {
                                                                 + "    Source: KSTREAM-SOURCE-0000000013 (topics: [aggregate-groupByKey-repartition])\n"
                                                                 + "      --> aggregate\n"
                                                                 + "    Processor: aggregate (stores: [aggregate-store])\n"
-                                                                + "      --> KTABLE-TOSTREAM-0000000014\n"
+                                                                + "      --> aggregate-toStream\n"
                                                                 + "      <-- KSTREAM-SOURCE-0000000013\n"
-                                                                + "    Processor: KTABLE-TOSTREAM-0000000014 (stores: [])\n"
+                                                                + "    Processor: aggregate-toStream (stores: [])\n"
                                                                 + "      --> reduce-to\n"
                                                                 + "      <-- aggregate\n"
                                                                 + "    Sink: reduce-to (topic: outputTopic_1)\n"
-                                                                + "      <-- KTABLE-TOSTREAM-0000000014\n"
+                                                                + "      <-- aggregate-toStream\n"
                                                                 + "\n"
                                                                 + "  Sub-topology: 2\n"
                                                                 + "    Source: KSTREAM-SOURCE-0000000021 (topics: [reduce-groupByKey-repartition])\n"
                                                                 + "      --> reducer\n"
                                                                 + "    Processor: reducer (stores: [reduce-store])\n"
-                                                                + "      --> KTABLE-TOSTREAM-0000000022\n"
+                                                                + "      --> reduce-toStream\n"
                                                                 + "      <-- KSTREAM-SOURCE-0000000021\n"
-                                                                + "    Processor: KTABLE-TOSTREAM-0000000022 (stores: [])\n"
+                                                                + "    Processor: reduce-toStream (stores: [])\n"
                                                                 + "      --> KSTREAM-SINK-0000000023\n"
                                                                 + "      <-- reducer\n"
                                                                 + "    Sink: KSTREAM-SINK-0000000023 (topic: outputTopic_2)\n"
-                                                                + "      <-- KTABLE-TOSTREAM-0000000022\n"
+                                                                + "      <-- reduce-toStream\n"
                                                                 + "\n"
                                                                 + "  Sub-topology: 3\n"
                                                                 + "    Source: sourceStream (topics: [input])\n"
