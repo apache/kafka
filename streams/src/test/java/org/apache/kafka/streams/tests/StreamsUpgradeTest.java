@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
@@ -60,6 +61,8 @@ import java.util.UUID;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class StreamsUpgradeTest {
+
+    private static final RebalanceProtocol REBALANCE_PROTOCOL = RebalanceProtocol.COOPERATIVE;
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
@@ -123,26 +126,26 @@ public class StreamsUpgradeTest {
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
             // 3. Task ids of valid local states on the client's state directory.
-
             final TaskManager taskManager = taskManger();
-            final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
+
             final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
-            standbyTasks.removeAll(previousActiveTasks);
-            final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
+            final Set<TaskId> activeTasks = prepareForSubscription(taskManager,
+                                                                   topics,
+                                                                   standbyTasks,
+                                                                   REBALANCE_PROTOCOL);
+            return new FutureSubscriptionInfo(
                 usedSubscriptionMetadataVersion,
                 LATEST_SUPPORTED_VERSION + 1,
                 taskManager.processId(),
-                previousActiveTasks,
+                activeTasks,
                 standbyTasks,
-                userEndPoint());
-
-            taskManager.updateSubscriptionsFromMetadata(topics);
-
-            return data.encode();
+                userEndPoint())
+                .encode();
         }
 
         @Override
-        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment, final ConsumerGroupMetadata metadata) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment,
+                                 final ConsumerGroupMetadata metadata) {
             try {
                 super.onAssignment(assignment, metadata);
                 return;
@@ -193,6 +196,7 @@ public class StreamsUpgradeTest {
             taskManager.setPartitionsToTaskId(partitionsToTaskId);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);
+            taskManager.setRebalanceInProgress(false);
         }
 
         @Override

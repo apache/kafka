@@ -19,6 +19,7 @@
   "name": "ExpireDelegationTokenResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },

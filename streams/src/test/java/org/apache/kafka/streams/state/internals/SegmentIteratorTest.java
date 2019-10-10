@@ -41,7 +41,8 @@ import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
 
-    private final RocksDBMetricsRecorder rocksDBMetricsRecorder = new RocksDBMetricsRecorder("metrics-scope", "store-name");
+    private final RocksDBMetricsRecorder rocksDBMetricsRecorder =
+        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
     private final KeyValueSegment segmentOne =
         new KeyValueSegment("one", "one", 0, rocksDBMetricsRecorder);
     private final KeyValueSegment segmentTwo =

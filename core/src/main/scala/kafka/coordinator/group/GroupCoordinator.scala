@@ -565,22 +565,14 @@ class GroupCoordinator(val brokerId: Int,
                     Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR
 
                 case Empty =>
-                  val (knownPartitions, unknownPartitions) =
-                    partitions.partition(tp => group.offset(tp).nonEmpty)
-
-                  partitionEligibleForDeletion = knownPartitions
-                  partitionErrors = unknownPartitions.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION).toMap
+                  partitionEligibleForDeletion = partitions
 
                 case PreparingRebalance | CompletingRebalance | Stable if group.isConsumerGroup =>
-                  val (knownPartitions, unknownPartitions) =
-                    partitions.partition(tp => group.offset(tp).nonEmpty)
-
                   val (consumed, notConsumed) =
-                    knownPartitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
+                    partitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
 
                   partitionEligibleForDeletion = notConsumed
-                  partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap ++
-                    unknownPartitions.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION).toMap
+                  partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap
 
                 case _ =>
                   groupError = Errors.NON_EMPTY_GROUP

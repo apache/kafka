@@ -70,6 +70,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private static final long GAP_MS = 5 * 60 * 1000L;
     private static final String STORE_NAME = "session-store";
 
+    private final String threadId = Thread.currentThread().getName();
     private final ToInternal toInternal = new ToInternal();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
@@ -93,7 +94,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final File stateDir = TestUtils.tempDirectory();
         metrics = new Metrics();
         final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
-        ThreadMetrics.skipRecordSensor(metrics);
+        ThreadMetrics.skipRecordSensor(threadId, metrics);
 
         context = new InternalMockProcessorContext(
             stateDir,
@@ -420,7 +421,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -433,7 +434,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -494,7 +495,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -507,7 +508,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )

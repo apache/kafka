@@ -73,4 +73,25 @@ public class ApiMessageTypeTest {
         assertEquals(ApiMessageType.values().length, requestNames.size());
         assertEquals(ApiMessageType.values().length, responseNames.size());
     }
+
+    @Test
+    public void testHeaderVersion() {
+        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 0));
+        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 0));
+
+        assertEquals((short) 1, ApiMessageType.PRODUCE.requestHeaderVersion((short) 1));
+        assertEquals((short) 0, ApiMessageType.PRODUCE.responseHeaderVersion((short) 1));
+
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 0));
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 0));
+
+        assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.requestHeaderVersion((short) 1));
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.responseHeaderVersion((short) 1));
+
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 4));
+        assertEquals((short) 0, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 4));
+
+        assertEquals((short) 2, ApiMessageType.CREATE_TOPICS.requestHeaderVersion((short) 5));
+        assertEquals((short) 1, ApiMessageType.CREATE_TOPICS.responseHeaderVersion((short) 5));
+    }
 }

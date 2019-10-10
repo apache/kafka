@@ -207,11 +207,11 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
         final ClientState client1 = createClient(p1, 1);
-        client1.addPreviousStandbyTasks("consumer", Utils.mkSet(task02));
+        client1.addPreviousStandbyTasks(Utils.mkSet(task02));
         final ClientState client2 = createClient(p2, 1);
-        client2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01));
+        client2.addPreviousStandbyTasks(Utils.mkSet(task01));
         final ClientState client3 = createClient(p3, 1);
-        client3.addPreviousStandbyTasks("consumer", Utils.mkSet(task00));
+        client3.addPreviousStandbyTasks(Utils.mkSet(task00));
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
@@ -225,9 +225,9 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00);
-        c1.addPreviousStandbyTasks("consumer", Utils.mkSet(task01));
+        c1.addPreviousStandbyTasks(Utils.mkSet(task01));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 2, task02);
-        c2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01));
+        c2.addPreviousStandbyTasks(Utils.mkSet(task01));
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
@@ -455,9 +455,9 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task02);
-        c1.addPreviousStandbyTasks("consumer", Utils.mkSet(task03, task00));
+        c1.addPreviousStandbyTasks(Utils.mkSet(task03, task00));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task00);
-        c2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01, task02));
+        c2.addPreviousStandbyTasks(Utils.mkSet(task01, task02));
 
         createClient(p3, 1);
         createClient(p4, 1);
@@ -577,14 +577,14 @@ public class StickyTaskAssignorTest {
         final TaskId task23 = new TaskId(2, 3);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task12, task13);
-        c1.addPreviousStandbyTasks("consumer", Utils.mkSet(task00, task11, task20, task21, task23));
+        c1.addPreviousStandbyTasks(Utils.mkSet(task00, task11, task20, task21, task23));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task00, task11, task22);
-        c2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01, task10, task02, task20, task03, task12, task21, task13, task23));
+        c2.addPreviousStandbyTasks(Utils.mkSet(task01, task10, task02, task20, task03, task12, task21, task13, task23));
         final ClientState c3 = createClientWithPreviousActiveTasks(p3, 1, task20, task21, task23);
-        c3.addPreviousStandbyTasks("consumer", Utils.mkSet(task02, task12));
+        c3.addPreviousStandbyTasks(Utils.mkSet(task02, task12));
 
         final ClientState newClient = createClient(p4, 1);
-        newClient.addPreviousStandbyTasks("consumer", Utils.mkSet(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23));
+        newClient.addPreviousStandbyTasks(Utils.mkSet(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23));
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
@@ -607,15 +607,15 @@ public class StickyTaskAssignorTest {
         final TaskId task23 = new TaskId(2, 3);
 
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task12, task13);
-        c1.addPreviousStandbyTasks("c1onsumer", Utils.mkSet(task00, task11, task20, task21, task23));
+        c1.addPreviousStandbyTasks(Utils.mkSet(task00, task11, task20, task21, task23));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task00, task11, task22);
-        c2.addPreviousStandbyTasks("consumer", Utils.mkSet(task01, task10, task02, task20, task03, task12, task21, task13, task23));
+        c2.addPreviousStandbyTasks(Utils.mkSet(task01, task10, task02, task20, task03, task12, task21, task13, task23));
 
         final ClientState bounce1 = createClient(p3, 1);
-        bounce1.addPreviousStandbyTasks("consumer", Utils.mkSet(task20, task21, task23));
+        bounce1.addPreviousStandbyTasks(Utils.mkSet(task20, task21, task23));
 
         final ClientState bounce2 = createClient(p4, 1);
-        bounce2.addPreviousStandbyTasks("consumer", Utils.mkSet(task02, task03, task10));
+        bounce2.addPreviousStandbyTasks(Utils.mkSet(task02, task03, task10));
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task10, task01, task02, task11, task20, task03, task12, task21, task13, task22, task23);
         taskAssignor.assign(0);
@@ -658,7 +658,7 @@ public class StickyTaskAssignorTest {
         final TaskId task06 = new TaskId(0, 6);
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00, task01, task02, task06);
         final ClientState c2 = createClient(p2, 1);
-        c2.addPreviousStandbyTasks("consumer", Utils.mkSet(task03, task04, task05));
+        c2.addPreviousStandbyTasks(Utils.mkSet(task03, task04, task05));
         final ClientState newClient = createClient(p3, 1);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task01, task02, task03, task04, task05, task06);
@@ -705,7 +705,7 @@ public class StickyTaskAssignorTest {
 
     private ClientState createClientWithPreviousActiveTasks(final Integer processId, final int capacity, final TaskId... taskIds) {
         final ClientState clientState = new ClientState(capacity);
-        clientState.addPreviousActiveTasks("consumer", Utils.mkSet(taskIds));
+        clientState.addPreviousActiveTasks(Utils.mkSet(taskIds));
         clients.put(processId, clientState);
         return clientState;
     }

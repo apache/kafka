@@ -43,7 +43,8 @@ import static org.powermock.api.easymock.PowerMock.verify;
 @PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
 public class NamedCacheMetricsTest {
 
-    private static final String TASK_NAME = "taskName";
+    private static final String THREAD_ID = "test-thread";
+    private static final String TASK_ID = "test-task";
     private static final String STORE_NAME = "storeName";
     private static final String HIT_RATIO_AVG_DESCRIPTION = "The average cache hit ratio";
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
@@ -61,7 +62,7 @@ public class NamedCacheMetricsTest {
         replay(streamsMetrics);
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, TASK_NAME, STORE_NAME);
+        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
 
         verifyResult(sensor);
     }
@@ -73,8 +74,9 @@ public class NamedCacheMetricsTest {
         final RecordingLevel recordingLevel = RecordingLevel.DEBUG;
         mockStatic(StreamsMetricsImpl.class);
         final Sensor parentSensor = mock(Sensor.class);
-        expect(streamsMetrics.taskLevelSensor(TASK_NAME, hitRatio, recordingLevel)).andReturn(parentSensor);
-        expect(streamsMetrics.cacheLevelTagMap(TASK_NAME, StreamsMetricsImpl.ROLLUP_VALUE)).andReturn(parentTagMap);
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, hitRatio, recordingLevel)).andReturn(parentSensor);
+        expect(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
+            .andReturn(parentTagMap);
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             parentSensor,
             StreamsMetricsImpl.CACHE_LEVEL_GROUP,
@@ -87,7 +89,7 @@ public class NamedCacheMetricsTest {
         replay(streamsMetrics);
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, TASK_NAME, STORE_NAME);
+        final Sensor sensor = NamedCacheMetrics.hitRatioSensor(streamsMetrics, THREAD_ID, TASK_ID, STORE_NAME);
 
         verifyResult(sensor);
     }
@@ -96,9 +98,9 @@ public class NamedCacheMetricsTest {
                                      final String hitRatio,
                                      final Sensor... parents) {
         expect(streamsMetrics.version()).andReturn(builtInMetricsVersion);
-        expect(streamsMetrics.cacheLevelSensor(TASK_NAME, STORE_NAME, hitRatio, RecordingLevel.DEBUG, parents))
+        expect(streamsMetrics.cacheLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, hitRatio, RecordingLevel.DEBUG, parents))
             .andReturn(expectedSensor);
-        expect(streamsMetrics.cacheLevelTagMap(TASK_NAME, STORE_NAME)).andReturn(tagMap);
+        expect(streamsMetrics.cacheLevelTagMap(THREAD_ID, TASK_ID, STORE_NAME)).andReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
             StreamsMetricsImpl.CACHE_LEVEL_GROUP,

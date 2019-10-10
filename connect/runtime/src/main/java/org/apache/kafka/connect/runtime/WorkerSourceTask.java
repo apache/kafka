@@ -309,7 +309,7 @@ class WorkerSourceTask extends WorkerTask {
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
+                commitTaskRecord(preTransformRecord, null);
                 continue;
             }
 
@@ -347,7 +347,7 @@ class WorkerSourceTask extends WorkerTask {
                                             WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
+                                    commitTaskRecord(preTransformRecord, recordMetadata);
                                 }
                             }
                         });
@@ -381,9 +381,9 @@ class WorkerSourceTask extends WorkerTask {
         return result;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void commitTaskRecord(SourceRecord record, RecordMetadata metadata) {
         try {
-            task.commitRecord(record);
+            task.commitRecord(record, metadata);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commitRecord()", this, t);
         }

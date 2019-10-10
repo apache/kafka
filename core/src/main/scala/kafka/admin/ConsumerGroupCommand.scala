@@ -467,8 +467,10 @@ object ConsumerGroupCommand extends Logging {
       } catch {
         case e: ExecutionException =>
           Errors.forException(e.getCause) match {
-            case Errors.INVALID_GROUP_ID | Errors.GROUP_ID_NOT_FOUND =>
-              printError(s"'$groupId' is not valid or does not exist.")
+            case Errors.INVALID_GROUP_ID =>
+              printError(s"'$groupId' is not valid.")
+            case Errors.GROUP_ID_NOT_FOUND =>
+              printError(s"'$groupId' does not exist.")
             case Errors.GROUP_AUTHORIZATION_FAILED =>
               printError(s"Access to '$groupId' is not authorized.")
             case Errors.NON_EMPTY_GROUP =>

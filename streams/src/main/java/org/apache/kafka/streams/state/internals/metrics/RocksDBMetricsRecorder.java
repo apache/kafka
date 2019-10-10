@@ -48,12 +48,16 @@ public class RocksDBMetricsRecorder {
     private final Map<String, Statistics> statisticsToRecord = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
+    private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
     private boolean isInitialized = false;
 
-    public RocksDBMetricsRecorder(final String metricsScope, final String storeName) {
+    public RocksDBMetricsRecorder(final String metricsScope,
+                                  final String threadId,
+                                  final String storeName) {
         this.metricsScope = metricsScope;
+        this.threadId = threadId;
         this.storeName = storeName;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
         logger = logContext.logger(RocksDBMetricsRecorder.class);
@@ -97,7 +101,8 @@ public class RocksDBMetricsRecorder {
     }
 
     private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
-        final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
+        final RocksDBMetricContext metricContext =
+            new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
         bytesWrittenToDatabaseSensor = RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricContext);
         bytesReadFromDatabaseSensor = RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricContext);
         memtableBytesFlushedSensor = RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricContext);
