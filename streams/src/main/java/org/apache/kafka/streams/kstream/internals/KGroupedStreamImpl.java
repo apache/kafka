@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -223,19 +222,5 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde());
-    }
-
-    @Override
-    public <T> KCogroupedStream<K, V, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator) {
-        return cogroup(aggregator, Materialized.with(keySerde, valSerde));
-    }
-
-    @Override
-    public <T> KCogroupedStream<K, V, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator,
-                                              final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>(materialized, builder, AGGREGATE_NAME);
-        return new KCogroupedStreamImpl<K, V, T>(name, materializedInternal.keySerde(), materializedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder).cogroup(this, aggregator);
     }
 }

@@ -31,6 +31,12 @@ public class AlwaysContinueProductionExceptionHandler implements ProductionExcep
     }
 
     @Override
+    public ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
+                                                                           final Exception exception) {
+        return ProductionExceptionHandlerResponse.CONTINUE;
+    }
+
+    @Override
     public void configure(final Map<String, ?> configs) {
         // ignore
     }
