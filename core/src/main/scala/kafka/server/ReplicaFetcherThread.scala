@@ -182,10 +182,11 @@ class ReplicaFetcherThread(name: String,
     // traffic doesn't exceed quota.
     if (quota.isThrottled(topicPartition))
       quota.record(records.sizeInBytes)
-    replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
     if (partition.isReassigning && partition.isAddingLocalReplica)
       replicaMgr.brokerTopicStats.updateReassignmentBytesIn(records.sizeInBytes)
+    else
+      replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
     logAppendInfo
   }

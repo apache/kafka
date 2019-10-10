@@ -813,12 +813,13 @@ class ReplicaFetcherThreadTest {
       Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
     thread.processPartitionData(t1p0, 0, partitionData)
 
-    if (isReassigning)
+    if (isReassigning) {
       assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())
-    else
+      assertEquals(0, brokerTopicStats.allTopicsStats.replicationBytesInRate.get.count())
+    } else {
       assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())
-
-    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesInRate.get.count())
+      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesInRate.get.count())
+    }
   }
 
   def stub(partition: Partition, replicaManager: ReplicaManager, log: Log): Unit = {

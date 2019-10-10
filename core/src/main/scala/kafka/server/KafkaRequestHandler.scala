@@ -345,9 +345,12 @@ class BrokerTopicStats {
       metrics.close()
   }
 
-  def updateBytesOut(topic: String, isFollower: Boolean, value: Long): Unit = {
+  def updateBytesOut(topic: String, isFollower: Boolean, isReassignment: Boolean, value: Long): Unit = {
     if (isFollower) {
-      updateReplicationBytesOut(value)
+      if (isReassignment)
+        updateReassignmentBytesOut(value)
+      else
+        updateReplicationBytesOut(value)
     } else {
       topicStats(topic).bytesOutRate.mark(value)
       allTopicsStats.bytesOutRate.mark(value)

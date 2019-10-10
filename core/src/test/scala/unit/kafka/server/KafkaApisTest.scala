@@ -830,12 +830,14 @@ class KafkaApisTest {
 
     createKafkaApis().handle(fetchFromFollower)
 
-    if (isReassigning)
+    if (isReassigning) {
       assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
-    else
+      assertEquals(0, brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
+    } else {
       assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
+      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
+    }
 
-    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
   }
 
   /**
