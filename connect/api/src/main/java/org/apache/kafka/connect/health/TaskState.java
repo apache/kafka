@@ -35,7 +35,7 @@ public class TaskState extends AbstractState {
      * @param trace    error message if that task had failed or errored out, may be {@code null} or empty
      */
     public TaskState(int taskId, String state, String workerId, String trace) {
-        super(state, workerId, trace);
+        super(workerId, state, trace);
         this.taskId = taskId;
     }
 
