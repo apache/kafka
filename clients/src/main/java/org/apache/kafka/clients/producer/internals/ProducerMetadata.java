@@ -35,34 +35,42 @@ public class ProducerMetadata extends Metadata {
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
 
+    private final boolean allowAutoTopicCreation;
     /* Topics with expiry time */
     private final Map<String, Long> topics = new HashMap<>();
     private final Logger log;
     private final Time time;
     private final long topicExpiryMs;
 
+    // LI-HOTFIX: this constructor should only be used for unit tests
+    // after the following hotfix changes:
+    // 1) add metadata.topic.expiry.ms config to KafkaProducer
+    // 2) Make client-side auto.topic.creation configurable and default to be false
     public ProducerMetadata(long refreshBackoffMs,
         long metadataExpireMs,
         LogContext logContext,
         ClusterResourceListeners clusterResourceListeners,
         Time time) {
-        this(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, time, TOPIC_EXPIRY_MS);
+        this(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners, time, TOPIC_EXPIRY_MS, true);
     }
+
     public ProducerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time,
-                            long topicExpiryMs) {
+                            long topicExpiryMs,
+                            boolean allowAutoTopicCreation) {
         super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
         this.topicExpiryMs = topicExpiryMs;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), true);
+        return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), allowAutoTopicCreation);
     }
 
     public synchronized void add(String topic) {

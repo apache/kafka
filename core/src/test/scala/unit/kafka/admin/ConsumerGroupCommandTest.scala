@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -129,6 +129,7 @@ object ConsumerGroupCommandTest {
       props.put("group.id", groupId)
       props.put("key.deserializer", classOf[StringDeserializer].getName)
       props.put("value.deserializer", classOf[StringDeserializer].getName)
+      props.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, boolean2Boolean(true))
     }
 
     def subscribe(): Unit

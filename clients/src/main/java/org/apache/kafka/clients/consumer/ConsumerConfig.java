@@ -278,7 +278,7 @@ public class ConsumerConfig extends AbstractConfig {
             " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
             " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
             " be set to `false` when using brokers older than 0.11.0";
-    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = false;
 
     /**
      * <code>security.providers</code>
