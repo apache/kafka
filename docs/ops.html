@@ -1075,16 +1075,6 @@
         <td>The number of reassigning leader partitions on a broker.</td>
       </tr>
       <tr>
-        <td>Max reassignment lag in messages on leader side</td>
-        <td>kafka.server:type=ReplicaManager,name=ReassignmentMaxLagOnLeader</td>
-        <td>Zero if there is no reassignment but should converge to zero if there is an ongoing reassignment.</td>
-      </tr>
-      <tr>
-        <td>Max reassignment lag in messages on follower side</td>
-        <td>kafka.server:type=ReplicaFetcherManager,name=ReassignmentMaxLagOnFollower,clientId=Replica</td>
-        <td>Zero if there is no reassignment but should converge to zero if there is an ongoing reassignment.</td>
-      </tr>
-      <tr>
         <td>Outgoing byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
         <td></td>
