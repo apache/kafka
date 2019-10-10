@@ -122,8 +122,6 @@ class CheckpointFile[T](val file: File,
   }
 
   def read(): Seq[T] = {
-    def malformedLineException(line: String) =
-      new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
     lock synchronized {
       try {
         val reader = Files.newBufferedReader(path)
