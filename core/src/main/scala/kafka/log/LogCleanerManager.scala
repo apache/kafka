@@ -39,9 +39,9 @@ private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
 private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
 
-private[log] case class LogCleaningException(log: Log,
-                                             private val message: String,
-                                             private val cause: Throwable) extends KafkaException(message, cause)
+private[log] class LogCleaningException(val log: Log,
+                                        private val message: String,
+                                        private val cause: Throwable) extends KafkaException(message, cause)
 
 /**
   * This class manages the state of each partition being cleaned.
@@ -191,7 +191,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
             LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
           } catch {
-            case e: Throwable => throw LogCleaningException(log,
+            case e: Throwable => throw new LogCleaningException(log,
               s"Failed to calculate log cleaning stats for partition $topicPartition", e)
           }
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs

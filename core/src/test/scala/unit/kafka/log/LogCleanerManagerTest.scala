@@ -94,7 +94,7 @@ class LogCleanerManagerTest extends Logging {
         throw new IllegalStateException("Error!")
     }
 
-    val log: Log = new LogMock(tpDir, createLogConfig(logSegmentSize, LogConfig.Compact))
+    val log: Log = new LogMock(tpDir, createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact))
     writeRecords(log = log,
       numBatches = logSegmentsCount * 2,
       recordsPerBatch = 10,
@@ -539,13 +539,7 @@ class LogCleanerManagerTest extends Logging {
   private def createLog(segmentSize: Int,
                         cleanupPolicy: String,
                         topicPartition: TopicPartition = new TopicPartition("log", 0)): Log = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
-    logProps.put(LogConfig.RetentionMsProp, 1: Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
-    logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0.05: java.lang.Double) // small for easier and clearer tests
-
-    val config = LogConfig(logProps)
+    val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
     val partitionDir = new File(logDir, Log.logDirName(topicPartition))
 
     Log(partitionDir,
@@ -560,7 +554,7 @@ class LogCleanerManagerTest extends Logging {
       logDirFailureChannel = new LogDirFailureChannel(10))
   }
 
-  private def createLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
+  private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
     logProps.put(LogConfig.RetentionMsProp, 1: Integer)

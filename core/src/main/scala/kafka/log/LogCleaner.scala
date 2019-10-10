@@ -339,7 +339,7 @@ class LogCleaner(initialConfig: CleanerConfig,
             true
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
-            case e: Exception => throw LogCleaningException(cleanable.log, e.getMessage, e)
+            case e: Exception => throw new LogCleaningException(cleanable.log, e.getMessage, e)
           }
       }
       val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
@@ -349,7 +349,7 @@ class LogCleaner(initialConfig: CleanerConfig,
             log.deleteOldSegments()
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
-            case e: Exception => throw LogCleaningException(log, e.getMessage, e)
+            case e: Exception => throw new LogCleaningException(log, e.getMessage, e)
           }
         }
       } finally  {
