@@ -22,7 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
