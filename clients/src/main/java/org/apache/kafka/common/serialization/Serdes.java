@@ -258,4 +258,11 @@ public class Serdes {
     static public Serde<byte[]> ByteArray() {
         return new ByteArraySerde();
     }
+
+    /*
+     * A serde for {@code Void} type.
+     */
+    static public Serde<Void> Void() {
+        return new VoidSerde();
+    }
 }

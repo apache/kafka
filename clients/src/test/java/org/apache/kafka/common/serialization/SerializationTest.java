@@ -147,6 +147,13 @@ public class SerializationTest {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void voidDeserializerShouldThrowOnNotNullValues() {
+        try (Serde<Void> serde = Serdes.Void()) {
+            serde.deserializer().deserialize(topic, new byte[5]);
+        }
+    }
+
     private Serde<String> getStringSerde(String encoder) {
         Map<String, Object> serializerConfigs = new HashMap<String, Object>();
         serializerConfigs.put("key.serializer.encoding", encoder);
