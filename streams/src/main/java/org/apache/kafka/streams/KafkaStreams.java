@@ -774,6 +774,7 @@ public class KafkaStreams implements AutoCloseable {
             return thread;
         });
 
+        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
@@ -787,6 +788,14 @@ public class KafkaStreams implements AutoCloseable {
             });
         }
         return null;
+    }
+
+    private static void maybeWarnAboutCodeInRocksDBConfigSetter(final Logger log,
+                                                                final StreamsConfig config) {
+        if (config.getClass(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG) != null) {
+            log.warn("Kafka Streams cannot guarantee backwards compatibility of code in the RocksDB config setter "
+                + "because RocksDB may remove methods without deprecating them.");
+        }
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
