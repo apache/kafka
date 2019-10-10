@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,13 +40,11 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,13 +52,16 @@ import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
-@Category({IntegrationTest.class})
-public class RepartitionWithMergeOptimizingIntegrationTest {
+public class RepartitionWithMergeOptimizingTest {
+
+    private final Logger log = LoggerFactory.getLogger(RepartitionWithMergeOptimizingTest.class);
 
     private static final String INPUT_A_TOPIC = "inputA";
     private static final String INPUT_B_TOPIC = "inputB";
@@ -84,7 +85,7 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
@@ -95,8 +96,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
             Serdes.String().getClass().getName(),
             Serdes.String().getClass().getName(),
             props);
-
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @After
@@ -104,26 +103,25 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         try {
             topologyTestDriver.close();
         } catch (final RuntimeException e) {
-            // KAFKA-6647 causes exception when executed in Windows, swallow and move on
-            System.out.println("An exception was thrown while trying to close the TopologyTestDriver, note that " +
-                "KAFKA-6647 causes this when running on Windows.");
+            log.warn("The following exception was thrown while trying to close the TopologyTestDriver (note that " +
+                "KAFKA-6647 causes this when running on Windows):", e);
         }
     }
 
     @Test
     public void shouldSendCorrectRecords_OPTIMIZED() {
-        runIntegrationTest(StreamsConfig.OPTIMIZE,
+        runTest(StreamsConfig.OPTIMIZE,
                            ONE_REPARTITION_TOPIC);
     }
 
     @Test
     public void shouldSendCorrectResults_NO_OPTIMIZATION() {
-        runIntegrationTest(StreamsConfig.NO_OPTIMIZATION,
+        runTest(StreamsConfig.NO_OPTIMIZATION,
                            TWO_REPARTITION_TOPICS);
     }
 
 
-    private void runIntegrationTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
+    private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
 
