@@ -988,7 +988,7 @@ public class ConsumerCoordinatorTest {
         coordinator.maybeLeaveGroup("test maybe leave group");
         assertTrue(received.get());
 
-        AbstractCoordinator.Generation generation = coordinator.generation();
+        AbstractCoordinator.Generation generation = coordinator.generationIfStable();
         assertNull(generation);
     }
 
@@ -1866,7 +1866,7 @@ public class ConsumerCoordinatorTest {
 
         AbstractCoordinator.Generation expectedGeneration = new AbstractCoordinator.Generation(1, consumerId, partitionAssignor.name());
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(expectedGeneration, coordinator.generation());
+        assertEquals(expectedGeneration, coordinator.generationIfStable());
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
 
@@ -1874,7 +1874,7 @@ public class ConsumerCoordinatorTest {
             new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
 
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertEquals(expectedGeneration, coordinator.generation());
+        assertEquals(expectedGeneration, coordinator.generationIfStable());
     }
 
     @Test(expected = KafkaException.class)
