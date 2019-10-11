@@ -607,7 +607,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
                 );
-        log.debug("Sending follower SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
+        log.debug("Sending follower SyncGroup to coordinator {} at generation {}: {}", this.coordinator, this.generation, requestBuilder);
         return sendSyncGroupRequest(requestBuilder);
     }
 
@@ -634,7 +634,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
-            log.debug("Sending leader SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
+            log.debug("Sending leader SyncGroup to coordinator {} at generation {}: {}", this.coordinator, this.generation, requestBuilder);
             return sendSyncGroupRequest(requestBuilder);
         } catch (RuntimeException e) {
             return RequestFuture.failure(e);
@@ -788,36 +788,29 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Get the current generation state if the group is stable.
-     * @return the current generation or null if the group is unjoined/rebalancing
+     * Get the current generation state, regardless of whether it is currently stable.
+     * Note that the generation information can be updated while we are still in the middle
+     * of a rebalance, after the join-group response is received.
+     *
+     * @return the current generation
      */
     protected synchronized Generation generation() {
+        return generation;
+    }
+
+    /**
+     * Get the current generation state if the group is stable, otherwise return null
+     *
+     * @return the current generation or null
+     */
+    protected synchronized Generation generationIfStable() {
         if (this.state != MemberState.STABLE)
             return null;
         return generation;
     }
 
     protected synchronized String memberId() {
-        return generation == null ? JoinGroupRequest.UNKNOWN_MEMBER_ID :
-                generation.memberId;
-    }
-
-    /**
-     * Check whether given generation id is matching the record within current generation.
-     * Only using in unit tests.
-     * @param generationId generation id
-     * @return true if the two ids are matching.
-     */
-    final synchronized boolean hasMatchingGenerationId(int generationId) {
-        return generation != null && generation.generationId == generationId;
-    }
-
-    /**
-     * @return true if the current generation's member ID is valid, false otherwise
-     */
-    // Visible for testing
-    final synchronized boolean hasValidMemberId() {
-        return generation != null && generation.hasMemberId();
+        return generation.memberId;
     }
 
     private synchronized void resetGeneration() {
@@ -1318,12 +1311,35 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    // For testing only
+    // For testing only below
     public Heartbeat heartbeat() {
         return heartbeat;
     }
 
-    public void setLastRebalanceTime(final long timestamp) {
+    final void setLastRebalanceTime(final long timestamp) {
         lastRebalanceEndMs = timestamp;
     }
+
+    /**
+     * Check whether given generation id is matching the record within current generation.
+     *
+     * @param generationId generation id
+     * @return true if the two ids are matching.
+     */
+    final boolean hasMatchingGenerationId(int generationId) {
+        return generation != Generation.NO_GENERATION && generation.generationId == generationId;
+    }
+
+    final boolean hasUnknownGeneration() {
+        return generation == Generation.NO_GENERATION;
+    }
+
+    /**
+     * @return true if the current generation's member ID is valid, false otherwise
+     */
+    final boolean hasValidMemberId() {
+        return generation != Generation.NO_GENERATION && generation.hasMemberId();
+    }
+
+
 }
