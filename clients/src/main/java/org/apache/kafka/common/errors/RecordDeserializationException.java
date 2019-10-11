@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -24,31 +23,31 @@ import org.apache.kafka.common.TopicPartition;
  */
 public class RecordDeserializationException extends SerializationException {
 
-  private static final long serialVersionUID = 1L;
-  private TopicPartition partition;
-  private long offset;
+    private static final long serialVersionUID = 1L;
+    private TopicPartition partition;
+    private long offset;
 
-  public RecordDeserializationException(TopicPartition partition, long offset, String message) {
-    this(partition, offset, message, null);
-  }
+    public RecordDeserializationException(TopicPartition partition, long offset, String message) {
+        this(partition, offset, message, null);
+    }
 
-  public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
-    super(message, cause);
-    this.partition = partition;
-    this.offset = offset;
-  }
+    public RecordDeserializationException(TopicPartition partition, long offset, String message, Throwable cause) {
+        super(message, cause);
+        this.partition = partition;
+        this.offset = offset;
+    }
 
-  public TopicPartition partition() {
-    return partition;
-  }
+    public TopicPartition partition() {
+        return partition;
+    }
 
-  public long offset() {
-    return offset;
-  }
+    public long offset() {
+        return offset;
+    }
 
-  /* avoid the expensive and useless stack trace for deserialization exceptions */
-  @Override
-  public Throwable fillInStackTrace() {
-    return this;
-  }
+    /* avoid the expensive and useless stack trace for deserialization exceptions */
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
+    }
 }

@@ -175,7 +175,7 @@ public class KafkaConsumerTest {
         assertEquals(records.partitions(), new HashSet<>(Collections.singletonList(tp0)));
         assertEquals(records.records(tp0).size(), 5);
 
-        consumer.close(Duration.ofMillis(0));;
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -193,7 +193,7 @@ public class KafkaConsumerTest {
         long lastValidOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
         assertEquals(invalidRecordNumber - 2, lastValidOffset);
 
-        consumer.close(Duration.ofMillis(0));;
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -219,7 +219,7 @@ public class KafkaConsumerTest {
             assertEquals(tp0, rde.partition());
         }
 
-        consumer.close(Duration.ofMillis(0));;
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -242,7 +242,7 @@ public class KafkaConsumerTest {
             assertEquals(corruptRecordOffset, rde.offset());
         }
 
-        consumer.close(Duration.ofMillis(0));;
+        consumer.close(Duration.ofMillis(0));
     }
 
     /*
@@ -289,7 +289,7 @@ public class KafkaConsumerTest {
         return setUpConsumerWithRecordsToPoll(tp, recordCount, new StringDeserializer());
     }
 
-    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer deserializer) {
+    private ConsumerHarness setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer<String> deserializer) {
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster(tp.topic(), 1);
         Node node = cluster.nodes().get(0);
