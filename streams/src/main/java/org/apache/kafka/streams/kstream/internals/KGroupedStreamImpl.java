@@ -231,7 +231,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         final Aggregator<? super K, ? super V, Vout> aggregator) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         return new CogroupedKStreamImpl<K, Vout>(
-            name, keySerde, sourceNodes,
+            name, sourceNodes,
             streamsGraphNode, builder).cogroup(this, aggregator);
     }
 }

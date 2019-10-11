@@ -58,6 +58,12 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
         final SessionWindows sessionWindows,
         final Merger<? super K, Vout> sessionMerger) {
 
+        final Collection<? extends AbstractStream<K, ?>> groupedStreams = new ArrayList<>(groupPatterns.keySet());
+        final AbstractStream<K, ?> kGrouped = groupedStreams.iterator().next();
+        groupedStreams.remove(kGrouped);
+        kGrouped.ensureCopartitionWith(groupedStreams);
+
+
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> kGroupedStream : groupPatterns
@@ -102,8 +108,8 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
 
     }
 
-    private <Vin, W extends Window> StatefulProcessorNode getStatefulProcessorNode(
-            final Aggregator<? super K, ? super Vin, Vout> aggregator,
+    private <W extends Window> StatefulProcessorNode getStatefulProcessorNode(
+            final Aggregator<? super K, ?, Vout> aggregator,
             final Initializer<Vout> initializer,
             final NamedInternal named,
             final boolean stateCreated,
@@ -114,7 +120,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
 
         final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
-        final ProcessorSupplier<K, Vin> kStreamAggregate;
+        final ProcessorSupplier<K, ?> kStreamAggregate;
 
         if (windows == null && sessionWindows == null) {
             kStreamAggregate = new KStreamAggregate<>(storeBuilder.name(), initializer, aggregator);
@@ -127,7 +133,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
                 "must be a TimeWindowedStream or a SessionWindowedStream");
         }
 
-        final StatefulProcessorNode statefulProcessorNode;
+        final StatefulProcessorNode<K, ?> statefulProcessorNode;
         if (!stateCreated) {
             statefulProcessorNode =
                 new StatefulProcessorNode<>(

@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -44,11 +43,10 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
     final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
-                         final Serde<K> keySerde,
                          final Set<String> sourceNodes,
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
-        super(name, keySerde, null, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, sourceNodes, streamsGraphNode, builder);
         this.groupPatterns = new HashMap<>();
         this.aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
