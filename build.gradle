@@ -483,6 +483,7 @@ subprojects {
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
       html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
     }
+    maxHeapSize = "2g"
   }
 
   // Ignore core since its a scala project
