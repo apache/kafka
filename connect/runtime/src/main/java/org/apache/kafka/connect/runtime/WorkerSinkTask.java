@@ -44,6 +44,7 @@ import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -482,10 +483,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> convertKeyValue(msg, true),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value()),
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> convertKeyValue(msg, false),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
@@ -505,6 +506,18 @@ class WorkerSinkTask extends WorkerTask {
         log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                 this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
         return transformationChain.apply(origRecord);
+    }
+
+    private SchemaAndValue convertKeyValue(ConsumerRecord<byte[], byte[]> msg, boolean isKey) {
+        try {
+            byte[] value = isKey ? msg.key() : msg.value();
+            Converter converter = isKey ? keyConverter : valueConverter;
+            return converter.toConnectData(msg.topic(), msg.headers(), value);
+        } catch (Exception e) {
+            log.error("Error converting message {} in topic '{}' partition {} at offset {}",
+                    isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName(), msg.topic(), msg.partition(), msg.offset());
+            throw e;
+        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
