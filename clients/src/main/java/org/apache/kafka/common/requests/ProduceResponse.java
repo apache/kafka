@@ -74,14 +74,14 @@ public class ProduceResponse extends AbstractResponse {
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
     private static final String LOG_APPEND_TIME_KEY_NAME = "log_append_time";
     private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
-    private static final String ERROR_RECORDS_KEY_NAME = "error_records";
-    private static final String RELATIVE_OFFSET_KEY_NAME = "relative_offset";
-    private static final String RELATIVE_OFFSET_ERROR_MESSAGE_KEY_NAME = "relative_offset_error_message";
+    private static final String RECORD_ERRORS_KEY_NAME = "record_errors";
+    private static final String BATCH_INDEX_KEY_NAME = "batch_index";
+    private static final String BATCH_INDEX_ERROR_MESSAGE_KEY_NAME = "batch_index_error_message";
     private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
 
     private static final Field.Int64 LOG_START_OFFSET_FIELD = new Field.Int64(LOG_START_OFFSET_KEY_NAME,
             "The start offset of the log at the time this produce response was created", INVALID_OFFSET);
-    private static final Field.NullableStr RELATIVE_OFFSET_ERROR_MESSAGE_FIELD = new Field.NullableStr(RELATIVE_OFFSET_ERROR_MESSAGE_KEY_NAME,
+    private static final Field.NullableStr BATCH_INDEX_ERROR_MESSAGE_FIELD = new Field.NullableStr(BATCH_INDEX_ERROR_MESSAGE_KEY_NAME,
             "The error message of the record that caused the batch to be dropped");
     private static final Field.NullableStr ERROR_MESSAGE_FIELD = new Field.NullableStr(ERROR_MESSAGE_KEY_NAME,
             "The global error message summarizing the common root cause of the records that caused the batch to be dropped");
@@ -160,7 +160,7 @@ public class ProduceResponse extends AbstractResponse {
     private static final Schema PRODUCE_RESPONSE_V7 = PRODUCE_RESPONSE_V6;
 
     /**
-     * V8 adds error_records and error_message. (see KIP-467)
+     * V8 adds record_errors and error_message. (see KIP-467)
      */
     public static final Schema PRODUCE_RESPONSE_V8 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
@@ -174,11 +174,11 @@ public class ProduceResponse extends AbstractResponse {
                                     "If LogAppendTime is used for the topic, the timestamp will be the broker local " +
                                     "time when the messages are appended."),
                             LOG_START_OFFSET_FIELD,
-                            new Field(ERROR_RECORDS_KEY_NAME, new ArrayOf(new Schema(
-                                    new Field.Int32(RELATIVE_OFFSET_KEY_NAME, "The relative offset of the record " +
+                            new Field(RECORD_ERRORS_KEY_NAME, new ArrayOf(new Schema(
+                                    new Field.Int32(BATCH_INDEX_KEY_NAME, "The batch index of the record " +
                                             "that caused the batch to be dropped"),
-                                    RELATIVE_OFFSET_ERROR_MESSAGE_FIELD
-                            )), "The relative offsets of records that caused the batch to be dropped"),
+                                    BATCH_INDEX_ERROR_MESSAGE_FIELD
+                            )), "The batch indices of records that caused the batch to be dropped"),
                             ERROR_MESSAGE_FIELD)))))),
             THROTTLE_TIME_MS);
 
@@ -225,19 +225,24 @@ public class ProduceResponse extends AbstractResponse {
                 long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
                 long logStartOffset = partRespStruct.getOrElse(LOG_START_OFFSET_FIELD, INVALID_OFFSET);
 
-                Map<Integer, String> errorRecords = new HashMap<>();
-                if (partRespStruct.hasField(ERROR_RECORDS_KEY_NAME)) {
-                    for (Object recordOffsetAndMessage : partRespStruct.getArray(ERROR_RECORDS_KEY_NAME)) {
-                        Struct recordOffsetAndMessageStruct = (Struct) recordOffsetAndMessage;
-                        Integer relativeOffset = recordOffsetAndMessageStruct.getInt(RELATIVE_OFFSET_KEY_NAME);
-                        String relativeOffsetErrorMessage = recordOffsetAndMessageStruct.getOrElse(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, "");
-                        errorRecords.put(relativeOffset, relativeOffsetErrorMessage);
+                List<RecordError> recordErrors = Collections.emptyList();
+                if (partRespStruct.hasField(RECORD_ERRORS_KEY_NAME)) {
+                    Object[] recordErrorsArray = partRespStruct.getArray(RECORD_ERRORS_KEY_NAME);
+                    if (recordErrorsArray.length > 0) {
+                        recordErrors = new ArrayList<>(recordErrorsArray.length);
+                        for (Object indexAndMessage : recordErrorsArray) {
+                            Struct indexAndMessageStruct = (Struct) indexAndMessage;
+                            recordErrors.add(new RecordError(
+                                    indexAndMessageStruct.getInt(BATCH_INDEX_KEY_NAME),
+                                    indexAndMessageStruct.get(BATCH_INDEX_ERROR_MESSAGE_FIELD)
+                            ));
+                        }
                     }
                 }
 
-                String errorMessage = partRespStruct.getOrElse(ERROR_MESSAGE_FIELD, "");
+                String errorMessage = partRespStruct.getOrElse(ERROR_MESSAGE_FIELD, null);
                 TopicPartition tp = new TopicPartition(topic, partition);
-                responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset, errorRecords, errorMessage));
+                responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset, recordErrors, errorMessage));
             }
         }
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
@@ -266,19 +271,21 @@ public class ProduceResponse extends AbstractResponse {
                         .set(PARTITION_ID, partitionEntry.getKey())
                         .set(ERROR_CODE, errorCode)
                         .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
-                if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
-                    partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
+                partStruct.setIfExists(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
 
-                List<Struct> errorRecords = new ArrayList<>();
-                for (Map.Entry<Integer, String> recordOffsetAndMessage : part.errorRecords.entrySet()) {
-                    Struct recordOffsetAndMessageStruct = partStruct.instance(ERROR_RECORDS_KEY_NAME)
-                            .set(RELATIVE_OFFSET_KEY_NAME, recordOffsetAndMessage.getKey())
-                            .setIfExists(RELATIVE_OFFSET_ERROR_MESSAGE_FIELD, recordOffsetAndMessage.getValue());
-                    errorRecords.add(recordOffsetAndMessageStruct);
+                List<Struct> recordErrors = Collections.emptyList();
+                if (!part.recordErrors.isEmpty()) {
+                    recordErrors = new ArrayList<>();
+                    for (RecordError indexAndMessage : part.recordErrors) {
+                        Struct indexAndMessageStruct = partStruct.instance(RECORD_ERRORS_KEY_NAME)
+                                .set(BATCH_INDEX_KEY_NAME, indexAndMessage.batchIndex)
+                                .set(BATCH_INDEX_ERROR_MESSAGE_FIELD, indexAndMessage.message);
+                        recordErrors.add(indexAndMessageStruct);
+                    }
                 }
 
-                partStruct.setIfExists(ERROR_RECORDS_KEY_NAME, errorRecords.toArray());
+                partStruct.setIfExists(RECORD_ERRORS_KEY_NAME, recordErrors.toArray());
 
                 partStruct.setIfExists(ERROR_MESSAGE_FIELD, part.errorMessage);
                 partitionArray.add(partStruct);
@@ -314,7 +321,7 @@ public class ProduceResponse extends AbstractResponse {
         public long baseOffset;
         public long logAppendTime;
         public long logStartOffset;
-        public Map<Integer, String> errorRecords;
+        public List<RecordError> recordErrors;
         public String errorMessage;
 
         public PartitionResponse(Errors error) {
@@ -322,19 +329,19 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset) {
-            this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyMap(), null);
+            this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyList(), null);
         }
 
-        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, Map<Integer, String> errorRecords) {
-            this(error, baseOffset, logAppendTime, logStartOffset, errorRecords, "");
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors) {
+            this(error, baseOffset, logAppendTime, logStartOffset, recordErrors, null);
         }
 
-        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, Map<Integer, String> errorRecords, String errorMessage) {
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
             this.error = error;
             this.baseOffset = baseOffset;
             this.logAppendTime = logAppendTime;
             this.logStartOffset = logStartOffset;
-            this.errorRecords = errorRecords;
+            this.recordErrors = recordErrors;
             this.errorMessage = errorMessage;
         }
 
@@ -350,13 +357,33 @@ public class ProduceResponse extends AbstractResponse {
             b.append(logAppendTime);
             b.append(", logStartOffset: ");
             b.append(logStartOffset);
-            b.append(", errorRecords: ");
-            b.append(errorRecords);
+            b.append(", recordErrors: ");
+            b.append(recordErrors);
             b.append(", errorMessage: ");
-            b.append(errorMessage);
+            if (errorMessage != null) {
+                b.append(errorMessage);
+            } else {
+                b.append("null");
+            }
             b.append('}');
             return b.toString();
         }
+    }
+
+    public static final class RecordError {
+        public final int batchIndex;
+        public final String message;
+
+        public RecordError(int batchIndex, String message) {
+            this.batchIndex = batchIndex;
+            this.message = message;
+        }
+
+        public RecordError(int batchIndex) {
+            this.batchIndex = batchIndex;
+            this.message = null;
+        }
+
     }
 
     public static ProduceResponse parse(ByteBuffer buffer, short version) {

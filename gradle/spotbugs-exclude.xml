@@ -104,10 +104,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppression for the equals() for extensiom methods. -->
-        <Or>
-            <Class name="kafka.api.package$ElectLeadersRequestOps"/>
-        </Or>
+        <!-- Suppression for the equals() for extension methods. -->
+        <Class name="kafka.api.package$ElectLeadersRequestOps"/>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
@@ -116,6 +114,59 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Source name="Json.scala"/>
         <Package name="kafka.utils"/>
         <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
+    </Match>
+
+    <Match>
+        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
+        <Class name="kafka.log.Log"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
+        <Class name="kafka.tools.StateChangeLogMerger$"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <Match>
+        <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
+        <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+        <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AdminUtils.scala"/>
+        <Package name="kafka.admin"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="ControllerContext.scala"/>
+        <Package name="kafka.controller"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="LogManager.scala"/>
+        <Package name="kafka.log"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="DelayedElectLeader.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AdminZkClient.scala"/>
+        <Package name="kafka.zk"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
     <Match>

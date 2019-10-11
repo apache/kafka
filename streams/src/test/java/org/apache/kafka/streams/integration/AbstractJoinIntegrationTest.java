@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -123,6 +124,8 @@ public abstract class AbstractJoinIntegrationTest {
 
     final boolean cacheEnabled;
 
+    private static final long TIMEOUT = 30000;
+
     AbstractJoinIntegrationTest(final boolean cacheEnabled) {
         this.cacheEnabled = cacheEnabled;
     }
@@ -199,6 +202,10 @@ public abstract class AbstractJoinIntegrationTest {
 
         try {
             streams.start();
+            TestUtils.waitForCondition(
+                () -> streams.state() == State.RUNNING,
+                TIMEOUT,
+                () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms");
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
@@ -244,6 +251,10 @@ public abstract class AbstractJoinIntegrationTest {
 
         try {
             streams.start();
+            TestUtils.waitForCondition(
+                () -> streams.state() == State.RUNNING,
+                TIMEOUT,
+                () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms");
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
