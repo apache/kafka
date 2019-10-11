@@ -1641,7 +1641,7 @@ public class RequestResponseTest {
     }
 
     private DescribeAclsResponse createDescribeAclsResponse() {
-        return new DescribeAclsResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
+        return DescribeAclsResponse.prepareResponse(0, ApiError.NONE, Collections.singleton(new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
     }

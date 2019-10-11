@@ -53,30 +53,30 @@ public class DescribeAclsResponseTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfNotLiteral() {
-        new DescribeAclsResponse(10, ApiError.NONE, aclBindings(PREFIXED_ACL1)).toStruct(V0);
+        DescribeAclsResponse.prepareResponse(10, ApiError.NONE, aclBindings(PREFIXED_ACL1)).toStruct(V0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfUnknown() {
-        new DescribeAclsResponse(10, ApiError.NONE, aclBindings(UNKNOWN_ACL)).toStruct(V0);
+        DescribeAclsResponse.prepareResponse(10, ApiError.NONE, aclBindings(UNKNOWN_ACL)).toStruct(V0);
     }
 
     @Test
     public void shouldRoundTripV0() {
-        final DescribeAclsResponse original = new DescribeAclsResponse(10, ApiError.NONE, aclBindings(LITERAL_ACL1, LITERAL_ACL2));
+        final DescribeAclsResponse original = DescribeAclsResponse.prepareResponse(10, ApiError.NONE, aclBindings(LITERAL_ACL1, LITERAL_ACL2));
         final Struct struct = original.toStruct(V0);
 
-        final DescribeAclsResponse result = new DescribeAclsResponse(struct);
+        final DescribeAclsResponse result = new DescribeAclsResponse(struct, V0);
 
         assertResponseEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripV1() {
-        final DescribeAclsResponse original = new DescribeAclsResponse(100, ApiError.NONE, aclBindings(LITERAL_ACL1, PREFIXED_ACL1));
+        final DescribeAclsResponse original = DescribeAclsResponse.prepareResponse(100, ApiError.NONE, aclBindings(LITERAL_ACL1, PREFIXED_ACL1));
         final Struct struct = original.toStruct(V1);
 
-        final DescribeAclsResponse result = new DescribeAclsResponse(struct);
+        final DescribeAclsResponse result = new DescribeAclsResponse(struct, V1);
 
         assertResponseEquals(original, result);
     }
