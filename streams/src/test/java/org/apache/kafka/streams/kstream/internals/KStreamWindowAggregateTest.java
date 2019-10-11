@@ -266,6 +266,15 @@ public class KStreamWindowAggregateTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterWhenSkippingNullKey(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullKey(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndMeterWhenSkippingNullKey(final String builtInMetricsVersion) {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -280,41 +289,19 @@ public class KStreamWindowAggregateTest {
             );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
             LogCaptureAppender.unregister(appender);
 
-            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
-        }
-    }
-
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String topic = "topic";
-
-        builder
-            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)))
-            .aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.toStringInstance("+"),
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
-            );
-
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
-            inputTopic.pipeInput(null, "1");
-            LogCaptureAppender.unregister(appender);
-
-            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+            if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+                assertEquals(
+                    1.0,
+                    getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+                );
+            }
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[0] offset=[0]"));
         }
     }

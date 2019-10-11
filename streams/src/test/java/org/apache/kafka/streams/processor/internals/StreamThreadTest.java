@@ -1553,16 +1553,16 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
-        shouldRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_LATEST);
+    public void shouldLogAndNotRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
+        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_LATEST);
     }
 
     @Test
     public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersion0100To24() {
-        shouldRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
+        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
     }
 
-    private void shouldRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
+    private void shouldLogAndRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -1645,7 +1645,16 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldReportSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
+    public void shouldLogAndRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndNotRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersionLatest() {
+        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -1655,10 +1664,7 @@ public class StreamThreadTest {
             StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             LogAndSkipOnInvalidTimestamp.class.getName()
         );
-        config.setProperty(
-            StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
-            StreamsConfig.METRICS_0100_TO_24
-        );
+        config.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
 
         thread.setState(StreamThread.State.STARTING);
@@ -1689,82 +1695,41 @@ public class StreamThreadTest {
             "stream-metrics",
             Collections.singletonMap("client-id", thread.getName())
         );
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-        long offset = -1;
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        addRecord(mockConsumer, ++offset);
-        thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
-        addRecord(mockConsumer, ++offset, 1L);
-        addRecord(mockConsumer, ++offset, 1L);
-        thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
-        verifyLogMessagesForSkippedRecordsForInvalidTimestamps(appender);
-    }
-
-    @Test
-    public void shouldReportSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersionLatest() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        final Properties config = configProps(false);
-        config.setProperty(
-            StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-            LogAndSkipOnInvalidTimestamp.class.getName()
-        );
-        config.setProperty(
-            StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
-            StreamsConfig.METRICS_LATEST
-        );
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-
-        final TaskId task1 = new TaskId(0, t1p1.partition());
-        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
-        thread.taskManager().setAssignmentMetadata(
-            Collections.singletonMap(
-                task1,
-                assignedPartitions),
-            Collections.emptyMap());
-        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
-
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
-        mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce();
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
 
         long offset = -1;
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         thread.runOnce();
 
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         thread.runOnce();
 
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+
         addRecord(mockConsumer, ++offset, 1L);
         addRecord(mockConsumer, ++offset, 1L);
         thread.runOnce();
 
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
         verifyLogMessagesForSkippedRecordsForInvalidTimestamps(appender);
     }
 

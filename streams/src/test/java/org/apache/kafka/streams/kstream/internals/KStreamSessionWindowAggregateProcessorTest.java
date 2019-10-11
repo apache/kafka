@@ -369,29 +369,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
-        final InternalMockProcessorContext context =
-            createInternalMockProcessorContext(StreamsConfig.METRICS_0100_TO_24);
-        processor.init(context);
-        context.setRecordContext(
-            new ProcessorRecordContext(-1, -2, -3, "topic", null)
-        );
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        processor.process(null, "1");
-        LogCaptureAppender.unregister(appender);
-
-        assertEquals(
-            1.0,
-            getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
-        );
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
-        );
+        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersionLatest() {
-        final InternalMockProcessorContext context = createInternalMockProcessorContext(StreamsConfig.METRICS_LATEST);
+        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
+        final InternalMockProcessorContext context =
+            createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", null)
@@ -400,6 +388,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(null, "1");
         LogCaptureAppender.unregister(appender);
 
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(
+                1.0,
+                getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            );
+        }
         assertThat(
             appender.getMessages(),
             hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
