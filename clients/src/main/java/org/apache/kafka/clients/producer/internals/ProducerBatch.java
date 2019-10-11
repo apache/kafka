@@ -231,15 +231,15 @@ public final class ProducerBatch {
     }
 
     /**
-     * Same as {@link #done(long, long, RuntimeException)} but excludes records not specified in relativeOffsets from
+     * Same as {@link #done(long, long, RuntimeException)} but excludes records not specified in batchIndices from
      * having their callbacks invoked
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param relativeOffsets The set of offsets in this batch to complete
+     * @param batchIndices The set of offsets in this batch to complete
      * @param logAppendTime The log append time or -1 if CreateTime is being used
      * @param exception The exception that occurred (or null if the request was successful)
      * @return true if the batch was completed successfully and false if the batch was previously aborted
      */
-    public boolean partiallyDone(long baseOffset, Set<Integer> relativeOffsets, long logAppendTime, RuntimeException exception) {
+    public boolean partiallyDone(long baseOffset, Set<Integer> batchIndices, long logAppendTime, RuntimeException exception) {
         final FinalState tryFinalState = (exception == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
 
         if (tryFinalState == FinalState.SUCCEEDED) {
@@ -249,7 +249,7 @@ public final class ProducerBatch {
         }
 
         if (this.finalState.compareAndSet(null, tryFinalState)) {
-            completeFutureAndFireCallbacks(baseOffset, relativeOffsets, logAppendTime, exception);
+            completeFutureAndFireCallbacks(baseOffset, batchIndices, logAppendTime, exception);
             return true;
         }
 
@@ -293,13 +293,13 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
-    private void completeFutureAndFireCallbacks(long baseOffset, Set<Integer> relativeOffsets, long logAppendTime, RuntimeException exception) {
+    private void completeFutureAndFireCallbacks(long baseOffset, Set<Integer> batchIndices, long logAppendTime, RuntimeException exception) {
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
 
         // execute callbacks
         for (int i = 0; i < thunks.size(); i++) {
-            if (!relativeOffsets.contains(i)) {
+            if (!batchIndices.contains(i)) {
                 try {
                     Thunk thunk = thunks.get(i);
                     if (exception == null) {

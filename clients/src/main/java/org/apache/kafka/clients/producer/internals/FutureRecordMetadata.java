@@ -30,7 +30,7 @@ import java.util.concurrent.TimeoutException;
 public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     private ProduceRequestResult result;
-    private long relativeOffset;
+    private long batchIndex;
     private final long createTimestamp;
     private final Long checksum;
     private final int serializedKeySize;
@@ -38,10 +38,10 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final Time time;
     private volatile FutureRecordMetadata nextRecordMetadata = null;
 
-    public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
+    public FutureRecordMetadata(ProduceRequestResult result, long batchIndex, long createTimestamp,
                                 Long checksum, int serializedKeySize, int serializedValueSize, Time time) {
         this.result = result;
-        this.relativeOffset = relativeOffset;
+        this.batchIndex = batchIndex;
         this.createTimestamp = createTimestamp;
         this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
@@ -49,9 +49,9 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         this.time = time;
     }
 
-    public void setProduceFuture(ProduceRequestResult produceFuture, long relativeOffset) {
+    public void setProduceFuture(ProduceRequestResult produceFuture, long batchIndex) {
         this.result = produceFuture;
-        this.relativeOffset = relativeOffset;
+        this.batchIndex = batchIndex;
     }
 
     @Override
@@ -112,7 +112,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     RecordMetadata value() {
         if (nextRecordMetadata != null)
             return nextRecordMetadata.value();
-        return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
+        return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.batchIndex,
                                   timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
 

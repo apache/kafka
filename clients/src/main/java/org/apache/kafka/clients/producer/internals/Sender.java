@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -664,16 +665,16 @@ public class Sender implements Runnable {
                 completeBatch(batch, response);
 
             // only execute the batch dropping and retrial logic if all records
-            } else if (!response.errorRecords.isEmpty() && response.errorRecords.size() < batch.recordCount) {
+            } else if (!response.recordErrors.isEmpty() && response.recordErrors.size() < batch.recordCount) {
                 if (!response.errorMessage.isEmpty())
                     log.error(response.errorMessage);
                 else
                     log.error(response.error.message());
 
                 // remove this batch from in flight batches and deallocate it
-                Set<Integer> relativeOffsets = response.errorRecords.keySet();
-                failPartialBatch(batch, response, relativeOffsets, new InvalidRecordException("Batch is dropped"), true);
-                this.accumulator.dropRecordsAndReenqueueNewBatch(batch, relativeOffsets, now);
+                Set<Integer> batchIndices = response.recordErrors.stream().map(r -> r.batchIndex).collect(Collectors.toSet());
+                failPartialBatch(batch, response, batchIndices, new InvalidRecordException("Batch is dropped"), true);
+                this.accumulator.dropRecordsAndReenqueueNewBatch(batch, batchIndices, now);
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -748,15 +749,15 @@ public class Sender implements Runnable {
 
     private void failPartialBatch(ProducerBatch batch,
                                   ProduceResponse.PartitionResponse response,
-                                  Set<Integer> relativeOffsets,
+                                  Set<Integer> batchIndices,
                                   RuntimeException exception,
                                   boolean adjustSequenceNumbers) {
-        failPartialBatch(batch, response.baseOffset, relativeOffsets, response.logAppendTime, exception, adjustSequenceNumbers);
+        failPartialBatch(batch, response.baseOffset, batchIndices, response.logAppendTime, exception, adjustSequenceNumbers);
     }
 
     private void failPartialBatch(ProducerBatch batch,
                                   long baseOffset,
-                                  Set<Integer> relativeOffsets,
+                                  Set<Integer> batchIndices,
                                   long logAppendTime,
                                   RuntimeException exception,
                                   boolean adjustSequenceNumber) {
@@ -766,7 +767,7 @@ public class Sender implements Runnable {
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
-        if (batch.partiallyDone(baseOffset, relativeOffsets, logAppendTime, exception)) {
+        if (batch.partiallyDone(baseOffset, batchIndices, logAppendTime, exception)) {
             maybeRemoveFromInflightBatches(batch);
             this.accumulator.deallocate(batch);
         }

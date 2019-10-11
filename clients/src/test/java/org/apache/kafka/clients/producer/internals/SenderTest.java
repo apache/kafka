@@ -1389,7 +1389,7 @@ public class SenderTest {
 
         String errorMessage = "Custom error message";
         // empty list since a non-empty list will cause the Sender not to complete the request
-        Map<Integer, String> errorRecords = Collections.emptyMap();
+        List<ProduceResponse.RecordError> recordErrors = Collections.emptyList();
 
         sender.runOnce(); // connect
         sender.runOnce(); // send produce request
@@ -1401,7 +1401,7 @@ public class SenderTest {
             public boolean matches(AbstractRequest body) {
                 return true;
             }
-        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, errorRecords, errorMessage));
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
 
         sender.runOnce();
         assertEquals("All requests completed.", 0, client.inFlightRequestCount());
@@ -1423,10 +1423,10 @@ public class SenderTest {
             futures.add(accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
                     null, null, MAX_BLOCK_TIMEOUT, false).future);
 
-        Map<Integer, String> errorRecords = new HashMap<>();
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
         // drop the first record
-        errorRecords.put(0, "");
-        errorRecords.put(2, "");
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
         String errorMessage = "Custom error message";
 
         sender.runOnce();   // send request
@@ -1438,7 +1438,7 @@ public class SenderTest {
             public boolean matches(AbstractRequest body) {
                 return true;
             }
-        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, errorRecords, errorMessage));
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
 
         sender.runOnce();   // receive request
         assertEquals(0, client.inFlightRequestCount());
@@ -1492,10 +1492,10 @@ public class SenderTest {
                         }
                     }, MAX_BLOCK_TIMEOUT, false).future);
 
-        Map<Integer, String> errorRecords = new HashMap<>();
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
         // drop the first record
-        errorRecords.put(0, "");
-        errorRecords.put(2, "");
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
         String errorMessage = "Custom error message";
         sender.runOnce();   // send request
         assertEquals(1, client.inFlightRequestCount());
@@ -1506,7 +1506,7 @@ public class SenderTest {
             public boolean matches(AbstractRequest body) {
                 return true;
             }
-        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, errorRecords, errorMessage));
+        }, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.INVALID_RECORD, 0, recordErrors, errorMessage));
 
         sender.runOnce();   // receive request
         assertEquals(0, client.inFlightRequestCount());
@@ -1562,10 +1562,10 @@ public class SenderTest {
             futures.add(accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
                     null, null, MAX_BLOCK_TIMEOUT, false).future);
 
-        Map<Integer, String> errorRecords = new HashMap<>();
+        List<ProduceResponse.RecordError> recordErrors = new ArrayList<>();
         // drop the first record
-        errorRecords.put(0, "");
-        errorRecords.put(2, "");
+        recordErrors.add(new ProduceResponse.RecordError(0));
+        recordErrors.add(new ProduceResponse.RecordError(2));
         String errorMessage = "Custom error message";
 
         sender.runOnce();       // send request
@@ -1580,7 +1580,7 @@ public class SenderTest {
             assertFalse(future.isDone());
         assertTrue(client.isReady(node, time.milliseconds()));
 
-        sendIdempotentProducerResponse(0, tp0, Errors.INVALID_RECORD, 0L, errorRecords, errorMessage);
+        sendIdempotentProducerResponse(0, tp0, Errors.INVALID_RECORD, 0L, recordErrors, errorMessage);
 
         sender.runOnce();       // receive request
         assertEquals(0, client.inFlightRequestCount());
@@ -1874,8 +1874,8 @@ public class SenderTest {
         sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1L);
     }
 
-    void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, Map<Integer, String> errorRecords, String errorMessage) {
-        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1, errorRecords, errorMessage);
+    void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1, recordErrors, errorMessage);
     }
 
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
@@ -1895,7 +1895,7 @@ public class SenderTest {
         }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset));
     }
 
-    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset, Map<Integer, String> errorRecords, String errorMessage) {
+    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
         client.respond(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1909,7 +1909,7 @@ public class SenderTest {
                 assertEquals(expectedSequence, firstBatch.baseSequence());
                 return true;
             }
-        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, errorRecords, errorMessage));
+        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, recordErrors, errorMessage));
     }
 
     @Test
@@ -2711,14 +2711,14 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, Map<Integer, String> errorRecords, String errorMessage) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset, errorRecords, errorMessage);
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset, recordErrors, errorMessage);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, Map<Integer, String> errorRecords, String errorMessage) {
-        return produceResponse(tp, offset, error, throttleTimeMs, -1L, errorRecords, errorMessage);
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, List<ProduceResponse.RecordError> recordErrors, String errorMessage) {
+        return produceResponse(tp, offset, error, throttleTimeMs, -1L, recordErrors, errorMessage);
     }
 
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
