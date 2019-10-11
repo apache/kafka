@@ -450,7 +450,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val describeResponseConfig = client.describeConfigs(List(topicResource).asJava).values.get(topicResource).get().entries.asScala
-    assertEquals(describeResponseConfig.size, createResponseConfig.size)
+    assertEquals(describeResponseConfig.map(_.name).toSet, createResponseConfig.map(_.name).toSet)
     describeResponseConfig.foreach { describeEntry =>
       val name = describeEntry.name
       val createEntry = createResponseConfig.find(_.name == name).get

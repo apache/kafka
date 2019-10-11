@@ -121,7 +121,7 @@ public class ProduceRequest extends AbstractRequest {
     private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
 
     /**
-     * V8 bumped up to add two new fields error_records offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
+     * V8 bumped up to add two new fields record_errors offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
      * (See KIP-467)
      */
     private static final Schema PRODUCE_REQUEST_V8 = PRODUCE_REQUEST_V7;

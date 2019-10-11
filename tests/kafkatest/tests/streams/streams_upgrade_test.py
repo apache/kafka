@@ -441,7 +441,7 @@ class StreamsUpgradeTest(Test):
         if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
             roll_counter = ".1-"  # second round of rolling bounces
         else:
-            roll_counter = ".0-"  # first  round of rolling boundes
+            roll_counter = ".0-"  # first  round of rolling bounces
 
         node.account.ssh("mv " + processor.STDOUT_FILE + " " + processor.STDOUT_FILE + roll_counter + str(counter), allow_fail=False)
         node.account.ssh("mv " + processor.STDERR_FILE + " " + processor.STDERR_FILE + roll_counter + str(counter), allow_fail=False)

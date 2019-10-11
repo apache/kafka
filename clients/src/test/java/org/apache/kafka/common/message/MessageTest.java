@@ -516,8 +516,8 @@ public final class MessageTest {
         int throttleTimeMs = 1234;
         long logAppendTimeMs = 1234L;
         long logStartOffset = 1234L;
-        int relativeOffset = 0;
-        String relativeOffsetErrorMessage = "error message";
+        int batchIndex = 0;
+        String batchIndexErrorMessage = "error message";
         String errorMessage = "global error message";
 
         testAllMessageRoundTrips(new ProduceResponseData()
@@ -542,10 +542,10 @@ public final class MessageTest {
                                          .setBaseOffset(baseOffset)
                                          .setLogAppendTimeMs(logAppendTimeMs)
                                          .setLogStartOffset(logStartOffset)
-                                         .setErrorRecords(singletonList(
-                                             new ProduceResponseData.RelativeOffsetAndErrorMessage()
-                                                 .setRelativeOffset(relativeOffset)
-                                                 .setRelativeOffsetErrorMessage(relativeOffsetErrorMessage)))
+                                         .setRecordErrors(singletonList(
+                                             new ProduceResponseData.BatchIndexAndErrorMessage()
+                                                 .setBatchIndex(batchIndex)
+                                                 .setBatchIndexErrorMessage(batchIndexErrorMessage)))
                                          .setErrorMessage(errorMessage)))))
                       .setThrottleTimeMs(throttleTimeMs);
 
@@ -553,7 +553,7 @@ public final class MessageTest {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
-                responseData.responses().get(0).partitions().get(0).setErrorRecords(Collections.emptyList());
+                responseData.responses().get(0).partitions().get(0).setRecordErrors(Collections.emptyList());
                 responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
             }
 

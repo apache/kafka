@@ -1820,6 +1820,20 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testListReassignmentsDoesNotShowDeletedPartitions(): Unit = {
+    client = AdminClient.create(createConfig())
+    
+    val topic = "list-reassignments-no-reassignments"
+    val tp = new TopicPartition(topic, 0)
+
+    val reassignmentsMap = client.listPartitionReassignments(Set(tp).asJava).reassignments().get()
+    assertEquals(0, reassignmentsMap.size())
+
+    val allReassignmentsMap = client.listPartitionReassignments().reassignments().get()
+    assertEquals(0, allReassignmentsMap.size())
+  }
+
+  @Test
   def testValidIncrementalAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
 
