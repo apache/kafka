@@ -38,6 +38,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -447,8 +448,15 @@ public class FetcherTest {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised");
             } catch (SerializationException e) {
+                // catch SerializationException to assert backwards compatibility
+                if (!(e instanceof RecordDeserializationException))
+                    fail("fetchedRecords should have raised " + RecordDeserializationException.class.getName());
+
                 // the position should not advance since no data has been returned
                 assertEquals(1, subscriptions.position(tp0).offset);
+                RecordDeserializationException error = (RecordDeserializationException) e;
+                assertEquals(error.partition(), tp0);
+                assertEquals(error.offset(), subscriptions.position(tp0).offset);
             }
         }
     }
@@ -508,26 +516,29 @@ public class FetcherTest {
         assertEquals(1, fetcher.fetchedRecords().get(tp0).size());
         assertEquals(1, subscriptions.position(tp0).offset);
 
-        ensureBlockOnRecord(1L);
+        ensureBlockOnRecord(tp0, 1L);
         seekAndConsumeRecord(buffer, 2L);
-        ensureBlockOnRecord(3L);
+        ensureBlockOnRecord(tp0, 3L);
         try {
             // For a record that cannot be retrieved from the iterator, we cannot seek over it within the batch.
             seekAndConsumeRecord(buffer, 4L);
             fail("Should have thrown exception when fail to retrieve a record from iterator.");
-        } catch (KafkaException ke) {
-           // let it go
+        } catch (RecordDeserializationException rde) {
+            assertEquals(rde.partition(), tp0);
+            assertEquals(rde.offset(), 4L);
         }
-        ensureBlockOnRecord(4L);
+        ensureBlockOnRecord(tp0, 4L);
     }
 
-    private void ensureBlockOnRecord(long blockedOffset) {
+    private void ensureBlockOnRecord(TopicPartition partition, long blockedOffset) {
         // the fetchedRecords() should always throw exception due to the invalid message at the starting offset.
         for (int i = 0; i < 2; i++) {
             try {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
-            } catch (KafkaException e) {
+            } catch (RecordDeserializationException e) {
+                assertEquals(partition, e.partition());
+                assertEquals(blockedOffset, e.offset());
                 assertEquals(blockedOffset, subscriptions.position(tp0).offset);
             }
         }
@@ -556,11 +567,14 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         ByteBufferOutputStream out = new ByteBufferOutputStream(buffer);
 
+        long batchEndOffset = 2;
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(out,
                                                                 DefaultRecordBatch.CURRENT_MAGIC_VALUE,
                                                                 CompressionType.NONE,
                                                                 TimestampType.CREATE_TIME,
                                                                 0L, 10L, 0L, (short) 0, 0, false, false, 0, 1024);
+        builder.append(10L, "key".getBytes(), "value".getBytes());
+        builder.append(10L, "key".getBytes(), "value".getBytes());
         builder.append(10L, "key".getBytes(), "value".getBytes());
         builder.close();
         buffer.flip();
@@ -584,13 +598,21 @@ public class FetcherTest {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
+                // check KafkaException to assert backwards compatibility
+                if (!(e instanceof RecordDeserializationException))
+                    fail("Error should be of type " + RecordDeserializationException.class.getName());
+
                 assertEquals(0, subscriptions.position(tp0).offset);
+                RecordDeserializationException err = (RecordDeserializationException) e;
+                assertEquals(err.partition(), tp0);
+                assertEquals(batchEndOffset, err.offset());
             }
         }
     }
 
     @Test
     public void testParseInvalidRecordBatch() {
+        long batchEndOffset = 2;
         buildFetcher();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -613,8 +635,15 @@ public class FetcherTest {
             fetcher.fetchedRecords();
             fail("fetchedRecords should have raised");
         } catch (KafkaException e) {
+            // check KafkaException to ensure backwards compatibility
+            if (!(e instanceof RecordDeserializationException))
+                fail("Error should be of type " + RecordDeserializationException.class.getName());
+
             // the position should not advance since no data has been returned
             assertEquals(0, subscriptions.position(tp0).offset);
+            RecordDeserializationException err = (RecordDeserializationException) e;
+            assertEquals(err.partition(), tp0);
+            assertEquals(batchEndOffset, err.offset());
         }
     }
 

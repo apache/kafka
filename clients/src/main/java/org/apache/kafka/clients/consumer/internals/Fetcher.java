@@ -38,6 +38,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -300,7 +301,8 @@ public class Fetcher<K, V> implements Closeable {
                                             long fetchOffset = requestData.fetchOffset;
                                             FetchResponse.PartitionData<Records> partitionData = entry.getValue();
 
-                                            log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                            if (log.isDebugEnabled())
+                                                log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                                     isolationLevel, fetchOffset, partition, partitionData);
 
                                             Iterator<? extends RecordBatch> batches = partitionData.records.batches().iterator();
@@ -1306,7 +1308,8 @@ public class Fetcher<K, V> implements Closeable {
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
-            throw new SerializationException("Error deserializing key/value for partition " + partition +
+            throw new RecordDeserializationException(partition, record.offset(),
+                "Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
         }
     }
@@ -1423,8 +1426,9 @@ public class Fetcher<K, V> implements Closeable {
                 try {
                     batch.ensureValid();
                 } catch (CorruptRecordException e) {
-                    throw new KafkaException("Record batch for partition " + partition + " at offset " +
-                            batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                    String errorMessage = "Record batch for partition " + partition + " at offset " +
+                        batch.baseOffset() + " is invalid, cause: " + e.getMessage();
+                    throw new RecordDeserializationException(partition, batch.lastOffset(), errorMessage);
                 }
             }
         }
@@ -1434,8 +1438,9 @@ public class Fetcher<K, V> implements Closeable {
                 try {
                     record.ensureValid();
                 } catch (CorruptRecordException e) {
-                    throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
-                            + " is invalid, cause: " + e.getMessage());
+                    String errorMessage = "Record batch for partition " + partition + " at offset " +
+                        record.offset() + " is invalid, cause: " + e.getMessage();
+                    throw new RecordDeserializationException(partition, record.offset(), errorMessage);
                 }
             }
         }
@@ -1511,10 +1516,7 @@ public class Fetcher<K, V> implements Closeable {
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             // Error when fetching the next record before deserialization.
             if (corruptLastRecord)
-                throw new KafkaException("Received exception when fetching the next record from " + partition
-                                             + ". If needed, please seek past the record to "
-                                             + "continue consumption.", cachedRecordException);
-
+                throw deserializationException(cachedRecordException);
             if (isConsumed)
                 return Collections.emptyList();
 
@@ -1545,11 +1547,22 @@ public class Fetcher<K, V> implements Closeable {
             } catch (KafkaException e) {
                 cachedRecordException = e;
                 if (records.isEmpty())
-                    throw new KafkaException("Received exception when fetching the next record from " + partition
-                                                 + ". If needed, please seek past the record to "
-                                                 + "continue consumption.", e);
+                    throw deserializationException(e);
             }
             return records;
+        }
+
+        private RecordDeserializationException deserializationException(Throwable e) {
+            long offsetToSkip;
+            if (e instanceof RecordDeserializationException)
+                offsetToSkip = ((RecordDeserializationException) e).offset();
+            else
+                offsetToSkip = nextFetchOffset;
+
+            return new RecordDeserializationException(partition, offsetToSkip,
+                "Received exception when fetching the next record from " + partition
+                    + ". If needed, please seek past the record to "
+                    + "continue consumption.", e);
         }
 
         private void consumeAbortedTransactionsUpTo(long offset) {
