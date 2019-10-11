@@ -698,7 +698,7 @@ class LogManager(logDirs: Seq[File],
                               maybeLog: Option[Log],
                               fetchLogConfig: () => LogConfig): Unit = {
     if (partitionsInitializing(topicPartition)) {
-      maybeLog.foreach(_.updateConfig(Set(), fetchLogConfig()))
+      maybeLog.foreach(_.updateConfig(fetchLogConfig()))
     }
 
     partitionsInitializing -= topicPartition

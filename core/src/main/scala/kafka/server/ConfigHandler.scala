@@ -62,7 +62,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
+      logs.foreach(_.updateConfig(logConfig))
     }
   }
 
