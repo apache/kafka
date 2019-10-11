@@ -35,10 +35,9 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * aggregations are applied to the new partitions resulting in a {@link KTable}.
  * <p>
  * A {@code CogroupedKStream} must be obtained from a {@link KGroupedStream} via {@link
- * KGroupedStream#cogroup(Aggregator, Materialized) cogroup(...)}.
+ * KGroupedStream#cogroup(Aggregator) cogroup(...)}.
  *
  * @param <K> Type of keys
- * @param <Vin> Type of input values
  * @param <Vout> Type of values after agg
  */
 public interface CogroupedKStream<K, Vout> {
@@ -55,6 +54,7 @@ public interface CogroupedKStream<K, Vout> {
      * <p>
      * @param groupedStream a group stream object
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
+     * @param <Vin> Type of input values
      * @return a KCogroupedStream with the new grouopStream and aggregator linked
      */
     <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,

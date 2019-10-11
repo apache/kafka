@@ -20,7 +20,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import jdk.vm.ci.meta.ExceptionHandler;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -38,18 +40,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> implements CogroupedKStream<K, Vout> {
 
-    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
 
     final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> groupPatterns;
     final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
                          final Serde<K> keySerde,
-                         final Serde<Vout> valueSerde,
                          final Set<String> sourceNodes,
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
-        super(name, keySerde, valueSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, null, sourceNodes, streamsGraphNode, builder);
         this.groupPatterns = new HashMap<>();
         this.aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
@@ -70,14 +71,14 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
         return doAggregate(initializer, named,
-                           new MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>>(
-                               materialized, builder,
-                               AGGREGATE_NAME));
+                new MaterializedInternal<>(
+                        materialized, builder,
+                        AGGREGATE_NAME));
     }
 
     @Override
     public KTable<K, Vout> aggregate(final Initializer<Vout> initializer) {
-        return aggregate(initializer, Materialized.with(keySerde, valSerde));
+        return aggregate(initializer, Materialized.with(keySerde, null));
     }
 
     @Override
@@ -89,7 +90,7 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
                 sourceNodes,
                 name,
                 keySerde,
-                valSerde,
+                null,
                 aggregateBuilder,
                 streamsGraphNode,
                 groupPatterns);
@@ -103,7 +104,7 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
                 sourceNodes,
                 name,
                 keySerde,
-                valSerde,
+                null,
                 aggregateBuilder,
                 streamsGraphNode,
                 groupPatterns);

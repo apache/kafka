@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
 
 import java.util.Arrays;
 import java.util.Properties;
@@ -39,10 +38,8 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -63,7 +60,7 @@ public class CogroupedKStreamImplTest {
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
 
-    private static final Aggregator<String, String, String> STRING_AGGREGATOR = (Aggregator<String, String, String>) (key, value, aggregate) ->
+    private static final Aggregator<String, String, String> STRING_AGGREGATOR = (key, value, aggregate) ->
             aggregate + value;
 
     private static final Initializer<String> STRING_INITIALIZER = () -> "";
@@ -119,12 +116,10 @@ public class CogroupedKStreamImplTest {
 
         final KGroupedStream<String, String> groupedOne = test.groupByKey();
 
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
             .aggregate(STRING_INITIALIZER);
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
-
-        builder.stream("to-one", stringConsumed).process(processorSupplier);
+        customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
@@ -152,13 +147,11 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedOne = test.groupByKey();
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
             .cogroup(groupedTwo, STRING_AGGREGATOR)
             .aggregate(STRING_INITIALIZER);
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
-
-        builder.stream("to-one", stringConsumed).process(processorSupplier);
+        customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
@@ -200,13 +193,11 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedOne = test.groupByKey();
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR, Materialized.as("store"))
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
             .cogroup(groupedTwo, STRING_AGGREGATOR)
             .aggregate(STRING_INITIALIZER);
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
-
-        builder.stream("to-one", stringConsumed).process(processorSupplier);
+        customers.toStream().process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
@@ -255,9 +246,7 @@ public class CogroupedKStreamImplTest {
             .cogroup(groupedTwo, STRSUM_AGGREGATOR)
             .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.Integer()));
-
-        builder.stream("to-one", stringConsume).process(supplier);
+        customers.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
@@ -307,9 +296,7 @@ public class CogroupedKStreamImplTest {
             .cogroup(groupedTwo, SUM_AGGREGATOR)
             .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.Integer()));
-
-        builder.stream("to-one", intergerConsumed).process(supplier);
+        customers.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
@@ -330,18 +317,18 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<String, Integer>("k1", 1, 0),
-            new KeyValueTimestamp<String, Integer>("k2", 1, 1),
-            new KeyValueTimestamp<String, Integer>("k1", 2, 10),
-            new KeyValueTimestamp<String, Integer>("k2", 2, 100),
-            new KeyValueTimestamp<String, Integer>("k2", 4, 100),
-            new KeyValueTimestamp<String, Integer>("k2", 6, 200),
-            new KeyValueTimestamp<String, Integer>("k1", 4, 10),
-            new KeyValueTimestamp<String, Integer>("k2", 8, 500),
-            new KeyValueTimestamp<String, Integer>("k1", 6, 500),
-            new KeyValueTimestamp<String, Integer>("k2", 11, 500),
-            new KeyValueTimestamp<String, Integer>("k3", 2, 500),
-            new KeyValueTimestamp<String, Integer>("k2", 13, 500)
+                new KeyValueTimestamp<>("k1", 1, 0),
+                new KeyValueTimestamp<>("k2", 1, 1),
+            new KeyValueTimestamp<>("k1", 2, 10),
+            new KeyValueTimestamp<>("k2", 2, 100),
+            new KeyValueTimestamp<>("k2", 4, 100),
+            new KeyValueTimestamp<>("k2", 6, 200),
+            new KeyValueTimestamp<>("k1", 4, 10),
+            new KeyValueTimestamp<>("k2", 8, 500),
+            new KeyValueTimestamp<>("k1", 6, 500),
+            new KeyValueTimestamp<>("k2", 11, 500),
+            new KeyValueTimestamp<>("k3", 2, 500),
+            new KeyValueTimestamp<>("k2", 13, 500)
         )));
     }
 
@@ -359,9 +346,8 @@ public class CogroupedKStreamImplTest {
             .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
             .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
 
-        customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
+        customers.toStream().process(supplier);
 
-        builder.stream("to-one", stringConsumed).process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
@@ -376,14 +362,14 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<String, String>("k1", "0-1", 0),
-            new KeyValueTimestamp<String, String>("k2", "0-1", 1),
-            new KeyValueTimestamp<String, String>("k1", "0-1-1", 10),
-            new KeyValueTimestamp<String, String>("k2", "0-1-1", 100),
-            new KeyValueTimestamp<String, String>("k1", "0-1-1+2", 500L),
-            new KeyValueTimestamp<String, String>("k2", "0-1-1+2", 500L),
-            new KeyValueTimestamp<String, String>("k1", "0-1-1+2+2", 500L),
-            new KeyValueTimestamp<String, String>("k2", "0-1-1+2+2", 500L)
+            new KeyValueTimestamp<>("k1", "0-1", 0),
+            new KeyValueTimestamp<>("k2", "0-1", 1),
+            new KeyValueTimestamp<>("k1", "0-1-1", 10),
+            new KeyValueTimestamp<>("k2", "0-1-1", 100),
+            new KeyValueTimestamp<>("k1", "0-1-1+2", 500L),
+            new KeyValueTimestamp<>("k2", "0-1-1+2", 500L),
+            new KeyValueTimestamp<>("k1", "0-1-1+2+2", 500L),
+            new KeyValueTimestamp<>("k2", "0-1-1+2+2", 500L)
         )));
     }
 }
