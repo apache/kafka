@@ -30,7 +30,6 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
-import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -545,8 +544,8 @@ class KafkaApisTest {
         val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
-        callback(Seq(tp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
-          None, None, Option.empty, isReassignmentFetch = false)))
+        callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records,
+          None, None, Option.empty)))
       }
     })
 
@@ -803,7 +802,7 @@ class KafkaApisTest {
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
         val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
-        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records, None, None, Option.empty, isReassigning)))
+        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records, None, None, Option.empty)))
       }
     })
 
@@ -819,8 +818,7 @@ class KafkaApisTest {
     expect(replicaManager.getLogConfig(EasyMock.eq(tp0))).andReturn(None)
 
     val partition: Partition = createNiceMock(classOf[Partition])
-    expect(partition.isAddingReplica(anyInt())).andReturn(isReassigning)
-    expect(replicaManager.getPartition(anyObject[TopicPartition])).andReturn(Online(partition))
+    expect(replicaManager.isAddingReplica(anyObject(), anyInt())).andReturn(isReassigning)
 
     replay(replicaManager, fetchManager, clientQuotaManager, requestChannel, replicaQuotaManager, partition)
 

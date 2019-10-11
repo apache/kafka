@@ -172,7 +172,7 @@ class DelayedFetch(delayMs: Long,
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
       tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-        result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, replicaManager.isAddingReplica(tp, fetchMetadata.replicaId))
+        result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
     }
 
     responseCallback(fetchPartitionData)

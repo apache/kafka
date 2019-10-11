@@ -120,8 +120,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
-                              preferredReadReplica: Option[Int],
-                              isReassignmentFetch: Boolean)
+                              preferredReadReplica: Option[Int])
 
 
 /**
@@ -925,7 +924,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isAddingReplica(tp, replicaId))
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
       maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {

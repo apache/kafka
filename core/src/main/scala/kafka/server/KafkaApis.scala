@@ -709,8 +709,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
           abortedTransactions, data.records))
-        // record the bytes out metrics only when the response is being sent
-        brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, data.isReassignmentFetch, data.records.sizeInBytes)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
@@ -731,8 +729,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         // Prepare fetch response from converted data
-        new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
+        val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
           unconvertedFetchResponse.sessionId())
+        // record the bytes out metrics only when the response is being sent
+        response.responseData.asScala.foreach { case (tp, data) =>
+          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower,
+            replicaManager.isAddingReplica(tp, fetchRequest.replicaId()), data.records.sizeInBytes)
+        }
+        response
       }
 
       def updateConversionStats(send: Send): Unit = {
