@@ -550,7 +550,7 @@ public interface KGroupedStream<K, V> {
      * @param  <Vout> the type of the output values
      *
      */
-    <Vout> CogroupedKStream<K, V, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
+    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
@@ -568,7 +568,7 @@ public interface KGroupedStream<K, V> {
      *                     Cannot be {@code null}.
      * @param  <Vout> the type of the output values
      */
-    <Vout> CogroupedKStream<K, V, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator,
+    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator,
                                                 final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized);
 
 }

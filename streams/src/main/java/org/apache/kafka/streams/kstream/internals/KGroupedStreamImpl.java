@@ -227,20 +227,20 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     @Override
-    public <Vout> CogroupedKStream<K, V, Vout> cogroup(
+    public <Vout> CogroupedKStream<K, Vout> cogroup(
         final Aggregator<? super K, ? super V, Vout> aggregator) {
         return cogroup(aggregator, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <Vout> CogroupedKStream<K, V, Vout> cogroup(
+    public <Vout> CogroupedKStream<K, Vout> cogroup(
         final Aggregator<? super K, ? super V, Vout> aggregator,
         final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>>(
             materialized, builder, AGGREGATE_NAME);
-        return new CogroupedKStreamImpl<K, V, Vout>(
+        return new CogroupedKStreamImpl<K, Vout>(
             name, materializedInternal.keySerde(), null, sourceNodes,
             streamsGraphNode, builder).cogroup(this, aggregator);
     }

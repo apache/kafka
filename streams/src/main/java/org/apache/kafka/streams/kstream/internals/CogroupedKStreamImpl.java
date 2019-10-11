@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.HashMap;
@@ -37,11 +36,11 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class CogroupedKStreamImpl<K, Vin, Vout> extends AbstractStream<K, Vout> implements CogroupedKStream<K, Vin, Vout> {
+public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> implements CogroupedKStream<K, Vout> {
 
-    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
 
-    final private Map<KGroupedStreamImpl<K, Vin>, Aggregator<? super K, ? super Vin, Vout>> groupPatterns;
+    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> groupPatterns;
     final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
@@ -56,11 +55,11 @@ public class CogroupedKStreamImpl<K, Vin, Vout> extends AbstractStream<K, Vout> 
     }
 
     @Override
-    public CogroupedKStream<K, Vin, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
+    public <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
                                                   final Aggregator<? super K, ? super Vin, Vout> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        groupPatterns.put((KGroupedStreamImpl<K, Vin>) groupedStream, aggregator);
+        groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream, aggregator);
         return this;
     }
 
@@ -71,9 +70,9 @@ public class CogroupedKStreamImpl<K, Vin, Vout> extends AbstractStream<K, Vout> 
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
         return doAggregate(initializer, named,
-                new MaterializedInternal<>(
-                        materialized, builder,
-                        AGGREGATE_NAME));
+                           new MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>>(
+                               materialized, builder,
+                               AGGREGATE_NAME));
     }
 
     @Override

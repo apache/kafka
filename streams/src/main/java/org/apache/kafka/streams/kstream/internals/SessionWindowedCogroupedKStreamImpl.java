@@ -38,14 +38,14 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
-public class SessionWindowedCogroupedKStreamImpl<K, T, V> extends
+public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     AbstractStream<K, V> implements
         SessionWindowedCogroupedKStream<K, V> {
 
     private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
     private final SessionWindows sessionWindows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    private final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns;
+    private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, V>> groupPatterns;
 
     SessionWindowedCogroupedKStreamImpl(final SessionWindows sessionWindows,
                                         final InternalStreamsBuilder builder,
@@ -55,7 +55,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, T, V> extends
                                         final Serde<V> valSerde,
                                         final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                         final StreamsGraphNode streamsGraphNode,
-                                        final Map<KGroupedStreamImpl<K, T>, Aggregator<? super K, ? super T, V>> groupPatterns) {
+                                        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, V>> groupPatterns) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.sessionWindows = sessionWindows;
         this.aggregateBuilder = aggregateBuilder;

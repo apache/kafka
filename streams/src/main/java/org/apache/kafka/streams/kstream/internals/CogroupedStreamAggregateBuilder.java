@@ -48,7 +48,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
     }
 
     <KR, Vin, W extends Window> KTable<KR, Vout> build(
-        final Map<KGroupedStreamImpl<K, Vin>, Aggregator<? super K, ? super Vin, Vout>> groupPatterns,
+        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> groupPatterns,
         final Initializer<Vout> initializer,
         final NamedInternal named,
         final StoreBuilder<? extends StateStore> storeBuilder,
@@ -60,7 +60,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
-        for (final Entry<KGroupedStreamImpl<K, Vin>, Aggregator<? super K, ? super Vin, Vout>> kGroupedStream : groupPatterns
+        for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? , Vout>> kGroupedStream : groupPatterns
             .entrySet()) {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
                 kGroupedStream.getValue(),

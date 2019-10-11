@@ -58,7 +58,7 @@ public class CogroupedKStreamImplTest {
     private static final String TOPIC = "topic";
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
-    private CogroupedKStream<String, String, String> cogroupedStream;
+    private CogroupedKStream<String, String> cogroupedStream;
 
     private final Properties props = StreamsTestUtils
         .getStreamsConfig(Serdes.String(), Serdes.String());
@@ -74,7 +74,7 @@ public class CogroupedKStreamImplTest {
     private static final Aggregator<? super String, ? super Integer, Integer> SUM_AGGREGATOR = (key, value, aggregate) ->
             aggregate + value;
 
-    private static final Initializer SUM_INITIALIZER = () -> 0;
+    private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
 
 
     @Before
@@ -241,7 +241,6 @@ public class CogroupedKStreamImplTest {
         )));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCogroupKeyMixedInTopicsandChageTypes() {
         final Consumed<String, Integer> stringConsume = Consumed.with(Serdes.String(), Serdes.Integer());
@@ -293,7 +292,6 @@ public class CogroupedKStreamImplTest {
         )));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCogroupKeyMixedInTopicsTypesandChageTypes() {
 
@@ -302,12 +300,12 @@ public class CogroupedKStreamImplTest {
         final KStream<String, String> test = builder.stream("one", stringConsumed);
         final KStream<String, Integer> test2 = builder.stream("two", intergerConsumed);
 
-        final KGroupedStream groupedOne = test.groupByKey();
-        final KGroupedStream groupedTwo = test2.groupByKey();
+        final KGroupedStream<String, String> groupedOne = test.groupByKey();
+        final KGroupedStream<String, Integer> groupedTwo = test2.groupByKey();
 
         final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
             .cogroup(groupedTwo, SUM_AGGREGATOR)
-            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, SessionStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
 
         customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.Integer()));
 
@@ -347,20 +345,19 @@ public class CogroupedKStreamImplTest {
         )));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCogroupKeyMixedAggregators() {
 
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
-        final KStream test = builder.stream("one", stringConsumed);
-        final KStream test2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
 
-        final KGroupedStream groupedOne = test.groupByKey();
-        final KGroupedStream groupedTwo = test2.groupByKey();
+        final KGroupedStream<String, String> groupedOne = test.groupByKey();
+        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(MockAggregator.TOSTRING_REMOVER)
             .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
-            .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
+            .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
 
         customers.toStream().to("to-one", Produced.with(Serdes.String(), Serdes.String()));
 

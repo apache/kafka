@@ -58,7 +58,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
     private KGroupedStream<String, String> groupedStream;
 
     private KGroupedStream<String, String> groupedStream2;
-    private CogroupedKStream<String, String, String> cogroupedStream;
+    private CogroupedKStream<String, String> cogroupedStream;
     private SessionWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
     private final Properties props = StreamsTestUtils

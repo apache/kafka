@@ -41,7 +41,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * @param <Vin> Type of input values
  * @param <Vout> Type of values after agg
  */
-public interface CogroupedKStream<K, Vin, Vout> {
+public interface CogroupedKStream<K, Vout> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
@@ -57,7 +57,7 @@ public interface CogroupedKStream<K, Vin, Vout> {
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
      * @return a KCogroupedStream with the new grouopStream and aggregator linked
      */
-    CogroupedKStream<K, Vin, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
+    <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
                                            final Aggregator<? super K, ? super Vin, Vout> aggregator);
     /**
      * Aggregate the values of records in these streams by the grouped key.
