@@ -74,6 +74,15 @@ object BrokersZNode {
   def path = "/brokers"
 }
 
+object PreferredControllersZNode {
+  def path = s"${BrokersZNode.path}/preferred_controllers"
+  def encode: Array[Byte] = null
+}
+
+object PreferredControllerIdZNode {
+  def path(id: Int) = s"${BrokersZNode.path}/preferred_controllers/$id"
+}
+
 object BrokerIdsZNode {
   def path = s"${BrokersZNode.path}/ids"
   def encode: Array[Byte] = null
@@ -775,6 +784,7 @@ object ZkData {
   val PersistentZkPaths = Seq(
     ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
+    PreferredControllersZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
     DeleteTopicsZNode.path,

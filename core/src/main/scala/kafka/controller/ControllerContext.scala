@@ -99,6 +99,8 @@ class ControllerContext {
   val topicsWithDeletionStarted = mutable.Set.empty[String]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
+  @volatile var livePreferredControllerIds: Set[Int] = Set.empty
+
   private def clearTopicsState(): Unit = {
     allTopics = Set.empty
     partitionAssignments.clear()
@@ -191,6 +193,10 @@ class ControllerContext {
     liveBrokers += newMetadata
   }
 
+  def setLivePreferredControllerIds(preferredControllerIds: Set[Int]): Unit = {
+    livePreferredControllerIds = preferredControllerIds
+  }
+
   // getter
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet -- shuttingDownBrokerIds
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
@@ -198,6 +204,8 @@ class ControllerContext {
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
   def maxBrokerEpoch: Long = liveBrokerEpochs.values.max
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
+
+  def getLivePreferredControllerIds : Set[Int] = livePreferredControllerIds
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
