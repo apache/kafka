@@ -106,7 +106,9 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logsPool)
     cleanerCheckpoints.put(tp, 1)
 
-    val thrownException = assertThrows(classOf[LogCleaningException], () => cleanerManager.grabFilthiestCompactedLog(time).get)
+    val thrownException = intercept[LogCleaningException] {
+      cleanerManager.grabFilthiestCompactedLog(time).get
+    }
     assertEquals(log, thrownException.log)
     assertTrue(thrownException.getCause.isInstanceOf[IllegalStateException])
   }
