@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.LinkedList;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -45,6 +44,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -769,10 +769,18 @@ public class InternalTopologyBuilder {
 
         // Start with the "true" source topics
         final LinkedList<String> sourceNodesToVisit = new LinkedList<>(userSubscribedSourceTopicNames);
+        final Set<String> visited = new HashSet<>();
 
         // Traverse the source nodes in topological order by BFS along sink-source topic edges
         while (!sourceNodesToVisit.isEmpty()) {
             final String nodeName = sourceNodesToVisit.poll();
+            if (visited.contains(nodeName)) {
+                log.warn("Found node {} twice during a BFS of the topology DAG, cycles in your stream processing " +
+                    "topology may cause unexpected consequences and/or undefined behavior", nodeName);
+                continue;
+            } else {
+                visited.add(nodeName);
+            }
             nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
 
             // Add all downstream nodes to the list of source nodes to visit -- note that it is ok to "ignore" the
