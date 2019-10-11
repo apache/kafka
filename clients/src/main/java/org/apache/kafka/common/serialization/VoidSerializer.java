@@ -17,7 +17,8 @@
 package org.apache.kafka.common.serialization;
 
 public class VoidSerializer implements Serializer<Void> {
-    @Override public byte[] serialize(String topic, Void data) {
+    @Override
+    public byte[] serialize(String topic, Void data) {
         return null;
     }
 }

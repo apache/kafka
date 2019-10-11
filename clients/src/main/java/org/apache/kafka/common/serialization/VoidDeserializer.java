@@ -17,7 +17,8 @@
 package org.apache.kafka.common.serialization;
 
 public class VoidDeserializer implements Deserializer<Void> {
-    @Override public Void deserialize(String topic, byte[] data) {
+    @Override
+    public Void deserialize(String topic, byte[] data) {
         if (data != null)
             throw new IllegalArgumentException("Data should be null for a VoidDeserializer.");
 

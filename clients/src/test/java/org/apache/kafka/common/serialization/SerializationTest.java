@@ -147,6 +147,20 @@ public class SerializationTest {
         }
     }
 
+    @Test
+    public void testSerializeVoid() {
+        try (Serde<Void> serde = Serdes.Void()) {
+            serde.serializer().serialize(topic, null);
+        }
+    }
+
+    @Test
+    public void testDeserializeVoid() {
+        try (Serde<Void> serde = Serdes.Void()) {
+            serde.deserializer().deserialize(topic, null);
+        }
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void voidDeserializerShouldThrowOnNotNullValues() {
         try (Serde<Void> serde = Serdes.Void()) {

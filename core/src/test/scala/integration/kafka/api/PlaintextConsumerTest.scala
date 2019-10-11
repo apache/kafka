@@ -1878,34 +1878,4 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue("Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1",
       records2.count() == 1 && records2.records(tp).asScala.head.offset == 1)
   }
-
-  @Test
-  def testVoidSerdeConsumption(): Unit = {
-    val numRecords = 10
-    val producer: KafkaProducer[Void, java.lang.Long] = createProducer(Serdes.Void().serializer(),
-      Serdes.Long().serializer())
-
-    (0 until numRecords).map { i =>
-      val record = new ProducerRecord[Void, java.lang.Long](tp.topic(), tp.partition(), i.toLong, null, i.toLong)
-      producer.send(record)
-      record
-    }
-    producer.flush()
-
-    val consumer = createConsumer(Serdes.Void().deserializer(), Serdes.Long().deserializer())
-    assertEquals(0, consumer.assignment.size)
-    consumer.assign(List(tp).asJava)
-    assertEquals(1, consumer.assignment.size)
-
-    consumer.seek(tp, 0)
-    val records = consumeRecords(consumer, numRecords)
-    for (i <- 0 until numRecords) {
-      val record = records(i)
-      assertNull(record.key)
-      assertEquals(i.toLong, record.value)
-    }
-
-    // check async commit callbacks
-    sendAndAwaitAsyncCommit(consumer)
-  }
 }
