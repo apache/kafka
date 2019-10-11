@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
+import kafka.controller.KafkaController
 import kafka.log.LogConfig
 import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
@@ -59,7 +60,8 @@ import scala.jdk.CollectionConverters._
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient,
+                     val controller: KafkaController) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
@@ -175,7 +177,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val assignments = if (topic.assignments.isEmpty) {
           adminZkClient.assignReplicasToAvailableBrokers(
-            brokers, config.getMaintenanceBrokerList.toSet,
+            brokers, controller.partitionUnassignableBrokerIds.toSet,
             resolvedNumPartitions, resolvedReplicationFactor
           )
         } else {
@@ -350,7 +352,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val assignmentForNewPartitions = adminZkClient.createNewPartitionsAssignment(
           topic, existingAssignment, allBrokers, newPartition.count, newPartitionsAssignment,
-          noNewPartitionBrokerIds = config.getMaintenanceBrokerList.toSet)
+          noNewPartitionBrokerIds = controller.partitionUnassignableBrokerIds.toSet)
 
         if (validateOnly) {
           CreatePartitionsMetadata(topic, (existingAssignment ++ assignmentForNewPartitions).keySet)

@@ -100,6 +100,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Registers the preferred controller id in zookeeper.
+   * @param id controller id
+   */
+  def registerPreferredControllerId(id: Int): Unit = {
+    val path = PreferredControllerIdZNode.path(id)
+    val stat = checkedEphemeralCreate(path, null)
+    info(s"Registered preferred controller ${id} at path $path with czxid (preferred controller epoch): ${stat.getCzxid}")
+  }
+
+  /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
    * @param controllerId the id of the broker that is to be registered as the controller.
    * @return the (updated controller epoch, epoch zkVersion) tuple
@@ -523,6 +533,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       DeleteRequest(BrokerShutdownIdZNode.path(brokerId), ZkVersion.MatchAnyVersion))
     retryRequestsUntilConnected(deleteRequests, expectedControllerEpochZkVersion)
   }
+
+  /**
+   * Gets the list of preferred controller Ids
+   */
+  def getPreferredControllerList: Seq[Int] = getChildren(PreferredControllersZNode.path).map(_.toInt)
 
   /**
    * Gets all topics in the cluster.

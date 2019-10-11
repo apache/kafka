@@ -151,6 +151,7 @@ class KafkaController(val config: KafkaConfig,
 
   private val controllerChangeHandler = new ControllerChangeHandler(eventManager)
   private val brokerChangeHandler = new BrokerChangeHandler(eventManager)
+  private val preferredControllerChangeHandler = new PreferredControllerChangeHandler(eventManager)
   private val brokerModificationsHandlers: mutable.Map[Int, BrokerModificationsHandler] = mutable.Map.empty
   private val topicChangeHandler = new TopicChangeHandler(eventManager)
   private val topicDeletionHandler = new TopicDeletionHandler(eventManager)
@@ -178,6 +179,8 @@ class KafkaController(val config: KafkaConfig,
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
 
   newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
+  newGauge("ActivePreferredControllerCount", () => if (isActive && config.preferredController) 1 else 0)
+  newGauge("StandbyPreferredControllerCount", () => if (!isActive && config.preferredController) 1 else 0)
   newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
   newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
   newGauge("ControllerState", () => state.value)
@@ -197,6 +200,11 @@ class KafkaController(val config: KafkaConfig,
   def brokerEpoch: Long = _brokerEpoch
 
   def epoch: Int = controllerContext.epoch
+
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+  def partitionUnassignableBrokerIds: Seq[Int] = config.getMaintenanceBrokerList ++ controllerContext.getLivePreferredControllerIds
 
   /**
    * Invoked when the controller module of a Kafka server is started up. This does not assume that the current broker
@@ -263,6 +271,10 @@ class KafkaController(val config: KafkaConfig,
     if (isActive) {
       eventManager.put(TopicUncleanLeaderElectionEnable(topic))
     }
+  }
+
+  private[kafka] def enablePreferredControllerFallback(): Unit = {
+    eventManager.put(PreferredControllerChange)
   }
 
   private[kafka] def setMinInSyncReplicas(topicName: String, minInSyncReplicas: Int): Unit = {
@@ -1079,7 +1091,7 @@ class KafkaController(val config: KafkaConfig,
   // maintenance brokers that do not take new partitions
   private def rearrangePartitionReplicaAssignmentForNewTopics(topics: Set[String]) {
     try {
-      val noNewPartitionBrokerIds = config.getMaintenanceBrokerList
+      val noNewPartitionBrokerIds = partitionUnassignableBrokerIds
       if (noNewPartitionBrokerIds.nonEmpty) {
         val newTopics = zkClient.getPartitionNodeNonExistsTopics(topics.toSet)
         val newTopicsToBeArranged = zkClient.getPartitionAssignmentForTopics(newTopics).filter {
@@ -1628,6 +1640,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def processStartup(): Unit = {
     zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
+    zkClient.registerZNodeChildChangeHandler(preferredControllerChangeHandler)
     elect()
   }
 
@@ -1705,6 +1718,10 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def elect(): Unit = {
+
+    // refresh preferred controller nodes
+    controllerContext.setLivePreferredControllerIds(zkClient.getPreferredControllerList.toSet)
+
     activeControllerId = zkClient.getControllerId.getOrElse(-1)
     /*
      * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
@@ -1714,6 +1731,16 @@ class KafkaController(val config: KafkaConfig,
     if (activeControllerId != -1) {
       debug(s"Broker $activeControllerId has been elected as the controller, so stopping the election process.")
       return
+    }
+
+    if (!config.preferredController) {
+      /*
+       * A broker that is not preferred controller only elects itself when there is no preferred controllers in cluster
+       * and allowPreferredControllerFallback is set to true.
+       */
+      if (!config.allowPreferredControllerFallback || controllerContext.getLivePreferredControllerIds.nonEmpty) {
+        return
+      }
     }
 
     try {
@@ -1820,6 +1847,33 @@ class KafkaController(val config: KafkaConfig,
 
     if (newBrokerIds.nonEmpty || deadBrokerIds.nonEmpty || bouncedBrokerIds.nonEmpty) {
       info(s"Updated broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
+    }
+  }
+
+  /**
+   * PreferredControllerChange event should be handled by all brokers to perform:
+   * 1) update preferred controllers
+   * 2) non-preferred active controller resign
+   * 3) elect controller in the absence of preferred controllers. When the last preferred controller goes offline,
+   * ControllerChange event might be fired before the PreferredControllerChange event. When ControllerChange event
+   * is processed, a broker may still see the preferred controller under preferred controller znode and not to elect
+   * itself as controller. Therefore, when PreferredControllerChange event is processed,
+   * a controller election needs to be attempted.
+   */
+  private def processPreferredControllerChange(): Unit = {
+    // refresh the preferred controller list and reset zookeeper watch by reading the list
+    controllerContext.setLivePreferredControllerIds(zkClient.getPreferredControllerList.toSet)
+    if (isActive) {
+      if (!config.preferredController && controllerContext.getLivePreferredControllerIds.nonEmpty) {
+        // resign if a non-preferred active controller detects any live preferred controller
+        info(s"Resign when detecting preferred controllers.")
+        triggerControllerMove()
+      }
+    } else {
+      if (controllerContext.getLivePreferredControllerIds.isEmpty) {
+        // trigger election in the absence of preferred controllers
+        processReelect()
+      }
     }
   }
 
@@ -2688,6 +2742,9 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processRegisterBrokerAndReelect(): Unit = {
+    if (config.preferredController) {
+      zkClient.registerPreferredControllerId(brokerInfo.broker.id)
+    }
     _brokerEpoch = zkClient.registerBroker(brokerInfo)
     processReelect()
   }
@@ -2704,7 +2761,7 @@ class KafkaController(val config: KafkaConfig,
 
     val replicationFactor = config.defaultReplicationFactor
     val brokers = controllerContext.liveOrShuttingDownBrokers.map { sb => kafka.admin.BrokerMetadata(sb.id, sb.rack) }.toSeq
-    val noNewPartitionBrokerIds = config.getMaintenanceBrokerList.toSet
+    val noNewPartitionBrokerIds = partitionUnassignableBrokerIds.toSet
 
     topicIdReplicaAssignments.foreach{ topicsIdReplicaAssignment =>
       val topic = topicsIdReplicaAssignment.topic
@@ -2776,6 +2833,8 @@ class KafkaController(val config: KafkaConfig,
           processTopicDeletionStopReplicaResponseReceived(replicaId, requestError, partitionErrors)
         case BrokerChange =>
           processBrokerChange()
+        case PreferredControllerChange =>
+          processPreferredControllerChange()
         case BrokerModifications(brokerId) =>
           processBrokerModification(brokerId)
         case ControllerChange =>
@@ -2838,6 +2897,14 @@ class BrokerChangeHandler(eventManager: ControllerEventManager) extends ZNodeChi
 
   override def handleChildChange(): Unit = {
     eventManager.put(BrokerChange)
+  }
+}
+
+class PreferredControllerChangeHandler(eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
+  override val path: String = PreferredControllersZNode.path
+
+  override def handleChildChange(): Unit = {
+    eventManager.put(PreferredControllerChange)
   }
 }
 
@@ -3045,6 +3112,11 @@ case object Startup extends ControllerEvent {
 
 case object BrokerChange extends ControllerEvent {
   override def state: ControllerState = ControllerState.BrokerChange
+  override def preempt(): Unit = {}
+}
+
+case object PreferredControllerChange extends ControllerEvent {
+  override def state: ControllerState = ControllerState.PreferredControllerChange
   override def preempt(): Unit = {}
 }
 
