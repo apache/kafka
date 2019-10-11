@@ -550,7 +550,8 @@ public class Sender implements Runnable {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
+                        correlationId, now);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
@@ -588,17 +589,20 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
+        String errorMessageSuffix = (response.errorMessage == null || response.errorMessage.isEmpty()) ?
+            "" : String.format(". Error Message: %s", response.errorMessage);
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone() &&
                 (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
             // If the batch is too large, we split the batch and send the split batches again. We do not decrement
             // the retry attempts in this case.
             log.warn(
-                "Got error produce response in correlation id {} on topic-partition {}, splitting and retrying ({} attempts left). Error: {}",
+                "Got error produce response in correlation id {} on topic-partition {}, splitting and retrying ({} attempts left). Error: {}{}",
                 correlationId,
                 batch.topicPartition,
                 this.retries - batch.attempts(),
-                error);
+                error,
+                errorMessageSuffix);
             if (transactionManager != null)
                 transactionManager.removeInFlightBatch(batch);
             this.accumulator.splitAndReenqueue(batch);
@@ -607,11 +611,12 @@ public class Sender implements Runnable {
         } else if (error != Errors.NONE) {
             if (canRetry(batch, response, now)) {
                 log.warn(
-                    "Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
+                    "Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}{}",
                     correlationId,
                     batch.topicPartition,
                     this.retries - batch.attempts() - 1,
-                    error);
+                    error,
+                    errorMessageSuffix);
                 reenqueueBatch(batch, now);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
@@ -639,8 +644,9 @@ public class Sender implements Runnable {
                             "topic-partition may not exist or the user may not have Describe access to it",
                         batch.topicPartition);
                 } else {
-                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
+                    log.warn("Received invalid metadata error in produce request on partition {} due to {}{}. Going " +
+                            "to request metadata update now", batch.topicPartition,
+                            error.exception(response.errorMessage).toString(), errorMessageSuffix);
                 }
                 metadata.requestUpdate();
             }
