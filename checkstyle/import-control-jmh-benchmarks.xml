@@ -38,6 +38,7 @@
     <allow pkg="kafka.api"/>
     <allow class="kafka.utils.Pool"/>
     <allow class="kafka.utils.KafkaScheduler"/>
+    <allow class="org.apache.kafka.clients.FetchSessionHandler"/>
     <allow pkg="org.mockito"/>
 
 

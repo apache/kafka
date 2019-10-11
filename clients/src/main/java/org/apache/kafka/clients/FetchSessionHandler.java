@@ -218,7 +218,6 @@ public class FetchSessionHandler {
                 return new FetchRequestData(toSend, Collections.emptyList(), toSend, nextMetadata);
             }
 
-            LinkedHashMap<TopicPartition, PartitionData> updated = new LinkedHashMap<>();
             List<TopicPartition> added = new ArrayList<>();
             List<TopicPartition> removed = new ArrayList<>();
             List<TopicPartition> altered = new ArrayList<>();
@@ -227,13 +226,11 @@ public class FetchSessionHandler {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData prevData = entry.getValue();
-                // process from next - removing the entry now so that later only
-                // added partitions are left
                 PartitionData nextData = next.remove(topicPartition);
                 if (nextData != null) {
                     if (!prevData.equals(nextData)) {
-                        // partition data was updated
-                        updated.put(topicPartition, nextData);
+                        // Re-add the altered partition to the end of 'next'
+                        next.put(topicPartition, nextData);
                         entry.setValue(nextData);
                         altered.add(topicPartition);
                     }
@@ -244,12 +241,18 @@ public class FetchSessionHandler {
                     removed.add(topicPartition);
                 }
             }
-            // Only the new partitions are left in next. Add these new partitions to the session
+            // Add any new partitions to the session.
             for (Entry<TopicPartition, PartitionData> entry : next.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData nextData = entry.getValue();
+                if (sessionPartitions.containsKey(topicPartition)) {
+                    // In the previous loop, all the partitions which existed in both sessionPartitions
+                    // and next were moved to the end of next, or removed from next.  Therefore,
+                    // once we hit one of them, we know there are no more unseen entries to look
+                    // at in next.
+                    break;
+                }
                 sessionPartitions.put(topicPartition, nextData);
-                updated.put(topicPartition, nextData);
                 added.add(topicPartition);
             }
             if (log.isDebugEnabled()) {
@@ -258,7 +261,7 @@ public class FetchSessionHandler {
                           partitionsToLogString(altered), partitionsToLogString(removed),
                           partitionsToLogString(sessionPartitions.keySet()));
             }
-            Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(updated);
+            Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
                     ? Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions))
                     : Collections.unmodifiableMap(sessionPartitions);

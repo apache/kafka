@@ -248,8 +248,8 @@ public class FetchSessionHandlerTest {
                 new ReqEntry("foo", 1, 10, 120, 210),
                 new ReqEntry("bar", 0, 20, 200, 200)),
             data2.sessionPartitions());
-        assertMapEquals(reqMap(new ReqEntry("foo", 1, 10, 120, 210),
-                new ReqEntry("bar", 0, 20, 200, 200)),
+        assertMapEquals(reqMap(new ReqEntry("bar", 0, 20, 200, 200),
+                new ReqEntry("foo", 1, 10, 120, 210)),
             data2.toSend());
 
         FetchResponse<MemoryRecords> resp2 = new FetchResponse<>(Errors.NONE,
