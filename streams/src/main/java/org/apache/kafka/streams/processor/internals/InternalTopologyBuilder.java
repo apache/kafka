@@ -71,17 +71,14 @@ public class InternalTopologyBuilder {
     // built global state stores
     private final Map<String, StateStore> globalStateStores = new LinkedHashMap<>();
 
-    // all topics subscribed from source processors
-    private final Set<String> userSubscribedSourceTopicNames = new HashSet<>();
+    // all topics subscribed from source processors (without application-id prefix for internal topics)
+    private final Set<String> sourceTopicNames = new HashSet<>();
 
     // all internal topics auto-created by the topology builder and used in source / sink processors
     private final Set<String> internalTopicNames = new HashSet<>();
 
     // groups of source processors that need to be copartitioned
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
-
-    // map from source topic (without application-id prefix for internal topics) to source processor names
-    private final Map<String, List<String>> sourceTopicToNodes = new HashMap<>();
 
     // map from source processor names to subscribed topics (without application-id prefix for internal topics)
     private final Map<String, List<String>> nodeToSourceTopics = new HashMap<>();
@@ -382,13 +379,11 @@ public class InternalTopologyBuilder {
             Objects.requireNonNull(topic, "topic names cannot be null");
             validateTopicNotAlreadyRegistered(topic);
             maybeAddToResetList(earliestResetTopics, latestResetTopics, offsetReset, topic);
-            userSubscribedSourceTopicNames.add(topic);
-
-            nodeToSourceTopics.computeIfAbsent(name, n -> new ArrayList<>()).add(topic);
-            sourceTopicToNodes.computeIfAbsent(topic, t -> new ArrayList<>()).add(name);
+            sourceTopicNames.add(topic);
         }
 
         nodeFactories.put(name, new SourceNodeFactory(name, topics, null, timestampExtractor, keyDeserializer, valDeserializer));
+        nodeToSourceTopics.put(name, Arrays.asList(topics));
         nodeGrouper.add(name);
         nodeGroups = null;
     }
@@ -406,7 +401,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("Processor " + name + " is already added.");
         }
 
-        for (final String sourceTopicName : userSubscribedSourceTopicNames) {
+        for (final String sourceTopicName : sourceTopicNames) {
             if (topicPattern.matcher(sourceTopicName).matches()) {
                 throw new TopologyException("Pattern " + topicPattern + " will match a topic that has already been registered by another source.");
             }
@@ -570,7 +565,6 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer));
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
-        sourceTopicToNodes.computeIfAbsent(topic, t -> new ArrayList<>()).add(sourceName);
         nodeGrouper.add(sourceName);
         nodeFactory.addStateStore(storeBuilder.name());
         nodeFactories.put(processorName, nodeFactory);
@@ -582,7 +576,7 @@ public class InternalTopologyBuilder {
     }
 
     private void validateTopicNotAlreadyRegistered(final String topic) {
-        if (userSubscribedSourceTopicNames.contains(topic) || globalTopics.contains(topic)) {
+        if (sourceTopicNames.contains(topic) || globalTopics.contains(topic)) {
             throw new TopologyException("Topic " + topic + " has already been registered by another source.");
         }
 
@@ -763,37 +757,9 @@ public class InternalTopologyBuilder {
 
         int nodeGroupId = 0;
 
-        // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        final Set<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
-        allSourceNodes.addAll(nodeToSourcePatterns.keySet());
-
-        // Start with the "true" source topics
-        final LinkedList<String> sourceNodesToVisit = new LinkedList<>(userSubscribedSourceTopicNames);
-        final Set<String> visited = new HashSet<>();
-
-        // Traverse the source nodes in topological order by BFS along sink-source topic edges
-        while (!sourceNodesToVisit.isEmpty()) {
-            final String nodeName = sourceNodesToVisit.poll();
-            if (visited.contains(nodeName)) {
-                log.warn("Found node {} twice during a BFS of the topology DAG, cycles in your stream processing " +
-                    "topology may cause unexpected consequences and/or undefined behavior", nodeName);
-                continue;
-            } else {
-                visited.add(nodeName);
-            }
+        // Traverse in topological order
+        for (final String nodeName : nodeFactories.keySet()) {
             nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-
-            // Add all downstream nodes to the list of source nodes to visit -- note that it is ok to "ignore" the
-            // Pattern source topics as those can only be user-subscribed, and these are already added
-            final String sinkTopic = nodeToSinkTopic.get(nodeName);
-            sourceNodesToVisit.addAll(sourceTopicToNodes.get(sinkTopic));
-        }
-
-        // Traverse the remaining (non-source) nodes
-        for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToSourceTopics.containsKey(nodeName)) {
-                nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-            }
         }
 
         return nodeGroups;
@@ -1931,8 +1897,8 @@ public class InternalTopologyBuilder {
 
     // following functions are for test only
 
-    public synchronized Set<String> userSubscribedSourceTopicNames() {
-        return userSubscribedSourceTopicNames;
+    public synchronized Set<String> sourceTopicNames() {
+        return sourceTopicNames;
     }
 
     public synchronized Map<String, StateStoreFactory> stateStores() {
