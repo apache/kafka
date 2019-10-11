@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -65,7 +66,7 @@ public final class MetricName {
     private final String name;
     private final String group;
     private final String description;
-    private Map<String, String> tags;
+    private final Map<String, String> tags;
     private int hash = 0;
 
     /**
@@ -92,7 +93,7 @@ public final class MetricName {
     }
 
     public Map<String, String> tags() {
-        return this.tags;
+        return Collections.unmodifiableMap(tags);
     }
 
     public String description() {
@@ -101,15 +102,9 @@ public final class MetricName {
 
     @Override
     public int hashCode() {
-        if (hash != 0)
-            return hash;
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + group.hashCode();
-        result = prime * result + name.hashCode();
-        result = prime * result + tags.hashCode();
-        this.hash = result;
-        return result;
+        if (hash == 0)
+            hash = Objects.hash(group, name, tags);
+        return hash;
     }
 
     @Override
