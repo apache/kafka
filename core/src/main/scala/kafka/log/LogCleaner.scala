@@ -310,53 +310,59 @@ class LogCleaner(initialConfig: CleanerConfig,
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
     override def doWork(): Unit = {
-      val cleaned = cleanFilthiestLog()
+      val cleaned = tryCleanFilthiestLog()
       if (!cleaned)
         pause(config.backOffMs, TimeUnit.MILLISECONDS)
     }
 
     /**
-      * Cleans a log if there is a dirty log available
-      * @return whether a log was cleaned
-      */
-    private def cleanFilthiestLog(): Boolean = {
-      var currentLog: Option[Log] = None
-
+     * Cleans a log if there is a dirty log available
+     * @return whether a log was cleaned
+     */
+    private def tryCleanFilthiestLog(): Boolean = {
       try {
-        val preCleanStats = new PreCleanStats()
-        val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
-          case None =>
-            false
-          case Some(cleanable) =>
-            this.lastPreCleanStats = preCleanStats
-            // there's a log, clean it
-            currentLog = Some(cleanable.log)
-            cleanLog(cleanable)
-            true
-        }
-        val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
-        try {
-          deletable.foreach { case (_, log) =>
-            currentLog = Some(log)
-            log.deleteOldSegments()
-          }
-        } finally  {
-          cleanerManager.doneDeleting(deletable.map(_._1))
-        }
-
-        cleaned
+        cleanFilthiestLog()
       } catch {
-        case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
-        case e: Exception =>
-          if (currentLog.isEmpty) {
-            throw new IllegalStateException("currentLog cannot be empty on an unexpected exception", e)
-          }
-          val erroneousLog = currentLog.get
-          warn(s"Unexpected exception thrown when cleaning log $erroneousLog. Marking its partition (${erroneousLog.topicPartition}) as uncleanable", e)
-          cleanerManager.markPartitionUncleanable(erroneousLog.dir.getParent, erroneousLog.topicPartition)
+        case e: LogCleaningException =>
+          warn(s"Unexpected exception thrown when cleaning log ${e.log}. Marking its partition (${e.log.topicPartition}) as uncleanable", e)
+          cleanerManager.markPartitionUncleanable(e.log.dir.getParent, e.log.topicPartition)
 
           false
       }
+    }
+
+    @throws(classOf[LogCleaningException])
+    private def cleanFilthiestLog(): Boolean = {
+      val preCleanStats = new PreCleanStats()
+      val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
+        case None =>
+          false
+        case Some(cleanable) =>
+          // there's a log, clean it
+          this.lastPreCleanStats = preCleanStats
+          try {
+            cleanLog(cleanable)
+            true
+          } catch {
+            case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
+            case e: Exception => throw new LogCleaningException(cleanable.log, e.getMessage, e)
+          }
+      }
+      val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
+      try {
+        deletable.foreach { case (_, log) =>
+          try {
+            log.deleteOldSegments()
+          } catch {
+            case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
+            case e: Exception => throw new LogCleaningException(log, e.getMessage, e)
+          }
+        }
+      } finally  {
+        cleanerManager.doneDeleting(deletable.map(_._1))
+      }
+
+      cleaned
     }
 
     private def cleanLog(cleanable: LogToClean): Unit = {
