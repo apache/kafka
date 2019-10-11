@@ -793,8 +793,9 @@ public class KafkaStreams implements AutoCloseable {
     private static void maybeWarnAboutCodeInRocksDBConfigSetter(final Logger log,
                                                                 final StreamsConfig config) {
         if (config.getClass(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG) != null) {
-            log.warn("Kafka Streams cannot guarantee backwards compatibility of code in the RocksDB config setter "
-                + "because RocksDB may remove methods without deprecating them.");
+            log.warn("RocksDB's version will be bumped to version 6+ via KAFKA-8897 in a future release. "
+                + "You will possibly need to rewrite your code after KAFKA-8897 is resolved because some methods were "
+                + "removed from RocksDB's API without a deprecation period.");
         }
     }
 
