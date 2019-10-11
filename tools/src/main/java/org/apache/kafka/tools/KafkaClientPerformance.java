@@ -19,14 +19,9 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
@@ -43,7 +38,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
-public class ProducerPerformance {
+public class KafkaClientPerformance {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = argParser();
@@ -52,54 +47,22 @@ public class ProducerPerformance {
             Namespace res = parser.parseArgs(args);
 
             /* parse args */
-            String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
-            Integer recordSize = res.getInt("recordSize");
             int throughput = res.getInt("throughput");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
-            String payloadFilePath = res.getString("payloadFile");
             String transactionalId = res.getString("transactionalId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
+            long flushDurationMs = res.getLong("flushDurationMs");
+            boolean flushEnabled = 0 < flushDurationMs;
             boolean transactionsEnabled =  0 < transactionDurationMs;
-
-            // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-            String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
 
             if (producerProps == null && producerConfig == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }
 
-            List<byte[]> payloadByteList = new ArrayList<>();
-            if (payloadFilePath != null) {
-                Path path = Paths.get(payloadFilePath);
-                System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
-                }
-
-                String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
-
-                System.out.println("Number of messages read: " + payloadList.length);
-
-                for (String payload : payloadList) {
-                    payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
-                }
-            }
-
-            Properties props = new Properties();
-            if (producerConfig != null) {
-                props.putAll(Utils.loadProps(producerConfig));
-            }
-            if (producerProps != null)
-                for (String prop : producerProps) {
-                    String[] pieces = prop.split("=");
-                    if (pieces.length != 2)
-                        throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
-                }
-
+            Properties props = generateProps(producerProps, producerConfig);
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             if (transactionsEnabled)
@@ -107,17 +70,23 @@ public class ProducerPerformance {
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
+            /* initialize test suite */
+            String testSuiteName = res.getString("testSuiteName");
+            ClientTestHandler<byte[], byte[]> clientTestHandler;
+            switch (testSuiteName) {
+                case "ProducerPerformance":
+                    clientTestHandler = new ProducerTestHandler(res);
+                    break;
+                case "EosPerformance":
+                    clientTestHandler = new EosClientTestHandler<>(res);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown test suite name: " + testSuiteName);
+            }
+
             if (transactionsEnabled)
                 producer.initTransactions();
 
-            /* setup perf test */
-            byte[] payload = null;
-            Random random = new Random(0);
-            if (recordSize != null) {
-                payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
-            }
             ProducerRecord<byte[], byte[]> record;
             Stats stats = new Stats(numRecords, 5000);
             long startMs = System.currentTimeMillis();
@@ -126,26 +95,28 @@ public class ProducerPerformance {
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
+            long lastFlushTime = 0;
             for (long i = 0; i < numRecords; i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                }
-                record = new ProducerRecord<>(topicName, payload);
+                record = clientTestHandler.getRecord();
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
+                Callback cb = stats.nextCompletion(sendStartMs, record.value().length, stats);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
                 if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
                     producer.commitTransaction();
                     currentTransactionSize = 0;
+                }
+
+                if (flushEnabled && flushDurationMs <= (sendStartMs - lastFlushTime)) {
+                    producer.flush();
+                    lastFlushTime = System.currentTimeMillis();
                 }
 
                 if (throttler.shouldThrottle(i, sendStartMs)) {
@@ -155,6 +126,10 @@ public class ProducerPerformance {
 
             if (transactionsEnabled && currentTransactionSize != 0)
                 producer.commitTransaction();
+
+            if (flushEnabled) {
+                producer.flush();
+            }
 
             if (!shouldPrintMetrics) {
                 producer.close();
@@ -189,14 +164,22 @@ public class ProducerPerformance {
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("producer-performance")
+                .newArgumentParser("kafka-client-performance")
                 .defaultHelp(true)
-                .description("This tool is used to verify the producer performance.");
+                .description("This tool is used to verify the Kafka client performance.");
 
         MutuallyExclusiveGroup payloadOptions = parser
                 .addMutuallyExclusiveGroup()
                 .required(true)
                 .description("either --record-size or --payload-file must be specified but not both.");
+
+        parser.addArgument("--test-suite-name")
+                .action(store())
+                .required(true)
+                .type(Long.class)
+                .metavar("TEST-SUITE-NAME")
+                .dest("testSuiteName")
+                .help("the name of this test suite");
 
         parser.addArgument("--topic")
                 .action(store())
@@ -204,6 +187,14 @@ public class ProducerPerformance {
                 .type(String.class)
                 .metavar("TOPIC")
                 .help("produce messages to this topic");
+
+        parser.addArgument("--input-topic")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("INPUT-TOPIC")
+                .dest("inputTopic")
+                .help("consume messages from this topic");
 
         parser.addArgument("--num-records")
                 .action(store())
@@ -249,13 +240,22 @@ public class ProducerPerformance {
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 
+        parser.addArgument("--poll-timeout")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("POLL-TIMEOUT")
+                .dest("pollTimeout")
+                .setDefault(100L)
+                .help("consumer poll timeout");
+
         parser.addArgument("--producer-props")
-                 .nargs("+")
-                 .required(false)
-                 .metavar("PROP-NAME=PROP-VALUE")
-                 .type(String.class)
-                 .dest("producerConfig")
-                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
+                .nargs("+")
+                .required(false)
+                .metavar("PROP-NAME=PROP-VALUE")
+                .type(String.class)
+                .dest("producerConfig")
+                .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
                          "These configs take precedence over those passed via --producer.config.");
 
         parser.addArgument("--producer.config")
@@ -266,6 +266,23 @@ public class ProducerPerformance {
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
 
+        parser.addArgument("--consumer-config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG-FILE")
+                .dest("consumerConfigFile")
+                .help("consumer config properties file.");
+
+        parser.addArgument("--consumer-props")
+                .nargs("+")
+                .required(false)
+                .metavar("PROP-NAME=PROP-VALUE")
+                .type(String.class)
+                .dest("consumerConfig")
+                .help("kafka consumer related configuration properties like bootstrap.servers,client.id etc. " +
+                      "These configs take precedence over those passed via --consumer-config.");
+
         parser.addArgument("--print-metrics")
                 .action(storeTrue())
                 .type(Boolean.class)
@@ -274,28 +291,54 @@ public class ProducerPerformance {
                 .help("print out metrics at the end of the test.");
 
         parser.addArgument("--transactional-id")
-               .action(store())
-               .required(false)
-               .type(String.class)
-               .metavar("TRANSACTIONAL-ID")
-               .dest("transactionalId")
-               .setDefault("performance-producer-default-transactional-id")
-               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("TRANSACTIONAL-ID")
+                .dest("transactionalId")
+                .setDefault("performance-producer-default-transactional-id")
+                .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
 
         parser.addArgument("--transaction-duration-ms")
-               .action(store())
-               .required(false)
-               .type(Long.class)
-               .metavar("TRANSACTION-DURATION")
-               .dest("transactionDurationMs")
-               .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("TRANSACTION-DURATION")
+                .dest("transactionDurationMs")
+                .setDefault(0L)
+                .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
 
+        parser.addArgument("--flush-duration-ms")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("FLUSH-DURATION")
+                .dest("flushDurationMs")
+                .setDefault(0L)
+                .help("When configured, the amount of time to elapse before making a producer.flush() call. Explicit flush is only enabled if this value is positive.");
 
         return parser;
     }
 
-    private static class Stats {
+    static Properties generateProps(List<String> overrideProps, String configFile) throws IOException {
+        Properties props = new Properties();
+        if (configFile != null) {
+            props.putAll(Utils.loadProps(configFile));
+        }
+
+        if (overrideProps != null) {
+            for (String prop : overrideProps) {
+                String[] pieces = prop.split("=");
+                if (pieces.length != 2)
+                    throw new IllegalArgumentException("Invalid property: " + prop);
+                props.put(pieces[0], pieces[1]);
+            }
+        }
+        return props;
+    }
+
+
+    static class Stats {
         private long start;
         private long windowStart;
         private int[] latencies;
