@@ -1450,13 +1450,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val partition2 = new TopicPartition("elect-preferred-leaders-topic-2", 0)
     TestUtils.createTopic(zkClient, partition2.topic, Map[Int, Seq[Int]](partition2.partition -> prefer0), servers)
 
-    def preferredLeader(topicPartition: TopicPartition): Int =
-      getTopicMetadata(client, topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .replicas
-        .get(0)
-        .id
+    def preferredLeader(topicPartition: TopicPartition): Int = {
+      val partitionMetadata = getTopicMetadata(client, topicPartition.topic).partitions.get(topicPartition.partition)
+      val preferredLeaderMetadata = partitionMetadata.replicas.get(0)
+      preferredLeaderMetadata.id
+    }
 
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
     def changePreferredLeader(newAssignment: Seq[Int]) = {
@@ -2439,11 +2437,11 @@ object AdminClientIntegrationTest {
 
     TestUtils.waitUntilTrue(() => {
       val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).values.get(topic)
-      if (topicResult.isCompletedExceptionally) {
-        false
-      } else {
+      try {
         result = topicResult.get
         expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)
+      } catch {
+        case _: UnknownTopicOrPartitionException => false  // metadata may not have propagated yet, so retry
       }
     }, s"Timed out waiting for metadata for $topic")
 
