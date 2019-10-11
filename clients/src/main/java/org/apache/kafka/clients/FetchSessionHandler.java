@@ -244,17 +244,10 @@ public class FetchSessionHandler {
                     removed.add(topicPartition);
                 }
             }
-            // Add any new partitions to the session.
+            // Only the new partitions are left in next. Add these new partitions to the session
             for (Entry<TopicPartition, PartitionData> entry : next.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData nextData = entry.getValue();
-                if (sessionPartitions.containsKey(topicPartition)) {
-                    // In the previous loop, all the partitions which existed in both sessionPartitions
-                    // and next were moved to the end of next, or removed from next.  Therefore,
-                    // once we hit one of them, we know there are no more unseen entries to look
-                    // at in next.
-                    break;
-                }
                 sessionPartitions.put(topicPartition, nextData);
                 updated.put(topicPartition, nextData);
                 added.add(topicPartition);
