@@ -27,7 +27,8 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link
- * KeyValue} pairs. It is an intermediate representation of one or more {@link KStream}s in order to
+ * KeyValue} pairs.
+ * It is an intermediate representation of one or more {@link KStream}s in order to
  * apply one or more aggregation operations on the original {@link KStream} records.
  * <p>
  * It is an intermediate representation after a grouping of {@link KStream}s, before the
@@ -44,7 +45,8 @@ public interface CogroupedKStream<K, Vin, Vout> {
 
     /**
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
-     * {@link KeyValue} pairs. It is an intermediate representation of one or more {@link KStream}s
+     * {@link KeyValue} pairs.
+     * It is an intermediate representation of one or more {@link KStream}s
      * in order to apply one or more aggregation operations on the original {@link KStream}
      * records.
      * <p>
@@ -58,17 +60,21 @@ public interface CogroupedKStream<K, Vin, Vout> {
     CogroupedKStream<K, Vin, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
                                            final Aggregator<? super K, ? super Vin, Vout> aggregator);
     /**
-     * Aggregate the values of records in these streams by the grouped key. Records with {@code null}
-     * key or value are ignored. Aggregating is a generalization of Reducing combining via
+     * Aggregate the values of records in these streams by the grouped key.
+     * Records with {@code null} key or value are ignored.
+     * Aggregating is a generalization of Reducing combining via
      * reduce(...)} as it, for example, allows the result to have a different type than the input
-     * values. The result is written into a local {@link KeyValueStore} (which is basically an
+     * values.
+     * The result is written into a local {@link KeyValueStore} (which is basically an
      * ever-updating materialized view) that can be queried by the given store name in {@code
-     * materialized}. Furthermore, updates to the store are sent downstream into a {@link KTable}
+     * materialized}.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable}
      * changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
-     * first record. The specified {@link Aggregator} is applied for each input record and computes
+     * first record.
+     * The specified {@link Aggregator} is applied for each input record and computes
      * a new aggregate using the current aggregate (or for the very first record using the
      * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
@@ -96,9 +102,11 @@ public interface CogroupedKStream<K, Vin, Vout> {
      *
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be
-     * created in Kafka. Therefore, the store name defined by the Materialized instance must be a
+     * created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a
      * valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_'
-     * and '-'. The changelog topic will be named "${applicationId}-${storeName}-changelog", where
+     * and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where
      * "applicationId" is user-specified in {@link StreamsConfig} via parameter {@link
      * StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store
      * name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
@@ -115,17 +123,22 @@ public interface CogroupedKStream<K, Vin, Vout> {
     KTable<K, Vout> aggregate(final Initializer<Vout> initializer,
                               final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized);
     /**
-     * Aggregate the values of records in these streams by the grouped key. Records with {@code null}
-     * key or value are ignored. Aggregating is a generalization of Reducing combining via
+     * Aggregate the values of records in these streams by the grouped key.
+     * Records with {@code null}
+     * key or value are ignored.
+     * Aggregating is a generalization of Reducing combining via
      * reduce(...)} as it, for example, allows the result to have a different type than the input
-     * values. The result is written into a local {@link KeyValueStore} (which is basically an
+     * values.
+     * The result is written into a local {@link KeyValueStore} (which is basically an
      * ever-updating materialized view) that can be queried by the given store name in {@code
-     * materialized}. Furthermore, updates to the store are sent downstream into a {@link KTable}
+     * materialized}.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable}
      * changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
-     * first record. The specified {@link Aggregator} is applied for each input record and computes
+     * first record.
+     * The specified {@link Aggregator} is applied for each input record and computes
      * a new aggregate using the current aggregate (or for the very first record using the
      * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
@@ -153,9 +166,11 @@ public interface CogroupedKStream<K, Vin, Vout> {
      *
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be
-     * created in Kafka. Therefore, the store name defined by the Materialized instance must be a
+     * created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a
      * valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_'
-     * and '-'. The changelog topic will be named "${applicationId}-${storeName}-changelog", where
+     * and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where
      * "applicationId" is user-specified in {@link StreamsConfig} via parameter {@link
      * StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store
      * name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
