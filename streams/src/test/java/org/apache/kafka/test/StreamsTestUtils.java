@@ -83,12 +83,12 @@ public final class StreamsTestUtils {
         return getStreamsConfig(UUID.randomUUID().toString());
     }
 
-    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams) {
+    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams) throws InterruptedException {
         startKafkaStreamsAndWaitForRunningState(kafkaStreams, DEFAULT_MAX_WAIT_MS);
     }
 
     public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams,
-                                                               final long timeoutMs) {
+                                                               final long timeoutMs) throws InterruptedException {
         final CountDownLatch countDownLatch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING) {
@@ -97,11 +97,9 @@ public final class StreamsTestUtils {
         });
 
         kafkaStreams.start();
-        try {
-            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
-        } catch (final InterruptedException interruptedException) {
-            throw new AssertionError("KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.");
-        }
+        assertThat(
+            "KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.",
+            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS), equalTo(true));
     }
 
     public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
