@@ -472,7 +472,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
       } catch {
         case _: UnknownTopicOrPartitionException => false
       }
-    }, "")
+    }, "Timed out waiting for describeConfigs")
 
     configEntries
   }
