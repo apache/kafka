@@ -19,6 +19,7 @@ package org.apache.kafka.common.memory;
 
 import java.nio.ByteBuffer;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 
@@ -43,6 +44,7 @@ public class WeakMemoryPoolTest {
         memoryPool.release(null);
     }
 
+    @Ignore("flaky test")
     @Test
     public void testAllocationMemorySize() {
         WeakMemoryPool pool = new WeakMemoryPool();
