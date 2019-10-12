@@ -2312,14 +2312,17 @@ public class ConsumerCoordinatorTest {
             waitForCondition(() -> coordinator.generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID,
                 waitTimeout, "JoinGroup response handled.");
 
+            //Waits for a AbstractCoordinator#sendJoinGroupRequest executes and respond after.
             client.waitForRequests(1, waitTimeout);
             client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
 
+            //Waits while coordinator process the response.
             client.waitForRequests(1, waitTimeout);
 
-            // Imitating heartbeat thread.
+            // Imitating heartbeat thread that will clear generation data.
             coordinator.maybeLeaveGroup("Clear generation data.");
 
+            // Respond to the coordinator thread request.
             client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
             th.join();

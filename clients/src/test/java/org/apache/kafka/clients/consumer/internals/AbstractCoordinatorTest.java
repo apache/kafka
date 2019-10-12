@@ -283,7 +283,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertTrue(future.exception().getClass().isInstance(Errors.GROUP_MAX_SIZE_REACHED.exception()));
         assertFalse(future.isRetriable());
@@ -296,7 +296,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
 
         mockTime.sleep(REQUEST_TIMEOUT_MS + 1);
         assertFalse(consumerClient.poll(future, mockTime.timer(0)));
@@ -314,7 +314,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
         assertFalse(consumerClient.poll(future, mockTime.timer(0)));
 
         mockTime.sleep(Integer.MAX_VALUE + 1L);
@@ -337,13 +337,13 @@ public class AbstractCoordinatorTest {
             return joinGroupRequest.data().memberId().equals(memberId);
         }, joinGroupResponse(Errors.UNKNOWN_MEMBER_ID));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
         assertTrue(coordinator.hasValidMemberId());
         assertTrue(coordinator.hasMatchingGenerationId(defaultGeneration));
-        future = coordinator.sendJoinGroupRequest();
+        future = coordinator.sendJoinGroupRequest(coordinator.generation);
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
     }
 
@@ -355,7 +355,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
         // Make sure the exception is fatal.
@@ -408,7 +408,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
 
-        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest(coordinator.generation);
 
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.UNKNOWN_MEMBER_ID.message(), future.exception().getMessage());

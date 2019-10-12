@@ -384,24 +384,29 @@ public abstract class AbstractCoordinator implements Closeable {
                 return false;
             }
 
-            RequestFuture<ByteBuffer> future;
+            Generation gen;
 
+            // Generation data maybe concurrently cleared by Heartbeat thread.
+            // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
+            // and  shouldn't block hearbeat thread.
+            // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInRevocation
             synchronized (this) {
-                // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
-                // time if the client is woken up before a pending rebalance completes. This must be called
-                // on each iteration of the loop because an event requiring a rebalance (such as a metadata
-                // refresh which changes the matched subscription set) can occur while another rebalance is
-                // still in progress.
-                if (needsJoinPrepare) {
-                    // need to set the flag before calling onJoinPrepare since the user callback may throw
-                    // exception, in which case upon retry we should not retry onJoinPrepare either.
-                    needsJoinPrepare = false;
-                    onJoinPrepare(generation.generationId, generation.memberId);
-                }
-
-                future = initiateJoinGroup();
+                gen = this.generation;
             }
 
+            // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
+            // time if the client is woken up before a pending rebalance completes. This must be called
+            // on each iteration of the loop because an event requiring a rebalance (such as a metadata
+            // refresh which changes the matched subscription set) can occur while another rebalance is
+            // still in progress.
+            if (needsJoinPrepare) {
+                // need to set the flag before calling onJoinPrepare since the user callback may throw
+                // exception, in which case upon retry we should not retry onJoinPrepare either.
+                needsJoinPrepare = false;
+                onJoinPrepare(gen.generationId, gen.memberId);
+            }
+
+            final RequestFuture<ByteBuffer> future = initiateJoinGroup(gen);
             client.poll(future, timer);
             if (!future.isDone()) {
                 // we ran out of time
@@ -409,24 +414,29 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
+                // Generation data maybe concurrently cleared by Heartbeat thread.
+                // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
+                // and  shouldn't block hearbeat thread.
+                // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment
                 synchronized (this) {
-                    // Generation data maybe concurrently cleared by Heartbeat thread.
-                    if (generation != Generation.NO_GENERATION) {
-                        // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
-                        ByteBuffer memberAssignment = future.value().duplicate();
+                    gen = this.generation;
+                }
 
-                        onJoinComplete(generation.generationId, generation.memberId, generation.protocol, memberAssignment);
+                if (gen != Generation.NO_GENERATION) {
+                    // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
+                    ByteBuffer memberAssignment = future.value().duplicate();
 
-                        // We reset the join group future only after the completion callback returns. This ensures
-                        // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
-                        resetJoinGroupFuture();
-                        needsJoinPrepare = true;
-                    } else {
-                        log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
-                        resetStateAndRejoin();
+                    onJoinComplete(gen.generationId, gen.memberId, gen.protocol, memberAssignment);
 
-                        return false;
-                    }
+                    // We reset the join group future only after the completion callback returns. This ensures
+                    // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
+                    resetJoinGroupFuture();
+                    needsJoinPrepare = true;
+                } else {
+                    log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
+                    resetStateAndRejoin();
+
+                    return false;
                 }
             } else {
                 resetJoinGroupFuture();
@@ -454,7 +464,7 @@ public abstract class AbstractCoordinator implements Closeable {
         state = MemberState.UNJOINED;
     }
 
-    private RequestFuture<ByteBuffer> initiateJoinGroup() {
+    private RequestFuture<ByteBuffer> initiateJoinGroup(final Generation gen) {
         // we store the join future in case we are woken up by the user after beginning the
         // rebalance in the call to poll below. This ensures that we do not mistakenly attempt
         // to rejoin before the pending rebalance has completed.
@@ -469,14 +479,13 @@ public abstract class AbstractCoordinator implements Closeable {
             // in this case we would not update the start time.
             if (lastRebalanceStartMs == -1L)
                 lastRebalanceStartMs = time.milliseconds();
-            joinFuture = sendJoinGroupRequest();
+            joinFuture = sendJoinGroupRequest(gen);
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override
                 public void onSuccess(ByteBuffer value) {
                     // handle join completion in the callback so that the callback will be invoked
                     // even if the consumer is woken up before finishing the rebalance
                     synchronized (AbstractCoordinator.this) {
-                        // Generation data maybe concurrently cleared by Heartbeat thread.
                         if (generation != Generation.NO_GENERATION) {
                             log.info("Successfully joined group with generation {}", generation.generationId);
                             state = MemberState.STABLE;
@@ -522,7 +531,7 @@ public abstract class AbstractCoordinator implements Closeable {
      *
      * @return A request future which wraps the assignment returned from the group leader
      */
-    RequestFuture<ByteBuffer> sendJoinGroupRequest() {
+    RequestFuture<ByteBuffer> sendJoinGroupRequest(final Generation gen) {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
@@ -532,7 +541,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 new JoinGroupRequestData()
                         .setGroupId(rebalanceConfig.groupId)
                         .setSessionTimeoutMs(this.rebalanceConfig.sessionTimeoutMs)
-                        .setMemberId(this.generation.memberId)
+                        .setMemberId(gen.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
