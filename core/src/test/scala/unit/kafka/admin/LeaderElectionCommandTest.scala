@@ -80,12 +80,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -96,8 +96,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
-      "failed to elect new leader within timeout")
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
@@ -112,12 +111,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -129,8 +128,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
-        "failed to elect new leader within timeout")
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
@@ -145,12 +143,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker3).shutdown()
       TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.assertNoLeader(client, topicPartition)
       servers(broker3).startup()
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
@@ -163,8 +161,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker3),
-        "failed to elect new leader within timeout")
+      TestUtils.assertLeader(client, topicPartition, broker3)
     }
   }
 
@@ -179,10 +176,10 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.assertLeader(client, topicPartition, broker2)
 
       servers(broker2).shutdown()
-      TestUtils.waitForLeaderToBecome(client, topicPartition, Some(broker3))
+      TestUtils.assertLeader(client, topicPartition, broker3)
       servers(broker2).startup()
       TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker2))
 
@@ -194,8 +191,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      TestUtils.waitUntilTrue(() => TestUtils.currentLeader(client, topicPartition) == Some(broker2),
-        "Failed to elect preferred leader within timeout")
+      TestUtils.assertLeader(client, topicPartition, broker2)
     }
   }
 
