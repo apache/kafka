@@ -85,7 +85,7 @@ public class FetchSessionBenchmark {
                     null,
                     null));
         }
-        FetchSessionHandler.FetchRequestData data = builder.build();
+        builder.build();
         // build and handle an initial response so that the next fetch will be incremental
         handler.handleResponse(new FetchResponse<>(Errors.NONE, respMap, 0, 1));
 
