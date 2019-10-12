@@ -272,9 +272,15 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val zk = stubZKClient(existing)
     val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
-    expect(admin.fetchEntityConfig(anyString(), anyString())).andStubReturn(new Properties)
+    val assigner = ReassignPartitionsCommand(zk, None, proposed, Map.empty, Some(admin))
+    // Return a fresh set of Properties for each broker
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andStubReturn(new Properties)
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andStubReturn(new Properties)
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andStubReturn(new Properties)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
+
+    expect(admin.fetchEntityConfig(is(ConfigType.Topic), anyString())).andStubReturn(new Properties)
+
     replay(admin)
 
     //When
@@ -336,8 +342,14 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
 
     //Given there is some existing config
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), anyString())).andReturn(
-      propsWith("useful.key", "useful.value")).atLeastOnce()
+    val baseProps = propsWith("useful.key", "useful.value")
+    // Make sure we return a fresh set of Properties for each broker
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andReturn(
+      copyOf(baseProps)).atLeastOnce()
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andReturn(
+      copyOf(baseProps)).atLeastOnce()
+    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andReturn(
+      copyOf(baseProps)).atLeastOnce()
 
     replay(admin)
 
