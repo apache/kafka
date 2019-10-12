@@ -579,7 +579,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     alterResult = client.createPartitions(Map(topic1 ->
       NewPartitions.increaseTo(3)).asJava, actuallyDoIt)
     altered = alterResult.values.get(topic1).get
-    assertEquals(3, numPartitions(topic1))
+    TestUtils.waitUntilTrue(() => numPartitions(topic1) == 3, "Timed out waiting for new partitions to appear")
 
     // validateOnly: now try creating a new partition (with assignments), to bring the total to 3 partitions
     val newPartition2Assignments = asList[util.List[Integer]](asList(0, 1), asList(1, 2))
@@ -780,7 +780,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       topic2 -> NewPartitions.increaseTo(2)).asJava, actuallyDoIt)
     // assert that the topic1 now has 4 partitions
     altered = alterResult.values.get(topic1).get
-    assertEquals(4, numPartitions(topic1))
+    TestUtils.waitUntilTrue(() => numPartitions(topic1) == 4, "Timed out waiting for new partitions to appear")
     try {
       altered = alterResult.values.get(topic2).get
     } catch {
