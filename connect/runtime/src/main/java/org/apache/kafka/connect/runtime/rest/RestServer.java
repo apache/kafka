@@ -226,7 +226,7 @@ public class RestServer {
         resourceConfig.register(new JacksonJsonProvider());
 
         resourceConfig.register(new RootResource(herder));
-        resourceConfig.register(new ConnectorsResource(herder, config));
+        resourceConfig.register(new ConnectorsResource(herder, config, advertisedUrl()));
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
         resourceConfig.register(ConnectExceptionMapper.class);

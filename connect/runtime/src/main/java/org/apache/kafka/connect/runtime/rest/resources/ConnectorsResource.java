@@ -80,12 +80,14 @@ public class ConnectorsResource {
 
     private final Herder herder;
     private final WorkerConfig config;
+    private final URI advertisedUrl;
     @javax.ws.rs.core.Context
     private ServletContext context;
 
-    public ConnectorsResource(Herder herder, WorkerConfig config) {
+    public ConnectorsResource(Herder herder, WorkerConfig config, URI advertisedUrl) {
         this.herder = herder;
         this.config = config;
+        this.advertisedUrl = advertisedUrl;
     }
 
     @GET
@@ -306,6 +308,11 @@ public class ConnectorsResource {
                     // this gives two total hops to resolve the request before giving up.
                     boolean recursiveForward = forward == null;
                     RequestTargetException targetException = (RequestTargetException) cause;
+
+                    if (this.advertisedUrl.compareTo(URI.create(targetException.forwardUrl())) == 0) {
+                        log.warn("Request will be forwarded to URL {} same as this server's advertised URL (potential loop)",
+                                targetException.forwardUrl());
+                    }
                     String forwardUrl = UriBuilder.fromUri(targetException.forwardUrl())
                             .path(path)
                             .queryParam("forward", recursiveForward)
