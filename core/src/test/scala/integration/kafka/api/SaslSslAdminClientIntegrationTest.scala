@@ -33,6 +33,7 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
@@ -470,7 +471,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
         configEntries = topicResponse.entries.asScala
         true
       } catch {
-        case _: UnknownTopicOrPartitionException => false
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
       }
     }, "Timed out waiting for describeConfigs")
 

@@ -1489,25 +1489,6 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
-  def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
-    val topic = topicPartition.topic
-    val partition = topicPartition.partition
-    var currentLeader: Option[Int] = null
-
-    TestUtils.waitUntilTrue(() => {
-      try {
-        val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
-        val partitionResult = topicResult.partitions.get(partition)
-        currentLeader = Option(partitionResult.leader).map(_.id)
-        true
-      } catch {
-        case _: UnknownTopicOrPartitionException => false
-      }
-    }, "Timed out waiting to get leader metadata")
-
-    currentLeader
-  }
-
   def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
