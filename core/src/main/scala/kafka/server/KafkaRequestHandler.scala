@@ -349,8 +349,7 @@ class BrokerTopicStats {
     if (isFollower) {
       if (isReassignment)
         updateReassignmentBytesOut(value)
-      else
-        updateReplicationBytesOut(value)
+      updateReplicationBytesOut(value)
     } else {
       topicStats(topic).bytesOutRate.mark(value)
       allTopicsStats.bytesOutRate.mark(value)
