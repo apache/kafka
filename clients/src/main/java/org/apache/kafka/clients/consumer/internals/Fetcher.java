@@ -258,8 +258,9 @@ public class Fetcher<K, V> implements Closeable {
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
-            client.send(fetchTarget, request)
-                    .addListener(new RequestFutureListener<ClientResponse>() {
+            RequestFuture<ClientResponse> future = client.send(fetchTarget, request);
+            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
+            future.addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             synchronized (Fetcher.this) {
@@ -333,7 +334,6 @@ public class Fetcher<K, V> implements Closeable {
                         }
                     });
 
-            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
         }
         return fetchRequestMap.size();
     }
