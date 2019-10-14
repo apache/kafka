@@ -1580,9 +1580,11 @@ class PartitionTest {
   @Test
   def testLogConfigDirtyAsTopicUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer(_ => {
-      logManager.initializingLog(topicPartition)
-      logManager.topicConfigUpdated(topicPartition.topic())
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.topicConfigUpdated(topicPartition.topic())
+      }
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,
@@ -1615,9 +1617,11 @@ class PartitionTest {
   @Test
   def testLogConfigDirtyAsBrokerUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer(_ => {
-      logManager.initializingLog(topicPartition)
-      logManager.brokerConfigUpdated()
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.brokerConfigUpdated()
+      }
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,
