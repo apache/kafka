@@ -82,6 +82,10 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
+  // This map contains all partitions whose logs are getting loaded and initialized. If log configuration
+  // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
+  // which triggers a config reload after initialization is finished (to get the latest config value).
+  // See KAFKA-8813 for more detail on the race condition
   // Visible for testing
   private[log] val partitionsInitializing = new ConcurrentHashMap[TopicPartition, Boolean]().asScala
 
@@ -672,12 +676,12 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   * Mark the partition configuration for partitions that are getting initialized for topic
+   * Mark the partition configuration for all partitions that are getting initialized for topic
    * as dirty. That will result in reloading of configuration once initialization is done.
    */
   def topicConfigUpdated(topic: String): Unit = {
-    partitionsInitializing.collect {
-      case (topicPartition, _) if topicPartition.topic() == topic => partitionsInitializing(topicPartition) = true
+    partitionsInitializing.keys.filter(_.topic() == topic).foreach {
+      topicPartition => partitionsInitializing.replace(topicPartition, false, true)
     }
   }
 
@@ -685,8 +689,8 @@ class LogManager(logDirs: Seq[File],
    * Mark all in progress partitions having dirty configuration if broker configuration is updated.
    */
   def brokerConfigUpdated(): Unit = {
-    partitionsInitializing.foreach {
-      case (topicPartition, _) => partitionsInitializing(topicPartition) = true
+    partitionsInitializing.keys.foreach {
+      topicPartition => partitionsInitializing.replace(topicPartition, false, true)
     }
   }
 
