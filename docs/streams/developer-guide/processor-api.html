@@ -289,11 +289,11 @@
                     you experience machine failure, the state store and the application&#8217;s state can be fully restored from its changelog. You can
                     <a class="reference internal" href="#streams-developer-guide-state-store-enable-disable-fault-tolerance"><span class="std std-ref">enable or disable this backup feature</span></a> for a
                     state store.</p>
-                <p>By default, persistent key-value stores are fault-tolerant.  They are backed by a
+                <p>Fault-tolerant state stores are backed by a
                     <a class="reference external" href="https://kafka.apache.org/documentation.html#compaction">compacted</a> changelog topic.  The purpose of compacting this
                     topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster,
                     and to minimize recovery time if a state store needs to be restored from its changelog topic.</p>
-                <p>Similarly, persistent window stores are fault-tolerant.  They are backed by a topic that uses both compaction and
+                <p>Fault-tolerant windowed state stores are backed by a topic that uses both compaction and
                     deletion. Because of the structure of the message keys that are being sent to the changelog topics, this combination of
                     deletion and compaction is required for the changelog topics of window stores. For window stores, the message keys are
                     composite keys that include the &#8220;normal&#8221; key and window timestamps.  For these types of composite keys it would not
