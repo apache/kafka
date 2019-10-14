@@ -46,7 +46,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
     private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, V>> groupPatterns;
+    private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
     TimeWindowedCogroupedKStreamImpl(final Windows<W> windows,
                                      final InternalStreamsBuilder builder,
@@ -56,7 +56,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
                                      final Serde<V> valSerde,
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                      final StreamsGraphNode streamsGraphNode,
-                                     final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, V>> groupPatterns) {
+                                     final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;

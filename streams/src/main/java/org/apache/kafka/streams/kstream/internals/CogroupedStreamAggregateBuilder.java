@@ -48,7 +48,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
     }
 
     <KR, Vin, W extends Window> KTable<KR, Vout> build(
-        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> groupPatterns,
+        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> groupPatterns,
         final Initializer<Vout> initializer,
         final NamedInternal named,
         final StoreBuilder<? extends StateStore> storeBuilder,
@@ -66,7 +66,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
-        for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> kGroupedStream : groupPatterns
+        for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> kGroupedStream : groupPatterns
             .entrySet()) {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
                 kGroupedStream.getValue(),
@@ -109,7 +109,7 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
     }
 
     private <W extends Window> StatefulProcessorNode getStatefulProcessorNode(
-            final Aggregator<? super K, ?, Vout> aggregator,
+            final Aggregator<? super K, ? super Object, Vout> aggregator,
             final Initializer<Vout> initializer,
             final NamedInternal named,
             final boolean stateCreated,
@@ -123,11 +123,11 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
         if (windows == null && sessionWindows == null) {
-            kStreamAggregate = new KStreamAggregate<K, Object, Vout>(storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator);
+            kStreamAggregate = new KStreamAggregate<K, Object, Vout>(storeBuilder.name(), initializer, aggregator);
         } else if (windows != null && sessionWindows == null) {
-            kStreamAggregate = new KStreamWindowAggregate<K, Object, Vout, W>(windows, storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator);
+            kStreamAggregate = new KStreamWindowAggregate<K, Object, Vout, W>(windows, storeBuilder.name(), initializer, aggregator);
         } else if (windows == null && sessionMerger != null) {
-            kStreamAggregate = new KStreamSessionWindowAggregate<K, Object, Vout>(sessionWindows, storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator, sessionMerger);
+            kStreamAggregate = new KStreamSessionWindowAggregate<K, Object, Vout>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
         } else {
             throw new IllegalArgumentException(
                 "must be a TimeWindowedStream or a SessionWindowedStream");

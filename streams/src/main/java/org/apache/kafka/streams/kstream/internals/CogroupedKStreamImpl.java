@@ -39,7 +39,7 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
 
     private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
 
-    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ?, Vout>> groupPatterns;
+    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> groupPatterns;
     final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
@@ -51,12 +51,13 @@ public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> imple
         this.aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
                                                   final Aggregator<? super K, ? super Vin, Vout> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream, aggregator);
+        groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream, (Aggregator<? super K, ? super Object, Vout>) aggregator);
         return this;
     }
 
