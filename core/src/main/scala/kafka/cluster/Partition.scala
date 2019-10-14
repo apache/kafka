@@ -677,11 +677,15 @@ class Partition(val topicPartition: TopicPartition,
    * @param assignment An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
    * @param isr The set of broker ids that are known to be insync with the leader
+   * @param addingReplicas An ordered sequence of all broker ids that will be added to the
+    *                       assignment
+   * @param removingReplicas An ordered sequence of all broker ids that will be removed from
+    *                         the assignment
    */
   def updateAssignmentAndIsr(assignment: Seq[Int],
                              isr: Set[Int],
-                             addingReplicas: Seq[Int] = Seq.empty,
-                             removingReplicas: Seq[Int] = Seq.empty): Unit = {
+                             addingReplicas: Seq[Int],
+                             removingReplicas: Seq[Int]): Unit = {
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
