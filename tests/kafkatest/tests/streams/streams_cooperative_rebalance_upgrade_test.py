@@ -70,7 +70,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             processor.set_version(upgrade_from_version)
             self.set_props(processor)
             processor.CLEAN_NODE_ENABLED = False
-            self.verify_running(processor, self.running_state_msg)
+            verify_running(processor, self.running_state_msg)
 
         for processor in processors:
             self.verify_processing(processor, self.processing_message)
