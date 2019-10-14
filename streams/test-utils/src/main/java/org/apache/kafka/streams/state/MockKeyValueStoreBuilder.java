@@ -14,34 +14,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
+package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serde;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 
 
-
-public class MockKeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore> {
+public class MockKeyValueStoreBuilder<K, V> extends KeyValueStoreBuilder<K, V> {
 
     private final boolean persistent;
     private final KeyValueBytesStoreSupplier storeSupplier;
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    final Time time;
 
     public MockKeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                     final Serde<K> keySerde,
                                     final Serde<V> valueSerde,
-                                    final boolean persistent) {
-        super(storeSupplier.name(), keySerde, valueSerde, Time.SYSTEM);
+                                    final boolean persistent,
+                                    final Time time) {
+        super(storeSupplier, keySerde, valueSerde, time);
         this.persistent = persistent;
         this.storeSupplier = storeSupplier;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.time = time;
     }
 
     @Override
-    public KeyValueStore build() {
-        return new MockKeyValueStore<>(name, storeSupplier.get(), persistent);
+    public KeyValueStore<K, V> build() {
+        return new MockKeyValueStore<>(storeSupplier, keySerde, valueSerde, persistent, time);
     }
 }
 
