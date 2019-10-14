@@ -888,6 +888,7 @@ private[log] class Cleaner(val id: Int,
                                   map: OffsetMap,
                                   stats: CleanerStats): Unit = {
     map.clear()
+    map.init(log.config.compactionStrategy)
     val dirty = log.logSegments(start, end).toBuffer
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
 
@@ -955,7 +956,7 @@ private[log] class Cleaner(val id: Int,
             for (record <- batch.asScala) {
               if (record.hasKey && record.offset >= startOffset) {
                 if (map.size < maxDesiredMapSize)
-                  map.put(record.key, record.offset)
+                  map.put(record)
                 else
                   return true
               }
