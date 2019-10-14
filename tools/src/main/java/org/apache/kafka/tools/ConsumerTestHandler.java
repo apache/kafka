@@ -21,37 +21,47 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.TopicPartition;
+
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.LinkedList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 
-import static org.apache.kafka.tools.KafkaClientPerformance.generateProps;
-
-class EosClientTestHandler<K, V> implements ClientTestHandler<K, V> {
+/**
+ * A consumer based EOS test handler that will poll data from input topic and
+ * buffer them in an in-memory queue.
+ */
+class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     private final Consumer<K, V> consumer;
-    private List<ProducerRecord<K, V>> recordsToBeSent;
+    private Deque<ProducerRecord<K, V>> recordsToBeSent;
     private final long pollTimeout;
-
     private final String outputTopic;
+    private final String applicationId;
+    private final Producer<K, V> producer;
 
-    EosClientTestHandler(Namespace res) throws IOException {
+    ConsumerTestHandler(Namespace res,
+                        String applicationId,
+                        Producer<K, V> producer) throws IOException {
         List<String> consumerProps = res.getList("consumerConfig");
         String consumerConfigFile = res.getString("consumerConfigFile");
         pollTimeout = res.getLong("pollTimeout");
-
         String inputTopic = res.getString("inputTopic");
         outputTopic = res.getString("topic");
+        this.applicationId = applicationId;
 
-        String applicationId = "Customized-EOS-Performance-" + UUID.randomUUID();
-        Properties consumerProperties = generateProps(consumerProps, consumerConfigFile);
+        Properties consumerProperties = KafkaClientPerformance.generateProps(consumerProps, consumerConfigFile);
         consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId);
         consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
@@ -59,7 +69,8 @@ class EosClientTestHandler<K, V> implements ClientTestHandler<K, V> {
         consumer = new KafkaConsumer<>(consumerProperties);
         consumer.subscribe(Collections.singletonList(inputTopic));
 
-        recordsToBeSent = new LinkedList<>();
+        this.producer = producer;
+        recordsToBeSent = new ArrayDeque<>();
     }
 
     @Override
@@ -70,11 +81,26 @@ class EosClientTestHandler<K, V> implements ClientTestHandler<K, V> {
                 recordsToBeSent.add(new ProducerRecord<>(outputTopic, consumerRecord.value()));
             }
         }
-        return recordsToBeSent.remove(0);
+        return recordsToBeSent.remove();
     }
 
     @Override
-    public void commit() {
+    public void onFlush() {
+        producer.flush();
         consumer.commitSync();
+    }
+
+    @Override
+    public void onTxnCommit() {
+        producer.sendOffsetsToTransaction(offsets(consumer), applicationId);
+        producer.commitTransaction();
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> offsets(Consumer<K, V> consumer) {
+        Map<TopicPartition, OffsetAndMetadata> positions = new HashMap<>();
+        for (TopicPartition topicPartition : consumer.assignment()) {
+            positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
+        }
+        return positions;
     }
 }

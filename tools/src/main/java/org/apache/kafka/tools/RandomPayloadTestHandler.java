@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.io.IOException;
@@ -28,18 +29,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-class ProducerTestHandler implements ClientTestHandler<byte[], byte[]> {
+class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
 
-    private final Integer recordSize;
     private final String payloadFilePath;
-    private final String payloadDelimiter;
     private final List<byte[]> payloadByteList;
     private final String outputTopic;
     private byte[] payload;
-    private Random random;
+    private final Random random;
+    private final Producer<byte[], byte[]> producer;
 
-    public ProducerTestHandler(Namespace res) throws IOException {
-        recordSize = res.getInt("recordSize");
+    RandomPayloadTestHandler(Namespace res, Producer<byte[], byte[]> producer) throws IOException {
+        Integer recordSize = res.getInt("recordSize");
         random = new Random(0);
         if (recordSize != null) {
             payload = new byte[recordSize];
@@ -50,7 +50,7 @@ class ProducerTestHandler implements ClientTestHandler<byte[], byte[]> {
         payloadFilePath = res.getString("payloadFile");
 
         // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
-        payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
+        String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
         outputTopic = res.getString("topic");
 
         payloadByteList = new ArrayList<>();
@@ -58,10 +58,10 @@ class ProducerTestHandler implements ClientTestHandler<byte[], byte[]> {
             Path path = Paths.get(payloadFilePath);
             System.out.println("Reading payloads from: " + path.toAbsolutePath());
             if (Files.notExists(path) || Files.size(path) == 0)  {
-                throw new  IllegalArgumentException("File does not exist or empty file provided.");
+                throw new IllegalArgumentException("File does not exist or empty file provided.");
             }
 
-            String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
+            String[] payloadList = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).split(payloadDelimiter);
 
             System.out.println("Number of messages read: " + payloadList.length);
 
@@ -69,6 +69,7 @@ class ProducerTestHandler implements ClientTestHandler<byte[], byte[]> {
                 payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
             }
         }
+        this.producer = producer;
     }
 
     @Override
@@ -80,7 +81,12 @@ class ProducerTestHandler implements ClientTestHandler<byte[], byte[]> {
     }
 
     @Override
-    public void commit() {
-        // Nothing to be done
+    public void onFlush() {
+       producer.flush();
+    }
+
+    @Override
+    public void onTxnCommit() {
+        producer.commitTransaction();
     }
 }

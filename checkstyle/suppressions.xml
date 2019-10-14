@@ -232,13 +232,12 @@
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="VerifiableConsumer.java"/>
-
     <suppress checks="CyclomaticComplexity"
-              files="(StreamsResetter|ProducerPerformance|Agent).java"/>
+              files="(StreamsResetter|KafkaClientPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
               files="StreamsResetter.java"/>
     <suppress checks="NPathComplexity"
-              files="(ProducerPerformance|StreamsResetter|Agent).java"/>
+              files="(KafkaClientPerformance|StreamsResetter|Agent).java"/>
     <suppress checks="ImportControl"
               files="SignalLogger.java"/>
     <suppress checks="IllegalImport"
@@ -247,6 +246,8 @@
               files="ProduceBenchSpec.java"/>
     <suppress checks="ParameterNumber"
               files="SustainedConnectionSpec.java"/>
+    <suppress checks="MethodLength"
+              files="KafkaClientPerformance.java"/>
 
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"

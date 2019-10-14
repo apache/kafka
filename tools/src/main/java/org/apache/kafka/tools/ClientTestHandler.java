@@ -21,10 +21,11 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 public interface ClientTestHandler<K, V> {
 
     /**
-     * Get one record for producing. Return null if no more record is left
-     *
+     * Get one record to produce. Return null if no more records are left.
      */
     ProducerRecord<K, V> getRecord();
 
-    void commit();
+    void onFlush();
+
+    void onTxnCommit();
 }
