@@ -1534,7 +1534,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Test with simple assignment
     val replicas2 = Seq(0, 3, 4, 5)
     val isr2 = Set(0, 3, 4, 5)
-    partition.updateAssignmentAndIsr(replicas2, isr2)
+    partition.updateAssignmentAndIsr(replicas2, isr2, Seq.empty, Seq.empty)
 
     assertTrue("The assignmentState is not SimpleAssignmentState",
       partition.assignmentState.isInstanceOf[SimpleAssignmentState])
