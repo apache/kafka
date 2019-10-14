@@ -746,10 +746,10 @@ public class IntegrationTestUtils {
      * that this method returns and the calling function executes its next statement.
      *
      * @param streamsList the list of streams instances to run.
-     * @param timeoutMs the time to wait for the streams to all be in @{link State#RUNNING} state.
+     * @param timeout the time to wait for the streams to all be in @{link State#RUNNING} state.
      */
     public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList,
-                                                           final long timeoutMs) throws InterruptedException {
+                                                           final Duration timeout) throws InterruptedException {
         final Lock stateLock = new ReentrantLock();
         final Condition stateUpdate = stateLock.newCondition();
         final Map<KafkaStreams, State> stateMap = new HashMap<>();
@@ -779,7 +779,7 @@ public class IntegrationTestUtils {
             streams.start();
         }
 
-        final long expectedEnd = System.currentTimeMillis() + timeoutMs;
+        final long expectedEnd = System.currentTimeMillis() + timeout.toMillis();
         stateLock.lock();
         try {
             // We use while true here because we want to run this test at least once, even if the
@@ -814,7 +814,7 @@ public class IntegrationTestUtils {
             final Field field = streams.getClass().getDeclaredField("stateListener");
             field.setAccessible(true);
             return (StateListener) field.get(streams);
-        } catch (IllegalAccessException | NoSuchFieldException e) {
+        } catch (final IllegalAccessException | NoSuchFieldException e) {
             throw new RuntimeException("Failed to get StateListener through reflection", e);
         }
     }

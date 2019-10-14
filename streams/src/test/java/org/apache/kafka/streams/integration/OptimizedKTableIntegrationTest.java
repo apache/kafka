@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -109,7 +110,7 @@ public class OptimizedKTableIntegrationTest {
         kafkaStreamsList.forEach(kafkaStreams -> {
             kafkaStreams.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, new AtomicLong()));
         });
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, 60 * 1000);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(numMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
@@ -142,7 +143,7 @@ public class OptimizedKTableIntegrationTest {
         kafkaStreamsList.forEach(kafkaStreams -> {
             kafkaStreams.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, restoreEndOffset));
         });
-        startApplicationAndWaitUntilRunning(kafkaStreamsList, 60 * 1000);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         produceValueRange(key, 0, batch1NumMessages);
 
