@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.state.MockStoreFactory;
@@ -65,7 +66,8 @@ public class TopologyTest {
             Stores.inMemoryKeyValueStore("store"),
             Serdes.Bytes(),
             Serdes.Bytes(),
-            false);
+            false,
+            Time.SYSTEM);
 
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
