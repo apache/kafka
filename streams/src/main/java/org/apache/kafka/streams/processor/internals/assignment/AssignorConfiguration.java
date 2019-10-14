@@ -153,7 +153,7 @@ public final class AssignorConfiguration {
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-
+        log.info("Cooperative rebalancing enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 

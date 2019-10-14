@@ -536,6 +536,7 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
+
 class StaticMemberTestService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, group_instance_id, num_threads):
         super(StaticMemberTestService, self).__init__(test_context,
@@ -553,6 +554,45 @@ class StaticMemberTestService(StreamsTestBaseService):
                       consumer_property.SESSION_TIMEOUT_MS: 60000}
 
         properties['input.topic'] = self.INPUT_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
+class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(CooperativeRebalanceUpgradeService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsUpgradeToCooperativeRebalanceTest",
+                                                                 "")
+        self.UPGRADE_FROM = None
+        # these properties will be overridden in test
+        self.SOURCE_TOPIC = None
+        self.SINK_TOPIC = None
+        self.THREAD_DELIMITER = None
+        self.TASK_DELIMITER = None
+        self.REPORT_INTERVAL = None
+
+    def set_version(self, kafka_streams_version):
+        self.KAFKA_STREAMS_VERSION = kafka_streams_version
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        if self.UPGRADE_FROM is not None:
+            properties['upgrade.from'] = self.UPGRADE_FROM
+        else:
+            try:
+                del properties['upgrade.from']
+            except KeyError:
+                self.logger.info("Key 'upgrade.from' not there, better safe than sorry")
+
+        properties['source.topic'] = self.SOURCE_TOPIC
+        properties['sink.topic'] = self.SINK_TOPIC
+        properties['thread.delimiter'] = self.THREAD_DELIMITER
+        properties['task.delimiter'] = self.TASK_DELIMITER
+        properties['report.interval'] = self.REPORT_INTERVAL
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
