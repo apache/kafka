@@ -110,7 +110,6 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
       // get the entries which have key <= the given offset
       val removedIndexes = removeIndexes(offset, remoteSegmentIndexes)
       removedIndexes.foreach { index => {
-        Utils.closeQuietly(index, index.getClass.getSimpleName)
         try {
           index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", Log.DeletedFileSuffix)))
         } catch {
