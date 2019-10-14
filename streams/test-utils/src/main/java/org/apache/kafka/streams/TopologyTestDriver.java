@@ -447,7 +447,7 @@ public class TopologyTestDriver implements Closeable {
     private void pipeRecord(final String topic, final Long timestamp, final byte[] key, final byte[] value, final Headers headers) {
         final String topicName = topic;
 
-        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
+        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
             validateSourceTopicNameRegexPattern(topic);
         }
         final TopicPartition topicPartition = getTopicPartition(topicName);
@@ -495,7 +495,7 @@ public class TopologyTestDriver implements Closeable {
 
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+        for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                         " cannot contain regex pattern for input record topic: " + inputRecordTopic +
