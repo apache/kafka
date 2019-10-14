@@ -123,11 +123,11 @@ class CogroupedStreamAggregateBuilder<K, Vout> {
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
         if (windows == null && sessionWindows == null) {
-            kStreamAggregate = new KStreamAggregate<>(storeBuilder.name(), initializer, aggregator);
+            kStreamAggregate = new KStreamAggregate<K, Object, Vout>(storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator);
         } else if (windows != null && sessionWindows == null) {
-            kStreamAggregate = new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, aggregator);
+            kStreamAggregate = new KStreamWindowAggregate<K, Object, Vout, W>(windows, storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator);
         } else if (windows == null && sessionMerger != null) {
-            kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
+            kStreamAggregate = new KStreamSessionWindowAggregate<K, Object, Vout>(sessionWindows, storeBuilder.name(), initializer, (Aggregator<? super K, ? super Object, Vout>) aggregator, sessionMerger);
         } else {
             throw new IllegalArgumentException(
                 "must be a TimeWindowedStream or a SessionWindowedStream");
