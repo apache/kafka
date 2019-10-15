@@ -782,6 +782,7 @@ case class PartitionFetchState(fetchOffset: Long,
     s"FetchState(fetchOffset=$fetchOffset" +
       s", currentLeaderEpoch=$currentLeaderEpoch" +
       s", state=$state" +
+      s", lag=$lag" +
       s", delay=${delay.map(_.delayMs).getOrElse(0)}ms" +
       s")"
   }
