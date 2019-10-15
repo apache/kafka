@@ -606,7 +606,9 @@ public class Worker {
                                             ConnectorConfig connConfig,
                                             Class<? extends Connector> connectorClass,
                                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        Map<String, Object> adminProps = new HashMap<>();
+        // Use the top-level worker configs to retain backwards compatibility with older releases which
+        // did not require a prefix for connector admin client configs in the worker configuration file
+        Map<String, Object> adminProps = new HashMap<>(config.originals());
         adminProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         // User-specified overrides
         adminProps.putAll(config.originalsWithPrefix("admin."));
