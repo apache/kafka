@@ -1243,9 +1243,7 @@ public class StreamThread extends Thread {
 
     public Map<MetricName, Metric> adminClientMetrics() {
         final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.adminClient().metrics();
-        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
-        result.putAll(adminClientMetrics);
-        return result;
+        return new LinkedHashMap<>(adminClientMetrics);
     }
 
     // the following are for testing only
