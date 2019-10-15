@@ -16,23 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static java.lang.String.format;
-import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
-
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.nio.ByteBuffer;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -41,8 +24,10 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
@@ -64,6 +49,22 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.ByteBuffer;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static java.lang.String.format;
+import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -160,7 +161,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public StreamTask(final TaskId id,
-                      final Collection<TopicPartition> partitions,
+                      final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
@@ -174,7 +175,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public StreamTask(final TaskId id,
-                      final Collection<TopicPartition> partitions,
+                      final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
@@ -253,9 +254,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public boolean initializeStateStores() {
-        log.debug("Initializing state stores");
+    public void initializeMetadata() {
+        try {
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions);
+            initializeCommittedOffsets(offsetsAndMetadata);
+            initializeTaskTime(offsetsAndMetadata);
+        } catch (final AuthorizationException e) {
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
+        } catch (final WakeupException e) {
+            throw e;
+        } catch (final KafkaException e) {
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+        }
+    }
 
+    private void initializeCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
         // Currently there is no easy way to tell the ProcessorStateManager to only restore up to
         // a specific offset. In most cases this is fine. However, in optimized topologies we can
         // have a source topic that also serves as a changelog, and in this case we want our active
@@ -263,13 +276,47 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // partitions of topics that are both sources and changelogs and set the consumer committed
         // offset via stateMgr as there is not a more direct route.
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
-        final Set<TopicPartition> sourcePartitionsAsChangelog = new HashSet<>(partitions)
-            .stream().filter(tp -> changelogTopicNames.contains(tp.topic())).collect(Collectors.toSet());
-        final Map<TopicPartition, Long> committedOffsets = committedOffsetForPartitions(sourcePartitionsAsChangelog);
-        stateMgr.putOffsetLimits(committedOffsets);
+        final Map<TopicPartition, Long> committedOffsetsForChangelogs = offsetsAndMetadata
+            .entrySet()
+            .stream()
+            .filter(e -> changelogTopicNames.contains(e.getKey().topic()))
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
 
+        // those do not have a committed offset would default to 0
+        for (final TopicPartition tp : partitions) {
+            committedOffsetsForChangelogs.putIfAbsent(tp, 0L);
+        }
+
+        stateMgr.putOffsetLimits(committedOffsetsForChangelogs);
+    }
+
+    private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final OffsetAndMetadata metadata = entry.getValue();
+
+            if (metadata != null) {
+                final long committedTimestamp = decodeTimestamp(metadata.metadata());
+                partitionGroup.setPartitionTime(partition, committedTimestamp);
+                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                    + " to {} in stream task {}", partition, committedTimestamp, this);
+            } else {
+                log.debug("No committed timestamp was found in metadata for partition {}", partition);
+            }
+        }
+
+        final Set<TopicPartition> nonCommitted = new HashSet<>(partitions);
+        nonCommitted.removeAll(offsetsAndMetadata.keySet());
+        for (final TopicPartition partition : nonCommitted) {
+            log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
+        }
+    }
+
+
+    @Override
+    public boolean initializeStateStores() {
+        log.debug("Initializing state stores");
         registerStateStores();
-
         return changelogPartitions().isEmpty();
     }
 
@@ -324,6 +371,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw new ProcessorStateException(format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
+        initializeMetadata();
     }
 
     /**
@@ -740,33 +788,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         closeSuspended(clean, firstException);
 
         taskClosed = true;
-    }
-
-    /**
-     * Retrieves formerly committed timestamps and updates the local queue's partition time.
-     */
-    public void initializeTaskTime() {
-        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(partitionGroup.partitions());
-
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : committed.entrySet()) {
-            final TopicPartition partition = entry.getKey();
-            final OffsetAndMetadata metadata = entry.getValue();
-
-            if (metadata != null) {
-                final long committedTimestamp = decodeTimestamp(metadata.metadata());
-                partitionGroup.setPartitionTime(partition, committedTimestamp);
-                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                    + " to {} in stream task {}", partition, committedTimestamp, this);
-            } else {
-                log.debug("No committed timestamp was found in metadata for partition {}", partition);
-            }
-        }
-
-        final Set<TopicPartition> nonCommitted = new HashSet<>(partitionGroup.partitions());
-        nonCommitted.removeAll(committed.keySet());
-        for (final TopicPartition partition : nonCommitted) {
-            log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
-        }
     }
 
     /**

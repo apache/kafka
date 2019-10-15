@@ -17,10 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
@@ -34,9 +31,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public abstract class AbstractTask implements Task {
 
@@ -62,7 +57,7 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if the state manager cannot be created
      */
     AbstractTask(final TaskId id,
-                 final Collection<TopicPartition> partitions,
+                 final Set<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
                  final ChangelogReader changelogReader,
@@ -249,26 +244,6 @@ public abstract class AbstractTask implements Task {
 
     public Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
-    }
-
-    Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
-        try {
-            final Map<TopicPartition, Long> results = consumer.committed(partitions)
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-
-            // those do not have a committed offset would default to 0
-            for (final TopicPartition tp : partitions) {
-                results.putIfAbsent(tp, 0L);
-            }
-
-            return results;
-        } catch (final AuthorizationException e) {
-            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
-        } catch (final WakeupException e) {
-            throw e;
-        } catch (final KafkaException e) {
-            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
-        }
     }
 
 }

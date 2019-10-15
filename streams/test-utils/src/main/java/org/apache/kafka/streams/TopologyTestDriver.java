@@ -388,7 +388,7 @@ public class TopologyTestDriver implements Closeable {
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(
                 TASK_ID,
-                partitionsByTopic.values(),
+                new HashSet<>(partitionsByTopic.values()),
                 processorTopology,
                 consumer,
                 new StoreChangelogReader(
