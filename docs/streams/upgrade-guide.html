@@ -81,8 +81,21 @@
 
     <!-- Placeholder KIP-429 -->
 
-    <!-- Placeholder KIP-444 -->
-    <!-- Placeholder KIP-471 -->
+    <p>
+        The 2.4.0 release contains newly added and reworked metrics.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements">KIP-444</a>
+        adds new <emph>client level</emph> (ie, <code>KafkaStreams</code> instance level) metrics, to the existing
+        thread-level, task-level, and processor-/state-store-level metrics.
+        For a full list of available client level metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_client_monitoring">KafkaStreams monitoring</a>
+        section in the operations guide.
+        <br />
+        Furthermore, RocksDB metrics are exposed via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-471%3A+Expose+RocksDB+Metrics+in+Kafka+Streams">KIP-471</a>.
+        For a full list of available RocksDB metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_rocksdb_monitoring">RocksDB monitoring</a>
+        section in the operations guide.
+    </p>
 
     <p>
         Kafka Streams <code>test-utils</code> got improved via
