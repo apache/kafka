@@ -43,9 +43,18 @@ public class InsertHeaderTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void insertHeaderWithBlankName() {
+    public void shouldFailWithEmptyHeaderName() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "");
+        props.put("literal.value", "dummy value");
+
+        xform.configure(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithBlankHeaderName() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "    ");
         props.put("literal.value", "dummy value");
 
         xform.configure(props);
@@ -55,7 +64,6 @@ public class InsertHeaderTest {
     public void insertHeaderWithNullValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "AAA");
-        props.put("literal.value", null);
 
         xform.configure(props);
 
@@ -67,6 +75,24 @@ public class InsertHeaderTest {
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithBlankHeaderValue() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "AAA");
+        props.put("literal.value", " ");
+
+        xform.configure(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithEmptyHeaderValue() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "AAA");
+        props.put("literal.value", "");
+
+        xform.configure(props);
     }
 
     @Test

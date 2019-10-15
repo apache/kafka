@@ -33,10 +33,9 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     public static final String OVERVIEW_DOC =
         "Insert in every record a header with a constant literal value.";
 
-    private interface ConfigName {
-        String HEADER_NAME_CONFIG = "header";
-        String HEADER_VALUE_CONFIG = "literal.value";
-    }
+
+    private static final String HEADER_NAME_CONFIG = "header";
+    private static final String HEADER_VALUE_CONFIG = "literal.value";
 
     /**
      * Maps known logical types to a list of Java classes that can be used to represent them.
@@ -44,11 +43,11 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(ConfigName.HEADER_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
+        .define(HEADER_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
             new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
             "Name of the header to add.")
-        .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-            "Value of the header to add.");
+        .define(HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),
+            ConfigDef.Importance.MEDIUM, "Value of the header to add.");
 
     private String headerName;
     private String headerValue;
@@ -57,8 +56,8 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        headerName = config.getString(ConfigName.HEADER_NAME_CONFIG);
-        headerValue = config.getString(ConfigName.HEADER_VALUE_CONFIG);
+        headerName = config.getString(HEADER_NAME_CONFIG);
+        headerValue = config.getString(HEADER_VALUE_CONFIG);
         schemaAndValue = Values.parseString(headerValue);
     }
 

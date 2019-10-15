@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -36,6 +37,27 @@ public class DropHeadersTest {
     @After
     public void teardown() {
         xform.close();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithEmptyHeaderNames() {
+        Map<String, String> props = new HashMap<>();
+        props.put("names", "");
+        xform.configure(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithBlankHeaderNames() {
+        Map<String, String> props = new HashMap<>();
+        props.put("names", "a, ");
+        xform.configure(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldFailWithBlankHeaderNameAndValidHeaderNames() {
+        Map<String, String> props = new HashMap<>();
+        props.put("names", "a,,d");
+        xform.configure(props);
     }
 
     @Test
@@ -147,4 +169,5 @@ public class DropHeadersTest {
         assertEquals(3, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
+
 }

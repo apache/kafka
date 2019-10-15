@@ -20,7 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
-import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
+import org.apache.kafka.connect.transforms.util.NonBlankStringListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.List;
@@ -35,15 +35,15 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(HEADER_NAMES_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
-            new NonEmptyListValidator(), ConfigDef.Importance.MEDIUM,
+            new NonBlankStringListValidator(), ConfigDef.Importance.MEDIUM,
             "Header name(s) to remove.");
 
-    private List<String> headers;
+    private List<String> headerNames;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        headers = config.getList(HEADER_NAMES_CONFIG);
+        headerNames = config.getList(HEADER_NAMES_CONFIG);
     }
 
     @Override
@@ -57,7 +57,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
         }
         Headers newHeaders = new ConnectHeaders();
         recordHeaders.forEach(header -> {
-                if (!headers.contains(header.key())) {
+                if (!headerNames.contains(header.key())) {
                     newHeaders.add(header);
                 }
             }
