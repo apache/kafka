@@ -243,16 +243,15 @@ class Log(@volatile var dir: File,
       0
   }
 
-  def updateConfig(updatedKeys: Set[String], newConfig: LogConfig): Unit = {
+  def updateConfig(newConfig: LogConfig): Unit = {
     val oldConfig = this.config
     this.config = newConfig
-    if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {
-      val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
-      val newRecordVersion = newConfig.messageFormatVersion.recordVersion
-      if (newRecordVersion.precedes(oldRecordVersion))
-        warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+    val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
+    val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+    if (newRecordVersion.precedes(oldRecordVersion))
+      warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+    if (newRecordVersion.value != oldRecordVersion.value)
       initializeLeaderEpochCache()
-    }
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {

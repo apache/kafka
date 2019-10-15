@@ -53,6 +53,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.mockito.ArgumentMatchers
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
@@ -972,15 +973,21 @@ class ReplicaManagerTest {
     }
 
     // Expect to call LogManager.truncateTo exactly once
+    val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(mockLogMgr.liveLogDirs).andReturn(config.logDirs.map(new File(_).getAbsoluteFile)).anyTimes
     EasyMock.expect(mockLogMgr.currentDefaultConfig).andReturn(LogConfig())
-    EasyMock.expect(mockLogMgr.getOrCreateLog(new TopicPartition(topic, topicPartition),
+    EasyMock.expect(mockLogMgr.getOrCreateLog(topicPartitionObj,
       LogConfig(), isNew = false, isFuture = false)).andReturn(mockLog).anyTimes
     if (expectTruncation) {
-      EasyMock.expect(mockLogMgr.truncateTo(Map(new TopicPartition(topic, topicPartition) -> offsetFromLeader),
+      EasyMock.expect(mockLogMgr.truncateTo(Map(topicPartitionObj -> offsetFromLeader),
         isFuture = false)).once
     }
+    EasyMock.expect(mockLogMgr.initializingLog(topicPartitionObj)).anyTimes
+
+    EasyMock.expect(mockLogMgr.finishedInitializingLog(
+      EasyMock.eq(topicPartitionObj), EasyMock.anyObject(), EasyMock.anyObject())).anyTimes
+
     EasyMock.replay(mockLogMgr)
 
     val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
@@ -1015,7 +1022,7 @@ class ReplicaManagerTest {
 
     // Mock network client to show leader offset of 5
     val quota = QuotaFactory.instantiate(config, metrics, time, "")
-    val blockingSend = new ReplicaFetcherMockBlockingSend(Map(new TopicPartition(topic, topicPartition) ->
+    val blockingSend = new ReplicaFetcherMockBlockingSend(Map(topicPartitionObj ->
       new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quota, mockBrokerTopicStats,
