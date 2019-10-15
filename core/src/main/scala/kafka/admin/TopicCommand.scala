@@ -32,7 +32,7 @@ import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, Ne
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -274,7 +274,13 @@ object TopicCommand extends Logging {
       val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
       val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
       val topicPartitions = topicDescriptions.flatMap(pi => pi.partitions().asScala.map(tpi => new TopicPartition(pi.name(), tpi.partition())))
-      val reassignments = adminClient.listPartitionReassignments(topicPartitions.toSet.asJava).reassignments().get()
+      val reassignments: util.Map[TopicPartition, PartitionReassignment] = try {
+        adminClient.listPartitionReassignments(topicPartitions.toSet.asJava).reassignments().get()
+      } catch {
+        case e: UnsupportedVersionException =>
+          logger.debug("Couldn't query reassignments through the AdminClient API", e)
+          Collections.emptyMap()
+      }
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
       for (td <- topicDescriptions) {
