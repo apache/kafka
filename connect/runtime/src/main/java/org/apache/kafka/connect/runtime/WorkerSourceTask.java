@@ -41,7 +41,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -75,7 +75,7 @@ class WorkerSourceTask extends WorkerTask {
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
-    private final OffsetStorageReader offsetReader;
+    private final OffsetStorageReaderImpl offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -105,7 +105,7 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
+                            OffsetStorageReaderImpl offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             ClusterConfigState configState,
@@ -175,6 +175,7 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     public void stop() {
         super.stop();
+        offsetReader.prematurelyCompleteRequests();
         stopRequestedLatch.countDown();
         synchronized (this) {
             if (finishedStart)

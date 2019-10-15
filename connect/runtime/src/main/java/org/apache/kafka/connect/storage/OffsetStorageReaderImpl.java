@@ -26,7 +26,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of OffsetStorageReader. Unlike OffsetStorageWriter which is implemented
@@ -40,6 +42,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
     private final String namespace;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final Set<OffsetReadFuture> offsetReadFutures;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
                                    Converter keyConverter, Converter valueConverter) {
@@ -47,6 +50,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.offsetReadFutures = new HashSet<>();
     }
 
     @Override
@@ -76,7 +80,18 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
-            raw = backingStore.get(serializedToOriginal.keySet(), null).get();
+            OffsetReadFuture offsetReadFuture;
+            synchronized (offsetReadFutures) {
+                offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
+                offsetReadFutures.add(offsetReadFuture);
+            }
+            try {
+                raw = offsetReadFuture.get();
+            } finally {
+                synchronized (offsetReadFutures) {
+                    offsetReadFutures.remove(offsetReadFuture);
+                }
+            }
         } catch (Exception e) {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
             throw new ConnectException("Failed to fetch offsets.", e);
@@ -107,5 +122,19 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         }
 
         return result;
+    }
+
+    /**
+     * Invoke {@link OffsetReadFuture#prematurelyComplete()} on all outstanding offset read
+     * requests. This is useful for unblocking task threads which need to shut down but are be
+     * blocked on offset reads.
+     */
+    public void prematurelyCompleteRequests() {
+        synchronized (offsetReadFutures) {
+            for (OffsetReadFuture offsetReadFuture : offsetReadFutures) {
+                offsetReadFuture.prematurelyComplete();
+            }
+            offsetReadFutures.clear();
+        }
     }
 }

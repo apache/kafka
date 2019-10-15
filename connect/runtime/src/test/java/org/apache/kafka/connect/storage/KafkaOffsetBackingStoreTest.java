@@ -218,16 +218,10 @@ public class KafkaOffsetBackingStoreTest {
 
         // Getting from empty store should return nulls
         final AtomicBoolean getInvokedAndPassed = new AtomicBoolean(false);
-        store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
-                // Since we didn't read them yet, these will be null
-                assertEquals(null, result.get(TP0_KEY));
-                assertEquals(null, result.get(TP1_KEY));
-                getInvokedAndPassed.set(true);
-            }
-        }).get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(getInvokedAndPassed.get());
+        Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        // Since we didn't read them yet, these will be null
+        assertNull(offsets.get(TP0_KEY));
+        assertNull(offsets.get(TP1_KEY));
 
         // Set some offsets
         Map<ByteBuffer, ByteBuffer> toSet = new HashMap<>();
@@ -251,27 +245,14 @@ public class KafkaOffsetBackingStoreTest {
 
         // Getting data should read to end of our published data and return it
         final AtomicBoolean secondGetInvokedAndPassed = new AtomicBoolean(false);
-        store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
-                assertEquals(TP0_VALUE, result.get(TP0_KEY));
-                assertEquals(TP1_VALUE, result.get(TP1_KEY));
-                secondGetInvokedAndPassed.set(true);
-            }
-        }).get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(secondGetInvokedAndPassed.get());
+        offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        assertEquals(TP0_VALUE, offsets.get(TP0_KEY));
+        assertEquals(TP1_VALUE, offsets.get(TP1_KEY));
 
         // Getting data should read to end of our published data and return it
-        final AtomicBoolean thirdGetInvokedAndPassed = new AtomicBoolean(false);
-        store.get(Arrays.asList(TP0_KEY, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
-                assertEquals(TP0_VALUE_NEW, result.get(TP0_KEY));
-                assertEquals(TP1_VALUE_NEW, result.get(TP1_KEY));
-                thirdGetInvokedAndPassed.set(true);
-            }
-        }).get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(thirdGetInvokedAndPassed.get());
+        offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        assertEquals(TP0_VALUE_NEW, offsets.get(TP0_KEY));
+        assertEquals(TP1_VALUE_NEW, offsets.get(TP1_KEY));
 
         store.stop();
 
@@ -330,15 +311,9 @@ public class KafkaOffsetBackingStoreTest {
 
         // Getting data should read to end of our published data and return it
         final AtomicBoolean secondGetInvokedAndPassed = new AtomicBoolean(false);
-        store.get(Arrays.asList(null, TP1_KEY), new Callback<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public void onCompletion(Throwable error, Map<ByteBuffer, ByteBuffer> result) {
-                assertEquals(TP0_VALUE, result.get(null));
-                assertNull(result.get(TP1_KEY));
-                secondGetInvokedAndPassed.set(true);
-            }
-        }).get(10000, TimeUnit.MILLISECONDS);
-        assertTrue(secondGetInvokedAndPassed.get());
+        Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(null, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        assertEquals(TP0_VALUE, offsets.get(null));
+        assertNull(offsets.get(TP1_KEY));
 
         store.stop();
 

@@ -27,10 +27,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Implementation of OffsetBackingStore that doesn't actually persist any data. To ensure this
@@ -75,22 +77,8 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public Future<Map<ByteBuffer, ByteBuffer>> get(
-            final Collection<ByteBuffer> keys,
-            final Callback<Map<ByteBuffer, ByteBuffer>> callback) {
-        return executor.submit(new Callable<Map<ByteBuffer, ByteBuffer>>() {
-            @Override
-            public Map<ByteBuffer, ByteBuffer> call() throws Exception {
-                Map<ByteBuffer, ByteBuffer> result = new HashMap<>();
-                for (ByteBuffer key : keys) {
-                    result.put(key, data.get(key));
-                }
-                if (callback != null)
-                    callback.onCompletion(null, result);
-                return result;
-            }
-        });
-
+    public OffsetReadFuture get(final Collection<ByteBuffer> keys) {
+        return new MemoryOffsetReadFuture(keys);
     }
 
     @Override
@@ -113,5 +101,76 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     // Hook to allow subclasses to persist data
     protected void save() {
 
+    }
+
+    private class MemoryOffsetReadFuture implements OffsetReadFuture {
+        private final Map<ByteBuffer, ByteBuffer> result;
+        private final Collection<ByteBuffer> keys;
+        private final CountDownLatch completed;
+        private final Future<?> underlyingOffsetFuture;
+
+        public MemoryOffsetReadFuture(Collection<ByteBuffer> keys) {
+            this.result = new HashMap<>();
+            this.keys = keys;
+            this.completed = new CountDownLatch(1);
+            this.underlyingOffsetFuture = executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    synchronized (this) {
+                        if (isDone()) {
+                            return;
+                        }
+                        collectResults();
+                        completed.countDown();
+                    }
+                }
+            });
+        }
+
+        @Override
+        public void prematurelyComplete() {
+            synchronized (this) {
+                if (isDone()) {
+                    return;
+                }
+                collectResults();
+                completed.countDown();
+            }
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return underlyingOffsetFuture.cancel(mayInterruptIfRunning);
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return underlyingOffsetFuture.isCancelled();
+        }
+
+        @Override
+        public boolean isDone() {
+            return completed.getCount() == 0;
+        }
+
+        @Override
+        public Map<ByteBuffer, ByteBuffer> get() throws InterruptedException {
+            completed.await();
+            return result;
+        }
+
+        @Override
+        public Map<ByteBuffer, ByteBuffer> get(long timeout, TimeUnit unit)
+            throws TimeoutException, InterruptedException {
+            if (!completed.await(timeout, unit))
+                throw new TimeoutException("Timed out waiting for future");
+            return result;
+        }
+
+        private void collectResults() {
+            for (ByteBuffer key : keys) {
+                result.put(key, data.get(key));
+            }
+        }
     }
 }
