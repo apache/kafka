@@ -651,11 +651,10 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testDescribeUnderMinIsrPartitionsWhenReassignmentIsInProgress(): Unit = {
+  def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(): Unit = {
     val configMap = new java.util.HashMap[String, String]()
     val replicationFactor: Short = 1
     val partitions = 1
-    configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, replicationFactor.toString)
 
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
@@ -683,17 +682,16 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       !reassignments.get(firstTopicPartition).addingReplicas().isEmpty
     }, "Reassignment didn't add the second node")
 
-    // describe the topic and test the ISR
+    // describe the topic and test if it's under-replicated
     val simpleDescribeOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val simpleDescribeOutputRows = simpleDescribeOutput.split("\n")
-    println(simpleDescribeOutput)
     assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"))
     assertEquals(2, simpleDescribeOutputRows.size)
 
-    val underMinIsrOutput = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
-    assertTrue("--under-min-isr-partitions shouldn't return anything", underMinIsrOutput.isEmpty)
+    val underReplicatedOutput = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
+    assertTrue("--under-replicated-partitions shouldn't return anything", underReplicatedOutput.isEmpty)
 
     TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
