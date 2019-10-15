@@ -573,8 +573,48 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         self.TASK_DELIMITER = None
         self.REPORT_INTERVAL = None
 
+        self.standby_tasks = None
+        self.active_tasks = None
+
+    def set_tasks(self, task_string):
+        label = "TASK-ASSIGNMENTS:"
+        task_string_substr = task_string[len(label):]
+        all_tasks = task_string_substr.split(self.TASK_DELIMITER)
+        self.active_tasks = set(all_tasks[0].split(","))
+        if len(all_tasks) > 1:
+            self.standby_tasks = set(all_tasks[1].split(","))
+
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        if self.KAFKA_STREAMS_VERSION in [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2),
+                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
+                                          str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3)]:
+            args['kafka'] = self.kafka.bootstrap_servers()
+        else:
+            args['kafka'] = ""
+        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0) or self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_1):
+            args['zk'] = self.kafka.zk.connect_setting()
+        else:
+            args['zk'] = ""
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['version'] = self.KAFKA_STREAMS_VERSION
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s " \
+              " %(kafka_run_class)s %(streams_class_name)s %(kafka)s %(zk)s %(config_file)s " \
+              " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing: " + cmd)
+
+        return cmd
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,

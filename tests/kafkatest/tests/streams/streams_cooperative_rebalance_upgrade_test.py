@@ -20,7 +20,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     sink_topic = "sink"
     thread_delimiter = "&"
     task_delimiter = "#"
-    report_interval = "100"
+    report_interval = "1000"
     processing_message = "Processed [0-9]* records so far"
     stopped_message = "COOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED"
     running_state_msg = "STREAMS in a RUNNING State"
@@ -66,6 +66,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         self.producer.start()
 
         # start all processors without upgrade_from config; normal operations mode
+        self.logger.info("Starting all streams clients in normal running mode")
         for processor in processors:
             processor.set_version(upgrade_from_version)
             self.set_props(processor)
@@ -76,59 +77,86 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             self.verify_processing(processor, self.processing_message)
 
         stop_processors(processors, self.stopped_message)
+        self.logger.info("Stopped all streams clients in normal running mode")
 
+        self.logger.info("Starting all streams clients again in upgrade mode running mode")
         # start again first rolling bounce with upgrade_from conifg set
         for processor in processors:
             # upgrade to version with cooperative rebalance
-            processor.set_version(str(DEV_VERSION))
-            self.set_props(processor, upgrade_from_version)
+            processor.set_version("")
+            if upgrade_from_version.startswith("0"):
+                upgrade_version = upgrade_from_version
+            else:
+                upgrade_version = upgrade_from_version[:upgrade_from_version.rfind('.')]
+            self.set_props(processor, upgrade_version)
             node = processor.node
-            with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-                processor.start()
-                message = self.cooperative_turned_off_msg % upgrade_from_version[:upgrade_from_version.rfind('.')]
-                # verify cooperative turned off
-                monitor.wait_until(message,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % message + str(processor.node.account))
+            with node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+                    processor.start()
+                    message = self.cooperative_turned_off_msg % upgrade_version
+                    # verify cooperative turned off
+                    log_monitor.wait_until(message,
+                                           timeout_sec=60,
+                                           err_msg="Never saw '%s' message " % message + str(processor.node.account))
 
                 # verify rebalanced into a running state
-                monitor.wait_until(self.running_state_msg,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % self.running_state_msg + str(processor.node.account))
+                stdout_monitor.wait_until(self.running_state_msg,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % self.running_state_msg + str(
+                                           processor.node.account))
 
                 # verify processing
-                monitor.wait_until(self.processing_message,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % self.processing_message + str(processor.node.account))
+                stdout_monitor.wait_until(self.processing_message,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % self.processing_message + str(
+                                           processor.node.account))
 
+        self.logger.info("Stopped all streams clients in upgrade running mode to remove upgrade-from tag")
         # stop all instances again to prepare for
         # another rolling bounce without upgrade from to enable cooperative rebalance
         stop_processors(processors, self.stopped_message)
 
+        self.logger.info("Starting all streams clients in normal running mode again in cooperative rebalance mode")
         # start again second rolling bounce without upgrade_from conifg
         for processor in processors:
             # upgrade to version with cooperative rebalance
-            processor.set_version(str(DEV_VERSION))
+            processor.set_version("")
             # removes the upgrade_from config
             self.set_props(processor)
             node = processor.node
-            with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-                processor.start()
-                # verify cooperative turned off
-                monitor.wait_until(self.cooperative_enabled_msg,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % self.cooperative_enabled_msg + str(processor.node.account))
+            with node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+                    processor.start()
+                    # verify cooperative turned off
+                    log_monitor.wait_until(self.cooperative_enabled_msg,
+                                           timeout_sec=60,
+                                           err_msg="Never saw '%s' message " % self.cooperative_enabled_msg + str(
+                                            processor.node.account))
 
                 # verify rebalanced into a running state
-                monitor.wait_until(self.running_state_msg,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % self.running_state_msg + str(processor.node.account))
+                stdout_monitor.wait_until(self.running_state_msg,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % self.running_state_msg + str(
+                                           processor.node.account))
 
                 # verify processing
-                monitor.wait_until(self.processing_message,
-                                   timeout_sec=60,
-                                   err_msg="Never saw '%s' message " % self.processing_message + str(processor.node.account))
+                stdout_monitor.wait_until(self.processing_message,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % self.processing_message + str(
+                                           processor.node.account))
 
+        # now verify tasks are unique
+        for processor in processors:
+            self.get_tasks_for_processor(processor)
+            self.logger.info("Active tasks %s" % processor.active_tasks)
+
+        processor1_active_tasks = processor1.active_tasks
+        processor2_active_tasks = processor2.active_tasks
+        processor3_active_tasks = processor3.active_tasks
+
+        overlapping_tasks = processor1_active_tasks.intersection(processor2_active_tasks, processor3_active_tasks)
+        assert len(overlapping_tasks) == int(0), \
+            "Final task assignments are not unique %s %s %s" % (processor1_active_tasks, processor2_active_tasks, processor3_active_tasks)
 
         # test done close all down
         stop_processors(processors, self.stopped_message)
@@ -144,17 +172,19 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                timeout_sec=60,
                                err_msg="Never saw processing of %s " % pattern + str(processor.node.account))
 
-    def all_source_subtopology_tasks(self, processor):
+    def get_tasks_for_processor(self, processor):
         retries = 0
         while retries < 5:
-            found_tasks = processor.node.account.ssh_capture("sed -n 's/.*\(TASK-ASSIGNMENTS:\[^\n\]*\)\1/p' %s" % processor.STDOUT_FILE, allow_fail=True)
-            self.logger.info("Returned %s from assigned task check" % found)
+            found_tasks = list(processor.node.account.ssh_capture("grep TASK-ASSIGNMENTS %s | tail -n 1" % processor.STDOUT_FILE, allow_fail=True))
+            self.logger.info("Returned %s from assigned task check" % found_tasks)
             if len(found_tasks) > 0:
-                return True
+                task_string = str(found_tasks[0]).strip()
+                self.logger.info("Converted %s from assigned task check" % task_string)
+                processor.set_tasks(task_string)
+                return
             retries += 1
             time.sleep(1)
-
-        return False
+        return
 
     def set_props(self, processor, upgrade_from=None):
         processor.SOURCE_TOPIC = self.source_topic
