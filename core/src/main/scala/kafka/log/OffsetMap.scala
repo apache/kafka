@@ -20,18 +20,26 @@ package kafka.log
 import java.util.Arrays
 import java.security.MessageDigest
 import java.nio.ByteBuffer
+
 import kafka.utils._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 trait OffsetMap {
   def slots: Int
-  def put(key: ByteBuffer, offset: Long): Unit
+  def init(strategy: String)
+  def put(record: Record): Boolean
   def get(key: ByteBuffer): Long
   def updateLatestOffset(offset: Long): Unit
   def clear(): Unit
   def size: Int
   def utilization: Double = size.toDouble / slots
   def latestOffset: Long
+}
+
+object Constants {
+  val OffsetStrategy: String = Defaults.CompactionStrategy
+  val TimestampStrategy: String = "timestamp"
 }
 
 /**
@@ -68,44 +76,123 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
 
   /**
    * The number of bytes of space each entry uses (the number of bytes in the hash plus an 8 byte offset)
+   * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
+   * and, if applicable, another 8 bytes for non-offset compact strategy (set in the init method).
    */
-  val bytesPerEntry = hashSize + 8
+  var bytesPerEntry = hashSize + 8
   
   /**
    * The maximum number of entries this map can contain
    */
-  val slots: Int = memory / bytesPerEntry
+  var slots: Int = memory / bytesPerEntry
+
+  /* compact strategy */
+  private var strategy: String = ""
+
+  /* compact using offset strategy */
+  private var isOffsetStrategy: Boolean = false
+
+  /* compact using timestamp strategy */
+  private var isTimestampStrategy: Boolean = false
+
+  override def init(strategy: String) {
+    this.strategy = strategy
+    this.isOffsetStrategy = strategy == null || Constants.OffsetStrategy.equalsIgnoreCase(strategy)
+    this.isTimestampStrategy = !isOffsetStrategy && Constants.TimestampStrategy.equalsIgnoreCase(strategy)
+
+    if (!isOffsetStrategy) {
+      // another 8 bytes for non-offset compact strategy.
+      this.bytesPerEntry = hashSize + 8 + 8
+      this.slots = memory / bytesPerEntry
+    }
+  }
   
   /**
    * Associate this offset to the given key.
    * @param key The key
    * @param offset The offset
    */
-  override def put(key: ByteBuffer, offset: Long): Unit = {
+  override def put(record: Record): Boolean = {
     require(entries < slots, "Attempt to add a new entry to a full offset map.")
+
+    val key = record.key
+    val offset = record.offset
+    val currValue = extractValue(record)
+
     lookups += 1
     hashInto(key, hash1)
     // probe until we find the first empty slot
     var attempt = 0
     var pos = positionOf(hash1, attempt)  
-    while(!isEmpty(pos)) {
+    while (!isEmpty(pos)) {
       bytes.position(pos)
       bytes.get(hash2)
-      if(Arrays.equals(hash1, hash2)) {
+      if (Arrays.equals(hash1, hash2)) {
+        // we found an existing entry, overwrite it and return (size does not change)
+        if (!isOffsetStrategy) {
+          // read previous value by skipping offset
+          bytes.position(bytes.position() + 8)
+          if (bytes.getLong() > currValue) {
+            // map already holding latest record
+            lastOffset = offset
+            return false
+          }
+
+          // reset the position to start of offset
+          bytes.position(bytes.position() - 16)
+        }
+
         // we found an existing entry, overwrite it and return (size does not change)
         bytes.putLong(offset)
+        if (!isOffsetStrategy) {
+          bytes.putLong(currValue)
+        }
+
         lastOffset = offset
-        return
+        return true
       }
+
       attempt += 1
       pos = positionOf(hash1, attempt)
     }
     // found an empty slot, update it--size grows by 1
+
     bytes.position(pos)
     bytes.put(hash1)
     bytes.putLong(offset)
+    if (!isOffsetStrategy) {
+      bytes.putLong(currValue)
+    }
+
     lastOffset = offset
     entries += 1
+    true
+  }
+
+  /** @return The value extracted from the record if the strategy is not offset, or -1 */
+  private def extractValue(record: Record): Long = {
+    if (isOffsetStrategy) {
+      // offset strategy
+      return -1L
+    }
+
+    if (isTimestampStrategy) {
+      // record timestamp strategy
+      return record.timestamp
+    }
+
+    if (record == null || record.headers() == null || record.headers().isEmpty) {
+      // record header empty
+      return -1L
+    }
+
+    // header value strategy
+    record.headers()
+      .filter(it => it.value != null && it.value.nonEmpty)
+      .find(it => strategy.trim.equalsIgnoreCase(it.key.trim))
+      .map(it => ByteBuffer.wrap(it.value))
+      .map(it => ByteUtils.readVarlong(it))
+      .getOrElse(-1L)
   }
   
   /**

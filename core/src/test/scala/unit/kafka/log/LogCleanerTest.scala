@@ -78,7 +78,7 @@ class LogCleanerTest {
     // pretend we have the following keys
     val keys = immutable.ListSet(1L, 3L, 5L, 7L, 9L)
     val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    keys.foreach(k => map.put(new FakeRecord(key(k), Long.MaxValue)))
 
     // clean the log
     val segments = log.logSegments.take(3).toSeq
@@ -700,7 +700,7 @@ class LogCleanerTest {
     // pretend we have the following keys
     val keys = immutable.ListSet(1L, 3L, 5L, 7L, 9L)
     val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    keys.foreach(k => map.put(new FakeRecord(key(k), Long.MaxValue)))
 
     // clean the log
     val stats = new CleanerStats()
@@ -776,7 +776,7 @@ class LogCleanerTest {
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
     val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    keys.foreach(k => map.put(new FakeRecord(key(k), Long.MaxValue)))
 
     (log, map)
   }
@@ -1082,7 +1082,7 @@ class LogCleanerTest {
 
     val keys = LogTest.keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
-    keys.foreach(k => map.put(key(k), Long.MaxValue))
+    keys.foreach(k => map.put(new FakeRecord(key(k), Long.MaxValue)))
     intercept[LogCleaningAbortedException] {
       cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L, new CleanerStats(),
         new CleanedTransactionMetadata)
@@ -1289,7 +1289,7 @@ class LogCleanerTest {
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
     for (k <- 1 until allKeys.size by 2) {
       expectedKeysAfterCleaning += allKeys(k - 1)
-      offsetMap.put(key(allKeys(k)), Long.MaxValue)
+      offsetMap.put(new FakeRecord(key(allKeys(k)), Long.MaxValue))
     }
 
     // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
@@ -1341,7 +1341,7 @@ class LogCleanerTest {
     // pretend we have odd-numbered keys
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
     for (k <- 1 until messageCount by 2)
-      offsetMap.put(key(k), Long.MaxValue)
+      offsetMap.put(new FakeRecord(key(k), Long.MaxValue))
 
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
@@ -1381,7 +1381,7 @@ class LogCleanerTest {
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
-      offsetMap.put(key(k), Long.MaxValue)
+      offsetMap.put(new FakeRecord(key(k), Long.MaxValue))
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
@@ -1399,7 +1399,7 @@ class LogCleanerTest {
       messageCount += 1
     }
     for (k <- 1 until messageCount by 2)
-      offsetMap.put(key(k), Long.MaxValue)
+      offsetMap.put(new FakeRecord(key(k), Long.MaxValue))
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats(),
       new CleanedTransactionMetadata)
     // clear scheduler so that async deletes don't run
@@ -1677,21 +1677,25 @@ class LogCleanerTest {
 }
 
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
-  val map = new java.util.HashMap[String, Long]()
+  val map = new java.util.HashMap[String, Record]()
   var lastOffset = -1L
 
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
-  override def put(key: ByteBuffer, offset: Long): Unit = {
-    lastOffset = offset
-    map.put(keyFor(key), offset)
+  override def int(strategy: String) = {
+  }
+
+  override def put(record: Record): Boolean = {
+    lastOffset = record.offset
+    map.put(keyFor(record.key), record)
+    return true
   }
 
   override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if(map.containsKey(k))
-      map.get(k)
+      map.get(k).offset()
     else
       -1L
   }
