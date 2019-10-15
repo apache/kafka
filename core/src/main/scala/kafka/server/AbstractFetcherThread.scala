@@ -93,7 +93,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
-  protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)]
+  protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
   protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
@@ -281,7 +281,7 @@ abstract class AbstractFetcherThread(name: String,
   private def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
                                   fetchRequest: FetchRequest.Builder): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
-    var responseData: Seq[(TopicPartition, FetchData)] = Seq.empty
+    var responseData: Map[TopicPartition, FetchData] = Map.empty
 
     try {
       trace(s"Sending fetch request $fetchRequest")
