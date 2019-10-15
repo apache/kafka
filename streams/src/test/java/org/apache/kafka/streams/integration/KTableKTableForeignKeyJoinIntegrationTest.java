@@ -63,7 +63,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    private static final Properties streamsConfig = mkProperties(mkMap(
+    private static final Properties STREAMS_CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
         mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
@@ -77,8 +77,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     @Test
     public void doJoinFromLeftThenDeleteLeftEntity() {
         for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(streamsConfig, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
                 final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
                 final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
                 final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
@@ -131,8 +131,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     @Test
     public void doJoinFromRightThenDeleteRightEntity() {
         for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(streamsConfig, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
                 final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
                 final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
                 final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
@@ -178,7 +178,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                         ))
                     );
                     assertThat(
-                        "leftJoin:" + leftJoin,
+                        "leftJoin",
                         asMap(store),
                         is(mkMap(
                             mkEntry(1, "value1=1.33,value2=null"),
@@ -196,7 +196,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                         ))
                     );
                     assertThat(
-                        "leftJoin:" + leftJoin,
+                        "innerJoin",
                         asMap(store),
                         is(mkMap(
                             mkEntry(3, "value1=3.77,value2=30")
@@ -210,8 +210,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     @Test
     public void joinShouldProduceNullsWhenValueHasNonMatchingForeignKey() {
         for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(streamsConfig, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
                 final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
                 final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
                 final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
