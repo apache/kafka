@@ -87,6 +87,7 @@ class KafkaApisTest {
   @After
   def tearDown(): Unit = {
     quotas.shutdown()
+    TestUtils.clearYammerMetrics()
     metrics.close()
   }
 
@@ -821,10 +822,6 @@ class KafkaApisTest {
     expect(replicaManager.isAddingReplica(anyObject(), anyInt())).andReturn(isReassigning)
 
     replay(replicaManager, fetchManager, clientQuotaManager, requestChannel, replicaQuotaManager, partition)
-
-    // reset the metrics so they don't affect other tests
-    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
-    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
 
     createKafkaApis().handle(fetchFromFollower)
 

@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
@@ -51,6 +51,11 @@ class ReplicaFetcherThreadTest {
 
   private def offsetAndEpoch(fetchOffset: Long, leaderEpoch: Int = 1): OffsetAndEpoch = {
     OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
+  }
+
+  @After
+  def cleanup(): Unit = {
+    TestUtils.clearYammerMetrics()
   }
 
   @Test
@@ -805,9 +810,6 @@ class ReplicaFetcherThreadTest {
 
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-
-    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReassignmentBytesInPerSec)
-    brokerTopicStats.allTopicsStats.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec)
 
     val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
       Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
