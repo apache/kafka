@@ -17,15 +17,59 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.junit.Test;
 
+import java.util.Map;
+import java.util.Objects;
+
+import static java.util.Objects.requireNonNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNull;
 
 public class SubscriptionResponseWrapperSerdeTest {
+    private static final class NonNullableSerde<T> implements Serde<T>, Serializer<T>, Deserializer<T> {
+        private final Serde<T> delegate;
+
+        NonNullableSerde(final Serde<T> delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public Serializer<T> serializer() {
+            return this;
+        }
+
+        @Override
+        public Deserializer<T> deserializer() {
+            return this;
+        }
+
+        @Override
+        public byte[] serialize(String topic, T data) {
+            return delegate.serializer().serialize(topic, requireNonNull(data));
+        }
+
+        @Override
+        public T deserialize(String topic, byte[] data) {
+            return delegate.deserializer().deserialize(topic, requireNonNull(data));
+        }
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -33,7 +77,7 @@ public class SubscriptionResponseWrapperSerdeTest {
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final String foreignValue = "foreignValue";
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(new NonNullableSerde(Serdes.String()));
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
@@ -46,7 +90,7 @@ public class SubscriptionResponseWrapperSerdeTest {
     public void shouldSerdeWithNullForeignValueTest() {
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null);
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(new NonNullableSerde(Serdes.String()));
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
@@ -60,7 +104,7 @@ public class SubscriptionResponseWrapperSerdeTest {
         final long[] hashedValue = null;
         final String foreignValue = "foreignValue";
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(new NonNullableSerde(Serdes.String()));
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
@@ -74,7 +118,7 @@ public class SubscriptionResponseWrapperSerdeTest {
         final long[] hashedValue = null;
         final String foreignValue = null;
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(new NonNullableSerde(Serdes.String()));
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
