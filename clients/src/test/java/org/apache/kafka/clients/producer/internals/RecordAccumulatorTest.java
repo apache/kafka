@@ -30,6 +30,8 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
@@ -778,6 +780,41 @@ public class RecordAccumulatorTest {
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, new TransactionManager(),
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false);
+    }
+
+    @Test
+    public void testRecordHeadersWithMagicV1() {
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+            buffer,
+            (byte) 1, // Enforces that Message format v1 is used on the client
+            CompressionType.NONE,
+            TimestampType.CREATE_TIME,
+            0L
+        );
+        long now = System.currentTimeMillis();
+        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
+        try {
+            batch.tryAppend(
+                1L,
+                new byte[10],
+                new byte[20],
+                new Header[] {new RecordHeader("key", new byte[20])},
+                null,
+                now
+            );
+            throw new IllegalStateException("The append of a record with non internal headers should have failed");
+        } catch (IllegalArgumentException exception) {
+            assertEquals(exception.getMessage(), "Magic v1 does not support record headers. [Key = key]");
+        }
+        batch.tryAppend(
+                1L,
+                new byte[10],
+                new byte[20],
+                new Header[] {new RecordHeader("_key", new byte[20])},
+                null,
+                now
+        );
     }
 
     @Test

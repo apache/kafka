@@ -114,5 +114,4 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       compressedProducer.close()
     }
   }
-
 }

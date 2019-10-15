@@ -39,6 +39,9 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
 public class MemoryRecordsBuilder implements AutoCloseable {
+    // TODO(viswamy): Revert this change once all brokers are on Message_v2
+    private static final String INTERNAL_HEADER_PREFIX = "_";
+
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
         @Override
@@ -403,6 +406,18 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return writtenCompressed;
     }
 
+    // Validates and throws an exception if the headers contain non-internal record headers
+    private void validateHeaders(Header[] headers) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0) {
+            for (Header header : headers) {
+                if (!header.key().startsWith(INTERNAL_HEADER_PREFIX)) {
+                    throw new IllegalArgumentException("Magic v" + magic + " does not support record headers. [Key = "
+                        + header.key() + "]");
+                }
+            }
+        }
+    }
+
     /**
      * Append a record and return its checksum for message format v0 and v1, or null for v2 and above.
      */
@@ -419,8 +434,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
 
-            if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
-                throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
+            validateHeaders(headers);
 
             if (firstTimestamp == null)
                 firstTimestamp = timestamp;
