@@ -28,21 +28,32 @@ class OffsetMapTest {
   @Test
   def testBasicValidation(): Unit = {
     validateMap(10)
+    validateMap(10, strategy = "sequence")
+    validateMap(10, strategy = "timestamp")
     validateMap(100)
+    validateMap(100, strategy = "sequence")
+    validateMap(100, strategy = "timestamp")
     validateMap(1000)
+    validateMap(1000, strategy = "sequence")
+    validateMap(1000, strategy = "timestamp")
     validateMap(5000)
+    validateMap(5000, strategy = "sequence")
+    validateMap(5000, strategy = "timestamp")
   }
   
   @Test
   def testClear(): Unit = {
     val map = new SkimpyOffsetMap(4000)
     map.init(Defaults.CompactionStrategy)
-    for(i <- 0 until 10)
+
+    for (i <- 0 until 10)
       map.put(new FakeRecord(key(i), i))
-    for(i <- 0 until 10)
+
+    for (i <- 0 until 10)
       assertEquals(i.toLong, map.get(key(i)))
+
     map.clear()
-    for(i <- 0 until 10)
+    for (i <- 0 until 10)
       assertEquals(map.get(key(i)), -1L)
   }
   
@@ -55,30 +66,81 @@ class OffsetMapTest {
       map.put(new FakeRecord(key(i), i))
       i = i + 1L
     }
+
     assertEquals(map.get(key(i)), -1L)
     assertEquals(map.get(key(i-1L)), i-1L)
+  }
+  
+  @Test
+  def testSequenceLogCompaction(): Unit = {
+    val map = new SkimpyOffsetMap(4096)
+    map.init("sequence")
+
+    // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    for (i <- 0 until 10)
+      map.put(new FakeRecord(key(i), i, 100+i))
+
+    // putting latest value for key=0 first followed by old value
+    map.put(new FakeRecord(key(0), 10, 111))
+    map.put(new FakeRecord(key(0), 11, 110))
+
+    // map should hold offset 10 for key 0
+    assertEquals(map.get(key(0)), 10)
+    // latest offset in map should be 11
+    assertEquals(map.latestOffset, 11)
+
+    // putting latest value for key=1 first followed by old value
+    map.put(new FakeRecord(key(1), 12, 112))
+    map.put(new FakeRecord(key(1), 13, 114))
+    map.put(new FakeRecord(key(1), 14, 115))
+    map.put(new FakeRecord(key(1), 15, 113))
+    map.put(new FakeRecord(key(1), 16, 120))
+    map.put(new FakeRecord(key(1), 17, 119))
+
+    // map should hold offset 16 for key 1
+    assertEquals(map.get(key(1)), 16)
+    // latest offset in map should be 17
+    assertEquals(map.latestOffset, 17)
+
+    map.put(new FakeRecord(key(1), 18, 118))
+    map.put(new FakeRecord(key(1), 19, 121))
+    map.put(new FakeRecord(key(1), 20, 116))
+    map.put(new FakeRecord(key(1), 21, 117))
+
+    // map should hold offset 19 for key 1
+    assertEquals(map.get(key(1)), 19)
+    // latest offset in map should be 21
+    assertEquals(map.latestOffset, 21)
   }
 
   def key(key: Long) = ByteBuffer.wrap(key.toString.getBytes)
   
-  def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyOffsetMap = {
+  def validateMap(items: Int, loadFactor: Double = 0.5, strategy: String = Defaults.CompactionStrategy): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
-    map.init(Defaults.CompactionStrategy)
-    for(i <- 0 until items)
-      map.put(new FakeRecord(key(i), i))
-    for(i <- 0 until items)
+    map.init(strategy)
+
+    val isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+    for (i <- 0 until items) {
+      if (isOffsetStrategy)
+        map.put(new FakeRecord(key(i), i))
+      else
+        map.put(new FakeRecord(key(i), i, items+i))
+    }
+
+    for (i <- 0 until items)
       assertEquals(map.get(key(i)), i.toLong)
+
     map
   }
-  
 }
 
 object OffsetMapTest {
   def main(args: Array[String]): Unit = {
-    if(args.length != 2) {
+    if (args.length != 2) {
       System.err.println("USAGE: java OffsetMapTest size load")
       Exit.exit(1)
     }
+
     val test = new OffsetMapTest()
     val size = args(0).toInt
     val load = args(1).toDouble

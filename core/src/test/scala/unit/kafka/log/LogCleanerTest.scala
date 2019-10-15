@@ -1683,7 +1683,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
-  override def int(strategy: String) = {
+  override def init(strategy: String) = {
   }
 
   override def put(record: Record): Boolean = {
