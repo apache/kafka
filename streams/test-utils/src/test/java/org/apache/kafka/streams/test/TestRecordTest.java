@@ -32,7 +32,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 
 public class TestRecordTest {
@@ -102,16 +101,16 @@ public class TestRecordTest {
                     new RecordHeader("bar", (byte[]) null),
                 });
         final TestRecord<String, Integer> headerMismatch = new TestRecord<>(key, value, headers2, recordTime);
-        assertFalse(testRecord.equals(headerMismatch));
+        assertNotEquals(testRecord, headerMismatch);
 
         final TestRecord<String, Integer> keyMisMatch = new TestRecord<>("test-mismatch", value, headers, recordTime);
-        assertFalse(testRecord.equals(keyMisMatch));
+        assertNotEquals(testRecord, keyMisMatch);
 
         final TestRecord<String, Integer> valueMisMatch = new TestRecord<>(key, 2, headers, recordTime);
-        assertFalse(testRecord.equals(valueMisMatch));
+        assertNotEquals(testRecord, valueMisMatch);
 
         final TestRecord<String, Integer> timeMisMatch = new TestRecord<>(key, value, headers, recordTime.plusMillis(1));
-        assertFalse(testRecord.equals(timeMisMatch));
+        assertNotEquals(testRecord, timeMisMatch);
 
         final TestRecord<String, Integer> nullFieldsRecord = new TestRecord<>(null, null, null, (Instant) null);
         assertEquals(nullFieldsRecord, nullFieldsRecord);
@@ -121,21 +120,21 @@ public class TestRecordTest {
     @Test
     public void testPartialConstructorEquals() {
         final TestRecord<String, Integer> record1 = new TestRecord<>(value);
-        assertThat(record1, equalTo(new TestRecord<String, Integer>(null, value, null, (Instant) null)));
+        assertThat(record1, equalTo(new TestRecord<>(null, value, null, (Instant) null)));
 
         final TestRecord<String, Integer> record2 = new TestRecord<>(key, value);
-        assertThat(record2, equalTo(new TestRecord<String, Integer>(key, value, null, (Instant) null)));
+        assertThat(record2, equalTo(new TestRecord<>(key, value, null, (Instant) null)));
 
         final TestRecord<String, Integer> record3 = new TestRecord<>(key, value, headers);
-        assertThat(record3, equalTo(new TestRecord<String, Integer>(key, value, headers, (Long) null)));
+        assertThat(record3, equalTo(new TestRecord<>(key, value, headers, (Long) null)));
 
         final TestRecord<String, Integer> record4 = new TestRecord<>(key, value, recordTime);
-        assertThat(record4, equalTo(new TestRecord<String, Integer>(key, value, null, recordMs)));
+        assertThat(record4, equalTo(new TestRecord<>(key, value, null, recordMs)));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidRecords() {
-        new TestRecord<String, Integer>(key, value, headers,  -1L);
+        new TestRecord<>(key, value, headers,  -1L);
     }
 
     @Test
@@ -150,7 +149,8 @@ public class TestRecordTest {
     @Test
     public void testConsumerRecord() {
         final String topicName = "topic";
-        final ConsumerRecord<String, Integer> consumerRecord = new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0L, 0, 0, key, value, headers);
+        final ConsumerRecord<String, Integer> consumerRecord =
+            new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0L, 0, 0, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(consumerRecord);
         final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
         assertEquals(expectedRecord, testRecord);
@@ -159,7 +159,8 @@ public class TestRecordTest {
     @Test
     public void testProducerRecord() {
         final String topicName = "topic";
-        final ProducerRecord<String, Integer> producerRecord = new ProducerRecord<>(topicName, 1, recordMs, key, value, headers);
+        final ProducerRecord<String, Integer> producerRecord =
+            new ProducerRecord<>(topicName, 1, recordMs, key, value, headers);
         final TestRecord<String, Integer> testRecord = new TestRecord<>(producerRecord);
         final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
         assertEquals(expectedRecord, testRecord);
