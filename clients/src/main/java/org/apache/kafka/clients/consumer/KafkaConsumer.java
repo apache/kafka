@@ -21,6 +21,7 @@ import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapt
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
@@ -667,15 +668,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("unchecked")
     private KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
-            String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-            if (clientId.isEmpty())
-                clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-            this.clientId = clientId;
-            this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
-
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                                                                                 GroupRebalanceConfig.ProtocolType.CONSUMER);
+                    GroupRebalanceConfig.ProtocolType.CONSUMER);
+
+            this.groupId = groupRebalanceConfig.groupId;
+            this.clientId = buildClientId(config.getString(CommonClientConfigs.CLIENT_ID_CONFIG), groupRebalanceConfig);
+
             LogContext logContext;
+
             // If group.instance.id is set, we will append it to the log context.
             if (groupRebalanceConfig.groupInstanceId.isPresent()) {
                 logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
@@ -852,6 +852,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
         this.groupId = groupId;
+    }
+
+    private static String buildClientId(String configuredClientId, GroupRebalanceConfig rebalanceConfig) {
+        if (!configuredClientId.isEmpty())
+            return configuredClientId;
+
+        if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
+            return "consumer-" + rebalanceConfig.groupId + "-" + rebalanceConfig.groupInstanceId.orElseGet(() ->
+                    CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "");
+
+        return "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
