@@ -3721,20 +3721,14 @@ public class KafkaAdminClient extends AdminClient {
                     if (!partitionsWithErrors.isEmpty()) {
                         partitionsToQuery.keySet().retainAll(partitionsWithErrors);
                         Set<String> retryTopics = partitionsWithErrors.stream().map(tp -> tp.topic()).collect(Collectors.toSet());
-                        Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> retryFutures =
-                                futures.entrySet()
-                                       .stream()
-                                       .filter(entry -> partitionsWithErrors.contains(entry.getKey()))
-                                       .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
-                                new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), retryFutures);
+                                new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
                         rescheduleMetadataTask(retryContext, () -> Collections.singletonList(this));
                     }
                 }
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    throwable.printStackTrace();
                     for (TopicPartition tp : entry.getValue().keySet()) {
                         KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(tp);
                         future.completeExceptionally(throwable);

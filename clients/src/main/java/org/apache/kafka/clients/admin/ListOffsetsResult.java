@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
@@ -40,10 +41,16 @@ public class ListOffsetsResult {
     }
 
     /**
-     * Return a map from TopicPartition to futures which can be used to retrieve the offsets
-     */
-    public Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> values() {
-        return futures;
+    * Return a future which can be used to check the result for a given partition.
+    */
+    public KafkaFuture<ListOffsetsResultInfo> partitionResult(final TopicPartition partition) {
+        if (!futures.containsKey(partition)) {
+            final KafkaFutureImpl<ListOffsetsResultInfo> result = new KafkaFutureImpl<>();
+            result.completeExceptionally(new IllegalArgumentException(
+                    "List Offsets for partition \"" + partition + "\" was not attempted"));
+            return result;
+        }
+        return futures.get(partition);
     }
 
     /**
@@ -69,13 +76,13 @@ public class ListOffsetsResult {
                 });
     }
 
-    static public class ListOffsetsResultInfo {
+    public static class ListOffsetsResultInfo {
 
         private final long offset;
         private final long timestamp;
         private final Optional<Integer> leaderEpoch;
 
-        public ListOffsetsResultInfo(long offset, long timestamp, Optional<Integer> leaderEpoch) {
+        ListOffsetsResultInfo(long offset, long timestamp, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.timestamp = timestamp;
             this.leaderEpoch = leaderEpoch;
