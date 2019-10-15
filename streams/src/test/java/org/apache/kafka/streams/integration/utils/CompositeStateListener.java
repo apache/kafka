@@ -28,7 +28,7 @@ import org.apache.kafka.streams.KafkaStreams.StateListener;
  * A {@link StateListener} that holds zero or more listeners internally and invokes all of them
  * when a state transition occurs (i.e. {@link #onChange(State, State)} is called). If any listener
  * throws {@link RuntimeException} or {@link Error} this immediately stops execution of listeners
- * and causes the throw exception to be raised.
+ * and causes the thrown exception to be raised.
  */
 public class CompositeStateListener implements StateListener {
     private final List<StateListener> listeners;
