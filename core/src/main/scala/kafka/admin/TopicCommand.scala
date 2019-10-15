@@ -41,6 +41,7 @@ import org.apache.zookeeper.KeeperException.NodeExistsException
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.io.StdIn
 
 object TopicCommand extends Logging {
@@ -277,9 +278,13 @@ object TopicCommand extends Logging {
       val reassignments: util.Map[TopicPartition, PartitionReassignment] = try {
         adminClient.listPartitionReassignments(topicPartitions.toSet.asJava).reassignments().get()
       } catch {
-        case e: UnsupportedVersionException =>
-          logger.debug("Couldn't query reassignments through the AdminClient API", e)
-          Collections.emptyMap()
+        case e: ExecutionException =>
+          e.getCause match {
+            case ex: UnsupportedVersionException =>
+              logger.debug("Couldn't query reassignments through the AdminClient API", ex)
+              Collections.emptyMap()
+            case t => throw t
+          }
       }
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
