@@ -93,6 +93,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
@@ -457,7 +458,7 @@ public class QueryableStateIntegrationTest {
             windowStoreName,
             streamsConfiguration);
 
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         producerThread.start();
 
@@ -527,7 +528,7 @@ public class QueryableStateIntegrationTest {
         t2.toStream().to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -593,7 +594,7 @@ public class QueryableStateIntegrationTest {
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
@@ -641,7 +642,7 @@ public class QueryableStateIntegrationTest {
         t3.toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -702,7 +703,7 @@ public class QueryableStateIntegrationTest {
             .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -728,7 +729,7 @@ public class QueryableStateIntegrationTest {
         final String storeName = "count-by-key";
         stream.groupByKey().count(Materialized.as(storeName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -761,7 +762,7 @@ public class QueryableStateIntegrationTest {
 
         // start again, and since it may take time to restore we wait for it to transit to RUNNING a bit longer
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams, maxWaitMs);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams, maxWaitMs);
 
         // make sure we never get any value other than 8 for hello
         TestUtils.waitForCondition(
@@ -824,7 +825,7 @@ public class QueryableStateIntegrationTest {
         kafkaStreams.setUncaughtExceptionHandler((t, e) -> failed.set(true));
 
         // since we start with two threads, wait for a bit longer for both of them to transit to running
-        StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams, 30000);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams, 30000);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,
