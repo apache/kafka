@@ -119,7 +119,7 @@ public class RestExtensionIntegrationTest {
             // Test the REST extension API; specifically, that the connector's health and configuration
             // are available to the REST extension we registered and that they contain expected values
             waitForCondition(
-                () -> verifyConnectorHealthAndConfig(connectorHandle.name(), expectedHealth, connectorProps),
+                () -> verifyConnectorHealth(connectorHandle.name(), expectedHealth),
                 CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS,
                 "Connector health and/or config was never accessible by the REST extension"
             );
@@ -144,10 +144,9 @@ public class RestExtensionIntegrationTest {
         }
     }
 
-    private boolean verifyConnectorHealthAndConfig(
+    private boolean verifyConnectorHealth(
         String connectorName,
-        ConnectorHealth expectedHealth,
-        Map<String, String> expectedConfig
+        ConnectorHealth expectedHealth
     ) {
         ConnectClusterState clusterState =
             IntegrationTestRestExtension.instance.restPluginContext.clusterState();
@@ -158,9 +157,6 @@ public class RestExtensionIntegrationTest {
             // the status topic by the worker.
             return false;
         }
-        Map<String, String> actualConfig = clusterState.connectorConfig(connectorName);
-
-        assertEquals(expectedConfig, actualConfig);
         assertEquals(expectedHealth, actualHealth);
 
         return true;
