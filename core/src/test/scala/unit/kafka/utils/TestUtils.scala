@@ -1507,7 +1507,7 @@ object TestUtils extends Logging {
         val partitionResult = topicResult.partitions.get(partition)
         Option(partitionResult.leader).map(_.id) == leader
       } catch {
-        case _: UnknownTopicOrPartitionException => false
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
       }
     }, "Timed out waiting for leader metadata")
   }
