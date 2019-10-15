@@ -883,10 +883,20 @@ public class Selector implements Selectable, AutoCloseable {
             key.attach(null);
         }
         this.sensors.connectionClosed.record();
+        String connectionId = channel.id();
+        removeSensor("node-" + connectionId + ".bytes-sent");
+        removeSensor("node-" + connectionId + ".bytes-received");
+        removeSensor("node-" + connectionId + ".latency");
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)
             this.disconnected.put(channel.id(), channel.state());
+    }
+
+    private void removeSensor(String name) {
+        Sensor sensor = this.sensors.metrics.getSensor(name);
+        this.sensors.metrics.removeSensor(name);
+        this.sensors.sensors.remove(sensor);
     }
 
     /**
@@ -1236,6 +1246,10 @@ public class Selector implements Selectable, AutoCloseable {
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
         }
+    }
+
+    int numberOfSensors() {
+        return sensors.sensors.size();
     }
 
     /**
