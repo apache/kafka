@@ -36,8 +36,9 @@ class OffsetMapTest {
   @Test
   def testClear(): Unit = {
     val map = new SkimpyOffsetMap(4000)
+    map.init(Defaults.CompactionStrategy)
     for(i <- 0 until 10)
-      map.put(key(i), i)
+      map.put(new FakeRecord(key(i), i))
     for(i <- 0 until 10)
       assertEquals(i.toLong, map.get(key(i)))
     map.clear()
@@ -48,9 +49,10 @@ class OffsetMapTest {
   @Test
   def testGetWhenFull(): Unit = {
     val map = new SkimpyOffsetMap(4096)
+    map.init(Defaults.CompactionStrategy)
     var i = 37L  //any value would do
     while (map.size < map.slots) {
-      map.put(key(i), i)
+      map.put(new FakeRecord(key(i), i))
       i = i + 1L
     }
     assertEquals(map.get(key(i)), -1L)
@@ -61,8 +63,9 @@ class OffsetMapTest {
   
   def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyOffsetMap = {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
+    map.init(Defaults.CompactionStrategy)
     for(i <- 0 until items)
-      map.put(key(i), i)
+      map.put(new FakeRecord(key(i), i))
     for(i <- 0 until items)
       assertEquals(map.get(key(i)), i.toLong)
     map
