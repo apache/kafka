@@ -21,7 +21,6 @@ import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -66,7 +65,7 @@ public class ProcessorNodeTest {
         node.close();
     }
 
-    private static class ExceptionalProcessor implements Processor {
+    private static class ExceptionalProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
             throw new RuntimeException();
@@ -186,10 +185,8 @@ public class ProcessorNodeTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
     public void testTopologyLevelClassCastExceptionDirect() {
-        final ProcessorNode node = new ProcessorNode("name", new ClassCastProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default serdes"));
