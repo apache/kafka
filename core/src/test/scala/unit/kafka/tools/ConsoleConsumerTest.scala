@@ -47,7 +47,6 @@ class ConsoleConsumerTest {
     val topic = "test"
     val maxMessages: Int = 123
     val totalMessages: Int = 700
-    val startOffset: java.lang.Long = 0L
 
     val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
     val tp1 = new TopicPartition(topic, 0)
@@ -56,7 +55,6 @@ class ConsoleConsumerTest {
     val consumer = new ConsumerWrapper(Some(topic), None, None, None, mockConsumer)
 
     mockConsumer.rebalance(List(tp1, tp2).asJava)
-    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
 
     0 until totalMessages foreach { i =>
       // add all records, each partition should have half of `totalMessages`

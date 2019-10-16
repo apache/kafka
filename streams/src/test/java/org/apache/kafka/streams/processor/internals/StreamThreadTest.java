@@ -191,7 +191,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
         assertEquals(thread.state(), StreamThread.State.RUNNING);
@@ -399,7 +398,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
@@ -564,10 +562,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
 
         assertEquals(1, clientSupplier.producers.size());
@@ -605,10 +599,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
 
         thread.runOnce();
@@ -639,10 +629,6 @@ public class StreamThreadTest {
         thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
 
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
@@ -793,7 +779,6 @@ public class StreamThreadTest {
 
         mockStreamThreadConsumer.setStreamThread(thread);
         mockStreamThreadConsumer.assign(assignedPartitions);
-        mockStreamThreadConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
         addRecord(mockStreamThreadConsumer, 1L, 0L);
         thread.setState(StreamThread.State.STARTING);
@@ -880,7 +865,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
@@ -888,7 +872,6 @@ public class StreamThreadTest {
         final MockProducer producer = clientSupplier.producers.get(0);
 
         // change consumer subscription from "pattern" to "manual" to be able to call .addRecords()
-        consumer.updateBeginningOffsets(Collections.singletonMap(assignedPartitions.iterator().next(), 0L));
         consumer.unsubscribe();
         consumer.assign(new HashSet<>(assignedPartitions));
 
@@ -941,7 +924,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
@@ -980,7 +962,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
@@ -1039,7 +1020,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
@@ -1077,11 +1057,6 @@ public class StreamThreadTest {
                 new Node[0])
             )
         );
-
-        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
-        restoreConsumer.updateEndOffsets(offsets);
-        restoreConsumer.updateBeginningOffsets(offsets);
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
@@ -1139,10 +1114,6 @@ public class StreamThreadTest {
         );
 
         restoreConsumer.assign(Utils.mkSet(partition1, partition2));
-        restoreConsumer.updateEndOffsets(Collections.singletonMap(partition1, 10L));
-        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition1, 0L));
-        restoreConsumer.updateEndOffsets(Collections.singletonMap(partition2, 10L));
-        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition2, 0L));
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
         final OffsetCheckpoint checkpoint
             = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
@@ -1261,10 +1232,12 @@ public class StreamThreadTest {
 
             @Override
             public void process(final Object key,
-                                final Object value) {}
+                                final Object value) {
+            }
 
             @Override
-            public void close() {}
+            public void close() {
+            }
         };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -1288,7 +1261,6 @@ public class StreamThreadTest {
         thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         clientSupplier.consumer.assign(assignedPartitions);
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         thread.runOnce();
@@ -1360,13 +1332,6 @@ public class StreamThreadTest {
                     new Node[0],
                     new Node[0])
             ));
-        final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 0), 0L);
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
-        restoreConsumer.updateEndOffsets(offsets);
-        restoreConsumer.updateBeginningOffsets(offsets);
-
-        clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
@@ -1420,7 +1385,6 @@ public class StreamThreadTest {
                 )
             )
         );
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
 
         mockRestoreConsumer.updatePartitions(
             "stream-thread-test-count-changelog",
@@ -1437,8 +1401,13 @@ public class StreamThreadTest {
 
         final TopicPartition changelogPartition = new TopicPartition("stream-thread-test-count-changelog", 0);
         final Set<TopicPartition> changelogPartitionSet = Collections.singleton(changelogPartition);
-        mockRestoreConsumer.updateBeginningOffsets(Collections.singletonMap(changelogPartition, 0L));
-        mockRestoreConsumer.updateEndOffsets(Collections.singletonMap(changelogPartition, 2L));
+        mockRestoreConsumer.addRecord(
+                new ConsumerRecord<>(
+                        "stream-thread-test-count-changelog",
+                        0,
+                        0L,
+                        "K1".getBytes(),
+                        "V1".getBytes()));
 
         mockConsumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -1452,13 +1421,6 @@ public class StreamThreadTest {
                 () -> mockRestoreConsumer.assignment().size() == 1,
                 "Never restore first record");
 
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-count-changelog",
-                0,
-                0L,
-                "K1".getBytes(),
-                "V1".getBytes()));
-
             TestUtils.waitForCondition(
                 () -> mockRestoreConsumer.position(changelogPartition) == 1L,
                 "Never restore first record");
@@ -1470,18 +1432,14 @@ public class StreamThreadTest {
                 }
             });
 
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-count-changelog",
-                0,
-                0L,
-                "K1".getBytes(),
-                "V1".getBytes()));
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
-                "stream-thread-test-count-changelog",
-                0,
-                1L,
-                "K2".getBytes(),
-                "V2".getBytes()));
+            mockRestoreConsumer.seekToBeginning(Collections.singleton(new TopicPartition("stream-thread-test-count-changelog", 0)));
+            mockRestoreConsumer.addRecord(
+                    new ConsumerRecord<>(
+                            "stream-thread-test-count-changelog",
+                            0,
+                            1L,
+                            "K2".getBytes(),
+                            "V2".getBytes()));
 
             TestUtils.waitForCondition(
                 () -> {
@@ -1520,7 +1478,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
@@ -1593,7 +1550,6 @@ public class StreamThreadTest {
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 

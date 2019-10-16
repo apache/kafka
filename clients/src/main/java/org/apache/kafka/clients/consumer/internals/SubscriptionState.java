@@ -580,7 +580,7 @@ public class SubscriptionState {
         }
     }
 
-    boolean hasDefaultOffsetResetPolicy() {
+    public boolean hasDefaultOffsetResetPolicy() {
         return defaultResetStrategy != OffsetResetStrategy.NONE;
     }
 

@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 
 public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
@@ -56,17 +55,15 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
         recordBuffer.clear();
     }
 
-    // buffer a record (we cannot use addRecord because we need to add records before assigning a partition)
+    // buffer a record
     public void bufferRecord(final ConsumerRecord<K, V> record) {
-        recordBuffer.add(
+        super.addRecord(
             new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.timestamp(),
                                  record.timestampType(), 0L, 0, 0,
                                  keySerializer.serialize(record.topic(), record.headers(), record.key()),
                                  valueSerializer.serialize(record.topic(), record.headers(), record.value()),
                                  record.headers()));
         endOffset = record.offset();
-
-        super.updateEndOffsets(Collections.singletonMap(assignedPartition, endOffset));
     }
 
     @Override
@@ -79,10 +76,6 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
             if (assignedPartition != null)
                 throw new IllegalStateException("RestoreConsumer: partition already assigned");
             assignedPartition = partitions.iterator().next();
-
-            // set the beginning offset to 0
-            // NOTE: this is users responsible to set the initial lEO.
-            super.updateBeginningOffsets(Collections.singletonMap(assignedPartition, 0L));
         }
 
         super.assign(partitions);

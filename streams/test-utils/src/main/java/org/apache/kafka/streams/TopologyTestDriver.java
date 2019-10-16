@@ -355,8 +355,6 @@ public class TopologyTestDriver implements Closeable {
                 offsetsByTopicPartition.put(partition, new AtomicLong());
                 consumer.updatePartitions(topicName, Collections.singletonList(
                     new PartitionInfo(topicName, 0, null, null, null)));
-                consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
-                consumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
             }
 
             globalStateManager = new GlobalStateManagerImpl(
@@ -1071,7 +1069,6 @@ public class TopologyTestDriver implements Closeable {
             final List<PartitionInfo> partitionInfos = new ArrayList<>();
             partitionInfos.add(new PartitionInfo(topicName, PARTITION_ID, null, null, null));
             consumer.updatePartitions(topicName, partitionInfos);
-            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
         }
         return consumer;
     }
