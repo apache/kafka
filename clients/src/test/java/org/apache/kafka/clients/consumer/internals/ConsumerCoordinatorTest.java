@@ -2281,7 +2281,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testConsumerRejoinAfterRebalance() throws Exception {
-        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -2293,7 +2293,6 @@ public class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
 
-            client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
             client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
 
             MockTime time = new MockTime(1);
