@@ -72,6 +72,59 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
+
+    <!-- Placeholder KIP-213 -->
+
+    <!-- Placeholder KIP-307 -->
+    <!-- Placeholder KIP-479 -->
+
+    <!-- Placeholder KIP-429 -->
+
+    <p>
+        The 2.4.0 release contains newly added and reworked metrics.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-444%3A+Augment+metrics+for+Kafka+Streams">KIP-444</a>
+        adds new <em>client level</em> (i.e., <code>KafkaStreams</code> instance level) metrics to the existing
+        thread-level, task-level, and processor-/state-store-level metrics.
+        For a full list of available client level metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_client_monitoring">KafkaStreams monitoring</a>
+        section in the operations guide.
+        <br />
+        Furthermore, RocksDB metrics are exposed via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-471%3A+Expose+RocksDB+Metrics+in+Kafka+Streams">KIP-471</a>.
+        For a full list of available RocksDB metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_rocksdb_monitoring">RocksDB monitoring</a>
+        section in the operations guide.
+    </p>
+
+    <p>
+        Kafka Streams <code>test-utils</code> got improved via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements">KIP-470</a>
+        to simplify the process of using <code>TopologyTestDriver</code> to test your application code.
+        We deprecated <code>ConsumerRecordFactory</code>, <code>TopologyTestDriver#pipeInput()</code>,
+        <code>OutputVerifier</code>, as well as <code>TopologyTestDriver#readOutput()</code> and replace them with
+        <code>TestInputTopic</code> and <code>TestOutputTopic</code>, respectively.
+        We also introduced a new class <code>TestRecord</code> that simplifies assertion code.
+        For full details see the
+        <a href="/{{version}}/documentation/streams/developer-guide/testing.html">Testing section</a> in the developer guide.
+    </p>
+
+    <p>
+        In 2.4.0, we deprecated <code>WindowStore#put(K key, V value)</code> that should never be used.
+        Instead the existing <code>WindowStore#put(K key, V value, long windowStartTimestamp)</code> should be used
+        (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=115526545">KIP-474</a>).
+    </p>
+
+    <p>
+        Furthermore, the <code>PartitionGrouper</code> interface and its corresponding configuration parameter
+        <code>partition.grouper</code> were deprecated
+        (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-528%3A+Deprecate+PartitionGrouper+configuration+and+interface">KIP-528</a>)
+        and will be removed in the next major release (<a href="https://issues.apache.org/jira/browse/KAFKA-7785">KAFKA-7785</a>.
+        Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly.
+        If you use a custom <code>PartitionGrouper</code> and stop to use it, the created tasks might change.
+        Hence, you will need to reset your application to upgrade it.
+    </p>
+
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
     <p>Version 2.3.0 adds the Suppress operator to the <code>kafka-streams-scala</code> Ktable API.</p>
