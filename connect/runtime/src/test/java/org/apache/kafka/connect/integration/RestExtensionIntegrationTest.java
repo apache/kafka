@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -25,7 +26,6 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Test;
@@ -34,6 +34,8 @@ import org.junit.experimental.categories.Category;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,7 +61,7 @@ public class RestExtensionIntegrationTest {
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testRestExtensionApi() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws IOException, InterruptedException, URISyntaxException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -75,17 +77,13 @@ public class RestExtensionIntegrationTest {
         // start the clusters
         connect.start();
 
-        WorkerHandle worker = connect.workers().stream()
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("At least one worker handle should be available"));
-
         waitForCondition(
             this::extensionIsRegistered,
             REST_EXTENSION_REGISTRATION_TIMEOUT_MS,
             "REST extension was never registered"
         );
 
-        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle("test-conn");
+        final String connectorName = "test-conn";
         try {
             // setup up props for the connector
             Map<String, String> connectorProps = new HashMap<>();
@@ -94,14 +92,12 @@ public class RestExtensionIntegrationTest {
             connectorProps.put(TOPICS_CONFIG, "test-topic");
 
             // start a connector
-            connectorHandle.taskHandle(connectorHandle.name() + "-0");
-            StartAndStopLatch connectorStartLatch = connectorHandle.expectedStarts(1);
-            connect.configureConnector(connectorHandle.name(), connectorProps);
-            connectorStartLatch.await(CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            connect.configureConnector(connectorName, connectorProps);
 
-            String workerId = String.format("%s:%d", worker.url().getHost(), worker.url().getPort());
+            URI workerUrl = new URI(connect.endpointForResource(""));
+            String workerId = workerUrl.getHost() + ":" + workerUrl.getPort();
             ConnectorHealth expectedHealth = new ConnectorHealth(
-                connectorHandle.name(),
+                connectorName,
                 new ConnectorState(
                     "RUNNING",
                     workerId,
@@ -114,17 +110,17 @@ public class RestExtensionIntegrationTest {
                 ConnectorType.SINK
             );
 
-            connectorProps.put(NAME_CONFIG, connectorHandle.name());
+            connectorProps.put(NAME_CONFIG, connectorName);
 
-            // Test the REST extension API; specifically, that the connector's health and configuration
-            // are available to the REST extension we registered and that they contain expected values
+            // Test the REST extension API; specifically, that the connector's health is available
+            // to the REST extension we registered and that they contain expected values
             waitForCondition(
-                () -> verifyConnectorHealth(connectorHandle.name(), expectedHealth),
+                () -> verifyConnectorHealth(connectorName, expectedHealth),
                 CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS,
                 "Connector health and/or config was never accessible by the REST extension"
             );
         } finally {
-            RuntimeHandles.get().deleteConnector(connectorHandle.name());
+            RuntimeHandles.get().deleteConnector(connectorName);
         }
     }
 
@@ -150,8 +146,15 @@ public class RestExtensionIntegrationTest {
     ) {
         ConnectClusterState clusterState =
             IntegrationTestRestExtension.instance.restPluginContext.clusterState();
-        
-        ConnectorHealth actualHealth = clusterState.connectorHealth(connectorName);
+
+        ConnectorHealth actualHealth;
+        try {
+            actualHealth = clusterState.connectorHealth(connectorName);
+        } catch (NotFoundException e) {
+            // Happens if the connector hasn't been started yet by the worker
+            return false;
+        }
+
         if (actualHealth.tasksState().isEmpty()) {
             // Happens if the task has been started but its status has not yet been picked up from
             // the status topic by the worker.
