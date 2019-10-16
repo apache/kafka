@@ -45,6 +45,31 @@
         The old overloaded functions are deprecated and we would recommend users to make their code changes to leverage the new methods (details
         can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-520%3A+Add+overloaded+Consumer%23committed+for+batching+partitions">KIP-520</a>).
     </li>
+    <li>We are introducing incremental cooperative rebalancing to the clients' group protocol, which allows consumers to keep all of their assigned partitions during a rebalance
+        and at the end revoke only those which must be migrated to another consumer for overall cluster balance. The <code>ConsumerCoordinator</code> will choose the latest <code>RebalanceProtocol</code>
+        that is commonly supported by all of the consumer's supported assignors. You can use the new built-in <code>CooperativeStickyAssignor</code> or plug in your own custom cooperative assignor. To do
+        so you must implement the <code>ConsumerPartitionAssignor</code> interface and include <code>RebalanceProtocol.COOPERATIVE</code> in the list returned by <code>ConsumerPartitionAssignor#supportedProtocols</code>.
+        Your custom assignor can then leverage the <code>ownedPartitions</code> field in each consumer's <code>Subscription</code> to give partitions back to their previous owners whenever possible. Note that when
+        a partition is to be reassigned to another consumer, it <em>must</em> be removed from the new assignment until it has been revoked from its original owner. Any consumer that has to revoke a partition will trigger
+        a followup rebalance to allow the revoked partition to safely be assigned to its new owner. See the
+        <a href="https://kafka.apache.org/24/javadoc/index.html?org/apache/kafka/clients/consumer/ConsumerPartitionAssignor.RebalanceProtocol.html">ConsumerPartitionAssignor RebalanceProtocol javadocs</a> for more information.
+        <br>
+        To upgrade from the old (eager) protocol, which always revokes all partitions before rebalancing, to cooperative rebalancing, you must follow a specific upgrade path to get all clients on the same <code>ConsumerPartitionAssignor</code>
+        that supports the cooperative protocol. This can be done with two rolling bounces, using the <code>CooperativeStickyAssignor</code> for the example: during the first one, add "cooperative-sticky" to the list of supported assignors
+        for each member (without removing the previous assignor -- note that if previously using the default, you must include that explicitly as well). You then bounce and/or upgrade it.
+        Once the entire group is on 2.4+ and all members have the "cooperative-sticky" among their supported assignors, remove the other assignor(s) and perform a second rolling bounce so that by the end all members support only the
+        cooperative protocol. For further details on the cooperative rebalancing protocol and upgrade path, see <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>.
+    </li>
+    <li>There are some behavioral changes to the <code>ConsumerRebalanceListener</code>, as well as a new API. Exceptions thrown during any of the listener's three callbacks will no longer be swallowed, and will instead be re-thrown
+        all the way up to the <code>Consumer.poll()</code> call. The <code>onPartitionsLost</code> method has been added to allow users to react to abnormal circumstances where a consumer may have lost ownership of its partitions
+        (such as a missed rebalance) and cannot commit offsets. By default, this will simply call the existing <code>onPartitionsRevoked</code> API to align with previous behavior. Note however that <code>onPartitionsLost</code> will not
+        be called when the set of lost partitions is empty. This means that no callback will be invoked at the beginning of the first rebalance of a new consumer joining the group.
+        <br>
+        The semantics of the <code>ConsumerRebalanceListener's</code> callbacks are further changed when following the cooperative rebalancing protocol described above. In addition to <code>onPartitionsLost</code>, <code>onPartitionsRevoked</code>
+        will also never be called when the set of revoked partitions is empty. The callback will generally be invoked only at the end of a rebalance, and only on the set of partitions that are being moved to another consumer. The
+        <code>onPartitionsAssigned</code> callback will however always be called, even with an empty set of partitions, as a way to notify users of a rebalance event (this is true for both cooperative and eager). For details on
+        the new callback semantics, see the <a href="https://kafka.apache.org/24/javadoc/index.html?org/apache/kafka/clients/consumer/ConsumerRebalanceListener.html">ConsumerRebalanceListener javadocs</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_3_0" href="#upgrade_2_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x to 2.3.0</a></h4>
