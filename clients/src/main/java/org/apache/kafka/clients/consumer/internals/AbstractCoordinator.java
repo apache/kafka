@@ -384,16 +384,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 return false;
             }
 
-            Generation gen;
-
-            // Generation data maybe concurrently cleared by Heartbeat thread.
-            // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
-            // and  shouldn't block hearbeat thread.
-            // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInRevocation
-            synchronized (this) {
-                gen = this.generation;
-            }
-
             // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
             // time if the client is woken up before a pending rebalance completes. This must be called
             // on each iteration of the loop because an event requiring a rebalance (such as a metadata
@@ -403,10 +393,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                onJoinPrepare(gen.generationId, gen.memberId);
+                onJoinPrepare(generation.generationId, generation.memberId);
             }
 
-            final RequestFuture<ByteBuffer> future = initiateJoinGroup(gen);
+            final RequestFuture<ByteBuffer> future = initiateJoinGroup();
             client.poll(future, timer);
             if (!future.isDone()) {
                 // we ran out of time
@@ -414,6 +404,8 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
+                Generation gen;
+
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
                 // and  shouldn't block hearbeat thread.
@@ -464,7 +456,7 @@ public abstract class AbstractCoordinator implements Closeable {
         state = MemberState.UNJOINED;
     }
 
-    private RequestFuture<ByteBuffer> initiateJoinGroup(final Generation gen) {
+    private synchronized RequestFuture<ByteBuffer> initiateJoinGroup() {
         // we store the join future in case we are woken up by the user after beginning the
         // rebalance in the call to poll below. This ensures that we do not mistakenly attempt
         // to rejoin before the pending rebalance has completed.
@@ -479,7 +471,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // in this case we would not update the start time.
             if (lastRebalanceStartMs == -1L)
                 lastRebalanceStartMs = time.milliseconds();
-            joinFuture = sendJoinGroupRequest(gen);
+            joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override
                 public void onSuccess(ByteBuffer value) {
@@ -531,7 +523,7 @@ public abstract class AbstractCoordinator implements Closeable {
      *
      * @return A request future which wraps the assignment returned from the group leader
      */
-    RequestFuture<ByteBuffer> sendJoinGroupRequest(final Generation gen) {
+    RequestFuture<ByteBuffer> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
 
@@ -541,7 +533,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 new JoinGroupRequestData()
                         .setGroupId(rebalanceConfig.groupId)
                         .setSessionTimeoutMs(this.rebalanceConfig.sessionTimeoutMs)
-                        .setMemberId(gen.memberId)
+                        .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
