@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -274,9 +274,13 @@ object TopicCommand extends Logging {
       val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
       val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
       val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
-      val topicPartitions = topicDescriptions.flatMap(pi => pi.partitions().asScala.map(tpi => new TopicPartition(pi.name(), tpi.partition())))
       val reassignments: util.Map[TopicPartition, PartitionReassignment] = try {
-        adminClient.listPartitionReassignments(topicPartitions.toSet.asJava).reassignments().get()
+        if (opts.topic.isEmpty) {
+          adminClient.listPartitionReassignments(new ListPartitionReassignmentsOptions).reassignments().get()
+        } else {
+          val topicPartitions = topicDescriptions.flatMap(pi => pi.partitions().asScala.map(tpi => new TopicPartition(pi.name(), tpi.partition())))
+          adminClient.listPartitionReassignments(topicPartitions.toSet.asJava).reassignments().get()
+        }
       } catch {
         case e: ExecutionException =>
           e.getCause match {
