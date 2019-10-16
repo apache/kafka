@@ -75,87 +75,25 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             processor.CLEAN_NODE_ENABLED = False
             verify_running(processor, self.running_state_msg)
 
+        # all running rebalancing has ceased
         for processor in processors:
             self.verify_processing(processor, self.processing_message)
 
-        stop_processors(processors, self.stopped_message)
-        self.logger.info("Stopped all streams clients in normal running mode")
-
-        self.logger.info("Starting all streams clients again in upgrade mode running mode")
-        # start again first rolling bounce with upgrade_from conifg set
-        for processor in processors:
-            # upgrade to version with cooperative rebalance
-            processor.set_version("")
-            processor.set_upgrade_phase(self.first_bounce_phase)
-            if upgrade_from_version.startswith("0"):
-                upgrade_version = upgrade_from_version
-            else:
-                upgrade_version = upgrade_from_version[:upgrade_from_version.rfind('.')]
-            self.set_props(processor, upgrade_version)
-            node = processor.node
-            with node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
-                with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
-                    processor.start()
-                    message = self.cooperative_turned_off_msg % upgrade_version
-                    # verify cooperative turned off
-                    log_monitor.wait_until(message,
-                                           timeout_sec=60,
-                                           err_msg="Never saw '%s' message " % message + str(processor.node.account))
-
-                # verify rebalanced into a running state
-                rebalance_msg = self.first_bounce_phase + self.running_state_msg
-                stdout_monitor.wait_until(rebalance_msg,
-                                          timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % rebalance_msg + str(
-                                           processor.node.account))
-
-                # verify processing
-                verify_processing_msg = self.first_bounce_phase + self.processing_message
-                stdout_monitor.wait_until(verify_processing_msg,
-                                          timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % verify_processing_msg + str(
-                                           processor.node.account))
+        # first rolling bounce with "upgrade.from" conifg set
+        previous_phase = ""
+        self.maybe_upgrade_rolling_bounce_and_verify(processors,
+                                                     previous_phase,
+                                                     self.first_bounce_phase,
+                                                     upgrade_from_version)
 
         # All nodes processing, rebalancing has ceased
         for processor in processors:
             self.verify_processing(processor, self.first_bounce_phase + self.processing_message)
 
-        self.logger.info("Stopped all streams clients in upgrade running mode to remove upgrade-from tag")
-        # stop all instances again to prepare for
-        # another rolling bounce without upgrade from to enable cooperative rebalance
-        stop_processors(processors, self.first_bounce_phase + self.stopped_message)
-
-        self.logger.info("Starting all streams clients in normal running mode again in cooperative rebalance mode")
-        # start again second rolling bounce without upgrade_from conifg
-        for processor in processors:
-            # upgrade to version with cooperative rebalance
-            processor.set_version("")
-            processor.set_upgrade_phase(self.second_bounce_phase)
-            # removes the upgrade_from config
-            self.set_props(processor)
-            node = processor.node
-            with node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
-                with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
-                    processor.start()
-                    # verify cooperative turned off
-                    log_monitor.wait_until(self.cooperative_enabled_msg,
-                                           timeout_sec=60,
-                                           err_msg="Never saw '%s' message " % self.cooperative_enabled_msg + str(
-                                            processor.node.account))
-
-                # verify rebalanced into a running state
-                rebalance_msg = self.second_bounce_phase + self.running_state_msg
-                stdout_monitor.wait_until(rebalance_msg,
-                                          timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % rebalance_msg + str(
-                                           processor.node.account))
-
-                # verify processing
-                verify_processing_msg = self.second_bounce_phase + self.processing_message
-                stdout_monitor.wait_until(verify_processing_msg,
-                                          timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % verify_processing_msg + str(
-                                           processor.node.account))
+        # second rolling bounce without "upgrade.from" conifg
+        self.maybe_upgrade_rolling_bounce_and_verify(processors,
+                                                     self.first_bounce_phase,
+                                                     self.second_bounce_phase)
 
         # All nodes processing, rebalancing has ceased
         for processor in processors:
@@ -180,6 +118,52 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         self.producer.stop()
         self.kafka.stop()
         self.zookeeper.stop()
+
+    def maybe_upgrade_rolling_bounce_and_verify(self,
+                                                processors,
+                                                previous_phase,
+                                                current_phase,
+                                                upgrade_from_version=None):
+        for processor in processors:
+            # stop the processor in prep for setting "update.from" or removing "update.from"
+            verify_stopped(processor, previous_phase + self.stopped_message)
+            # upgrade to version with cooperative rebalance
+            processor.set_version("")
+            processor.set_upgrade_phase(current_phase)
+
+            if upgrade_from_version is not None:
+                if upgrade_from_version.startswith("0"):
+                    upgrade_version = upgrade_from_version
+                else:
+                    upgrade_version = upgrade_from_version[:upgrade_from_version.rfind('.')]
+                rebalance_mode_msg = self.cooperative_turned_off_msg % upgrade_version
+            else:
+                upgrade_version = None
+                rebalance_mode_msg = self.cooperative_enabled_msg
+
+            self.set_props(processor, upgrade_version)
+            node = processor.node
+            with node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+                    processor.start()
+                    # verify correct rebalance mode either turned off for upgrade or enabled after upgrade
+                    log_monitor.wait_until(rebalance_mode_msg,
+                                           timeout_sec=60,
+                                           err_msg="Never saw '%s' message " % rebalance_mode_msg + str(processor.node.account))
+
+                # verify rebalanced into a running state
+                rebalance_msg = current_phase + self.running_state_msg
+                stdout_monitor.wait_until(rebalance_msg,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % rebalance_msg + str(
+                                              processor.node.account))
+
+                # verify processing
+                verify_processing_msg = current_phase + self.processing_message
+                stdout_monitor.wait_until(verify_processing_msg,
+                                          timeout_sec=60,
+                                          err_msg="Never saw '%s' message " % verify_processing_msg + str(
+                                              processor.node.account))
 
     def verify_processing(self, processor, pattern):
         self.logger.info("Verifying %s processing pattern in STDOUT_FILE" % pattern)
