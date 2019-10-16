@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -59,6 +58,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
@@ -103,21 +103,21 @@ public abstract class AbstractJoinIntegrationTest {
     AtomicBoolean finalResultReached = new AtomicBoolean(false);
 
     private final List<Input<String>> input = Arrays.asList(
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, "A"),
-            new Input<>(INPUT_TOPIC_RIGHT, "a"),
-            new Input<>(INPUT_TOPIC_LEFT, "B"),
-            new Input<>(INPUT_TOPIC_RIGHT, "b"),
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, "C"),
-            new Input<>(INPUT_TOPIC_RIGHT, "c"),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, "d"),
-            new Input<>(INPUT_TOPIC_LEFT, "D")
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "A"),
+        new Input<>(INPUT_TOPIC_RIGHT, "a"),
+        new Input<>(INPUT_TOPIC_LEFT, "B"),
+        new Input<>(INPUT_TOPIC_RIGHT, "b"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "C"),
+        new Input<>(INPUT_TOPIC_RIGHT, "c"),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, "d"),
+        new Input<>(INPUT_TOPIC_LEFT, "D")
     );
 
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
@@ -201,11 +201,7 @@ public abstract class AbstractJoinIntegrationTest {
         KeyValueTimestamp<Long, String> expectedFinalResult = null;
 
         try {
-            streams.start();
-            TestUtils.waitForCondition(
-                () -> streams.state() == State.RUNNING,
-                TIMEOUT,
-                () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms");
+            startKafkaStreamsAndWaitForRunningState(streams, TIMEOUT);
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
@@ -238,23 +234,12 @@ public abstract class AbstractJoinIntegrationTest {
     /*
      * Runs the actual test. Checks the final result only after expected number of records have been consumed.
      */
-    void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult) throws Exception {
-        runTest(expectedFinalResult, null);
-    }
-
-    /*
-     * Runs the actual test. Checks the final result only after expected number of records have been consumed.
-     */
     void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult, final String storeName) throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
         try {
-            streams.start();
-            TestUtils.waitForCondition(
-                () -> streams.state() == State.RUNNING,
-                TIMEOUT,
-                () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms");
+            startKafkaStreamsAndWaitForRunningState(streams, TIMEOUT);
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
@@ -299,7 +284,7 @@ public abstract class AbstractJoinIntegrationTest {
         }
     }
 
-    private final class Input<V> {
+    private static final class Input<V> {
         String topic;
         KeyValue<Long, V> record;
 

@@ -16,22 +16,27 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import java.util.stream.Collectors;
 
 /**
  * A StandbyTask
@@ -54,7 +59,7 @@ public class StandbyTask extends AbstractTask {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final Collection<TopicPartition> partitions,
+                final Set<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final Consumer<byte[], byte[]> consumer,
                 final ChangelogReader changelogReader,
@@ -75,6 +80,9 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void initializeMetadata() {}
+
+    @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
@@ -85,14 +93,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void initializeTopology() {
-        //no-op
-    }
-
-    @Override
-    public void initializeTaskTime() {
-        //no-op
-    }
+    public void initializeTopology() {}
 
     /**
      * <pre>
@@ -217,6 +218,26 @@ public class StandbyTask extends AbstractTask {
         updateOffsetLimits = false;
 
         return offsetLimits.get(partition);
+    }
+
+    private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
+        try {
+            final Map<TopicPartition, Long> results = consumer.committed(partitions)
+                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+
+            // those do not have a committed offset would default to 0
+            for (final TopicPartition tp : partitions) {
+                results.putIfAbsent(tp, 0L);
+            }
+
+            return results;
+        } catch (final AuthorizationException e) {
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
+        } catch (final WakeupException e) {
+            throw e;
+        } catch (final KafkaException e) {
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+        }
     }
 
     void allowUpdateOfOffsetLimit() {

@@ -385,10 +385,10 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.build().storeToChangelogTopic(),
             equalTo(Collections.singletonMap("store", "topic")));
         assertThat(
-            internalTopologyBuilder.getStateStores().keySet(),
+            internalTopologyBuilder.stateStores().keySet(),
             equalTo(Collections.singleton("store")));
         assertThat(
-            internalTopologyBuilder.getStateStores().get("store").loggingEnabled(),
+            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(false));
         assertThat(
             internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.isEmpty(),
@@ -407,10 +407,10 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.build().storeToChangelogTopic(),
             equalTo(Collections.singletonMap("store", "appId-store-changelog")));
         assertThat(
-            internalTopologyBuilder.getStateStores().keySet(),
+            internalTopologyBuilder.stateStores().keySet(),
             equalTo(Collections.singleton("store")));
         assertThat(
-            internalTopologyBuilder.getStateStores().get("store").loggingEnabled(),
+            internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(true));
         assertThat(
             internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(),

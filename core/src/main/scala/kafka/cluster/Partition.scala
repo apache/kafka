@@ -313,17 +313,28 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def createLog(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
-    val props = stateStore.fetchTopicConfig()
-    val config = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-    val log = logManager.getOrCreateLog(topicPartition, config, isNew, isFutureReplica)
-    val checkpointHighWatermark = offsetCheckpoints.fetch(log.dir.getParent, topicPartition).getOrElse {
-      info(s"No checkpointed highwatermark is found for partition $topicPartition")
-      0L
+  // Visible for testing
+  private[cluster] def createLog(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
+    val fetchLogConfig = () => {
+      val props = stateStore.fetchTopicConfig()
+      LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
-    val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
-    info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
-    log
+
+    logManager.initializingLog(topicPartition)
+    var maybeLog: Option[Log] = None
+    try {
+      val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig(), isNew, isFutureReplica)
+      val checkpointHighWatermark = offsetCheckpoints.fetch(log.dir.getParent, topicPartition).getOrElse {
+        info(s"No checkpointed highwatermark is found for partition $topicPartition")
+        0L
+      }
+      val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
+      info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
+      maybeLog = Some(log)
+      log
+    } finally {
+      logManager.finishedInitializingLog(topicPartition, maybeLog, fetchLogConfig)
+    }
   }
 
   def getReplica(replicaId: Int): Option[Replica] = Option(remoteReplicasMap.get(replicaId))

@@ -164,9 +164,9 @@ public class StreamTaskTest {
         }
     };
 
-    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
-                                                   final Map<String, SourceNode> sourcesByTopic,
-                                                   final Set<String> repartitionTopics) {
+    private static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                           final Map<String, SourceNode> sourcesByTopic,
+                                                           final Set<String> repartitionTopics) {
         return new ProcessorTopology(processorNodes,
                                      sourcesByTopic,
                                      Collections.emptyMap(),
@@ -176,8 +176,8 @@ public class StreamTaskTest {
                                      repartitionTopics);
     }
 
-    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
-                                         final Map<String, SourceNode> sourcesByTopic) {
+    private static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
+                                                 final Map<String, SourceNode> sourcesByTopic) {
         return new ProcessorTopology(processorNodes,
                                      sourcesByTopic,
                                      Collections.emptyMap(),
@@ -233,7 +233,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -282,7 +282,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -353,7 +353,6 @@ public class StreamTaskTest {
         assertThat(expectedError, is(singletonList("ERROR")));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
         task = createStatelessTask(createConfig(false));
@@ -437,7 +436,6 @@ public class StreamTaskTest {
         ));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
         task = createStatelessTask(createConfig(false));
@@ -492,7 +490,6 @@ public class StreamTaskTest {
         assertEquals(0, consumer.paused().size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(createConfig(false));
@@ -669,7 +666,7 @@ public class StreamTaskTest {
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(false));
 
-        task.initializeTaskTime();
+        task.initializeMetadata();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
         assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
@@ -678,24 +675,12 @@ public class StreamTaskTest {
     public void shouldRestorePartitionTimeAfterRestartWithEosEnabled() {
         createTaskWithProcessAndCommit(true);
 
-        // extract the committed metadata from MockProducer
-        final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
-            producer.consumerGroupOffsetsHistory();
-        final String storedMetadata = metadataList.get(0).get(APPLICATION_ID).get(partition1).metadata();
-        final long partitionTime = task.decodeTimestamp(storedMetadata);
-        assertEquals(DEFAULT_TIMESTAMP, partitionTime);
-
-        // since producer and consumer is mocked, we need to "connect" producer and consumer
-        // so we should manually commit offsets here to simulate this "connection"
-        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        final String encryptedMetadata = task.encodeTimestamp(partitionTime);
-        offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
-        consumer.commitSync(offsetMap);
+        moveCommittedOffsetsFromProducerToConsumer(DEFAULT_TIMESTAMP);
 
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(true));
 
-        task.initializeTaskTime();
+        task.initializeMetadata();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
         assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
@@ -890,11 +875,8 @@ public class StreamTaskTest {
         task.initializeTopology();
 
         try {
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, new Punctuator() {
-                @Override
-                public void punctuate(final long timestamp) {
-                    throw new KafkaException("KABOOM!");
-                }
+            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
@@ -911,11 +893,8 @@ public class StreamTaskTest {
         task.initializeTopology();
 
         try {
-            task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-                @Override
-                public void punctuate(final long timestamp) {
-                    throw new KafkaException("KABOOM!");
-                }
+            task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
             });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
@@ -1015,24 +994,14 @@ public class StreamTaskTest {
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() {
         task = createStatelessTask(createConfig(false));
-        task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                // no-op
-            }
-        });
+        task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
     }
 
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
         task = createStatelessTask(createConfig(false));
         task.processorContext.setCurrentNode(processorStreamTime);
-        task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                // no-op
-            }
-        });
+        task.schedule(1, PunctuationType.STREAM_TIME, timestamp -> { });
     }
 
     @Test
@@ -1334,6 +1303,41 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldInitTaskTimeOnResumeWithEosDisabled() {
+        shouldInitTaskTimeOnResume(false);
+    }
+
+    @Test
+    public void shouldInitTaskTimeOnResumeWithEosEnabled() {
+        shouldInitTaskTimeOnResume(true);
+    }
+
+    private void shouldInitTaskTimeOnResume(final boolean eosEnabled) {
+        task = createStatelessTask(createConfig(eosEnabled));
+        task.initializeTopology();
+
+        assertThat(task.partitionTime(partition1), is(RecordQueue.UNKNOWN));
+        assertThat(task.streamTime(), is(RecordQueue.UNKNOWN));
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.process();
+        assertThat(task.partitionTime(partition1), is(0L));
+        assertThat(task.streamTime(), is(0L));
+
+        task.suspend();
+        assertThat(task.partitionTime(partition1), is(RecordQueue.UNKNOWN));
+        assertThat(task.streamTime(), is(RecordQueue.UNKNOWN));
+
+        if (eosEnabled) {
+            moveCommittedOffsetsFromProducerToConsumer(0L);
+        }
+
+        task.resume();
+        assertThat(task.partitionTime(partition1), is(0L));
+        assertThat(task.streamTime(), is(0L));
+    }
+
+    @Test
     public void shouldStartNewTransactionOnResumeIfEosEnabled() {
         task = createStatelessTask(createConfig(true));
         task.initializeTopology();
@@ -1562,13 +1566,8 @@ public class StreamTaskTest {
 
         task.initializeStateStores();
         task.initializeTopology();
-        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-            @Override
-            public void punctuate(final long timestamp) {
-                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
-                        new IntegerSerializer(),  new IntegerSerializer());
-            }
-        });
+        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, timestamp -> recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
+                new IntegerSerializer(),  new IntegerSerializer()));
         task.commit();
         assertEquals(1, producer.history().size());
     }
@@ -1577,6 +1576,7 @@ public class StreamTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new AuthorizationException("message"));
         final StreamTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeMetadata();
         task.initializeStateStores();
     }
 
@@ -1584,6 +1584,7 @@ public class StreamTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new KafkaException("message"));
         final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeMetadata();
         task.initializeStateStores();
     }
 
@@ -1591,6 +1592,7 @@ public class StreamTaskTest {
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new WakeupException());
         final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        task.initializeMetadata();
         task.initializeStateStores();
     }
 
@@ -1603,11 +1605,27 @@ public class StreamTaskTest {
         };
     }
 
+    private void moveCommittedOffsetsFromProducerToConsumer(final long expectedPartitionTime) {
+        // extract the committed metadata from MockProducer
+        final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList =
+            producer.consumerGroupOffsetsHistory();
+        final String storedMetadata = metadataList.get(0).get(APPLICATION_ID).get(partition1).metadata();
+        final long partitionTime = task.decodeTimestamp(storedMetadata);
+        assertThat(partitionTime, is(expectedPartitionTime));
+
+        // since producer and consumer is mocked, we need to "connect" producer and consumer
+        // so we should manually commit offsets here to simulate this "connection"
+        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+        final String encryptedMetadata = task.encodeTimestamp(partitionTime);
+        offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
+        consumer.commitSync(offsetMap);
+    }
+
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
         final StateStore stateStore = new MockKeyValueStore(storeName, true);
 
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
-            asList(source1),
+            singletonList(source1),
             mkMap(mkEntry(topic1, source1)),
             singletonList(stateStore),
             Collections.singletonMap(storeName, topic1));

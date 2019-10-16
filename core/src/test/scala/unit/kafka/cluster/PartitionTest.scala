@@ -40,7 +40,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, ListOffsetRequest}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import org.mockito.Mockito.{doNothing, mock, when}
+import org.mockito.Mockito.{doAnswer, doNothing, mock, spy, times, verify, when}
 import org.scalatest.Assertions.assertThrows
 import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
@@ -1545,6 +1545,108 @@ class PartitionTest {
     assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
   }
 
+  /**
+   * Test when log is getting initialized, its config remains untouched after initialization is done.
+   */
+  @Test
+  def testLogConfigNotDirty(): Unit = {
+    val spyLogManager = spy(logManager)
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      spyLogManager)
+
+    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+
+    // Validate that initializingLog and finishedInitializingLog was called
+    verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+
+    // We should get config from ZK only once
+    verify(stateStore).fetchTopicConfig()
+  }
+
+  /**
+   * Test when log is getting initialized, its config remains gets reloaded if Topic config gets changed
+   * before initialization is done.
+   */
+  @Test
+  def testLogConfigDirtyAsTopicUpdated(): Unit = {
+    val spyLogManager = spy(logManager)
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.topicConfigUpdated(topicPartition.topic())
+      }
+    }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
+
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      spyLogManager)
+
+    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+
+    // Validate that initializingLog and finishedInitializingLog was called
+    verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+
+    // We should get config from ZK twice, once before log is created, and second time once
+    // we find log config is dirty and refresh it.
+    verify(stateStore, times(2)).fetchTopicConfig()
+  }
+
+  /**
+   * Test when log is getting initialized, its config remains gets reloaded if Broker config gets changed
+   * before initialization is done.
+   */
+  @Test
+  def testLogConfigDirtyAsBrokerUpdated(): Unit = {
+    val spyLogManager = spy(logManager)
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.brokerConfigUpdated()
+      }
+    }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
+
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      localBrokerId = brokerId,
+      time,
+      stateStore,
+      delayedOperations,
+      metadataCache,
+      spyLogManager)
+
+    partition.createLog(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+
+    // Validate that initializingLog and finishedInitializingLog was called
+    verify(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
+    verify(spyLogManager).finishedInitializingLog(ArgumentMatchers.eq(topicPartition),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
+
+    // We should get config from ZK twice, once before log is created, and second time once
+    // we find log config is dirty and refresh it.
+    verify(stateStore, times(2)).fetchTopicConfig()
+  }
+
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {
     for (i <- 0 until numRecords) {
       val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
@@ -1552,5 +1654,4 @@ class PartitionTest {
       log.appendAsLeader(records, leaderEpoch)
     }
   }
-
 }

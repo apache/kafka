@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -31,8 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -77,6 +81,25 @@ public final class StreamsTestUtils {
 
     public static Properties getStreamsConfig() {
         return getStreamsConfig(UUID.randomUUID().toString());
+    }
+
+    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams) throws InterruptedException {
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams, DEFAULT_MAX_WAIT_MS);
+    }
+
+    public static void startKafkaStreamsAndWaitForRunningState(final KafkaStreams kafkaStreams,
+                                                               final long timeoutMs) throws InterruptedException {
+        final CountDownLatch countDownLatch = new CountDownLatch(1);
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING) {
+                countDownLatch.countDown();
+            }
+        });
+
+        kafkaStreams.start();
+        assertThat(
+            "KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.",
+            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS), equalTo(true));
     }
 
     public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {

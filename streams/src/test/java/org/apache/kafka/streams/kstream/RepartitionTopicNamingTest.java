@@ -603,7 +603,7 @@ public class RepartitionTopicNamingTest {
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
             "      --> KSTREAM-MAP-0000000001\n" +
             "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000020, KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000009, KSTREAM-FILTER-0000000016, KSTREAM-FILTER-0000000029\n" +
+            "      --> KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000009, KSTREAM-FILTER-0000000020, KSTREAM-FILTER-0000000016, KSTREAM-FILTER-0000000029\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
             "    Processor: KSTREAM-FILTER-0000000020 (stores: [])\n" +
             "      --> KSTREAM-PEEK-0000000021\n" +
