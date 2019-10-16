@@ -217,7 +217,6 @@ public class KafkaOffsetBackingStoreTest {
         store.start();
 
         // Getting from empty store should return nulls
-        final AtomicBoolean getInvokedAndPassed = new AtomicBoolean(false);
         Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         // Since we didn't read them yet, these will be null
         assertNull(offsets.get(TP0_KEY));
@@ -244,7 +243,6 @@ public class KafkaOffsetBackingStoreTest {
         assertTrue(invoked.get());
 
         // Getting data should read to end of our published data and return it
-        final AtomicBoolean secondGetInvokedAndPassed = new AtomicBoolean(false);
         offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertEquals(TP0_VALUE, offsets.get(TP0_KEY));
         assertEquals(TP1_VALUE, offsets.get(TP1_KEY));
@@ -310,7 +308,6 @@ public class KafkaOffsetBackingStoreTest {
         assertTrue(invoked.get());
 
         // Getting data should read to end of our published data and return it
-        final AtomicBoolean secondGetInvokedAndPassed = new AtomicBoolean(false);
         Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(null, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertEquals(TP0_VALUE, offsets.get(null));
         assertNull(offsets.get(TP1_KEY));

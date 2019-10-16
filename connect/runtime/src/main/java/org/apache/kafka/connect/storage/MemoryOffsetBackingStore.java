@@ -128,12 +128,11 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
         }
 
         @Override
-        public void prematurelyComplete() {
+        public void forceComplete() {
             synchronized (this) {
                 if (isDone()) {
                     return;
                 }
-                collectResults();
                 completed.countDown();
             }
         }

@@ -226,24 +226,29 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private class KafkaOffsetReadFuture extends ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> implements OffsetReadFuture {
         private final Collection<ByteBuffer> keys;
         private final AtomicBoolean completed;
+        private transient boolean forceComplete;
 
         public KafkaOffsetReadFuture(Collection<ByteBuffer> keys) {
             super(null);
             this.keys = keys;
             this.completed = new AtomicBoolean(false);
+            this.forceComplete = false;
         }
 
         @Override
         public Map<ByteBuffer, ByteBuffer> convert(Void result) {
             Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
-            for (ByteBuffer key : keys)
-                values.put(key, data.get(key));
+            if (!forceComplete) {
+                for (ByteBuffer key : keys)
+                    values.put(key, data.get(key));
+            }
             return values;
         }
 
         @Override
-        public void prematurelyComplete() {
-            log.debug("Prematurely completing offset read future");
+        public void forceComplete() {
+            log.debug("Forcing completion of offset read future");
+            forceComplete = true;
             onCompletion(null, null);
         }
 
@@ -256,7 +261,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         @Override
         public void onCompletion(Throwable error, Void result) {
             if (!completed.getAndSet(true)) {
-                log.trace("Offset request completed (either normally or prematurely)");
+                log.trace("Offset request completed (either normally or forcibly)");
                 super.onCompletion(error, result);
             } else {
                 log.trace("Ignoring onCompletion invocation as offset read has already completed");

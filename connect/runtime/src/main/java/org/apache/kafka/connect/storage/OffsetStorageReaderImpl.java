@@ -29,19 +29,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implementation of OffsetStorageReader. Unlike OffsetStorageWriter which is implemented
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */
-public class OffsetStorageReaderImpl implements OffsetStorageReader {
+public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final AtomicBoolean closed;
     private final Set<OffsetReadFuture> offsetReadFutures;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
@@ -50,6 +52,7 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.closed = new AtomicBoolean(false);
         this.offsetReadFutures = new HashSet<>();
     }
 
@@ -82,9 +85,13 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         try {
             OffsetReadFuture offsetReadFuture;
             synchronized (offsetReadFutures) {
+                if (closed.get()) {
+                    return Collections.emptyMap();
+                }
                 offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
             }
+
             try {
                 raw = offsetReadFuture.get();
             } finally {
@@ -124,15 +131,11 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         return result;
     }
 
-    /**
-     * Invoke {@link OffsetReadFuture#prematurelyComplete()} on all outstanding offset read
-     * requests. This is useful for unblocking task threads which need to shut down but are be
-     * blocked on offset reads.
-     */
-    public void prematurelyCompleteRequests() {
+    public void close() {
         synchronized (offsetReadFutures) {
+            closed.set(true);
             for (OffsetReadFuture offsetReadFuture : offsetReadFutures) {
-                offsetReadFuture.prematurelyComplete();
+                offsetReadFuture.forceComplete();
             }
             offsetReadFutures.clear();
         }

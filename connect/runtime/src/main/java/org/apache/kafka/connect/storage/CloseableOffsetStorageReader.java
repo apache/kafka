@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.connect.storage;
 
-
-import java.nio.ByteBuffer;
+import java.io.Closeable;
+import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.Future;
 
-public interface OffsetReadFuture extends Future<Map<ByteBuffer, ByteBuffer>> {
+public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageReader {
 
     /**
-     * Without {@link Future#cancel(boolean) cancelling} the operation, immediately return an empty
-     * map to any threads which are waiting for this future to complete.
+     * Invoke {@link OffsetReadFuture#forceComplete()} on all outstanding offset read requests, and
+     * return an empty map and {@code null} in all future calls to {@link #offsets(Collection)} and
+     * {@link #offset(Map)}, respectively. This is useful for unblocking task threads which need to shut
+     * down but are blocked on offset reads.
      */
-    void forceComplete();
+    void close();
 }
