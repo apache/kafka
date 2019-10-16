@@ -155,6 +155,7 @@ public class ProcessorNodeTest {
                 groupName, threadId, context.taskId().toString(), node.name())));
     }
 
+    @Test
     public void testTopologyLevelClassCastException() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
@@ -185,6 +186,7 @@ public class ProcessorNodeTest {
         }
     }
 
+    @Test
     public void testTopologyLevelClassCastExceptionDirect() {
         final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
