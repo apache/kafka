@@ -383,12 +383,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         if (minReceivedMetadataVersion < LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading metadata to version {}. Latest supported version is {}.",
+            log.info("Downgrade metadata to version {}. Latest supported version is {}.",
                 minReceivedMetadataVersion,
                 LATEST_SUPPORTED_VERSION);
         }
         if (minSupportedMetadataVersion < LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading latest supported metadata to version {}. Latest supported version is {}.",
+            log.info("Downgrade latest supported metadata to version {}. Latest supported version is {}.",
                 minSupportedMetadataVersion,
                 LATEST_SUPPORTED_VERSION);
         }
@@ -1244,7 +1244,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {
         if (supportedVersion < minSupportedMetadataVersion) {
-            log.debug("Downgrading the current minimum supported version {} to the smaller seen supported version {}",
+            log.debug("Downgrade the current minimum supported version {} to the smaller seen supported version {}",
                 minSupportedMetadataVersion, supportedVersion);
             return supportedVersion;
         } else {
