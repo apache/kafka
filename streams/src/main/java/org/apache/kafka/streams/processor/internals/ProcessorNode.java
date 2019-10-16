@@ -123,7 +123,7 @@ public class ProcessorNode<K, V> {
                     + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
                     + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "
                     + "the deserialized input of type key: %s, and value: %s.%n"
-                    + "Note that also although wrong Serdes are a common cause of error, the cast exception might have "
+                    + "Note that although incorrect Serdes are a common cause of error, the cast exception might have "
                     + "another cause (in user code, for example). For example, if a processor wires in a store, but casts "
                     + "the generics incorrectly, a class cast exception could be raised during processing, but the "
                     + "cause would not be wrong Serdes.",
