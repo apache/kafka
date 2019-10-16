@@ -569,12 +569,12 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         # these properties will be overridden in test
         self.SOURCE_TOPIC = None
         self.SINK_TOPIC = None
-        self.THREAD_DELIMITER = None
         self.TASK_DELIMITER = None
         self.REPORT_INTERVAL = None
 
         self.standby_tasks = None
         self.active_tasks = None
+        self.upgrade_phase = None
 
     def set_tasks(self, task_string):
         label = "TASK-ASSIGNMENTS:"
@@ -586,6 +586,9 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
+
+    def set_upgrade_phase(self, upgrade_phase):
+        self.upgrade_phase = upgrade_phase
 
     def start_cmd(self, node):
         args = self.args.copy()
@@ -628,9 +631,11 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
             except KeyError:
                 self.logger.info("Key 'upgrade.from' not there, better safe than sorry")
 
+        if self.upgrade_phase is not None:
+            properties['upgrade.phase'] = self.upgrade_phase
+
         properties['source.topic'] = self.SOURCE_TOPIC
         properties['sink.topic'] = self.SINK_TOPIC
-        properties['thread.delimiter'] = self.THREAD_DELIMITER
         properties['task.delimiter'] = self.TASK_DELIMITER
         properties['report.interval'] = self.REPORT_INTERVAL
 

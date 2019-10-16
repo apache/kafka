@@ -26,6 +26,9 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     running_state_msg = "STREAMS in a RUNNING State"
     cooperative_turned_off_msg = "Turning off cooperative rebalancing for upgrade from %s"
     cooperative_enabled_msg = "Cooperative rebalancing enabled now"
+    first_bounce_phase = "first_bounce_phase-"
+    second_bounce_phase = "second_bounce_phase-"
+
 
     #streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
     #                                            str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
@@ -84,6 +87,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         for processor in processors:
             # upgrade to version with cooperative rebalance
             processor.set_version("")
+            processor.set_upgrade_phase(self.first_bounce_phase)
             if upgrade_from_version.startswith("0"):
                 upgrade_version = upgrade_from_version
             else:
@@ -100,27 +104,30 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                            err_msg="Never saw '%s' message " % message + str(processor.node.account))
 
                 # verify rebalanced into a running state
-                stdout_monitor.wait_until(self.running_state_msg,
+                rebalance_msg = self.first_bounce_phase + self.running_state_msg
+                stdout_monitor.wait_until(rebalance_msg,
                                           timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % self.running_state_msg + str(
+                                          err_msg="Never saw '%s' message " % rebalance_msg + str(
                                            processor.node.account))
 
                 # verify processing
-                stdout_monitor.wait_until(self.processing_message,
+                verify_processing_msg = self.first_bounce_phase + self.processing_message
+                stdout_monitor.wait_until(verify_processing_msg,
                                           timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % self.processing_message + str(
+                                          err_msg="Never saw '%s' message " % verify_processing_msg + str(
                                            processor.node.account))
 
         self.logger.info("Stopped all streams clients in upgrade running mode to remove upgrade-from tag")
         # stop all instances again to prepare for
         # another rolling bounce without upgrade from to enable cooperative rebalance
-        stop_processors(processors, self.stopped_message)
+        stop_processors(processors, self.first_bounce_phase + self.stopped_message)
 
         self.logger.info("Starting all streams clients in normal running mode again in cooperative rebalance mode")
         # start again second rolling bounce without upgrade_from conifg
         for processor in processors:
             # upgrade to version with cooperative rebalance
             processor.set_version("")
+            processor.set_upgrade_phase(self.second_bounce_phase)
             # removes the upgrade_from config
             self.set_props(processor)
             node = processor.node
@@ -134,15 +141,17 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                             processor.node.account))
 
                 # verify rebalanced into a running state
-                stdout_monitor.wait_until(self.running_state_msg,
+                rebalance_msg = self.second_bounce_phase + self.running_state_msg
+                stdout_monitor.wait_until(rebalance_msg,
                                           timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % self.running_state_msg + str(
+                                          err_msg="Never saw '%s' message " % rebalance_msg + str(
                                            processor.node.account))
 
                 # verify processing
-                stdout_monitor.wait_until(self.processing_message,
+                verify_processing_msg = self.second_bounce_phase + self.processing_message
+                stdout_monitor.wait_until(verify_processing_msg,
                                           timeout_sec=60,
-                                          err_msg="Never saw '%s' message " % self.processing_message + str(
+                                          err_msg="Never saw '%s' message " % verify_processing_msg + str(
                                            processor.node.account))
 
         # now verify tasks are unique
@@ -150,16 +159,12 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             self.get_tasks_for_processor(processor)
             self.logger.info("Active tasks %s" % processor.active_tasks)
 
-        processor1_active_tasks = processor1.active_tasks
-        processor2_active_tasks = processor2.active_tasks
-        processor3_active_tasks = processor3.active_tasks
-
-        overlapping_tasks = processor1_active_tasks.intersection(processor2_active_tasks, processor3_active_tasks)
+        overlapping_tasks = processor1.active_tasks.intersection(processor2.active_tasks, processor3.active_tasks)
         assert len(overlapping_tasks) == int(0), \
-            "Final task assignments are not unique %s %s %s" % (processor1_active_tasks, processor2_active_tasks, processor3_active_tasks)
+            "Final task assignments are not unique %s %s %s" % (processor1.active_tasks, processor2.active_tasks, processor3.active_tasks)
 
         # test done close all down
-        stop_processors(processors, self.stopped_message)
+        stop_processors(processors, self.second_bounce_phase + self.stopped_message)
 
         self.producer.stop()
         self.kafka.stop()

@@ -38,9 +38,8 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires two argument (kafka-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] : ""));
+        if (args.length < 1) {
+            System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires one argument (properties-file) but no args provided");
         }
         System.out.println("Args are " + Arrays.toString(args));
         final String propFileName = args[0];
@@ -58,9 +57,9 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         final String sourceTopic = streamsProperties.getProperty("source.topic", "source");
         final String sinkTopic = streamsProperties.getProperty("sink.topic", "sink");
-        final String threadDelimiter = streamsProperties.getProperty("thread.delimiter", "&");
         final String taskDelimiter = streamsProperties.getProperty("task.delimiter", "#");
         final int reportInterval = Integer.parseInt(streamsProperties.getProperty("report.interval", "100"));
+        final String upgradePhase = streamsProperties.getProperty("upgrade.phase",  "");
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -71,7 +70,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                       @Override
                       public void apply(String key, String value) {
                           if (recordCounter++ % reportInterval == 0) {
-                              System.out.println(String.format("Processed %d records so far", recordCounter));
+                              System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
                               System.out.flush();
                           }
                       }
@@ -82,7 +81,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         streams.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING && oldState == State.REBALANCING) {
-                System.out.println("STREAMS in a RUNNING State");
+                System.out.println(String.format("%sSTREAMS in a RUNNING State", upgradePhase));
                 final Set<ThreadMetadata> allThreadMetadata = streams.localThreadsMetadata();
                 final StringBuilder taskReportBuilder = new StringBuilder();
                 final List<String> activeTasks = new ArrayList<>();
@@ -102,7 +101,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             }
 
             if (newState == State.REBALANCING) {
-                System.out.println("Starting a REBALANCE");
+                System.out.println(String.format("%sStarting a REBALANCE", upgradePhase));
             }
         });
 
@@ -111,7 +110,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close();
-            System.out.println("COOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED");
+            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
             System.out.flush();
         }));
     }
