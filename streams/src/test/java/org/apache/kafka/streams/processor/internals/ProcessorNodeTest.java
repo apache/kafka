@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Arrays;
 import java.util.Properties;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
