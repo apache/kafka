@@ -68,18 +68,17 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
-import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 import scala.collection.Map;
-import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -306,8 +305,8 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Seq<Tuple2<TopicPartition, FetchResponse.PartitionData<Records>>> fetchFromLeader(FetchRequest.Builder fetchRequest) {
-            return JavaConverters.asScalaIteratorConverter(new ArrayList<Tuple2<TopicPartition, FetchResponse.PartitionData<Records>>>().iterator()).asScala().toSeq();
+        public Map<TopicPartition, FetchResponse.PartitionData<Records>> fetchFromLeader(FetchRequest.Builder fetchRequest) {
+            return new scala.collection.mutable.HashMap<>();
         }
     }
 }
