@@ -63,11 +63,10 @@ class NetworkDegradeTest(Test):
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=3 ttl=64 time=0.145 ms
         times = []
 
-        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 example.com"))
-        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.hostname))
-        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.ssh_hostname))
-        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.externally_routable_ip))
-
+        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 example.com", allow_fail=True))
+        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.hostname, allow_fail=True))
+        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.ssh_hostname, allow_fail=True))
+        self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 %s" % zk1.account.externally_routable_ip, allow_fail=True))
 
         for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.hostname):
             self.logger.debug("Ping output: %s" % line)
