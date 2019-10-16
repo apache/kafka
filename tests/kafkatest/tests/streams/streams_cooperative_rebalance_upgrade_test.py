@@ -28,11 +28,9 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     first_bounce_phase = "first_bounce_phase-"
     second_bounce_phase = "second_bounce_phase-"
 
-    #streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
-    #                                            str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
-    #                                            str(LATEST_2_3)]
-
-    streams_eager_rebalance_upgrade_versions = [str(LATEST_2_3)]
+    streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
+                                                str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
+                                                str(LATEST_2_3)]
 
     def __init__(self, test_context):
         super(StreamsCooperativeRebalanceUpgradeTest, self).__init__(test_context)
