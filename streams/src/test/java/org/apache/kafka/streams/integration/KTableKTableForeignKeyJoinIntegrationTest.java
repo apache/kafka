@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.serialization.FloatSerializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -34,16 +29,17 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -57,7 +53,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 
-@Category(IntegrationTest.class)
+@RunWith(value = Parameterized.class)
 public class KTableKTableForeignKeyJoinIntegrationTest {
 
     private static final String LEFT_TABLE = "left_table";
@@ -66,235 +62,295 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static final Properties STREAMS_CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
-        mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-        mkEntry(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0"),
-        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "100"),
         mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE)
     ));
+    private final boolean leftJoin;
 
+    public KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin) {
+        this.leftJoin = leftJoin;
+    }
+
+    @Parameterized.Parameters(name = "leftJoin={0}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[] {false}, new Object[] {true});
+    }
 
     @Test
     public void doJoinFromLeftThenDeleteLeftEntity() {
-        for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
-                final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
-                final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
-                final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
-                final KeyValueStore<Integer, String> store = driver.getKeyValueStore("store");
+        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
 
-                right.pipeInput("1", 10L);
-                right.pipeInput("2", 20L);
+            // Pre-populate the RHS records. This test is all about what happens when we add/remove LHS records
+            right.pipeInput("rhs1", "rhsValue1");
+            right.pipeInput("rhs2", "rhsValue2");
+            right.pipeInput("rhs3", "rhsValue3"); // this unreferenced FK won't show up in any results
 
-                left.pipeInput(1, 1.33f);
-                left.pipeInput(2, 2.77f);
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(emptyMap())
+            );
+            assertThat(
+                asMap(store),
+                is(emptyMap())
+            );
 
-                {
-                    final Map<Integer, String> expected = mkMap(
-                        mkEntry(1, "value1=1.33,value2=10"),
-                        mkEntry(2, "value1=2.77,value2=20")
-                    );
-                    assertThat(
-                        "leftJoin:" + leftJoin,
-                        outputTopic.readKeyValuesToMap(),
-                        is(expected)
-                    );
-                    assertThat(
-                        "leftJoin:" + leftJoin,
-                        asMap(store),
-                        is(expected)
-                    );
-                }
+            left.pipeInput("lhs1", "lhsValue1|rhs1");
+            left.pipeInput("lhs2", "lhsValue2|rhs2");
 
-                //Now delete one LHS entity such that one delete is propagated down to the output.
-
-                left.pipeInput(1, null);
+            {
+                final Map<String, String> expected = mkMap(
+                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                    mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)")
+                );
                 assertThat(
-                    "leftJoin:" + leftJoin,
+                    outputTopic.readKeyValuesToMap(),
+                    is(expected)
+                );
+                assertThat(
+                    asMap(store),
+                    is(expected)
+                );
+            }
+
+            // Add another reference to an existing FK
+            left.pipeInput("lhs3", "lhsValue3|rhs1");
+            {
+                assertThat(
                     outputTopic.readKeyValuesToMap(),
                     is(mkMap(
-                        mkEntry(1, null)
+                        mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                     ))
                 );
                 assertThat(
-                    "leftJoin:" + leftJoin,
                     asMap(store),
                     is(mkMap(
-                        mkEntry(2, "value1=2.77,value2=20")
+                        mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                        mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                        mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                     ))
                 );
             }
+            // Now delete one LHS entity such that one delete is propagated down to the output.
+
+            left.pipeInput("lhs1", (String) null);
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(
+                    mkEntry("lhs1", null)
+                ))
+            );
+            assertThat(
+                asMap(store),
+                is(mkMap(
+                    mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                    mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
+                ))
+            );
         }
     }
 
     @Test
     public void doJoinFromRightThenDeleteRightEntity() {
-        for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
-                final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
-                final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
-                final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
-                final KeyValueStore<Integer, String> store = driver.getKeyValueStore("store");
+        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
 
-                left.pipeInput(1, 1.33f);
-                left.pipeInput(2, 1.77f);
-                left.pipeInput(3, 3.77f);
+            // Pre-populate the LHS records. This test is all about what happens when we add/remove RHS records
+            left.pipeInput("lhs1", "lhsValue1|rhs1");
+            left.pipeInput("lhs2", "lhsValue2|rhs2");
+            left.pipeInput("lhs3", "lhsValue3|rhs1");
 
-                right.pipeInput("1", 10L);
-                right.pipeInput("2", 20L);
-                right.pipeInput("3", 30L);
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(leftJoin
+                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)"),
+                               mkEntry("lhs2", "(lhsValue2|rhs2,null)"),
+                               mkEntry("lhs3", "(lhsValue3|rhs1,null)"))
+                       : emptyMap()
+                )
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin
+                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)"),
+                               mkEntry("lhs2", "(lhsValue2|rhs2,null)"),
+                               mkEntry("lhs3", "(lhsValue3|rhs1,null)"))
+                       : emptyMap()
+                )
+            );
 
-                //Ensure that the joined values exist in the output
-                {
-                    final Map<Integer, String> expected = mkMap(
-                        mkEntry(1, "value1=1.33,value2=10"),
-                        mkEntry(2, "value1=1.77,value2=10"),
-                        mkEntry(3, "value1=3.77,value2=30")
-                    );
-                    assertThat(
-                        "leftJoin:" + leftJoin,
-                        outputTopic.readKeyValuesToMap(),
-                        is(expected)
-                    );
-                    assertThat(
-                        "leftJoin:" + leftJoin,
-                        asMap(store),
-                        is(expected)
-                    );
-                }
+            right.pipeInput("rhs1", "rhsValue1");
 
-                //Now delete the RHS entity such that all matching keys have deletes propagated.
-                right.pipeInput("1", null);
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                         mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)"))
+                )
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin
+                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                               mkEntry("lhs2", "(lhsValue2|rhs2,null)"),
+                               mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)"))
 
-                if (leftJoin) {
-                    assertThat(
-                        "leftJoin",
-                        outputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry(1, "value1=1.33,value2=null"),
-                            mkEntry(2, "value1=1.77,value2=null")
-                        ))
-                    );
-                    assertThat(
-                        "leftJoin",
-                        asMap(store),
-                        is(mkMap(
-                            mkEntry(1, "value1=1.33,value2=null"),
-                            mkEntry(2, "value1=1.77,value2=null"),
-                            mkEntry(3, "value1=3.77,value2=30")
-                        ))
-                    );
-                } else {
-                    assertThat(
-                        "innerJoin",
-                        outputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry(1, null),
-                            mkEntry(2, null)
-                        ))
-                    );
-                    assertThat(
-                        "innerJoin",
-                        asMap(store),
-                        is(mkMap(
-                            mkEntry(3, "value1=3.77,value2=30")
-                        ))
-                    );
-                }
-            }
+                       : mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                               mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)"))
+                )
+            );
+
+            right.pipeInput("rhs2", "rhsValue2");
+
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)")))
+            );
+            assertThat(
+                asMap(store),
+                is(mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                         mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                         mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)"))
+                )
+            );
+
+            right.pipeInput("rhs3", "rhsValue3"); // this unreferenced FK won't show up in any results
+
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(emptyMap())
+            );
+            assertThat(
+                asMap(store),
+                is(mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                         mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                         mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)"))
+                )
+            );
+
+            // Now delete the RHS entity such that all matching keys have deletes propagated.
+            right.pipeInput("rhs1", (String) null);
+
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs1,null)" : null),
+                         mkEntry("lhs3", leftJoin ? "(lhsValue3|rhs1,null)" : null))
+                )
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin
+                       ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)"),
+                               mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                               mkEntry("lhs3", "(lhsValue3|rhs1,null)"))
+
+                       : mkMap(mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"))
+                )
+            );
         }
     }
 
     @Test
     public void joinShouldProduceNullsWhenValueHasNonMatchingForeignKey() {
-        for (final Boolean leftJoin : new Boolean[] {false, true}) {
-            final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-            try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
-                final TestInputTopic<String, Long> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new LongSerializer());
-                final TestInputTopic<Integer, Float> left = driver.createInputTopic(LEFT_TABLE, new IntegerSerializer(), new FloatSerializer());
-                final TestOutputTopic<Integer, String> outputTopic = driver.createOutputTopic(OUTPUT, new IntegerDeserializer(), new StringDeserializer());
-                final KeyValueStore<Integer, String> store = driver.getKeyValueStore("store");
+        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
 
-                right.pipeInput("1", 10L);
+            left.pipeInput("lhs1", "lhsValue1|rhs1");
+            // no output for a new inner join on a non-existent FK
+            // the left join of course emits the half-joined output
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)")) : emptyMap())
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)")) : emptyMap())
+            );
+            // "moving" our subscription to another non-existent FK results in an unnecessary tombstone for inner join,
+            // since it impossible to know whether the prior FK existed or not (and thus whether any results have
+            // previously been emitted)
+            // The left join emits a _necessary_ update (since the lhs record has actually changed)
+            left.pipeInput("lhs1", "lhsValue1|rhs2");
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(
+                    mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs2,null)" : null)
+                ))
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs2,null)")) : emptyMap())
+            );
+            // of course, moving it again to yet another non-existent FK has the same effect
+            left.pipeInput("lhs1", "lhsValue1|rhs3");
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(
+                    mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs3,null)" : null)
+                ))
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs3,null)")) : emptyMap())
+            );
 
-                left.pipeInput(1, 8.33f);
-                // no output for a new inner join on a non-existent FK (8)
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    outputTopic.readKeyValuesToMap(),
-                    is(leftJoin ? mkMap(mkEntry(1, "value1=8.33,value2=null")) : emptyMap())
-                );
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    asMap(store),
-                    is(leftJoin ? mkMap(mkEntry(1, "value1=8.33,value2=null")) : emptyMap())
-                );
-                // "moving" our subscription to another non-existent FK (18) results in a tombstone, since it
-                // impossible to know whether the other FK exists or not (and thus whether any results have
-                // previously been emitted)
-                left.pipeInput(1, 18.0f);
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry(1, leftJoin ? "value1=18.0,value2=null" : null)
-                    ))
-                );
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    asMap(store),
-                    is(leftJoin ? mkMap(mkEntry(1, "value1=18.0,value2=null")) : emptyMap())
-                );
-                // of course, moving it again to yet another non-existent FK (100) still results in a tombstone
-                left.pipeInput(1, 100.0f);
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry(1, leftJoin ? "value1=100.0,value2=null" : null)
-                    ))
-                );
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    asMap(store),
-                    is(leftJoin ? mkMap(mkEntry(1, "value1=100.0,value2=null")) : emptyMap())
-                );
-                // now, we change to a FK that exists
-                left.pipeInput(1, 1.11f);
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry(1, "value1=1.11,value2=10")
-                    ))
-                );
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    asMap(store),
-                    is(mkMap(mkEntry(1, "value1=1.11,value2=10")))
-                );
-                // but if we update it again to a non-existent one, we'll get another tombstone.
-                left.pipeInput(1, 13.0f);
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry(1, leftJoin ? "value1=13.0,value2=null" : null)
-                    ))
-                );
-                assertThat(
-                    "leftJoin:" + leftJoin,
-                    asMap(store),
-                    is(leftJoin ? mkMap(mkEntry(1, "value1=13.0,value2=null")) : emptyMap())
-                );
-            }
+            // Adding an RHS record now, so that we can demonstrate "moving" from a non-existent FK to an existent one
+            // This RHS key was previously referenced, but it's not referenced now, so adding this record should
+            // result in no changes whatsoever.
+            right.pipeInput("rhs1", "rhsValue1");
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(emptyMap())
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs3,null)")) : emptyMap())
+            );
+
+            // now, we change to a FK that exists, and see the join completes
+            left.pipeInput("lhs1", "lhsValue1|rhs1");
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(
+                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                ))
+            );
+            assertThat(
+                asMap(store),
+                is(mkMap(
+                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                ))
+            );
+
+            // but if we update it again to a non-existent one, we'll get a tombstone for the inner join, and the
+            // left join updates appropriately.
+            left.pipeInput("lhs1", "lhsValue1|rhs2");
+            assertThat(
+                outputTopic.readKeyValuesToMap(),
+                is(mkMap(
+                    mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs2,null)" : null)
+                ))
+            );
+            assertThat(
+                asMap(store),
+                is(leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs2,null)")) : emptyMap())
+            );
         }
     }
 
-    private static Map<Integer, String> asMap(final KeyValueStore<Integer, String> store) {
-        final HashMap<Integer, String> result = new HashMap<>();
+    private static Map<String, String> asMap(final KeyValueStore<String, String> store) {
+        final HashMap<String, String> result = new HashMap<>();
         store.all().forEachRemaining(kv -> result.put(kv.key, kv.value));
         return result;
     }
@@ -304,34 +360,32 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                         final boolean leftJoin) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<Integer, Float> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.Integer(), Serdes.Float()));
-        final KTable<String, Long> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.String(), Serdes.Long()));
+        final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
 
-        final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized =
-            Materialized.<Integer, String>as(Stores.inMemoryKeyValueStore(queryableStoreName))
-                .withKeySerde(Serdes.Integer())
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            Materialized.<String, String>as(Stores.inMemoryKeyValueStore(queryableStoreName))
+                .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())
                 .withCachingDisabled();
 
-        final Function<Float, String> extractor = value -> Integer.toString((int) value.floatValue());
-        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
+        final Function<String, String> extractor = value -> value.split("\\|")[1];
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
         if (leftJoin)
             left.leftJoin(right,
                           extractor,
                           joiner,
-                          Named.as("customName"),
                           materialized)
                 .toStream()
-                .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
+                .to(OUTPUT, Produced.with(Serdes.String(), Serdes.String()));
         else
             left.join(right,
                       extractor,
                       joiner,
-                      Named.as("customName"),
                       materialized)
                 .toStream()
-                .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
+                .to(OUTPUT, Produced.with(Serdes.String(), Serdes.String()));
 
         return builder.build(streamsConfig);
     }
