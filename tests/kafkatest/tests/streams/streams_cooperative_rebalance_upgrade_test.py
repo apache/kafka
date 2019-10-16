@@ -28,12 +28,9 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     first_bounce_phase = "first_bounce_phase-"
     second_bounce_phase = "second_bounce_phase-"
 
-
-    #streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
-    #                                            str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
-    #                                            str(LATEST_2_3)]
-
-    streams_eager_rebalance_upgrade_versions = [str(LATEST_2_3)]
+    streams_eager_rebalance_upgrade_versions = [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0),
+                                                str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2),
+                                                str(LATEST_2_3)]
 
     def __init__(self, test_context):
         super(StreamsCooperativeRebalanceUpgradeTest, self).__init__(test_context)
@@ -73,7 +70,9 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             processor.set_version(upgrade_from_version)
             self.set_props(processor)
             processor.CLEAN_NODE_ENABLED = False
-            verify_running(processor, self.running_state_msg)
+            # can't use state as older version don't have state listener
+            # so just verify up and running
+            verify_running(processor, self.processing_message)
 
         # all running rebalancing has ceased
         for processor in processors:
@@ -132,10 +131,8 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             processor.set_upgrade_phase(current_phase)
 
             if upgrade_from_version is not None:
-                if upgrade_from_version.startswith("0"):
-                    upgrade_version = upgrade_from_version
-                else:
-                    upgrade_version = upgrade_from_version[:upgrade_from_version.rfind('.')]
+                # need to remove minor version numbers for check of valid upgrade from numbers
+                upgrade_version = upgrade_from_version[:upgrade_from_version.rfind('.')]
                 rebalance_mode_msg = self.cooperative_turned_off_msg % upgrade_version
             else:
                 upgrade_version = None
