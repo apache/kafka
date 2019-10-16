@@ -1629,7 +1629,7 @@
                             <td>Supported</td>
                             <td>Supported</td>
                         </tr>
-                        <tr class="row-even"><td>KTable-to-KTable using Foreign Keys</td>
+                        <tr class="row-even"><td>KTable-to-KTable Foreign-Key Join</td>
                             <td>Non-windowed</td>
                             <td>Supported</td>
                             <td>Supported</td>
@@ -1663,7 +1663,10 @@
                             <strong>It is the responsibility of the user to ensure data co-partitioning when joining</strong>.</p>
                         <div class="admonition tip">
                             <p><b>Tip</b></p>
-                            <p class="last">If possible, consider using <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">global tables</span></a> (<code class="docutils literal"><span class="pre">GlobalKTable</span></code>) for joining because they do not require data co-partitioning.</p>
+                            <p class="last">
+                            A KTable-to-KTable Foreign-Key Join does not require co-partitioning.
+
+                            Also, if possible, consider using <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">global tables</span></a> (<code class="docutils literal"><span class="pre">GlobalKTable</span></code>) for joining because they do not require data co-partitioning.</p>
                         </div>
                         <p>The requirements for data co-partitioning are:</p>
                         <ul class="simple">
@@ -1683,11 +1686,14 @@
                             <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable</span></a> joins
                             are performed based on the keys of records (e.g.,  <code class="docutils literal"><span class="pre">leftRecord.key</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code>), it is required that the
                             input streams/tables of a join are co-partitioned by key.</p>
-                        <p>The only exception are
-                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-globalktable"><span class="std std-ref">KStream-GlobalKTable joins</span></a>.  Here, co-partitioning is
+                        <p>There are two exceptions where co-partitioning is not required. For
+                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-globalktable"><span class="std std-ref">KStream-GlobalKTable joins</span></a> joins, co-partitioning is
                             it not required because <em>all</em> partitions of the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>&#8216;s underlying changelog stream are made available to
                             each <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, i.e. each instance has a full copy of the changelog stream.  Further, a
-                            <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> allows for non-key based joins from the <code class="docutils literal"><span class="pre">KStream</span></code> to the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>.</p>
+                            <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> allows for non-key based joins from the <code class="docutils literal"><span class="pre">KStream</span></code> to the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>.
+                            Additionally, <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> do not require co-partitioning, as the records from the left table are repartitioned automatically to match the partition count of the right table.
+                            </p>
+
                         <div class="admonition note">
                             <p><b>Note</b></p>
                             <p class="last"><strong>Kafka Streams partly verifies the co-partitioning requirement:</strong>
