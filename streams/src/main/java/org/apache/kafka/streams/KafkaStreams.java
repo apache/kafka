@@ -60,6 +60,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
+import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
@@ -774,6 +775,7 @@ public class KafkaStreams implements AutoCloseable {
             return thread;
         });
 
+        maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
@@ -787,6 +789,13 @@ public class KafkaStreams implements AutoCloseable {
             });
         }
         return null;
+    }
+
+    private static void maybeWarnAboutCodeInRocksDBConfigSetter(final Logger log,
+                                                                final StreamsConfig config) {
+        if (config.getClass(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG) != null) {
+            RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.logWarning(log);
+        }
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {
