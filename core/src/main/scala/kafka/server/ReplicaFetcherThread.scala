@@ -184,9 +184,9 @@ class ReplicaFetcherThread(name: String,
       quota.record(records.sizeInBytes)
 
     if (partition.isReassigning && partition.isAddingLocalReplica)
-      replicaMgr.brokerTopicStats.updateReassignmentBytesIn(records.sizeInBytes)
+      brokerTopicStats.updateReassignmentBytesIn(records.sizeInBytes)
 
-    replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
+    brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
     logAppendInfo
   }
