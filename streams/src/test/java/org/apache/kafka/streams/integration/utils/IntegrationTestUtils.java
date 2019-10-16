@@ -65,8 +65,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.is;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -449,15 +452,14 @@ public class IntegrationTestUtils {
                                                                                 final int expectedNumRecords,
                                                                                 final long waitTime) throws InterruptedException {
         final List<ConsumerRecord<K, V>> accumData = new ArrayList<>();
+        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = () -> {
+            retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<ConsumerRecord<K, V>> readData =
                     readRecords(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            };
-            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
-            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+            });
         }
         return accumData;
     }
@@ -495,15 +497,14 @@ public class IntegrationTestUtils {
                                                                                   final int expectedNumRecords,
                                                                                   final long waitTime) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
+        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = () -> {
+            retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<KeyValue<K, V>> readData =
                     readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            };
-            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
-            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+            });
         }
         return accumData;
     }
@@ -524,15 +525,14 @@ public class IntegrationTestUtils {
                                                                                                                final int expectedNumRecords,
                                                                                                                final long waitTime) throws InterruptedException {
         final List<KeyValueTimestamp<K, V>> accumData = new ArrayList<>();
+        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
         try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = () -> {
+            retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<KeyValueTimestamp<K, V>> readData =
                     readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            };
-            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
-            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+            });
         }
         return accumData;
     }
@@ -671,15 +671,14 @@ public class IntegrationTestUtils {
                                                                 final int expectedNumRecords,
                                                                 final long waitTime) throws InterruptedException {
         final List<V> accumData = new ArrayList<>();
+        final String reason = String.format("Did not receive all %d records from topic %s within %d ms", expectedNumRecords, topic, waitTime);
         try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
-            final TestCondition valuesRead = () -> {
+            retryOnExceptionWithTimeout(waitTime, () -> {
                 final List<V> readData =
                     readValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            };
-            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
-            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+            });
         }
         return accumData;
     }
@@ -702,22 +701,34 @@ public class IntegrationTestUtils {
                                                      final String topic,
                                                      final int partition,
                                                      final long timeout) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
+        final String baseReason = String.format("Metadata for topic=%s partition=%d was not propagated to all brokers within %d ms. ",
+            topic, partition, timeout);
+
+        retryOnExceptionWithTimeout(timeout, () -> {
+            final List<KafkaServer> emptyPartitionInfos = new ArrayList<>();
+            final List<KafkaServer> invalidBrokerIds = new ArrayList<>();
+
             for (final KafkaServer server : servers) {
                 final MetadataCache metadataCache = server.dataPlaneRequestProcessor().metadataCache();
                 final Option<UpdateMetadataPartitionState> partitionInfo =
-                        metadataCache.getPartitionInfo(topic, partition);
+                    metadataCache.getPartitionInfo(topic, partition);
+
                 if (partitionInfo.isEmpty()) {
-                    return false;
+                    emptyPartitionInfos.add(server);
+                    continue;
                 }
+
                 final UpdateMetadataPartitionState metadataPartitionState = partitionInfo.get();
                 if (!Request.isValidBrokerId(metadataPartitionState.leader())) {
-                    return false;
+                    invalidBrokerIds.add(server);
+                    continue;
                 }
             }
-            return true;
-        }, timeout, "metadata for topic=" + topic + " partition=" + partition + " not propagated to all brokers");
 
+            final String reason = baseReason + ". Brokers without partition info: " + emptyPartitionInfos +
+                ". Brokers with invalid broker id for partition leader: " + invalidBrokerIds;
+            assertThat(reason, emptyPartitionInfos.isEmpty() && invalidBrokerIds.isEmpty());
+        });
     }
 
     public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
