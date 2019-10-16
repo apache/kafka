@@ -47,6 +47,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ProcessorNodeTest {
@@ -155,7 +156,6 @@ public class ProcessorNodeTest {
                 groupName, threadId, context.taskId().toString(), node.name())));
     }
 
-    @Test(expected = StreamsException.class)
     public void testTopologyLevelClassCastException() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
@@ -173,38 +173,10 @@ public class ProcessorNodeTest {
         final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a value");
 
-        try {
-            testDriver.pipeInput(consumerRecord);
-        } catch (final StreamsException s) {
-            final String msg = s.getMessage();
-            assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-            assertTrue("Error about class cast with serdes", msg.contains("serdes"));
-            throw s;
-        }
-    }
-
-    @Test
-    public void testTopologyLevelClassCastExceptionCorrect() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-        // Serdes are correctly configured, so should be no class cast exception
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        builder.<String, String>stream("streams-plaintext-input")
-            .flatMapValues(value -> {
-                return Arrays.asList("");
-            });
-
-        final Topology topology = builder.build();
-
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-        final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-        final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a-value");
-
-        testDriver.pipeInput(consumerRecord);
+        final StreamsException se = assertThrows(StreamsException.class, () -> testDriver.pipeInput(consumerRecord));
+        final String msg = se.getMessage();
+        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+        assertTrue("Error about class cast with serdes", msg.contains("serdes"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {
@@ -218,13 +190,9 @@ public class ProcessorNodeTest {
     @Test(expected = StreamsException.class)
     public void testTopologyLevelClassCastExceptionDirect() {
         final ProcessorNode node = new ProcessorNode("name", new ClassCastProcessor(), Collections.emptySet());
-        try {
-            node.process("aKey", "aValue");
-        } catch (final StreamsException e) {
-            assertThat(e.getCause(), instanceOf(ClassCastException.class));
-            assertThat(e.getMessage(), containsString("default serdes"));
-            assertThat(e.getMessage(), containsString("input types"));
-            throw e;
-        }
+        final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
+        assertThat(se.getCause(), instanceOf(ClassCastException.class));
+        assertThat(se.getMessage(), containsString("default serdes"));
+        assertThat(se.getMessage(), containsString("input types"));
     }
 }
