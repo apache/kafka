@@ -18,10 +18,8 @@
 package org.apache.kafka.clients.admin.internals;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.common.TopicPartition;
@@ -82,15 +80,14 @@ public final class MetadataOperationContext<T, O extends AbstractOptions<O>> {
         return topics;
     }
 
-    public static boolean shouldRefreshMetadata(MetadataResponse response) {
-        Set<Errors> allErrors = new HashSet<>(response.errors().values());
+    public static void handleMetadataErrors(MetadataResponse response) {
         for (TopicMetadata tm : response.topicMetadata()) {
             for (PartitionMetadata pm : tm.partitionMetadata()) {
-                if (pm.error() != Errors.NONE)
-                    allErrors.add(pm.error());
+                if (shouldRefreshMetadata(pm.error())) {
+                    throw pm.error().exception();
+                }
             }
         }
-        return allErrors.stream().anyMatch(error -> MetadataOperationContext.shouldRefreshMetadata(error));
     }
 
     public static boolean shouldRefreshMetadata(Errors error) {

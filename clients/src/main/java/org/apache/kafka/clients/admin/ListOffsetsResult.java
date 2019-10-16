@@ -24,7 +24,6 @@ import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
@@ -44,13 +43,12 @@ public class ListOffsetsResult {
     * Return a future which can be used to check the result for a given partition.
     */
     public KafkaFuture<ListOffsetsResultInfo> partitionResult(final TopicPartition partition) {
-        if (!futures.containsKey(partition)) {
-            final KafkaFutureImpl<ListOffsetsResultInfo> result = new KafkaFutureImpl<>();
-            result.completeExceptionally(new IllegalArgumentException(
-                    "List Offsets for partition \"" + partition + "\" was not attempted"));
-            return result;
+        KafkaFuture<ListOffsetsResultInfo> future = futures.get(partition);
+        if (future == null) {
+            throw new IllegalArgumentException(
+                    "List Offsets for partition \"" + partition + "\" was not attempted");
         }
-        return futures.get(partition);
+        return future;
     }
 
     /**

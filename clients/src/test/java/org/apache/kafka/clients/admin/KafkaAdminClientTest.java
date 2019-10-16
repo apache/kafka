@@ -2518,10 +2518,8 @@ public class KafkaAdminClientTest {
             assertEquals(offsets.get(tp3), result.partitionResult(tp3).get());
             try {
                 result.partitionResult(new TopicPartition("unknown", 0)).get();
-                fail("expected");
-            } catch (ExecutionException ee) {
-                assertTrue(ee.getCause() instanceof IllegalArgumentException);
-            }
+                fail("should have thrown IllegalArgumentException");
+            } catch (IllegalArgumentException expected) { }
         }
     }
 

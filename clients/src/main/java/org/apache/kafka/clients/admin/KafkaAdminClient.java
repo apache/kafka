@@ -2803,10 +2803,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
-                if (MetadataOperationContext.shouldRefreshMetadata(response)) {
-                    rescheduleMetadataTask(context, nextCalls);
-                    return;
-                }
+                MetadataOperationContext.handleMetadataErrors(response);
 
                 context.setResponse(Optional.of(response));
 
