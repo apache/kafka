@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.health.ConnectClusterState;
+import org.apache.kafka.connect.health.ConnectorHealth;
+import org.apache.kafka.connect.health.ConnectorState;
+import org.apache.kafka.connect.health.ConnectorType;
+import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -28,12 +34,20 @@ import org.junit.experimental.categories.Category;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 
 /**
  * A simple integration test to ensure that REST extensions are registered correctly.
@@ -41,25 +55,25 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 @Category(IntegrationTest.class)
 public class RestExtensionIntegrationTest {
 
-    private static final int NUM_WORKERS = 3;
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
+    private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testImmediateRequestForListOfConnectors() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws IOException, InterruptedException, URISyntaxException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
-  
+
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
-                .name("connect-cluster")
-                .numWorkers(NUM_WORKERS)
-                .numBrokers(1)
-                .workerProps(workerProps)
-                .build();
-  
+            .name("connect-cluster")
+            .numWorkers(1)
+            .numBrokers(1)
+            .workerProps(workerProps)
+            .build();
+
         // start the clusters
         connect.start();
 
@@ -68,12 +82,53 @@ public class RestExtensionIntegrationTest {
             REST_EXTENSION_REGISTRATION_TIMEOUT_MS,
             "REST extension was never registered"
         );
+
+        final String connectorName = "test-conn";
+        try {
+            // setup up props for the connector
+            Map<String, String> connectorProps = new HashMap<>();
+            connectorProps.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+            connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(1));
+            connectorProps.put(TOPICS_CONFIG, "test-topic");
+
+            // start a connector
+            connect.configureConnector(connectorName, connectorProps);
+
+            URI workerUrl = new URI(connect.endpointForResource(""));
+            String workerId = workerUrl.getHost() + ":" + workerUrl.getPort();
+            ConnectorHealth expectedHealth = new ConnectorHealth(
+                connectorName,
+                new ConnectorState(
+                    "RUNNING",
+                    workerId,
+                    null
+                ),
+                Collections.singletonMap(
+                    0,
+                    new TaskState(0, "RUNNING", workerId, null)
+                ),
+                ConnectorType.SINK
+            );
+
+            connectorProps.put(NAME_CONFIG, connectorName);
+
+            // Test the REST extension API; specifically, that the connector's health is available
+            // to the REST extension we registered and that they contain expected values
+            waitForCondition(
+                () -> verifyConnectorHealth(connectorName, expectedHealth),
+                CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS,
+                "Connector health and/or config was never accessible by the REST extension"
+            );
+        } finally {
+            RuntimeHandles.get().deleteConnector(connectorName);
+        }
     }
 
     @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
+        IntegrationTestRestExtension.instance = null;
     }
 
     private boolean extensionIsRegistered() {
@@ -85,11 +140,45 @@ public class RestExtensionIntegrationTest {
         }
     }
 
+    private boolean verifyConnectorHealth(
+        String connectorName,
+        ConnectorHealth expectedHealth
+    ) {
+        ConnectClusterState clusterState =
+            IntegrationTestRestExtension.instance.restPluginContext.clusterState();
+
+        ConnectorHealth actualHealth;
+        try {
+            actualHealth = clusterState.connectorHealth(connectorName);
+        } catch (NotFoundException e) {
+            // Happens if the connector hasn't been started yet by the worker
+            return false;
+        }
+
+        if (actualHealth.tasksState().isEmpty()) {
+            // Happens if the task has been started but its status has not yet been picked up from
+            // the status topic by the worker.
+            return false;
+        }
+        assertEquals(expectedHealth, actualHealth);
+
+        return true;
+    }
+
     public static class IntegrationTestRestExtension implements ConnectRestExtension {
+        private static IntegrationTestRestExtension instance;
+
+        public ConnectRestExtensionContext restPluginContext;
 
         @Override
         public void register(ConnectRestExtensionContext restPluginContext) {
+            instance = this;
+            this.restPluginContext = restPluginContext;
+            // Immediately request a list of connectors to confirm that the context and its fields
+            // has been fully initialized and there is no risk of deadlock
             restPluginContext.clusterState().connectors();
+            // Install a new REST resource that can be used to confirm that the extension has been
+            // successfully registered
             restPluginContext.configurable().register(new IntegrationTestRestExtensionResource());
         }
     
