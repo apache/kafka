@@ -90,9 +90,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     /** Simulate a rebalance event. */
     public synchronized void rebalance(Collection<TopicPartition> newAssignment) {
-        // TODO: Rebalance callbacks
+        if (newAssignment == null)
+            throw new IllegalArgumentException("newAssignment cannot be null");
+
+        this.subscriptions.rebalanceListener().onPartitionsRevoked(this.subscriptions.assignedPartitions());
         this.records.clear();
         this.subscriptions.assignFromSubscribed(newAssignment);
+        this.subscriptions.rebalanceListener().onPartitionsAssigned(newAssignment);
     }
 
     @Override
