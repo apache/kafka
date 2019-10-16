@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -59,27 +60,33 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    private static final Properties STREAMS_CONFIG = mkProperties(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
-        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-        mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE)
-    ));
+    private final Properties streamsConfig;
     private final boolean leftJoin;
 
-    public KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin) {
+    public KTableKTableForeignKeyJoinIntegrationTest(final boolean leftJoin, final String optimization) {
         this.leftJoin = leftJoin;
+        streamsConfig = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization)
+        ));
     }
 
-    @Parameterized.Parameters(name = "leftJoin={0}")
+    @Parameterized.Parameters(name = "leftJoin={0}, optimization={1}")
     public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[] {false}, new Object[] {true});
+        return Arrays.asList(
+            new Object[] {false, StreamsConfig.OPTIMIZE},
+            new Object[] {false, StreamsConfig.NO_OPTIMIZATION},
+            new Object[] {true, StreamsConfig.OPTIMIZE},
+            new Object[] {true, StreamsConfig.NO_OPTIMIZATION}
+        );
     }
 
     @Test
     public void doJoinFromLeftThenDeleteLeftEntity() {
-        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+        final Topology topology = getTopology(streamsConfig, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -156,8 +163,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @Test
     public void doJoinFromRightThenDeleteRightEntity() {
-        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+        final Topology topology = getTopology(streamsConfig, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -258,9 +265,87 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     }
 
     @Test
+    public void shouldEmitTombstonedWhenDeletingNonJoiningRecords() {
+        final Topology topology = getTopology(streamsConfig, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+
+            left.pipeInput("lhs1", "lhsValue1|rhs1");
+
+            {
+                final Map<String, String> expected =
+                    leftJoin ? mkMap(mkEntry("lhs1", "(lhsValue1|rhs1,null)")) : emptyMap();
+                assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(expected)
+                );
+                assertThat(
+                    asMap(store),
+                    is(expected)
+                );
+            }
+
+            // Deleting a non-joining record produces an unnecessary tombstone for inner joins, because
+            // it's not possible to know whether a result was previously emitted.
+            // For the left join, the tombstone is necessary.
+            left.pipeInput("lhs1", (String) null);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(Utils.<String, String>mkMap(mkEntry("lhs1", null)))
+                );
+                assertThat(
+                    asMap(store),
+                    is(emptyMap())
+                );
+            }
+
+            // Deleting a non-existing record is idempotent
+            left.pipeInput("lhs1", (String) null);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(emptyMap())
+                );
+                assertThat(
+                    asMap(store),
+                    is(emptyMap())
+                );
+            }
+        }
+    }
+
+    @Test
+    public void shouldNotEmitTombstonesWhenDeletingNonExistingRecords() {
+        final Topology topology = getTopology(streamsConfig, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+
+            // Deleting a record that never existed doesn't need to emit tombstones.
+            left.pipeInput("lhs1", (String) null);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToMap(),
+                    is(emptyMap())
+                );
+                assertThat(
+                    asMap(store),
+                    is(emptyMap())
+                );
+            }
+        }
+    }
+
+    @Test
     public void joinShouldProduceNullsWhenValueHasNonMatchingForeignKey() {
-        final Topology topology = getTopology(STREAMS_CONFIG, "store", leftJoin);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, STREAMS_CONFIG)) {
+        final Topology topology = getTopology(streamsConfig, "store", leftJoin);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
