@@ -141,14 +141,18 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   }
 
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]): Unit = {
-    partitionsBecomeFollower.foreach { partition =>
-      doHandleLeaderOrFollowerPartitions(partition.topicPartition, task => task.convertToFollower())
-    }
+    // Partitions logs are available when this callback is invoked.
+    // Compact topics are filtered here as they are not supported with tiered storage.
+    partitionsBecomeFollower.filter(partition => partition.log.exists(log => !log.config.compact))
+      .foreach { partition =>
+        doHandleLeaderOrFollowerPartitions(partition.topicPartition, task => task.convertToFollower())
+      }
 
-    partitionsBecomeLeader.foreach { partition =>
-      doHandleLeaderOrFollowerPartitions(partition.topicPartition,
-        task => task.convertToLeader(partition.getLeaderEpoch))
-    }
+    partitionsBecomeLeader.filter(partition => partition.log.exists(log => !log.config.compact))
+      .foreach { partition =>
+        doHandleLeaderOrFollowerPartitions(partition.topicPartition,
+          task => task.convertToLeader(partition.getLeaderEpoch))
+      }
   }
 
   /**

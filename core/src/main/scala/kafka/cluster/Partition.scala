@@ -385,7 +385,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   def isLeader: Boolean = leaderReplicaIdOpt.contains(localBrokerId)
 
-  private def localLogWithEpochOrException(currentLeaderEpoch: Optional[Integer],
+  def localLogWithEpochOrException(currentLeaderEpoch: Optional[Integer],
                                            requireLeader: Boolean): Log = {
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
@@ -967,7 +967,14 @@ class Partition(val topicPartition: TopicPartition,
                   minOneMessage: Boolean): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+    readRecords(fetchOffset, localLog, maxBytes, fetchIsolation, minOneMessage)
+  }
 
+  def readRecords(fetchOffset: Long,
+                  localLog: Log,
+                  maxBytes: Int,
+                  fetchIsolation: FetchIsolation,
+                  minOneMessage: Boolean): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark

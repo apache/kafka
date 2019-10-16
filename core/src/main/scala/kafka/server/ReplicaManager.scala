@@ -18,9 +18,9 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
+import java.util.concurrent.{CompletableFuture, RejectedExecutionException, TimeUnit}
 
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.api._
@@ -33,10 +33,6 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -45,6 +41,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
+import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
+import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -52,12 +50,11 @@ import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse, DescribeLogDirsResponse, EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, LeaderAndIsrResponse, OffsetsForLeaderEpochRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
-import org.apache.kafka.common.replica.{ClientMetadata, _}
+import org.apache.kafka.common.{ElectionType, Node, TopicPartition}
 
-import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -996,18 +993,6 @@ class ReplicaManager(val config: KafkaConfig,
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
 
-    def createLogReadResult(e: Throwable) = {
-      LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-        highWatermark = -1L,
-        leaderLogStartOffset = -1L,
-        leaderLogEndOffset = -1L,
-        followerLogStartOffset = -1L,
-        fetchTimeMs = -1L,
-        readSize = 0,
-        lastStableOffset = None,
-        exception = Some(e))
-    }
-
     def checkFetchDataInfo(tp: TopicPartition, givenFetchedDataInfo: FetchDataInfo): FetchDataInfo = {
       if (shouldLeaderThrottle(quota, tp, replicaId)) {
         // If the partition is being throttled, simply return an empty set.
@@ -1030,6 +1015,7 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
 
       val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
+      var log:Log = null
       try {
         trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
           s"remaining response limit $limitBytes" +
@@ -1061,12 +1047,13 @@ class ReplicaManager(val config: KafkaConfig,
             exception = None)
         } else {
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
+          log = partition.localLogWithEpochOrException(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader)
+
           val readInfo: LogReadInfo = partition.readRecords(
             fetchOffset = fetchInfo.fetchOffset,
-            currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
+            localLog = log,
             maxBytes = adjustedMaxBytes,
             fetchIsolation = fetchIsolation,
-            fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
 
           // Check if the HW known to the follower is behind the actual HW
@@ -1097,11 +1084,13 @@ class ReplicaManager(val config: KafkaConfig,
                 _: KafkaStorageException) =>
           createLogReadResult(e)
         case e: OffsetOutOfRangeException =>
-          // Incase of offset out of range errors, check for remote log manager to fetch from remote storage.
-          // if it is from a follower then send the offset metadata but not the records data as that can be fetched
+          // Incase of offset out of range errors, check for remote log manager for non-compacted topics
+          // to fetch from remote storage. `log` instance should not be null here as that would have caught earlier with
+          // NotLeaderForPartitionException or ReplicaNotAvailableException.
+          // If it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
-          remoteLogManager.map(rlm => {
-            val log = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader).localLogOrException
+          if (remoteLogManager.isDefined && log != null && !log.config.compact) {
+            val rlm = remoteLogManager.get
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
             val leaderLogEndOffset = log.logEndOffset
@@ -1115,32 +1104,41 @@ class ReplicaManager(val config: KafkaConfig,
               // send the offset to follower broker
               val mayBeLastOffset = rlm.lookupLastOffset(tp)
               if (mayBeLastOffset.isEmpty) {
-                error = Some(new OffsetOutOfRangeException(s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
-              } else
+                error = Some(new OffsetOutOfRangeException(
+                  s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
+              } else {
                 nextLocalOffset = Some(mayBeLastOffset.get + 1)
+              }
 
               FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset, -1L, -1), MemoryRecords.EMPTY)
             } else {
               // create a dummy FetchDataInfo with the remote storage fetch information
               // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
               // For the following topic-partitions, we return an empty record set
-              val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset, relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
+              val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset,
+                relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
               FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
-                delayedRemoteStorageFetch = Some(RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo)))
+                delayedRemoteStorageFetch = Some(
+                  RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo)))
             }
 
-            if (error.isDefined) createLogReadResult(error.get)
-            else LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
-              highWatermark,
-              leaderLogStartOffset,
-              leaderLogEndOffset,
-              followerLogStartOffset,
-              fetchTimeMs,
-              readSize,
-              lastStableOffset,
-              nextLocalOffset,
-              exception = None)
-          }).getOrElse(createLogReadResult(e))
+            if (error.isDefined) {
+              createLogReadResult(error.get)
+            } else {
+              LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
+                highWatermark,
+                leaderLogStartOffset,
+                leaderLogEndOffset,
+                followerLogStartOffset,
+                fetchTimeMs,
+                readSize,
+                lastStableOffset,
+                nextLocalOffset,
+                exception = None)
+            }
+          } else {
+            createLogReadResult(e)
+          }
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()

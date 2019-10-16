@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 class RemoteLogReaderTest {
 
   @Test
-  def testReadRemoteLog: Unit = {
+  def testReadRemoteLog(): Unit = {
     val rlm = new MockRemoteLogManager(2, 10)
 
     val tp = new TopicPartition("test", 0)
@@ -63,7 +63,7 @@ class RemoteLogReaderTest {
   }
 
   @Test
-  def testTaskQueueFullAndCancelTask: Unit = {
+  def testTaskQueueFullAndCancelTask(): Unit = {
     val rlm = new MockRemoteLogManager(5, 20)
     rlm.pause()
 
@@ -107,7 +107,7 @@ class RemoteLogReaderTest {
   }
 
   @Test
-  def testErr: Unit = {
+  def testErr(): Unit = {
     val rlm = new MockRemoteLogManager(2, 10)
     val tp = new TopicPartition("test", 1)
     val fetchInfo = new PartitionData(10000, 0, 1000, Optional.of(1))
@@ -153,8 +153,8 @@ object MockRemoteLogManager {
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
 
-  def rlmConfig(threads: Int, taskQueueSize: Int) = {
-    RemoteLogManagerConfig(true, "kafka.log.remote.MockRemoteStorageManager",
+  def rlmConfig(threads: Int, taskQueueSize: Int): RemoteLogManagerConfig = {
+    RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager",
       1024, 60000, threads, taskQueueSize, rsmConfig, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
   }
 }

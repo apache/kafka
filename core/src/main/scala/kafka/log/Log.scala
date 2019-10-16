@@ -208,7 +208,7 @@ class Log(@volatile var dir: File,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
           logDirFailureChannel: LogDirFailureChannel,
-          val remoteLogEnabled:Boolean = false) extends Logging with KafkaMetricsGroup {
+          val rlmEnabled:Boolean = false) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -279,6 +279,11 @@ class Log(@volatile var dir: File,
 
   @volatile private var highestOffsetWithRemoteIndex:Long = logStartOffset
 
+  private def remoteLogEnabled() : Boolean = {
+    // remote logging is enabled only for non-compact topics
+    rlmEnabled && !config.compact
+  }
+
   locally {
     val startMs = time.milliseconds
 
@@ -313,7 +318,7 @@ class Log(@volatile var dir: File,
 
   def updateLogStartOffsetFromRemoteTier(remoteLso: Long): Unit = {
     if(remoteLogEnabled) logStartOffset = if (remoteLso < 0) localLogStartOffset else remoteLso
-    else warn(s"updateLogStartOffsetFromRemoteTier call is ignored as remoteLogEnabled is set as false.")
+    else warn(s"updateLogStartOffsetFromRemoteTier call is ignored as remoteLogEnabled is determined to be false.")
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -2110,7 +2115,7 @@ class Log(@volatile var dir: File,
         maybeIncrementFirstUnstableOffset()
 
         this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
-        //todo-tiering cleanup remote logs
+        //todo-tiering cleanup remote logs??
         this.logStartOffset = newOffset
       }
     }
