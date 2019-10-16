@@ -58,7 +58,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 throw new UnsupportedVersionException("SubscriptionResponseWrapper version is larger than maximum supported 0x7F");
             }
 
-            final byte[] serializedData = serializer.serialize(topic, data.getForeignValue());
+            final byte[] serializedData = data.getForeignValue() == null ? null : serializer.serialize(topic, data.getForeignValue());
             final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
             final long[] originalHash = data.getOriginalValueHash();
             final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
@@ -108,14 +108,16 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 lengthSum += 2 * Long.BYTES;
             }
 
-            final byte[] serializedValue;
+            final V value;
             if (data.length - lengthSum > 0) {
+                final byte[] serializedValue;
                 serializedValue = new byte[data.length - lengthSum];
                 buf.get(serializedValue, 0, serializedValue.length);
-            } else
-                serializedValue = null;
+                value = deserializer.deserialize(topic, serializedValue);
+            } else {
+                value = null;
+            }
 
-            final V value = deserializer.deserialize(topic, serializedValue);
             return new SubscriptionResponseWrapper<>(hash, value, version);
         }
 
