@@ -734,7 +734,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // record the bytes out metrics only when the response is being sent
         response.responseData.asScala.foreach { case (tp, data) =>
           brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower,
-            replicaManager.isAddingReplica(tp, fetchRequest.replicaId()), data.records.sizeInBytes)
+            fetchRequest.isFromFollower && replicaManager.isAddingReplica(tp, fetchRequest.replicaId()), data.records.sizeInBytes)
         }
         response
       }
