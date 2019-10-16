@@ -34,10 +34,10 @@
     </div>
 
     <p>
-        Upgrading from any older version to {{fullDotVersion}} is possible: (1) if you are upgrading from 2.0.x to {{fullDotVersion}} then a single rolling bounce is needed to swap in the new jar,
-        (2) if you are upgrading from older versions than 2.0.x in the online mode, you would need two rolling bounces where
-        the first rolling bounce phase you need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
-        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
+        Upgrading from any older version to {{fullDotVersion}} is possible: you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
+        (possible values are <code>"0.10.0" - "2.3"</code>) and during the second you remove it. This is required to safely upgrade to the new cooperative rebalancing protocol of the embedded consumer. Note that you will remain using the old eager
+        rebalancing protocol if you skip or delay the second rolling bounce, but you can safely switch over to cooperative at any time once the entire group is on 2.4+ by removing the config value and bouncing. For more details please refer to
+        <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>:
     </p>
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade.</li>
@@ -70,6 +70,64 @@
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
+
+    <!-- Placeholder KIP-213 -->
+    <!-- Placeholder KIP-307 -->
+    <!-- Placeholder KIP-479 -->
+
+    <p>
+        With the introduction of incremental cooperative rebalancing, Streams no longer requires all tasks be revoked at the beginning of a rebalance. Instead, at the completion of the rebalance only those tasks which are to be migrated to another consumer
+        for overall load balance will need to be closed and revoked. This changes the semantics of the <code>StateListener</code> a bit, as it will not necessarily transition to <code>REBALANCING</code> at the beginning of a rebalance anymore. Note that
+        this means IQ will now be available at all times except during state restoration, including while a rebalance is in progress. If restoration is occurring when a rebalance begins, we will continue to actively restore the state stores and/or process
+        standby tasks during a cooperative rebalance. Note that with this new rebalancing protocol, you may sometimes see a rebalance be followed by a second short rebalance that ensures all tasks are safely distributed. For details on please see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol">KIP-429</a>.
+    </p>
+
+    <p>
+        The 2.4.0 release contains newly added and reworked metrics.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-444%3A+Augment+metrics+for+Kafka+Streams">KIP-444</a>
+        adds new <em>client level</em> (i.e., <code>KafkaStreams</code> instance level) metrics to the existing
+        thread-level, task-level, and processor-/state-store-level metrics.
+        For a full list of available client level metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_client_monitoring">KafkaStreams monitoring</a>
+        section in the operations guide.
+        <br />
+        Furthermore, RocksDB metrics are exposed via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-471%3A+Expose+RocksDB+Metrics+in+Kafka+Streams">KIP-471</a>.
+        For a full list of available RocksDB metrics, see the
+        <a href="/{{version}}/documentation/#kafka_streams_rocksdb_monitoring">RocksDB monitoring</a>
+        section in the operations guide.
+    </p>
+
+    <p>
+        Kafka Streams <code>test-utils</code> got improved via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements">KIP-470</a>
+        to simplify the process of using <code>TopologyTestDriver</code> to test your application code.
+        We deprecated <code>ConsumerRecordFactory</code>, <code>TopologyTestDriver#pipeInput()</code>,
+        <code>OutputVerifier</code>, as well as <code>TopologyTestDriver#readOutput()</code> and replace them with
+        <code>TestInputTopic</code> and <code>TestOutputTopic</code>, respectively.
+        We also introduced a new class <code>TestRecord</code> that simplifies assertion code.
+        For full details see the
+        <a href="/{{version}}/documentation/streams/developer-guide/testing.html">Testing section</a> in the developer guide.
+    </p>
+
+    <p>
+        In 2.4.0, we deprecated <code>WindowStore#put(K key, V value)</code> that should never be used.
+        Instead the existing <code>WindowStore#put(K key, V value, long windowStartTimestamp)</code> should be used
+        (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=115526545">KIP-474</a>).
+    </p>
+
+    <p>
+        Furthermore, the <code>PartitionGrouper</code> interface and its corresponding configuration parameter
+        <code>partition.grouper</code> were deprecated
+        (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-528%3A+Deprecate+PartitionGrouper+configuration+and+interface">KIP-528</a>)
+        and will be removed in the next major release (<a href="https://issues.apache.org/jira/browse/KAFKA-7785">KAFKA-7785</a>.
+        Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly.
+        If you use a custom <code>PartitionGrouper</code> and stop to use it, the created tasks might change.
+        Hence, you will need to reset your application to upgrade it.
     </p>
 
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
