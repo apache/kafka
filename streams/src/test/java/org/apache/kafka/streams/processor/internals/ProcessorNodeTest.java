@@ -169,7 +169,7 @@ public class ProcessorNodeTest {
         final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-        TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
         final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
         final String msg = se.getMessage();
