@@ -27,16 +27,15 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
+public class CogroupedKStreamImpl<K, Vout> extends AbstractStream<K, Vout> implements CogroupedKStream<K, Vout> {
 
     private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
 
-    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
-    final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
+    final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> groupPatterns;
+    final private CogroupedStreamAggregateBuilder<K, Vout> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
                          final Set<String> sourceNodes,
@@ -49,50 +48,36 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
 
     @SuppressWarnings("unchecked")
     @Override
-    public <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,
-                                                   final Aggregator<? super K, ? super VIn, VOut> aggregator) {
+    public <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
+                                                   final Aggregator<? super K, ? super Vin, Vout> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream,
-                          (Aggregator<? super K, ? super Object, VOut>) aggregator);
+        groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream, (Aggregator<? super K, ? super Object, Vout>) aggregator);
         return this;
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KTable<K, Vout> aggregate(final Initializer<Vout> initializer,
+                                     final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
-        return aggregate(initializer, named, materialized);
+        return doAggregate(initializer, named,
+                new MaterializedInternal<>(
+                        materialized, builder,
+                        AGGREGATE_NAME));
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer, final Named named) {
-        return aggregate(initializer, named, Materialized.with(keySerde, null));
-    }
-
-    @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Named named,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
-        Objects.requireNonNull(named, "named can't be null");
-        final NamedInternal namedInternal = new NamedInternal(named);
-        return doAggregate(initializer,
-                namedInternal,
-                new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME));
-    }
-
-    @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer) {
+    public KTable<K, Vout> aggregate(final Initializer<Vout> initializer) {
         return aggregate(initializer, Materialized.with(keySerde, null));
     }
 
-    private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
+
+    private KTable<K, Vout> doAggregate(final Initializer<Vout> initializer,
                                         final NamedInternal named,
-                                        final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        return this.aggregateBuilder.build(
-                groupPatterns,
+                                        final MaterializedInternal<K, Vout, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        return this.aggregateBuilder.build(groupPatterns,
                 initializer,
                 named,
                 new TimestampedKeyValueStoreMaterializer<>(

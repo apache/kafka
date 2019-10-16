@@ -37,7 +37,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-class CogroupedStreamAggregateBuilder<K, VOut> {
+class CogroupedStreamAggregateBuilder<K, Vout> {
 
     private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
 
@@ -47,31 +47,31 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         this.builder = builder;
     }
 
-    <KR, VIn, W extends Window> KTable<KR, VOut> build(
-            final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-            final Initializer<VOut> initializer,
+    <KR, Vin, W extends Window> KTable<KR, Vout> build(
+            final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> groupPatterns,
+            final Initializer<Vout> initializer,
             final NamedInternal named,
             final StoreBuilder<? extends StateStore> storeBuilder,
             final Serde<KR> keySerde,
-            final Serde<VOut> valSerde,
+            final Serde<Vout> valSerde,
             final Windows<W> windows,
             final SessionWindows sessionWindows,
-            final Merger<? super K, VOut> sessionMerger) {
+            final Merger<? super K, Vout> sessionMerger) {
 
         final Collection<? extends AbstractStream<K, ?>> groupedStreams = new ArrayList<>(groupPatterns.keySet());
         final AbstractStream<K, ?> kGrouped = groupedStreams.iterator().next();
         groupedStreams.remove(kGrouped);
-        kGrouped.ensureCopartitionWith(groupedStreams);
+        //kGrouped.ensureCopartitionWith(groupedStreams);
 
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
-        for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> kGroupedStream : groupPatterns
+        for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, Vout>> kGroupedStream : groupPatterns
                 .entrySet()) {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
                     kGroupedStream.getValue(),
                     initializer,
-                    named.withName(AGGREGATE_NAME + kGroupedStream.getKey().name + named.name()),
+                    named,
                     stateCreated,
                     storeBuilder,
                     windows,
@@ -82,10 +82,10 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
         }
         final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final ProcessorSupplier<K, VOut> tableSource = new KTableSource<>(
+        final ProcessorSupplier<K, Vout> tableSource = new KTableSource<>(
                         storeBuilder.name(),
                         storeBuilder.name());
-        final StatefulProcessorNode<K, VOut> tableSourceNode =
+        final StatefulProcessorNode<K, Vout> tableSourceNode =
                 new StatefulProcessorNode<>(
                         functionName,
                         new ProcessorParameters<>(tableSource, functionName),
@@ -94,7 +94,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
         builder.addGraphNode(processors, tableSourceNode);
 
-        return new KTableImpl<KR, VIn, VOut>(
+        return new KTableImpl<KR, Vin, Vout>(
                 functionName,
                 keySerde,
                 valSerde,
@@ -107,25 +107,25 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     }
 
     private <W extends Window> StatefulProcessorNode getStatefulProcessorNode(
-            final Aggregator<? super K, ? super Object, VOut> aggregator,
-            final Initializer<VOut> initializer,
+            final Aggregator<? super K, ? super Object, Vout> aggregator,
+            final Initializer<Vout> initializer,
             final NamedInternal named,
             final boolean stateCreated,
             final StoreBuilder<? extends StateStore> storeBuilder,
             final Windows<W> windows,
             final SessionWindows sessionWindows,
-            final Merger<? super K, VOut> sessionMerger) {
+            final Merger<? super K, Vout> sessionMerger) {
 
         final String functionName = named.orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
         if (windows == null && sessionWindows == null) {
-            kStreamAggregate = new KStreamAggregate<>(storeBuilder.name(), initializer, aggregator);
+            kStreamAggregate = new KStreamAggregate<K, Object, Vout>(storeBuilder.name(), initializer, aggregator);
         } else if (windows != null && sessionWindows == null) {
-            kStreamAggregate = new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, aggregator);
+            kStreamAggregate = new KStreamWindowAggregate<K, Object, Vout, W>(windows, storeBuilder.name(), initializer, aggregator);
         } else if (windows == null && sessionMerger != null) {
-            kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
+            kStreamAggregate = new KStreamSessionWindowAggregate<K, Object, Vout>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
         } else {
             throw new IllegalArgumentException(
                     "must be a TimeWindowedStream or a SessionWindowedStream");
