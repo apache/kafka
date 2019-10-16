@@ -18,7 +18,6 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
 
     source_topic = "source"
     sink_topic = "sink"
-    thread_delimiter = "&"
     task_delimiter = "#"
     report_interval = "1000"
     processing_message = "Processed [0-9]* records so far"
@@ -117,6 +116,10 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                           err_msg="Never saw '%s' message " % verify_processing_msg + str(
                                            processor.node.account))
 
+        # All nodes processing, rebalancing has ceased
+        for processor in processors:
+            self.verify_processing(processor, self.first_bounce_phase + self.processing_message)
+
         self.logger.info("Stopped all streams clients in upgrade running mode to remove upgrade-from tag")
         # stop all instances again to prepare for
         # another rolling bounce without upgrade from to enable cooperative rebalance
@@ -154,6 +157,10 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                           err_msg="Never saw '%s' message " % verify_processing_msg + str(
                                            processor.node.account))
 
+        # All nodes processing, rebalancing has ceased
+        for processor in processors:
+            self.verify_processing(processor, self.second_bounce_phase + self.processing_message)
+
         # now verify tasks are unique
         for processor in processors:
             self.get_tasks_for_processor(processor)
@@ -162,6 +169,10 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         overlapping_tasks = processor1.active_tasks.intersection(processor2.active_tasks, processor3.active_tasks)
         assert len(overlapping_tasks) == int(0), \
             "Final task assignments are not unique %s %s %s" % (processor1.active_tasks, processor2.active_tasks, processor3.active_tasks)
+
+        other_overlapping_tasks = processor2.active_tasks.intersection(processor3.active_tasks)
+        assert len(other_overlapping_tasks) == int(0), \
+            "Final task assignments are not unique %s %s" % (processor2.active_tasks, processor3.active_tasks)
 
         # test done close all down
         stop_processors(processors, self.second_bounce_phase + self.stopped_message)
@@ -194,7 +205,6 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     def set_props(self, processor, upgrade_from=None):
         processor.SOURCE_TOPIC = self.source_topic
         processor.SINK_TOPIC = self.sink_topic
-        processor.THREAD_DELIMITER = self.thread_delimiter
         processor.TASK_DELIMITER = self.task_delimiter
         processor.REPORT_INTERVAL = self.report_interval
         processor.UPGRADE_FROM = upgrade_from
