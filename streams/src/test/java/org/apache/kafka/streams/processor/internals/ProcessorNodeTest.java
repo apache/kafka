@@ -176,7 +176,7 @@ public class ProcessorNodeTest {
         final StreamsException se = assertThrows(StreamsException.class, () -> testDriver.pipeInput(consumerRecord));
         final String msg = se.getMessage();
         assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-        assertTrue("Error about class cast with serdes", msg.contains("serdes"));
+        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {
@@ -191,7 +191,7 @@ public class ProcessorNodeTest {
         final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
-        assertThat(se.getMessage(), containsString("default serdes"));
+        assertThat(se.getMessage(), containsString("default Serdes"));
         assertThat(se.getMessage(), containsString("input types"));
     }
 }
