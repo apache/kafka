@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.IntGaugeSuite;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -51,6 +52,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -531,6 +533,7 @@ public class Selector implements Selectable, AutoCloseable {
                     if (channel.finishConnect()) {
                         this.connected.add(nodeId);
                         this.sensors.connectionCreated.record();
+
                         SocketChannel socketChannel = (SocketChannel) key.channel();
                         log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
                                 socketChannel.socket().getReceiveBufferSize(),
@@ -560,6 +563,10 @@ public class Selector implements Selectable, AutoCloseable {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
                             if (!channel.connectedClientSupportsReauthentication())
                                 sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
+                            Optional<SslInformation> sslInformation = channel.sslInformation();
+                            if (sslInformation.isPresent()) {
+                                sensors.connectionsByCipher.increment(sslInformation.get());
+                            }
                         }
                         log.debug("Successfully {}authenticated with {}", isReauthentication ?
                             "re-" : "", channel.socketDescription());
@@ -918,6 +925,11 @@ public class Selector implements Selectable, AutoCloseable {
             key.cancel();
             key.attach(null);
         }
+
+        Optional<SslInformation> sslInformation = channel.sslInformation();
+        if (sslInformation.isPresent()) {
+            sensors.connectionsByCipher.decrement(sslInformation.get());
+        }
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
@@ -1081,6 +1093,7 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor responsesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
+        public final IntGaugeSuite<SslInformation> connectionsByCipher;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
@@ -1176,6 +1189,15 @@ public class Selector implements Selectable, AutoCloseable {
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
+
+            this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics, Selector.this,
+                sslInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("cipher", sslInformation.cipher());
+                    tags.put("protocol", sslInformation.protocol());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The ssl ciphers in use by clients.", tags);
+                }, 100);
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -1299,6 +1321,7 @@ public class Selector implements Selectable, AutoCloseable {
                 metrics.removeMetric(metricName);
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
+            connectionsByCipher.close();
         }
     }
 
