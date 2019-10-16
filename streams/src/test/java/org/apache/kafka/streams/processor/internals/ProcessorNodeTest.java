@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -170,10 +170,9 @@ public class ProcessorNodeTest {
         final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
-        final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-        final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a value");
+        TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
-        final StreamsException se = assertThrows(StreamsException.class, () -> testDriver.pipeInput(consumerRecord));
+        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
         final String msg = se.getMessage();
         assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
         assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
