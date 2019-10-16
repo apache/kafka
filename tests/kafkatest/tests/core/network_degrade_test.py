@@ -65,7 +65,7 @@ class NetworkDegradeTest(Test):
 
         self.logger.info("ping test: %s" % zk0.account.ssh_output("ping -i 1 -c 5 example.com"))
 
-        for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.externally_routable_ip):
+        for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.hostname):
             self.logger.debug("Ping output: %s" % line)
             m = r.match(line)
             if m is not None and m.group("time"):
@@ -107,7 +107,7 @@ class NetworkDegradeTest(Test):
         # [  3]  1.0- 2.0 sec  2899072 KBytes  23749198 Kbits/sec
         # [  3]  2.0- 3.0 sec  2998784 KBytes  24566039 Kbits/sec
         measured_rates = []
-        for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.account.externally_routable_ip):
+        for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.account.hostname):
             self.logger.info("iperf output %s" % line)
             m = r.match(line)
             if m is not None:
