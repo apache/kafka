@@ -106,7 +106,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.test.TestUtils.toSet;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -2282,8 +2281,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testConsumerRejoinAfterRebalance() throws Exception {
-        long waitTimeout = 5_000;
-
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
 
@@ -2296,39 +2293,27 @@ public class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
 
-            AtomicBoolean res = new AtomicBoolean();
+            client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+            client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
 
-            Thread th = new Thread(() -> {
-                coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+            MockTime time = new MockTime(1);
 
-                res.set(true);
-            });
+            //onJoinPrepare will be executed and onJoinComplete will not.
+            boolean res = coordinator.joinGroupIfNeeded(time.timer(1));
 
-            th.start();
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
 
-            client.waitForRequests(1, waitTimeout);
-            client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
-
-            waitForCondition(() -> coordinator.generation.generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                waitTimeout, "JoinGroup response handled.");
-
-            //Waits for a AbstractCoordinator#sendJoinGroupRequest executes and respond after.
-            client.waitForRequests(1, waitTimeout);
-            client.respond(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
-
-            //Waits while coordinator process the response.
-            client.waitForRequests(1, waitTimeout);
-
-            // Imitating heartbeat thread that will clear generation data.
+            // Imitating heartbeat thread that clears generation data.
             coordinator.maybeLeaveGroup("Clear generation data.");
 
-            // Respond to the coordinator thread request.
-            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
+            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-            th.join();
+            //Join future should succeed but generation already cleared so result of join is false.
+            res = coordinator.joinGroupIfNeeded(time.timer(1));
 
-            assertTrue(res.get());
-
+            assertFalse(res);
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
         }

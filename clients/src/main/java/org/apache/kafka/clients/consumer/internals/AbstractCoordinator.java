@@ -130,7 +130,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private MemberState state = MemberState.UNJOINED;
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
-    Generation generation = Generation.NO_GENERATION;
+    private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
 
