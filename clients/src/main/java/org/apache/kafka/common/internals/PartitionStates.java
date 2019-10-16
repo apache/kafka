@@ -101,7 +101,7 @@ public class PartitionStates<S> {
     }
 
     public LinkedHashMap<TopicPartition, S> partitionStateMap() {
-        return new LinkedHashMap<>(map);
+        return map;
     }
 
     /**

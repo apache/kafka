@@ -208,6 +208,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="org.apache.kafka.jmh.record.generated"/>
             <Package name="org.apache.kafka.jmh.producer.generated"/>
             <Package name="org.apache.kafka.jmh.partition.generated"/>
+            <Package name="org.apache.kafka.jmh.fetchsession.generated"/>
+            <Package name="org.apache.kafka.jmh.fetcher.generated"/>
         </Or>
     </Match>
 

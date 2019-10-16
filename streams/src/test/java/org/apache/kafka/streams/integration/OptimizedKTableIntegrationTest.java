@@ -189,7 +189,7 @@ public class OptimizedKTableIntegrationTest {
 
         final ReadOnlyKeyValueStore<Integer, Integer> newActiveStore =
             kafkaStreams1WasFirstActive ? store2 : store1;
-        retryOnExceptionWithTimeout(100, 60 * 1000, TimeUnit.MILLISECONDS, () -> {
+        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
             // Assert that after failover we have recovered to the last store write
             assertThat(newActiveStore.get(key), is(equalTo(batch1NumMessages - 1)));
         });
@@ -224,25 +224,6 @@ public class OptimizedKTableIntegrationTest {
                 .collect(Collectors.toList()),
             producerProps,
             mockTime);
-    }
-
-    private void retryOnExceptionWithTimeout(final long pollInterval,
-                                             final long timeout,
-                                             final TimeUnit timeUnit,
-                                             final Runnable runnable) throws InterruptedException {
-        final long expectedEnd = System.currentTimeMillis() + timeUnit.toMillis(timeout);
-
-        while (true) {
-            try {
-                runnable.run();
-                return;
-            } catch (final Throwable t) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(t);
-                }
-                Thread.sleep(timeUnit.toMillis(pollInterval));
-            }
-        }
     }
 
     private void waitForKafkaStreamssToEnterRunningState(final Collection<KafkaStreams> kafkaStreamss,
