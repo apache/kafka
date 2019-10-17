@@ -43,8 +43,8 @@ class NetworkDegradeTest(Test):
         self.trogdor.stop()
         self.zk.stop()
 
-    @parametrize(task_name="latency-100", latency_ms=100, rate_limit_kbit=0)
-    @parametrize(task_name="latency-100-rate-1000", latency_ms=100, rate_limit_kbit=1000)
+    @parametrize(task_name="latency-100", latency_ms=50, rate_limit_kbit=0)
+    @parametrize(task_name="latency-100-rate-1000", latency_ms=50, rate_limit_kbit=1000)
     def test_latency(self, task_name, latency_ms, rate_limit_kbit):
         spec = DegradedNetworkFaultSpec(0, 10000, {})
         for node in self.zk.nodes:
