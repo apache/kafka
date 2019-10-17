@@ -94,4 +94,13 @@ public class AssignmentInfoTest {
         final AssignmentInfo expectedInfo = new AssignmentInfo(4, AssignmentInfo.LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
+
+    @Test
+    public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
+        final int usedVersion = AssignmentInfo.LATEST_SUPPORTED_VERSION - 1;
+        final int commonlySupportedVersion = AssignmentInfo.LATEST_SUPPORTED_VERSION - 1;
+        final AssignmentInfo info = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, 0);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, 0);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
 }

@@ -416,9 +416,15 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 minReceivedMetadataVersion = usedVersion;
             }
 
-            final int latestSupportedVersion = info.latestSupportedVersion();
-            if (latestSupportedVersion < minSupportedMetadataVersion) {
-                minSupportedMetadataVersion = latestSupportedVersion;
+            final int supportedVersion = info.latestSupportedVersion();
+
+            if (supportedVersion < minSupportedMetadataVersion) {
+                log.debug("Downgrade the current minimum supported version {} to the smaller seen supported version {}",
+                    minSupportedMetadataVersion, supportedVersion);
+                minSupportedMetadataVersion = supportedVersion;
+            } else {
+                log.debug("Current minimum supported version remains at {}, last seen supported version was {}",
+                    minSupportedMetadataVersion, supportedVersion);
             }
 
             // create the new client metadata if necessary
@@ -449,8 +455,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         if (minReceivedMetadataVersion < SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading metadata to version {}. Latest supported version is {}.",
+            log.info("Downgrade metadata to version {}. Latest supported version is {}.",
                 minReceivedMetadataVersion,
+                SubscriptionInfo.LATEST_SUPPORTED_VERSION);
+        }
+        if (minSupportedMetadataVersion < SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
+            log.info("Downgrade latest supported metadata to version {}. Latest supported version is {}.",
+                minSupportedMetadataVersion,
                 SubscriptionInfo.LATEST_SUPPORTED_VERSION);
         }
 
@@ -884,9 +895,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 log.info(
                     "Sent a version {} subscription and got version {} assignment back (successful version probing). "
                         +
-                        "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
+                        "Downgrade subscription metadata to commonly supported version {} and trigger new rebalance.",
                     usedSubscriptionMetadataVersion,
-                    receivedAssignmentMetadataVersion
+                    receivedAssignmentMetadataVersion,
+                    latestCommonlySupportedVersion
                 );
                 usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
                 return true;
