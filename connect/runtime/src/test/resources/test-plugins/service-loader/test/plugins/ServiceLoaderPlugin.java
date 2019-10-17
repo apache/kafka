@@ -29,7 +29,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 /**
  * Samples data about its initialization environment for later analysis
  */
-public class ServiceLoaderPlugin implements Converter, SamplingTestPlugin {
+public class ServiceLoaderPlugin extends SamplingTestPlugin implements Converter {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
   private static final Map<String, SamplingTestPlugin> SAMPLES;

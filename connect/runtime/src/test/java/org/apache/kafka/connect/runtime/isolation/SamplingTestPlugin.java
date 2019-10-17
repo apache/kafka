@@ -23,32 +23,32 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 /**
- * Mix-in interface for plugins so we can sample information about their initialization
+ * Base class for plugins so we can sample information about their initialization
  */
-public interface SamplingTestPlugin {
+public abstract class SamplingTestPlugin {
 
     /**
      * @return the ClassLoader used to statically initialize this plugin class
      */
-    ClassLoader staticClassloader();
+    public abstract ClassLoader staticClassloader();
 
     /**
      * @return the ClassLoader used to initialize this plugin instance
      */
-    ClassLoader classloader();
+    public abstract ClassLoader classloader();
 
     /**
      * @return a group of other SamplingTestPlugin instances known by this plugin
      * This should only return direct children, and not reference this instance directly
      */
-    default Map<String, SamplingTestPlugin> otherSamples() {
+    public Map<String, SamplingTestPlugin> otherSamples() {
         return Collections.emptyMap();
     }
 
     /**
      * @return a flattened list of child samples including this entry keyed as "this"
      */
-    default Map<String, SamplingTestPlugin> flatten() {
+    public Map<String, SamplingTestPlugin> flatten() {
         Map<String, SamplingTestPlugin> out = new HashMap<>();
         Map<String, SamplingTestPlugin> otherSamples = otherSamples();
         if (otherSamples != null) {
@@ -71,7 +71,7 @@ public interface SamplingTestPlugin {
      * Stores only the last invocation of each method if there are multiple invocations.
      * @param samples The collection of samples to which this method call should be added
      */
-    default void logMethodCall(Map<String, SamplingTestPlugin> samples) {
+    public void logMethodCall(Map<String, SamplingTestPlugin> samples) {
         StackTraceElement[] stackTraces = Thread.currentThread().getStackTrace();
         if (stackTraces.length < 2) {
             return;
@@ -88,7 +88,7 @@ public interface SamplingTestPlugin {
         ));
     }
 
-    class MethodCallSample implements SamplingTestPlugin {
+    public static class MethodCallSample extends SamplingTestPlugin {
 
         private final StackTraceElement caller;
         private final ClassLoader staticClassLoader;

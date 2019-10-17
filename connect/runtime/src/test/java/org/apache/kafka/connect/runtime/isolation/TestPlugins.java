@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory;
  * any value you need for testing.
  *
  * <p>To use this class in your tests, make sure to first call
- * {@link TestPlugins#assertInitialized()} to verify that the plugins initialized correctly.
+ * {@link TestPlugins#assertAvailable()} to verify that the plugins initialized correctly.
  * Otherwise, exceptions during the plugin build are not propagated, and may invalidate your test.
  * You can access the list of plugin jars for assembling a {@literal plugin.path}, and reference
  * the names of the different plugins directly via the exposed constants.
@@ -72,7 +72,7 @@ public class TestPlugins {
     /**
      * Class name of a plugin which samples information about its initialization.
      */
-    public static final String SAMPLING = "test.plugins.Sampling";
+    public static final String ALIASED_STATIC_FIELD = "test.plugins.AliasedStaticField";
     /**
      * Class name of a {@link org.apache.kafka.connect.storage.Converter}
      * which samples information about its method calls.
@@ -108,7 +108,7 @@ public class TestPlugins {
         HashMap<String, File> pluginJars = new HashMap<>();
         try {
             pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
-            pluginJars.put(SAMPLING, createPluginJar("sampling"));
+            pluginJars.put(ALIASED_STATIC_FIELD, createPluginJar("aliased-static-field"));
             pluginJars.put(SAMPLING_CONVERTER, createPluginJar("sampling-converter"));
             pluginJars.put(SAMPLING_CONFIGURABLE, createPluginJar("sampling-configurable"));
             pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
@@ -123,10 +123,10 @@ public class TestPlugins {
     }
 
     /**
-     * Ensure that the test plugins were adequately initialized before continuing.
+     * Ensure that the test plugin JARs were assembled without error before continuing.
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static void assertInitialized() throws AssertionError {
+    public static void assertAvailable() throws AssertionError {
         if (INITIALIZATION_EXCEPTION != null) {
             throw new AssertionError("TestPlugins did not initialize completely",
                 INITIALIZATION_EXCEPTION);

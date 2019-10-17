@@ -29,7 +29,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 /**
  * Samples data about its initialization environment for later analysis
  */
-public class SamplingHeaderConverter implements HeaderConverter, SamplingTestPlugin {
+public class SamplingHeaderConverter extends SamplingTestPlugin implements HeaderConverter {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
   private final ClassLoader classloader;

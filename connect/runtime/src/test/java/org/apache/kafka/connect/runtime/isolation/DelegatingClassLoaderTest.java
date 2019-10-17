@@ -43,7 +43,7 @@ public class DelegatingClassLoaderTest {
 
     @Test(expected = ClassNotFoundException.class)
     public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {
@@ -53,7 +53,7 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingPluginClass() throws ClassNotFoundException {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(TestPlugins.pluginPath());
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {

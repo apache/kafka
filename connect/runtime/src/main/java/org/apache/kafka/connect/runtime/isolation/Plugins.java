@@ -87,7 +87,8 @@ public class Plugins {
     protected <U> Class<? extends U> pluginClassFromConfig(
             AbstractConfig config,
             String propertyName,
-            Class<U> pluginClass
+            Class<U> pluginClass,
+            Collection<PluginDesc<U>> plugins
     ) {
         Class<?> klass = config.getClass(propertyName);
         if (pluginClass.isAssignableFrom(klass)) {
@@ -96,8 +97,8 @@ public class Plugins {
         throw new ConnectException(
             "Failed to find any class that implements " + pluginClass.getSimpleName()
                 + " for the config "
-                + propertyName + ", available converters are: "
-                + pluginNames(delegatingLoader.converters())
+                + propertyName + ", available classes are: "
+                + pluginNames(plugins)
         );
     }
 
@@ -243,7 +244,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-                klass = pluginClassFromConfig(config, classPropertyName, Converter.class);
+                klass = pluginClassFromConfig(config, classPropertyName, Converter.class, delegatingLoader.converters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
@@ -317,7 +318,7 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class);
+                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class, delegatingLoader.headerConverters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
@@ -369,7 +370,7 @@ public class Plugins {
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
-                klass = pluginClassFromConfig(config, classPropertyName, ConfigProvider.class);
+                klass = pluginClassFromConfig(config, classPropertyName, ConfigProvider.class, delegatingLoader.configProviders());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback

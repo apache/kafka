@@ -27,7 +27,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 /**
  * Samples data about its initialization environment for later analysis
  */
-public class SamplingConverter implements Converter, SamplingTestPlugin {
+public class SamplingConverter extends SamplingTestPlugin implements Converter {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
   private final ClassLoader classloader;

@@ -54,7 +54,7 @@ import static org.junit.Assert.assertTrue;
 
 public class PluginsTest {
 
-    private static Plugins plugins;
+    private Plugins plugins;
     private Map<String, String> props;
     private AbstractConfig config;
     private TestConverter converter;
@@ -186,7 +186,7 @@ public class PluginsTest {
 
     @Test(expected = ConnectException.class)
     public void shouldThrowIfPluginThrows() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
 
         plugins.newPlugin(
             TestPlugins.ALWAYS_THROW_EXCEPTION,
@@ -198,9 +198,9 @@ public class PluginsTest {
     @Test
     public void shouldShareStaticValuesBetweenSamePlugin() {
         // Plugins are not isolated from other instances of their own class.
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         Converter firstPlugin = plugins.newPlugin(
-            TestPlugins.SAMPLING,
+            TestPlugins.ALIASED_STATIC_FIELD,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -208,7 +208,7 @@ public class PluginsTest {
         assertInstanceOf(SamplingTestPlugin.class, firstPlugin, "Cannot collect samples");
 
         Converter secondPlugin = plugins.newPlugin(
-            TestPlugins.SAMPLING,
+            TestPlugins.ALIASED_STATIC_FIELD,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -222,7 +222,7 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldServiceLoadWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
             TestPlugins.SERVICE_LOADER,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -239,9 +239,9 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldInstantiateWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
-            TestPlugins.SAMPLING,
+            TestPlugins.ALIASED_STATIC_FIELD,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
@@ -253,14 +253,14 @@ public class PluginsTest {
 
     @Test(expected = ConfigException.class)
     public void shouldFailToFindConverterInCurrentClassloader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
         createConfig();
     }
 
     @Test
     public void newConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_CONVERTER);
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_CONVERTER);
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
@@ -281,7 +281,7 @@ public class PluginsTest {
 
     @Test
     public void newConfigProviderShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         String providerPrefix = "some.provider";
         props.put(providerPrefix + ".class", TestPlugins.SAMPLING_CONFIG_PROVIDER);
 
@@ -305,7 +305,7 @@ public class PluginsTest {
 
     @Test
     public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugins.SAMPLING_HEADER_CONVERTER);
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugins.SAMPLING_HEADER_CONVERTER);
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
@@ -326,7 +326,7 @@ public class PluginsTest {
 
     @Test
     public void newPluginsShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertInitialized();
+        TestPlugins.assertAvailable();
         List<Configurable> configurables = plugins.newPlugins(
             Collections.singletonList(TestPlugins.SAMPLING_CONFIGURABLE),
             config,
