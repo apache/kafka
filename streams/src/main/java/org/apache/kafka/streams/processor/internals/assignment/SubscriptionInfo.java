@@ -212,7 +212,7 @@ public class SubscriptionInfo {
         final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeFourAndFiveByteLength(endPointBytes));
 
         buf.putInt(usedVersion); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
+        buf.putInt(latestSupportedVersion); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
         encodeTasks(buf, standbyTasks);
@@ -272,7 +272,7 @@ public class SubscriptionInfo {
             default:
                 latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
-                log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
+                log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, latestSupportedVersion);
         }
 
         return subscriptionInfo;
