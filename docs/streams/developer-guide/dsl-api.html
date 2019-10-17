@@ -1686,7 +1686,7 @@
                             not required because <em>all</em> partitions of the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>&#8216;s underlying changelog stream are made available to
                              each <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance. That is, each instance has a full copy of the changelog stream.  Further, a
                             <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> allows for non-key based joins from the <code class="docutils literal"><span class="pre">KStream</span></code> to the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>.
-                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> do not require co-partitioning.
+                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> also do not require co-partitioning. Kafka Streams internally ensures co-partitioning for Foreign-Key joins.
                             </p>
 
                         <div class="admonition note">
