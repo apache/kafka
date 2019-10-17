@@ -404,21 +404,21 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             if (future.succeeded()) {
-                Generation gen;
+                Generation generationSnapshot;
 
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
                 // and  shouldn't block hearbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment
                 synchronized (this) {
-                    gen = this.generation;
+                    generationSnapshot = this.generation;
                 }
 
-                if (gen != Generation.NO_GENERATION) {
+                if (generationSnapshot != Generation.NO_GENERATION) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
-                    onJoinComplete(gen.generationId, gen.memberId, gen.protocol, memberAssignment);
+                    onJoinComplete(generationSnapshot.generationId, generationSnapshot.memberId, generationSnapshot.protocol, memberAssignment);
 
                     // We reset the join group future only after the completion callback returns. This ensures
                     // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
@@ -491,7 +491,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 heartbeatThread.enable();
                         } else {
                             log.info("Generation data was cleared by heartbeat thread. Rejoin failed.");
-                            failure();
+                            recordRebalanceFailure();
                         }
                     }
                 }
@@ -501,11 +501,11 @@ public abstract class AbstractCoordinator implements Closeable {
                     // we handle failures below after the request finishes. if the join completes
                     // after having been woken up, the exception is ignored and we will rejoin
                     synchronized (AbstractCoordinator.this) {
-                        failure();
+                        recordRebalanceFailure();
                     }
                 }
 
-                private void failure() {
+                private void recordRebalanceFailure() {
                     state = MemberState.UNJOINED;
                     sensors.failedRebalanceSensor.record();
                 }

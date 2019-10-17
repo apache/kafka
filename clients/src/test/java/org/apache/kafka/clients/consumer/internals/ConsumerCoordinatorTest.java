@@ -2293,21 +2293,29 @@ public class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
 
-            client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            client.prepareResponse(joinGroupFollowerResponse(42, memberId, "leader", Errors.NONE));
 
             MockTime time = new MockTime(1);
 
             //onJoinPrepare will be executed and onJoinComplete will not.
-            boolean res = coordinator.joinGroupIfNeeded(time.timer(1));
+            boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
 
             assertFalse(res);
             assertFalse(client.hasPendingResponses());
-            assertFalse(client.hasInFlightRequests());
+            //SynGroupRequests not responded.
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(generationId, coordinator.generation().generationId);
+            assertEquals(memberId, coordinator.generation().memberId);
 
             // Imitating heartbeat thread that clears generation data.
             coordinator.maybeLeaveGroup("Clear generation data.");
 
-            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+            assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+
+            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
             //Join future should succeed but generation already cleared so result of join is false.
             res = coordinator.joinGroupIfNeeded(time.timer(1));
