@@ -28,16 +28,16 @@ class OffsetMapTest {
   @Test
   def testBasicValidation(): Unit = {
     validateMap(10)
-    validateMap(10, strategy = "sequence")
+    validateMap(10, strategy = "header.sequence")
     validateMap(10, strategy = "timestamp")
     validateMap(100)
-    validateMap(100, strategy = "sequence")
+    validateMap(100, strategy = "header.sequence")
     validateMap(100, strategy = "timestamp")
     validateMap(1000)
-    validateMap(1000, strategy = "sequence")
+    validateMap(1000, strategy = "header.sequence")
     validateMap(1000, strategy = "timestamp")
     validateMap(5000)
-    validateMap(5000, strategy = "sequence")
+    validateMap(5000, strategy = "header.sequence")
     validateMap(5000, strategy = "timestamp")
   }
   
@@ -72,9 +72,44 @@ class OffsetMapTest {
   }
   
   @Test
+  def testTimestampLogCompaction(): Unit = {
+    val map = new SkimpyOffsetMap(4096)
+    map.init("timestamp")
+
+    // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    for (i <- 0 until 10)
+      map.put(new FakeRecord(key(i), i, fakeTimestamp = System.currentTimeMillis()))
+
+    // map should hold offset 0 for key 0
+    assertEquals(map.get(key(0)), 0)
+    // latest offset in map should be 9
+    assertEquals(map.latestOffset, 9)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    // putting latest value for key=0 first followed by old value
+    map.put(new FakeRecord(key(0), 10, fakeTimestamp = System.currentTimeMillis()))
+    map.put(new FakeRecord(key(0), 11, fakeTimestamp = System.currentTimeMillis()-1000))
+
+    // map should hold offset 10 for key 0
+    assertEquals(map.get(key(0)), 10)
+    // latest offset in map should be 11
+    assertEquals(map.latestOffset, 11)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    map.put(new FakeRecord(key(10), 12, fakeTimestamp = System.currentTimeMillis()))
+
+    // latest offset in map should be 12
+    assertEquals(map.latestOffset, 12)
+    // size should 11
+    assertEquals(map.size, 11)
+  }
+  
+  @Test
   def testSequenceLogCompaction(): Unit = {
     val map = new SkimpyOffsetMap(4096)
-    map.init("sequence")
+    map.init("header.sequence")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
     for (i <- 0 until 10)
@@ -88,6 +123,8 @@ class OffsetMapTest {
     assertEquals(map.get(key(0)), 10)
     // latest offset in map should be 11
     assertEquals(map.latestOffset, 11)
+    // size should 10
+    assertEquals(map.size, 10)
 
     // putting latest value for key=1 first followed by old value
     map.put(new FakeRecord(key(1), 12, 112))
@@ -101,6 +138,8 @@ class OffsetMapTest {
     assertEquals(map.get(key(1)), 16)
     // latest offset in map should be 17
     assertEquals(map.latestOffset, 17)
+    // size should 10
+    assertEquals(map.size, 10)
 
     map.put(new FakeRecord(key(1), 18, 118))
     map.put(new FakeRecord(key(1), 19, 121))
@@ -111,6 +150,95 @@ class OffsetMapTest {
     assertEquals(map.get(key(1)), 19)
     // latest offset in map should be 21
     assertEquals(map.latestOffset, 21)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    map.put(new FakeRecord(key(10), 22, 22))
+
+    // latest offset in map should be 21
+    assertEquals(map.latestOffset, 22)
+    // size should 11
+    assertEquals(map.size, 11)
+  }
+  
+  @Test
+  def testSameOffsetMapInstanceForDifferentCompactionStrategy(): Unit = {
+    val map = new SkimpyOffsetMap(4096)
+
+    /*
+     * offset based compaction
+     */
+    map.init()
+
+    for (i <- 0 until 10)
+      map.put(new FakeRecord(key(i), i))
+
+    // map should hold offset 0 for key 0
+    assertEquals(map.get(key(0)), 0)
+    // latest offset in map should be 9
+    assertEquals(map.latestOffset, 9)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    // putting latest value for key=0 first followed by old value
+    map.put(new FakeRecord(key(0), 10))
+    map.put(new FakeRecord(key(0), 11))
+
+    // map should hold offset 10 for key 0
+    assertEquals(map.get(key(0)), 11)
+    // latest offset in map should be 11
+    assertEquals(map.latestOffset, 11)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    /*
+     * timestamp based compaction
+     */
+    map.clear()
+    map.init("timestamp")
+
+    // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    for (i <- 0 until 10)
+      map.put(new FakeRecord(key(i), i, fakeTimestamp = System.currentTimeMillis()))
+
+    // map should hold offset 0 for key 0
+    assertEquals(map.get(key(0)), 0)
+    // latest offset in map should be 9
+    assertEquals(map.latestOffset, 9)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    // putting latest value for key=0 first followed by old value
+    map.put(new FakeRecord(key(0), 10, fakeTimestamp = System.currentTimeMillis()))
+    map.put(new FakeRecord(key(0), 11, fakeTimestamp = System.currentTimeMillis()-1000))
+
+    // map should hold offset 10 for key 0
+    assertEquals(map.get(key(0)), 10)
+    // latest offset in map should be 11
+    assertEquals(map.latestOffset, 11)
+    // size should 10
+    assertEquals(map.size, 10)
+
+    /* 
+     * header sequence based compaction
+     */
+    map.clear()
+    map.init("header.sequence")
+
+    // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    for (i <- 0 until 10)
+      map.put(new FakeRecord(key(i), i, 100+i))
+
+    // putting latest value for key=0 first followed by old value
+    map.put(new FakeRecord(key(0), 10, 111))
+    map.put(new FakeRecord(key(0), 11, 110))
+
+    // map should hold offset 10 for key 0
+    assertEquals(map.get(key(0)), 10)
+    // latest offset in map should be 11
+    assertEquals(map.latestOffset, 11)
+    // size should 10
+    assertEquals(map.size, 10)
   }
 
   def key(key: Long) = ByteBuffer.wrap(key.toString.getBytes)
