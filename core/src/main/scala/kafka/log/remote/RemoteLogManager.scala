@@ -162,15 +162,22 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @param topicPartitions Set of topic partitions with a flag to be deleted or not.
    * @return
    */
-  def handleStopPartition(topicPartitions: Set[(TopicPartition, Boolean)]): Unit = {
-    topicPartitions.foreach { case (tp, delete) =>
+  def stopPartitions(topicPartitions: Set[TopicPartition], delete:Boolean): Unit = {
+    topicPartitions.foreach { tp =>
       // unassign topic partitions from RLM leader/follower
       val rlmTaskWithFuture = leaderOrFollowerTasks.remove(tp)
       if (rlmTaskWithFuture != null) {
         rlmTaskWithFuture.cancel()
       }
-      // schedule delete task if necessary, this should be asynchronous
-      if (delete) remoteStorageManager.deleteTopicPartition(tp)
+
+      // todo-sato may need to do this asychronously as this call should not block partition#stop(delete).
+      if (delete) {
+        try {
+          remoteStorageManager.deleteTopicPartition(tp)
+        } catch {
+          case ex: Exception => error(s"Error occurred while deleting topic partition: $tp", ex)
+        }
+      }
     }
   }
 
@@ -403,7 +410,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   case class RLMTaskWithFuture(rlmTask: RLMTask, future: Future[_]) {
     def cancel(): Unit = {
       rlmTask.cancel()
-      future.cancel(true)
+      try {
+        future.cancel(true)
+      } catch {
+        case ex:Exception => error(s"Error occurred while canceling the task: $rlmTask", ex)
+      }
     }
   }
 

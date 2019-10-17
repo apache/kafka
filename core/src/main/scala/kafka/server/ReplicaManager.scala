@@ -392,6 +392,7 @@ class ReplicaManager(val config: KafkaConfig,
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
+        remoteLogManager.foreach(rlm => rlm.stopPartitions(partitions, stopReplicaRequest.deletePartitions))
         for (topicPartition <- partitions){
           try {
             stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
