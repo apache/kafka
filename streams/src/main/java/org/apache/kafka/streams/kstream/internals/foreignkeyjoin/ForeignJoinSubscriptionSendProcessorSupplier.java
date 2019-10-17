@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -24,17 +25,22 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.Murmur3;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.function.Function;
 import java.util.Arrays;
+import java.util.function.Function;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
 public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
+    private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
     private final String repartitionTopicName;
@@ -60,7 +66,9 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     }
 
     private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
-        
+
+        private Sensor skippedRecordsSensor;
+
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
@@ -69,18 +77,36 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
             if (foreignKeySerializer == null) {
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(),
+                                                                  (StreamsMetricsImpl) context.metrics());
         }
 
         @Override
         public void process(final K key, final Change<V> change) {
             final long[] currentHash = change.newValue == null ?
-                    null :
-                    Murmur3.hash128(valueSerializer.serialize(repartitionTopicName, change.newValue));
+                null :
+                Murmur3.hash128(valueSerializer.serialize(repartitionTopicName, change.newValue));
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
+                if (oldForeignKey == null) {
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        change.oldValue, context().topic(), context().partition(), context().offset()
+                    );
+                    skippedRecordsSensor.record();
+                    return;
+                }
                 if (change.newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
+                    if (newForeignKey == null) {
+                        LOG.warn(
+                            "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                            change.newValue, context().topic(), context().partition(), context().offset()
+                        );
+                        skippedRecordsSensor.record();
+                        return;
+                    }
 
                     final byte[] serialOldForeignKey = foreignKeySerializer.serialize(repartitionTopicName, oldForeignKey);
                     final byte[] serialNewForeignKey = foreignKeySerializer.serialize(repartitionTopicName, newForeignKey);
@@ -109,7 +135,16 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 } else {
                     instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
                 }
-                context().forward(foreignKeyExtractor.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
+                final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
+                if (newForeignKey == null) {
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        change.newValue, context().topic(), context().partition(), context().offset()
+                    );
+                    skippedRecordsSensor.record();
+                } else {
+                    context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, instruction, key));
+                }
             }
         }
     }
