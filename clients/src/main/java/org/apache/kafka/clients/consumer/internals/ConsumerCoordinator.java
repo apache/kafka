@@ -515,7 +515,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         final Timer timer) {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
-        final Generation generation = generation();
+        final Generation generation = generationIfStable();
         if (pendingCommittedOffsetRequest != null && !pendingCommittedOffsetRequest.sameRequest(partitions, generation)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
@@ -767,15 +767,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
-        if (subscriptions.partitionsAutoAssigned())
-            generation = generation();
-        else
+        if (subscriptions.partitionsAutoAssigned()) {
+            generation = generationIfStable();
+            // if the generation is null, we are not part of an active group (and we expect to be).
+            // the only thing we can do is fail the commit and let the user rejoin the group in poll()
+            if (generation == null) {
+                log.info("Failing OffsetCommit request since the consumer is not part of an active group");
+                return RequestFuture.failure(new CommitFailedException());
+            }
+        } else
             generation = Generation.NO_GENERATION;
-
-        // if the generation is null, we are not part of an active group (and we expect to be).
-        // the only thing we can do is fail the commit and let the user rejoin the group in poll()
-        if (generation == null)
-            return RequestFuture.failure(new CommitFailedException());
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
                 setGenerationId(generation.generationId).
