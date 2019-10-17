@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
+import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -44,13 +45,10 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -1212,7 +1210,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            this.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             // poll for new data until the timeout expires
             do {
@@ -1220,7 +1218,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                 if (includeMetadataInTimeout) {
                     if (!updateAssignmentMetadataIfNeeded(timer)) {
-                        this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
                         return ConsumerRecords.empty();
                     }
                 } else {
@@ -1241,15 +1238,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
-                    this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
             } while (timer.notExpired());
 
-            this.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
-
             return ConsumerRecords.empty();
         } finally {
+            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
         }
     }
@@ -2398,61 +2393,5 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // Visible for testing
     String getClientId() {
         return clientId;
-    }
-
-    static class KafkaConsumerMetrics {
-        private final Metrics metrics;
-
-        private Sensor timeBetweenPollSensor;
-        private Sensor pollIdleSensor;
-        private long lastPollMs;
-        private long pollStartMs;
-        private long timeSinceLastPollMs;
-
-        private KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
-
-            String metricGroupName = metricGrpPrefix + "-metrics";
-            Measurable lastPoll = (mConfig, now) -> {
-                if (lastPollMs == 0L)
-                    // if no poll is ever triggered, just return -1.
-                    return -1d;
-                else
-                    return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
-            };
-            metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
-                    metricGroupName,
-                    "The number of seconds since the last poll() invocation."),
-                    lastPoll);
-
-            this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
-            this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
-                    metricGroupName,
-                    "The average delay between invocations of poll()."),
-                    new Avg());
-            this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
-                    metricGroupName,
-                    "The max delay between invocations of poll()."),
-                    new Max());
-
-            this.pollIdleSensor = metrics.sensor("poll-idle-ratio");
-            this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio",
-                    metricGroupName,
-                    "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
-                    new Avg());
-        }
-
-        void recordPollStart(long pollStartMs) {
-            this.pollStartMs = pollStartMs;
-            this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
-            this.timeBetweenPollSensor.record(timeSinceLastPollMs);
-            this.lastPollMs = pollStartMs;
-        }
-
-        void recordPollEnd(long pollEndMs) {
-            long pollTimeMs = pollEndMs - pollStartMs;
-            double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
-            this.pollIdleSensor.record(pollIdleRatio);
-        }
     }
 }
