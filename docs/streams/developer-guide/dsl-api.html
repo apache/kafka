@@ -1658,16 +1658,11 @@
                     <p>Each case is explained in more detail in the subsequent sections.</p>
                     <div class="section" id="join-co-partitioning-requirements">
                         <span id="streams-developer-guide-dsl-joins-co-partitioning"></span><h5><a class="toc-backref" href="#id14">Join co-partitioning requirements</a><a class="headerlink" href="#join-co-partitioning-requirements" title="Permalink to this headline"></a></h5>
-                        <p>Input data must be co-partitioned when joining. This ensures that input records with the same key, from both sides of the
+                        <p>For most joins, Input data must be co-partitioned when joining. This ensures that input records with the same key, from both sides of the
                             join, are delivered to the same stream task during processing.
-                            <strong>It is the responsibility of the user to ensure data co-partitioning when joining</strong>.</p>
-                        <div class="admonition tip">
-                            <p><b>Tip</b></p>
-                            <p class="last">
-                            A KTable-to-KTable Foreign-Key Join does not require co-partitioning.
-
-                            Also, if possible, consider using <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">global tables</span></a> (<code class="docutils literal"><span class="pre">GlobalKTable</span></code>) for joining because they do not require data co-partitioning.</p>
-                        </div>
+                            <strong>It is the responsibility of the user to ensure data co-partitioning when joining</strong>.
+                            Co-partitioning is not required when performing <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> and <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">Global KTable joins</span></a>.
+                            </p>
                         <p>The requirements for data co-partitioning are:</p>
                         <ul class="simple">
                             <li>The input topics of the join (left side and right side) must have the <strong>same number of partitions</strong>.</li>
@@ -1688,10 +1683,10 @@
                             input streams/tables of a join are co-partitioned by key.</p>
                         <p>There are two exceptions where co-partitioning is not required. For
                             <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-globalktable"><span class="std std-ref">KStream-GlobalKTable joins</span></a> joins, co-partitioning is
-                            it not required because <em>all</em> partitions of the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>&#8216;s underlying changelog stream are made available to
+                            not required because <em>all</em> partitions of the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>&#8216;s underlying changelog stream are made available to
                             each <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, i.e. each instance has a full copy of the changelog stream.  Further, a
                             <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> allows for non-key based joins from the <code class="docutils literal"><span class="pre">KStream</span></code> to the <code class="docutils literal"><span class="pre">GlobalKTable</span></code>.
-                            Additionally, <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> do not require co-partitioning, as the records from the left table are repartitioned automatically to match the partition count of the right table.
+                            <a class="reference internal" href="#streams-developer-guide-dsl-joins-ktable-ktable-fk-join"><span class="std std-ref">KTable-KTable Foreign-Key joins</span></a> do not require co-partitioning.
                             </p>
 
                         <div class="admonition note">
@@ -2399,8 +2394,8 @@
                           internal" href="#streams_concepts_ktable"><span class="std
                             std-ref">table duals</span></a>. A foreign-key extractor
                         function is applied to the left record, with a new intermediate
-                        record created and co-located with the associated right record
-                        of the same key. The join is applied on the co-located records.
+                        record created and is used to lookup and join with the corresponding 
+                        primary key on the right hand side table.
                         The result is a new KTable that represents the changelog stream
                         of the join operation.</p>
                       The left KTable can have multiple records which map to the same
@@ -2478,8 +2473,7 @@
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. Tombstones
-                                          do not trigger the join. When an input
+                                          deletion of the key from the table. When an input
                                           tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
@@ -2552,8 +2546,7 @@
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
                                           for the corresponding key, which indicate the
-                                          deletion of the key from the table. Tombstones
-                                          do not trigger the join. When an input
+                                          deletion of the key from the table. When an input
                                           tombstone is received, then an output
                                           tombstone is forwarded directly to the join
                                           result KTable if required (i.e. only if the
@@ -2584,10 +2577,11 @@
                         </tbody>
                       </table>
                       <p><strong>Semantics of table-table foreign-key joins:</strong>
-                        The semantics of the various table-table foreign-key join
-                        variants are explained below. All records are processed in
-                        timestamp order. The key is shown alongside the value for each
-                        record. The columns INNER JOIN and LEFT JOIN denote what is
+                        The semantics of the table-table foreign-key INNER and LEFT JOIN
+                        variants are demonstrated below.
+                        The key is shown alongside the value for each record.
+                        Records are processed in incrementing offset order.
+                        The columns INNER JOIN and LEFT JOIN denote what is
                         passed as arguments to the user-supplied <a class="reference
                           external"
                 href="/%7B%7Bversion%7D%7D/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a>
@@ -2604,7 +2598,7 @@
                         <colgroup> <col width="12%"> <col width="13%"> <col
                             width="13%"> <col width="31%"> <col width="31%"> </colgroup>
                         <thead valign="bottom"> <tr class="row-odd">
-                            <th class="head">Timestamp</th>
+                            <th class="head">Record Offset</th>
                             <th class="head">Left KTable (K, extracted-FK)</th>
                             <th class="head">Right KTable (FK, VR)</th>
                             <th class="head">(INNER) JOIN</th>
