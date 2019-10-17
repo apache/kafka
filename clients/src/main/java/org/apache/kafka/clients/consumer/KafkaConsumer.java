@@ -1206,11 +1206,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
+            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
+
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
-
-            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             // poll for new data until the timeout expires
             do {
