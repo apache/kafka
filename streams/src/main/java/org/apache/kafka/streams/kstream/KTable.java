@@ -2128,19 +2128,34 @@ public interface KTable<K, V> {
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
      *                            result is null, the update is ignored as invalid.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                            should be materialized. Cannot be {@code null}
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
-     * @return
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                    final Function<V, KO> foreignKeyExtractor,
+                                    final ValueJoiner<V, VO, VR> joiner);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
      */
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
-                                    final Named named,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                    final Named named);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
@@ -2156,12 +2171,94 @@ public interface KTable<K, V> {
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
-     * @return
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
      */
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                            should be materialized. Cannot be {@code null}
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                    final Function<V, KO> foreignKeyExtractor,
+                                    final ValueJoiner<V, VO, VR> joiner,
+                                    final Named named,
+                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains only those records that satisfy the given predicate
+     */
+    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                        final Function<V, KO> foreignKeyExtractor,
+                                        final ValueJoiner<V, VO, VR> joiner);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                        final Function<V, KO> foreignKeyExtractor,
+                                        final ValueJoiner<V, VO, VR> joiner,
+                                        final Named named);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * <p>
+     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
+     *
+     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            result is null, the update is ignored as invalid.
+     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
+     *                            should be materialized. Cannot be {@code null}
+     * @param <VR>                the value type of the result {@code KTable}
+     * @param <KO>                the key type of the other {@code KTable}
+     * @param <VO>                the value type of the other {@code KTable}
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
+     */
+    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                        final Function<V, KO> foreignKeyExtractor,
+                                        final ValueJoiner<V, VO, VR> joiner,
+                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
@@ -2178,33 +2275,12 @@ public interface KTable<K, V> {
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains only those records that satisfy the given predicate
+     * @return a {@code KTable} that contains the result of joining this table with {@code other}
      */
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                         final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
                                         final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
-
-    /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
-     * <p>
-     * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
-     *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
-     * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
-     *                            should be materialized. Cannot be {@code null}
-     * @param <VR>                the value type of the result {@code KTable}
-     * @param <KO>                the key type of the other {@code KTable}
-     * @param <VO>                the value type of the other {@code KTable}
-     * @return a {@code KTable} that contains only those records that satisfy the given predicate
-     */
-    <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final Function<V, KO> foreignKeyExtractor,
-                                        final ValueJoiner<V, VO, VR> joiner,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**

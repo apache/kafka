@@ -38,6 +38,7 @@ import org.junit.runners.Suite;
     BytesTest.class,
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
+    KTableKTableForeignKeyJoinMaterializationIntegrationTest.class,
     CombinedKeySchemaTest.class,
     SubscriptionWrapperSerdeTest.class,
     SubscriptionResponseWrapperSerdeTest.class,
