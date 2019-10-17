@@ -26,7 +26,8 @@ sudo apt-get install -y \
   zlib1g-dev \
   realpath \
   python-setuptools \
-  iperf
+  iperf \
+  traceroute
 
 base_dir=`dirname $0`/../..
 

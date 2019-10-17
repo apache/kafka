@@ -108,7 +108,7 @@ popd
 popd
 
 # Install iperf
-apt-get install -y iperf
+apt-get install -y iperf traceroute
 
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
