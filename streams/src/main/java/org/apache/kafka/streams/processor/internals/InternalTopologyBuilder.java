@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -29,8 +28,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +49,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
@@ -84,7 +84,7 @@ public class InternalTopologyBuilder {
     // map from source processor names to regex subscription patterns
     private final Map<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
 
-    // map from sink processor names to subscribed topic (without application-id prefix for internal topics)
+    // map from sink processor names to sink topic (without application-id prefix for internal topics)
     private final Map<String, String> nodeToSinkTopic = new HashMap<>();
 
     // map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
@@ -748,25 +748,16 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
+    // Order node groups by their position in the actual topology, ie upstream subtopologies come before downstream
     private Map<Integer, Set<String>> makeNodeGroups() {
         final Map<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final Map<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
 
-        // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        final Set<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
-        allSourceNodes.addAll(nodeToSourcePatterns.keySet());
-
-        for (final String nodeName : Utils.sorted(allSourceNodes)) {
+        // Traverse in topological order
+        for (final String nodeName : nodeFactories.keySet()) {
             nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-        }
-
-        // Go through non-source nodes
-        for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToSourceTopics.containsKey(nodeName)) {
-                nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-            }
         }
 
         return nodeGroups;
@@ -1149,21 +1140,45 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized Collection<Set<String>> copartitionGroups() {
-        final List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
-        for (final Set<String> nodeNames : copartitionSourceGroups) {
-            final Set<String> copartitionGroup = new HashSet<>();
-            for (final String node : nodeNames) {
-                final List<String> topics = nodeToSourceTopics.get(node);
-                if (topics != null) {
-                    copartitionGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+        // compute transitive closures of copartitionGroups to relieve registering code to know all members
+        // of a copartitionGroup at the same time
+        final List<Set<String>> copartitionSourceTopics =
+            copartitionSourceGroups
+                .stream()
+                .map(sourceGroup ->
+                         sourceGroup
+                             .stream()
+                             .flatMap(node -> maybeDecorateInternalSourceTopics(nodeToSourceTopics.get(node)).stream())
+                             .collect(Collectors.toSet())
+                ).collect(Collectors.toList());
+
+        final Map<String, Set<String>> topicsToCopartitionGroup = new LinkedHashMap<>();
+        for (final Set<String> topics : copartitionSourceTopics) {
+            if (topics != null) {
+                Set<String> coparititonGroup = null;
+                for (final String topic : topics) {
+                    coparititonGroup = topicsToCopartitionGroup.get(topic);
+                    if (coparititonGroup != null) {
+                        break;
+                    }
+                }
+                if (coparititonGroup == null) {
+                    coparititonGroup = new HashSet<>();
+                }
+                coparititonGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+                for (final String topic : topics) {
+                    topicsToCopartitionGroup.put(topic, coparititonGroup);
                 }
             }
-            list.add(Collections.unmodifiableSet(copartitionGroup));
         }
-        return Collections.unmodifiableList(list);
+        final Set<Set<String>> uniqueCopartitionGroups = new HashSet<>(topicsToCopartitionGroup.values());
+        return Collections.unmodifiableList(new ArrayList<>(uniqueCopartitionGroups));
     }
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
+        if (sourceTopics == null) {
+            return Collections.emptyList();
+        }
         final List<String> decoratedTopics = new ArrayList<>();
         for (final String topic : sourceTopics) {
             if (internalTopicNames.contains(topic)) {
@@ -1880,11 +1895,11 @@ public class InternalTopologyBuilder {
 
     // following functions are for test only
 
-    public synchronized Set<String> getSourceTopicNames() {
+    public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }
 
-    public synchronized Map<String, StateStoreFactory> getStateStores() {
+    public synchronized Map<String, StateStoreFactory> stateStores() {
         return stateFactories;
     }
 }

@@ -161,6 +161,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         public KeyValue keyValue() {
             return keyValue;
         }
+
+        @Override
+        public String toString() {
+            return "CapturedForward{" +
+                "childName='" + childName + '\'' +
+                ", timestamp=" + timestamp +
+                ", keyValue=" + keyValue +
+                '}';
+        }
     }
 
     // constructors ================================================
@@ -213,9 +222,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.stateDir = stateDir;
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        final String threadName = "mock-processor-context-virtual-thread";
-        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadName, StreamsConfig.METRICS_LATEST);
-        ThreadMetrics.skipRecordSensor(metrics);
+        final String threadId = Thread.currentThread().getName();
+        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadId, StreamsConfig.METRICS_LATEST);
+        ThreadMetrics.skipRecordSensor(threadId, metrics);
     }
 
     @Override

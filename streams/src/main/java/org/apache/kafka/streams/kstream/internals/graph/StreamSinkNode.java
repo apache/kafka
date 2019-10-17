@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
 public class StreamSinkNode<K, V> extends StreamsGraphNode {
 
@@ -60,6 +61,9 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
             @SuppressWarnings("unchecked")
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
             topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, windowedPartitioner, parentNames);
+        } else if (topicNameExtractor instanceof StaticTopicNameExtractor) {
+            final String topicName = ((StaticTopicNameExtractor) topicNameExtractor).topicName;
+            topologyBuilder.addSink(nodeName(), topicName, keySerializer, valSerializer, partitioner, parentNames);
         } else {
             topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, partitioner,  parentNames);
         }

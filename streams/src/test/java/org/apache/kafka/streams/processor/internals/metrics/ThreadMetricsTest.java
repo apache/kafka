@@ -43,6 +43,7 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 @PrepareForTest(StreamsMetricsImpl.class)
 public class ThreadMetricsTest {
 
+    private static final String THREAD_ID = "thread-id";
     private static final String THREAD_LEVEL_GROUP = "stream-metrics";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
@@ -57,15 +58,15 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of newly created tasks";
         final String rateDescription = "The average per-second number of newly created tasks";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.createTaskSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.createTaskSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -79,15 +80,15 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of closed tasks";
         final String rateDescription = "The average per-second number of closed tasks";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.closeTaskSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.closeTaskSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -102,8 +103,8 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of commit calls";
         final String rateDescription = "The average per-second number of commit calls";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -112,7 +113,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.commitSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.commitSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -127,8 +128,8 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of poll calls";
         final String rateDescription = "The average per-second number of poll calls";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -137,7 +138,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.pollSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.pollSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -152,8 +153,8 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of process calls";
         final String rateDescription = "The average per-second number of process calls";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -162,7 +163,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.processSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.processSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -177,8 +178,8 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of punctuate calls";
         final String rateDescription = "The average per-second number of punctuate calls";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -187,7 +188,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.punctuateSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.punctuateSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -201,15 +202,15 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of skipped records";
         final String rateDescription = "The average per-second number of skipped records";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.skipRecordSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -224,8 +225,8 @@ public class ThreadMetricsTest {
         final String totalDescription = "The total number of commit calls over all tasks";
         final String rateDescription = "The average per-second number of commit calls over all tasks";
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.DEBUG)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ROLLUP_VALUE)).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(dummySensor);
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID, TASK_ID_TAG, ROLLUP_VALUE)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, TASK_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -234,7 +235,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);

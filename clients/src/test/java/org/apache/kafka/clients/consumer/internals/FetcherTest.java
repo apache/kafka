@@ -77,7 +77,6 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
-import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -782,8 +781,7 @@ public class FetcherTest {
         try {
             buildFetcher();
 
-            client.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.FETCH, (short) 2, (short) 2))));
+            client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.FETCH.id, (short) 2, (short) 2));
             makeFetchRequestWithIncompleteRecord();
             try {
                 fetcher.fetchedRecords();
@@ -850,7 +848,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchDuringRebalance() {
+    public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
         subscriptions.subscribe(singleton(topicName), listener);
@@ -861,13 +859,40 @@ public class FetcherTest {
 
         assertEquals(1, fetcher.sendFetches());
 
-        // Now the rebalance happens and fetch positions are cleared
+        // Now the eager rebalance happens and fetch positions are cleared
+        subscriptions.assignFromSubscribed(Collections.emptyList());
+
         subscriptions.assignFromSubscribed(singleton(tp0));
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // The active fetch should be ignored since its position is no longer valid
         assertTrue(fetcher.fetchedRecords().isEmpty());
+    }
+
+    @Test
+    public void testFetchDuringCooperativeRebalance() {
+        buildFetcher();
+
+        subscriptions.subscribe(singleton(topicName), listener);
+        subscriptions.assignFromSubscribed(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        assertEquals(1, fetcher.sendFetches());
+
+        // Now the cooperative rebalance happens and fetch positions are NOT cleared for unrevoked partitions
+        subscriptions.assignFromSubscribed(singleton(tp0));
+
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+
+        // The active fetch should NOT be ignored since the position for tp0 is still valid
+        assertEquals(1, fetchedRecords.size());
+        assertEquals(3, fetchedRecords.get(tp0).size());
     }
 
     @Test
@@ -1971,8 +1996,9 @@ public class FetcherTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000,  ClientDnsLookup.DEFAULT,
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
-        short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        ByteBuffer buffer = ApiVersionsResponse.
+            createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
+                serialize(ApiKeys.API_VERSIONS, 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -1989,7 +2015,7 @@ public class FetcherTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             FetchResponse response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.FETCH.latestVersion(), new ResponseHeader(request.correlationId()));
+            buffer = response.serialize(ApiKeys.FETCH, request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -3485,8 +3511,8 @@ public class FetcherTest {
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
-        apiVersions.update(node.idString(), NodeApiVersions.create(singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH, (short) 0, (short) 2))));
+        apiVersions.update(node.idString(), NodeApiVersions.create(
+            ApiKeys.OFFSET_FOR_LEADER_EPOCH.id, (short) 0, (short) 2));
 
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(

@@ -16,7 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.processor.TaskId;
 
 class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
 
@@ -34,4 +40,40 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         running.forEach((id, task) -> task.allowUpdateOfOffsetLimit());
         return committed;
     }
+
+    /**
+     * Closes standby tasks that were reassigned elsewhere after a rebalance.
+     *
+     * @param revokedTasks the tasks which are no longer owned
+     * @return the changelogs of all standby tasks that were reassigned
+     */
+    List<TopicPartition> closeRevokedStandbyTasks(final Map<TaskId, Set<TopicPartition>> revokedTasks) {
+        log.debug("Closing revoked standby tasks {}", revokedTasks);
+
+        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : revokedTasks.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            final Task task;
+
+            if (running.containsKey(taskId)) {
+                task = running.get(taskId);
+            } else if (created.containsKey(taskId)) {
+                task = created.get(taskId);
+            } else {
+                log.error("Could not find the standby task {} while closing it", taskId);
+                continue;
+            }
+
+            try {
+                task.close(true, false);
+            } catch (final RuntimeException e) {
+                log.error("Closing the {} {} failed due to the following error:", taskTypeName, task.id(), e);
+            } finally {
+                running.remove(taskId);
+                revokedChangelogs.addAll(task.changelogPartitions());
+            }
+        }
+        return revokedChangelogs;
+    }
+
 }

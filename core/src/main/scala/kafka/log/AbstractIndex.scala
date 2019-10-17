@@ -395,8 +395,8 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {
     searchEntity match {
-      case IndexSearchType.KEY => indexEntry.indexKey.compareTo(target)
-      case IndexSearchType.VALUE => indexEntry.indexValue.compareTo(target)
+      case IndexSearchType.KEY => java.lang.Long.compare(indexEntry.indexKey, target)
+      case IndexSearchType.VALUE => java.lang.Long.compare(indexEntry.indexValue, target)
     }
   }
 

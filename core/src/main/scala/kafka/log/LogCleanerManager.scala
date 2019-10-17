@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.common.LogCleaningAbortedException
+import kafka.common.{KafkaException, LogCleaningAbortedException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -38,6 +38,10 @@ private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
 private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
+
+private[log] class LogCleaningException(val log: Log,
+                                        private val message: String,
+                                        private val cause: Throwable) extends KafkaException(message, cause)
 
 /**
   * This class manages the state of each partition being cleaned.
@@ -180,11 +184,16 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
-          val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, topicPartition, lastClean, now)
-          val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
-          preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
+          try {
+            val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, topicPartition, lastClean, now)
+            val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
+            preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
-          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
+            LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
+          } catch {
+            case e: Throwable => throw new LogCleaningException(log,
+              s"Failed to calculate log cleaning stats for partition $topicPartition", e)
+          }
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0

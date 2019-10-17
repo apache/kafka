@@ -107,7 +107,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         for (ConnectorStateInfo.TaskState state : states) {
             taskStates.put(
                 state.id(),
-                new TaskState(state.id(), state.workerId(), state.state(), state.trace())
+                new TaskState(state.id(), state.state(), state.workerId(), state.trace())
             );
         }
         return taskStates;

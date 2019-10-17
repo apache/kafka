@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -43,19 +44,14 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -63,6 +59,23 @@ import java.util.Objects;
 import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K, V> {
+
+
+    static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
+
+    static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
+
+    static final String JOIN_NAME = "KSTREAM-JOIN-";
+
+    static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
+
+    static final String MERGE_NAME = "KSTREAM-MERGE-";
+
+    static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
+
+    static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
+
+    static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
     static final String SOURCE_NAME = "KSTREAM-SOURCE-";
 
@@ -82,23 +95,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     private static final String FLATMAPVALUES_NAME = "KSTREAM-FLATMAPVALUES-";
 
-    private static final String JOINTHIS_NAME = "KSTREAM-JOINTHIS-";
-
-    private static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
-
-    private static final String JOIN_NAME = "KSTREAM-JOIN-";
-
-    private static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
-
     private static final String MAP_NAME = "KSTREAM-MAP-";
 
     private static final String MAPVALUES_NAME = "KSTREAM-MAPVALUES-";
-
-    private static final String MERGE_NAME = "KSTREAM-MERGE-";
-
-    private static final String OUTERTHIS_NAME = "KSTREAM-OUTERTHIS-";
-
-    private static final String OUTEROTHER_NAME = "KSTREAM-OUTEROTHER-";
 
     private static final String PROCESSOR_NAME = "KSTREAM-PROCESSOR-";
 
@@ -109,8 +108,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String TRANSFORM_NAME = "KSTREAM-TRANSFORM-";
 
     private static final String TRANSFORMVALUES_NAME = "KSTREAM-TRANSFORMVALUES-";
-
-    private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
 
@@ -714,16 +711,32 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                         final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                         final JoinWindows windows,
                                         final Joined<K, V, VO> joined) {
+        Objects.requireNonNull(joined, "Joined can't be null");
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final StreamJoined<K, V, VO> streamJoined =
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
+
+        return join(otherStream, joiner, windows, streamJoined);
+
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
+                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                        final JoinWindows windows,
+                                        final StreamJoined<K, V, VO> streamJoined) {
 
         return doJoin(otherStream,
                       joiner,
                       windows,
-                      joined,
-                      new KStreamImplJoin(false, false));
+                      streamJoined,
+                      new KStreamImplJoin(builder, false, false)
+                    );
 
     }
 
@@ -735,38 +748,52 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> other,
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
+        Objects.requireNonNull(joined, "Joined can't be null");
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final StreamJoined<K, V, VO> streamJoined =
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
+        return outerJoin(other, joiner, windows, streamJoined);
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> other,
+                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows,
+                                             final StreamJoined<K, V, VO> streamJoined) {
+
+        return doJoin(other, joiner, windows, streamJoined, new KStreamImplJoin(builder, true, true));
     }
 
     private <VO, VR> KStream<K, VR> doJoin(final KStream<K, VO> other,
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                            final JoinWindows windows,
-                                           final Joined<K, V, VO> joined,
+                                           final StreamJoined<K, V, VO> streamJoined,
                                            final KStreamImplJoin join) {
         Objects.requireNonNull(other, "other KStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(joined, "joined can't be null");
+        Objects.requireNonNull(streamJoined, "streamJoined can't be null");
 
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, VO> joinOther = (KStreamImpl<K, VO>) other;
 
-        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
-        final NamedInternal name = new NamedInternal(joinedInternal.name());
+        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined);
+        final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
-            joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, joined.keySerde(), joined.valueSerde());
+            joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
         }
 
         if (joinOther.repartitionRequired) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
-            joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, joined.keySerde(), joined.otherValueSerde());
+            joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -776,8 +803,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joinOther,
             joiner,
             windows,
-            joined
-        );
+            streamJoined);
     }
 
     /**
@@ -843,19 +869,31 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> other,
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final JoinWindows windows,
                                             final Joined<K, V, VO> joined) {
-        Objects.requireNonNull(joined, "joined can't be null");
-        return doJoin(
-            other,
-            joiner,
-            windows,
-            joined,
-            new KStreamImplJoin(true, false)
-        );
+        Objects.requireNonNull(joined, "Joined can't be null");
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final StreamJoined<K, V, VO> streamJoined =
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
 
+        return leftJoin(other, joiner, windows, streamJoined);
+
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> other,
+                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                            final JoinWindows windows,
+                                            final StreamJoined<K, V, VO> streamJoined) {
+        return doJoin(other,
+                     joiner,
+                     windows,
+                     streamJoined,
+                     new KStreamImplJoin(builder, true, false)
+        );
     }
 
     @Override
@@ -1068,125 +1106,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionRequired,
             streamsGraphNode,
             builder);
-    }
-
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
-                                                                                 final JoinWindows windows,
-                                                                                 final Serde<K> keySerde,
-                                                                                 final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                joinName + "-store",
-                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
-                Duration.ofMillis(windows.size()),
-                true
-            ),
-            keySerde,
-            valueSerde
-        );
-    }
-
-    private class KStreamImplJoin {
-
-        private final boolean leftOuter;
-        private final boolean rightOuter;
-
-
-        KStreamImplJoin(final boolean leftOuter,
-                        final boolean rightOuter) {
-            this.leftOuter = leftOuter;
-            this.rightOuter = rightOuter;
-        }
-
-        public <K1, R, V1, V2> KStream<K1, R> join(final KStream<K1, V1> lhs,
-                                                   final KStream<K1, V2> other,
-                                                   final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
-                                                   final JoinWindows windows,
-                                                   final Joined<K1, V1, V2> joined) {
-
-            final JoinedInternal<K1, V1, V2>  joinedInternal = new JoinedInternal<>(joined);
-            final NamedInternal renamed = new NamedInternal(joinedInternal.name());
-
-            final String thisWindowStreamName =  renamed.suffixWithOrElseGet(
-                    "-this-windowed", builder, WINDOWED_NAME);
-            final String otherWindowStreamName = renamed.suffixWithOrElseGet(
-                    "-other-windowed", builder, WINDOWED_NAME);
-
-            final String joinThisName = rightOuter ?
-                    renamed.suffixWithOrElseGet("-outer-this-join", builder, OUTERTHIS_NAME)
-                    : renamed.suffixWithOrElseGet("-this-join", builder, JOINTHIS_NAME);
-            final String joinOtherName = leftOuter ?
-                    renamed.suffixWithOrElseGet("-outer-other-join", builder, OUTEROTHER_NAME)
-                    : renamed.suffixWithOrElseGet("-other-join", builder, JOINOTHER_NAME);
-            final String joinMergeName = renamed.suffixWithOrElseGet(
-                    "-merge", builder, MERGE_NAME);
-            final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
-            final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
-
-
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
-                joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
-            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
-                joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
-
-            final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
-
-            final ProcessorParameters<K1, V1> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamName);
-            final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
-            builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
-
-            final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
-
-            final ProcessorParameters<K1, V2> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamName);
-            final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
-            builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
-
-            final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
-                otherWindowStore.name(),
-                windows.beforeMs,
-                windows.afterMs,
-                joiner,
-                leftOuter
-            );
-
-            final KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(
-                thisWindowStore.name(),
-                windows.afterMs,
-                windows.beforeMs,
-                reverseJoiner(joiner),
-                rightOuter
-            );
-
-            final KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
-
-            final StreamStreamJoinNode.StreamStreamJoinNodeBuilder<K1, V1, V2, R> joinBuilder = StreamStreamJoinNode.streamStreamJoinNodeBuilder();
-
-            final ProcessorParameters<K1, V1> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
-            final ProcessorParameters<K1, V2> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
-            final ProcessorParameters<K1, R> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
-
-            joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
-                       .withJoinThisProcessorParameters(joinThisProcessorParams)
-                       .withJoinOtherProcessorParameters(joinOtherProcessorParams)
-                       .withThisWindowStoreBuilder(thisWindowStore)
-                       .withOtherWindowStoreBuilder(otherWindowStore)
-                       .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
-                       .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
-                       .withValueJoiner(joiner)
-                       .withNodeName(joinMergeName);
-
-            final StreamsGraphNode joinGraphNode = joinBuilder.build();
-
-            builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
-
-            final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).sourceNodes);
-            allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
-
-            // do not have serde for joined result;
-            // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
-            return new KStreamImpl<>(joinMergeName, joined.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
-        }
     }
 
 }

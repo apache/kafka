@@ -41,15 +41,16 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.UpdateMetadataRequest.{Broker, EndPoint}
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import EasyMock._
-import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData, TxnOffsetCommitRequestData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, SyncGroupRequestData, TxnOffsetCommitRequestData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
@@ -393,6 +394,68 @@ class KafkaApisTest {
     testListOffsetFailedGetLeaderReplica(Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
+  @Test
+  def testOffsetDeleteWithInvalidPartition(): Unit = {
+    val group = "groupId"
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 1)
+
+    def checkInvalidPartition(invalidPartitionId: Int): Unit = {
+      EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+      val topics = new OffsetDeleteRequestTopicCollection()
+      topics.add(new OffsetDeleteRequestTopic()
+        .setName(topic)
+        .setPartitions(Collections.singletonList(
+          new OffsetDeleteRequestPartition().setPartitionIndex(invalidPartitionId))))
+      val (offsetDeleteRequest, request) = buildRequest(new OffsetDeleteRequest.Builder(
+        new OffsetDeleteRequestData()
+          .setGroupId(group)
+          .setTopics(topics)
+      ))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
+        .andReturn((Errors.NONE, Map.empty))
+      EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+      createKafkaApis().handleOffsetDeleteRequest(request)
+
+      val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+        .asInstanceOf[OffsetDeleteResponse]
+
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode()))
+    }
+
+    checkInvalidPartition(-1)
+    checkInvalidPartition(1) // topic has only one partition
+  }
+
+  @Test
+  def testOffsetDeleteWithInvalidGroup(): Unit = {
+    val group = "groupId"
+
+    EasyMock.reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    val (offsetDeleteRequest, request) = buildRequest(new OffsetDeleteRequest.Builder(
+      new OffsetDeleteRequestData()
+        .setGroupId(group)
+    ))
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(groupCoordinator.handleDeleteOffsets(EasyMock.eq(group), EasyMock.eq(Seq.empty)))
+      .andReturn((Errors.GROUP_ID_NOT_FOUND, Map.empty))
+    EasyMock.replay(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+
+    createKafkaApis().handleOffsetDeleteRequest(request)
+
+    val response = readResponse(ApiKeys.OFFSET_DELETE, offsetDeleteRequest, capturedResponse)
+      .asInstanceOf[OffsetDeleteResponse]
+
+    assertEquals(Errors.GROUP_ID_NOT_FOUND, Errors.forCode(response.data.errorCode()))
+  }
+
   private def testListOffsetFailedGetLeaderReplica(error: Errors): Unit = {
     val tp = new TopicPartition("foo", 0)
     val isolationLevel = IsolationLevel.READ_UNCOMMITTED
@@ -713,14 +776,34 @@ class KafkaApisTest {
   private def updateMetadataCacheWithInconsistentListeners(): (ListenerName, ListenerName) = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val anotherListener = new ListenerName("LISTENER2")
-    val brokers = Set(
-      new Broker(0, Seq(new EndPoint("broker0", 9092, SecurityProtocol.PLAINTEXT, plaintextListener),
-        new EndPoint("broker0", 9093, SecurityProtocol.PLAINTEXT, anotherListener)).asJava, "rack"),
-      new Broker(1, Seq(new EndPoint("broker1", 9092, SecurityProtocol.PLAINTEXT, plaintextListener)).asJava,
-        "rack")
+    val brokers = Seq(
+      new UpdateMetadataBroker()
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value),
+          new UpdateMetadataEndpoint()
+            .setHost("broker0")
+            .setPort(9093)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(anotherListener.value)
+        ).asJava),
+      new UpdateMetadataBroker()
+        .setId(1)
+        .setRack("rack")
+        .setEndpoints(Seq(
+          new UpdateMetadataEndpoint()
+            .setHost("broker1")
+            .setPort(9092)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+            .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState].asJava, brokers.asJava).build()
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
@@ -796,7 +879,7 @@ class KafkaApisTest {
     send.writeTo(channel)
     channel.close()
     channel.buffer.getInt() // read the size
-    ResponseHeader.parse(channel.buffer)
+    ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version()))
     val struct = api.responseSchema(request.version).read(channel.buffer)
     AbstractResponse.parseResponse(api, struct, request.version)
   }
@@ -814,12 +897,29 @@ class KafkaApisTest {
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int): Unit = {
     val replicas = List(0.asInstanceOf[Integer]).asJava
-    val partitionState = new UpdateMetadataRequest.PartitionState(1, 0, 1, replicas, 0, replicas, Collections.emptyList())
+
+    def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
+      .setTopicName(topic)
+      .setPartitionIndex(partition)
+      .setControllerEpoch(1)
+      .setLeader(0)
+      .setLeaderEpoch(1)
+      .setReplicas(replicas)
+      .setZkVersion(0)
+      .setReplicas(replicas)
+
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val broker = new Broker(0, Seq(new EndPoint("broker0", 9092, SecurityProtocol.PLAINTEXT, plaintextListener)).asJava, "rack")
-    val partitions = (0 until numPartitions).map(new TopicPartition(topic, _) -> partitionState).toMap
+    val broker = new UpdateMetadataBroker()
+      .setId(0)
+      .setRack("rack")
+      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setListener(plaintextListener.value)).asJava)
+    val partitionStates = (0 until numPartitions).map(createPartitionState)
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, partitions.asJava, Set(broker).asJava).build()
+      0, 0, partitionStates.asJava, Seq(broker).asJava).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
 }

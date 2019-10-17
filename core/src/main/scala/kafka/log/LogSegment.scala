@@ -26,6 +26,7 @@ import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
+import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
@@ -367,9 +368,9 @@ class LogSegment private[log] (val log: FileRecords,
         }
       }
     } catch {
-      case e: CorruptRecordException =>
-        warn("Found invalid messages in log segment %s at byte offset %d: %s."
-          .format(log.file.getAbsolutePath, validBytes, e.getMessage))
+      case e@ (_: CorruptRecordException | _: InvalidRecordException) =>
+        warn("Found invalid messages in log segment %s at byte offset %d: %s. %s"
+          .format(log.file.getAbsolutePath, validBytes, e.getMessage, e.getCause))
     }
     val truncated = log.sizeInBytes - validBytes
     if (truncated > 0)
@@ -409,7 +410,11 @@ class LogSegment private[log] (val log: FileRecords,
   def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult =
     txnIndex.collectAbortedTxns(fetchOffset, upperBoundOffset)
 
-  override def toString = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
+  override def toString: String = "LogSegment(baseOffset=" + baseOffset +
+    ", size=" + size +
+    ", lastModifiedTime=" + lastModified +
+    ", largestTime=" + largestTimestamp +
+    ")"
 
   /**
    * Truncate off all index and log entries with offsets >= the given offset.

@@ -78,6 +78,7 @@ public class JmxReporter implements MetricsReporter {
     public boolean containsMbean(String mbeanName) {
         return mbeans.containsKey(mbeanName);
     }
+
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {

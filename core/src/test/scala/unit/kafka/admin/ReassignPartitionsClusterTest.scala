@@ -684,6 +684,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(2, 1), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
     assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
     assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(sameMoveTp))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 3)))
     assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
 

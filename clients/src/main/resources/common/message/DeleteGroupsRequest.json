@@ -18,7 +18,10 @@
   "type": "request",
   "name": "DeleteGroupsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  //
+  // Version 2 is the first flexible version.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The group names to delete." }

@@ -25,6 +25,7 @@ import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
+import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
@@ -38,7 +39,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{mutable, Map, Set}
 import scala.util.Random
 import org.scalatest.Assertions.assertThrows
 
@@ -575,7 +576,7 @@ class AbstractFetcherThreadTest {
 
     val fetcher = new MockFetcherThread {
       var fetchedOnce = false
-      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
+      override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
         val fetchedData = super.fetchFromLeader(fetchRequest)
         if (!fetchedOnce) {
           val records = fetchedData.head._2.records.asInstanceOf[MemoryRecords]
@@ -901,7 +902,7 @@ class AbstractFetcherThreadTest {
       state.highWatermark = offset
     }
 
-    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
+    override def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
       val fetchData = mutable.Map.empty[TopicPartition, FetchRequest.PartitionData]
       partitionMap.foreach { case (partition, state) =>
         if (state.isReadyForFetch) {
@@ -911,13 +912,15 @@ class AbstractFetcherThreadTest {
         }
       }
       val fetchRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 1, fetchData.asJava)
-      ResultWithPartitions(Some(fetchRequest), Set.empty)
+      ResultWithPartitions(Some(ReplicaFetch(fetchData.asJava, fetchRequest)), Set.empty)
     }
 
     override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
       val state = replicaPartitionState(topicPartition)
       state.log.lastOption.map(_.partitionLeaderEpoch).orElse(Some(EpochEndOffset.UNDEFINED_EPOCH))
     }
+
+    override def logStartOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logStartOffset
 
     override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
@@ -973,7 +976,7 @@ class AbstractFetcherThreadTest {
 
     override protected def isOffsetForLeaderEpochSupported: Boolean = true
 
-    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
+    override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>
         val leaderState = leaderPartitionState(partition)
         val epochCheckError = checkExpectedLeaderEpoch(fetchData.currentLeaderEpoch, leaderState)
@@ -1000,7 +1003,7 @@ class AbstractFetcherThreadTest {
 
         (partition, new FetchData(error, leaderState.highWatermark, leaderState.highWatermark, leaderState.logStartOffset,
           List.empty.asJava, records))
-      }.toSeq
+      }.toMap
     }
 
     private def checkLeaderEpochAndThrow(expectedEpoch: Int, partitionState: PartitionState): Unit = {

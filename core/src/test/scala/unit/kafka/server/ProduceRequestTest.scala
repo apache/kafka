@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
 import java.util.Properties
 
 import com.yammer.metrics.Metrics
@@ -56,6 +57,7 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
       assertEquals(-1, partitionResponse.logAppendTime)
+      assertTrue(partitionResponse.recordErrors.isEmpty)
       partitionResponse
     }
 
@@ -65,6 +67,39 @@ class ProduceRequestTest extends BaseRequestTest {
     sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
       new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
+  }
+
+  @Test
+  def testProduceWithInvalidTimestamp(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val topicConfig = new Properties
+    topicConfig.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
+    val leader = partitionToLeader(partition)
+
+    def createRecords(magicValue: Byte,
+                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                      codec: CompressionType): MemoryRecords = {
+      val buf = ByteBuffer.allocate(512)
+      val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+      builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
+      builder.appendWithOffset(1, timestamp, null, "there".getBytes)
+      builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
+      builder.build()
+    }
+
+    val records = createRecords(RecordBatch.MAGIC_VALUE_V2, System.currentTimeMillis() - 1001L, CompressionType.GZIP)
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = Map(topicPartition -> records)
+    val produceResponse = sendProduceRequest(leader, ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
+    val (tp, partitionResponse) = produceResponse.responses.asScala.head
+    assertEquals(topicPartition, tp)
+    assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
+    assertEquals(1, partitionResponse.recordErrors.size())
+    assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
+    assertNull(partitionResponse.recordErrors.get(0).message)
+    assertNotNull(partitionResponse.errorMessage)
   }
 
   @Test

@@ -42,6 +42,7 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
+import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
@@ -561,8 +562,8 @@ class KafkaController(val config: KafkaConfig,
    *   . OVRS denotes the overlapping replica set - replicas which are part of the AR of the ongoing reassignment and will be part of the overriding reassignment
    *       (it is essentially (RS - ORS) - URS)
    *
-   *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory
-   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS
+   *   1 Set RS = ORS + OVRS, AR = OVRS, RR = [] in memory
+   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = OVRS, RR = [] to all brokers in ORS + OVRS
    *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS
    *      unless a preferred leader election was triggered while the reassignment was happening)
    *   3 Replicas in URS -> Offline (force those replicas out of ISR)
@@ -882,21 +883,23 @@ class KafkaController(val config: KafkaConfig,
     */
   private def initializePartitionReassignment(): Unit = {
     val partitionsBeingReassigned = zkClient.getPartitionReassignment
-    info(s"DEPRECATED: Partitions being reassigned through ZooKeeper: $partitionsBeingReassigned")
+    if (partitionsBeingReassigned.nonEmpty) {
+      info(s"DEPRECATED: Partitions being reassigned through ZooKeeper: $partitionsBeingReassigned")
 
-    partitionsBeingReassigned.foreach {
-      case (tp, newReplicas) =>
-        val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, tp)
-        val assignment = controllerContext.partitionFullReplicaAssignment(tp)
-        val ongoingReassignmentOption = if (assignment.isBeingReassigned)
-          Some(assignment)
-        else
-          None
+      partitionsBeingReassigned.foreach {
+        case (tp, newReplicas) =>
+          val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, tp)
+          val assignment = controllerContext.partitionFullReplicaAssignment(tp)
+          val ongoingReassignmentOption = if (assignment.isBeingReassigned)
+            Some(assignment)
+          else
+            None
 
-        controllerContext.partitionsBeingReassigned += (
-          tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
-            persistedInZk = true,
-            ongoingReassignmentOpt = ongoingReassignmentOption))
+          controllerContext.partitionsBeingReassigned += (
+            tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
+              persistedInZk = true,
+              ongoingReassignmentOpt = ongoingReassignmentOption))
+      }
     }
   }
 
@@ -1312,12 +1315,17 @@ class KafkaController(val config: KafkaConfig,
       return
     }
 
-    val offlineReplicas = leaderAndIsrResponse.responses.asScala.collect {
-      case (tp, error) if error == Errors.KAFKA_STORAGE_ERROR => tp
+    val offlineReplicas = new ArrayBuffer[TopicPartition]()
+    val onlineReplicas = new ArrayBuffer[TopicPartition]()
+
+    leaderAndIsrResponse.partitions.asScala.foreach { partition =>
+      val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
+      if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
+        offlineReplicas += tp
+      else if (partition.errorCode == Errors.NONE.code)
+        onlineReplicas += tp
     }
-    val onlineReplicas = leaderAndIsrResponse.responses.asScala.collect {
-      case (tp, error) if error == Errors.NONE => tp
-    }
+
     val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicPartition])
     val currentOfflineReplicas = previousOfflineReplicas -- onlineReplicas ++ offlineReplicas
     controllerContext.replicasOnOfflineDirs.put(brokerId, currentOfflineReplicas)
@@ -1813,10 +1821,7 @@ class KafkaController(val config: KafkaConfig,
 
       partitionsToList.foreach { tp =>
         val assignment = controllerContext.partitionFullReplicaAssignment(tp)
-        if (assignment.replicas.isEmpty) {
-          callback(Right(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
-          return
-        } else if (assignment.isBeingReassigned) {
+        if (assignment.isBeingReassigned) {
           results += tp -> assignment
         }
       }
