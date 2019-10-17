@@ -146,6 +146,12 @@ public class NetworkReceive implements Receive {
         return this.buffer;
     }
 
+    public int bytesRead() {
+        if (buffer == null)
+            return size.position();
+        return payload().position() + size.position();
+    }
+
     /**
      * Returns the total size of the receive including payload and size buffer
      * for use in metrics. This is consistent with {@link NetworkSend#size()}

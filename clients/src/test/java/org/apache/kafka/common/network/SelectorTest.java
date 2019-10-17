@@ -48,18 +48,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -260,6 +260,46 @@ public class SelectorTest {
         blockingConnect(node);
         String big = TestUtils.randomString(10 * BUFFER_SIZE);
         assertEquals(big, blockingRequest(node, big));
+    }
+
+    @Test
+    public void testPartialSendAndReceiveReflectedInMetrics() throws Exception {
+        // We use a large payload to attempt to trigger the partial send and receive logic.
+        int payloadSize = 200 * BUFFER_SIZE;
+        String payload = TestUtils.randomString(payloadSize);
+        String nodeId = "0";
+        blockingConnect(nodeId);
+        NetworkSend send = createSend(nodeId, payload);
+
+        selector.send(send);
+        KafkaChannel channel = selector.channel(nodeId);
+
+        KafkaMetric outgoingByteTotal = selector.sensors().bytesSent.findByName("outgoing-byte-total");
+        assertNotNull(outgoingByteTotal);
+
+        KafkaMetric incomingByteTotal = selector.sensors().bytesReceived.findByName("incoming-byte-total");
+        assertNotNull(incomingByteTotal);
+
+        TestUtils.waitForCondition(() -> {
+            long bytesSent = send.size() - send.remaining();
+            assertEquals(bytesSent, ((Double) outgoingByteTotal.metricValue()).longValue());
+
+            NetworkReceive currentReceive = channel.currentReceive();
+            if (currentReceive != null) {
+                assertEquals(currentReceive.bytesRead(), ((Double) incomingByteTotal.metricValue()).intValue());
+            }
+
+            selector.poll(50);
+            return !selector.completedReceives().isEmpty();
+        }, "Failed to receive expected response");
+
+        KafkaMetric requestTotal = selector.sensors().requestsSent.findByName("request-total");
+        assertNotNull(requestTotal);
+        assertEquals(1, ((Double) requestTotal.metricValue()).intValue());
+
+        KafkaMetric responseTotal = selector.sensors().responsesReceived.findByName("response-total");
+        assertNotNull(responseTotal);
+        assertEquals(1, ((Double) responseTotal.metricValue()).intValue());
     }
 
     @Test
@@ -767,8 +807,8 @@ public class SelectorTest {
             selector.poll(10000L);
     }
 
-    protected NetworkSend createSend(String node, String s) {
-        return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
+    protected NetworkSend createSend(String node, String payload) {
+        return new NetworkSend(node, ByteBuffer.wrap(payload.getBytes()));
     }
 
     protected String asString(NetworkReceive receive) {
