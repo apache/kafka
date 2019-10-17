@@ -17,9 +17,9 @@
 package kafka.cluster
 
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.{Optional, Properties}
+import java.util.concurrent.{CountDownLatch, Executors, TimeoutException, TimeUnit}
+import java.util.concurrent.atomic.AtomicBoolean
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Metric
@@ -33,15 +33,16 @@ import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, ListOffsetRequest}
-import org.apache.kafka.common.utils.SystemTime
-import org.junit.Assert._
 import org.junit.Test
-import org.mockito.Mockito.{doAnswer, doNothing, mock, spy, times, verify, when}
+import org.junit.Assert._
+import org.mockito.Mockito._
+import org.scalatest.Assertions.assertThrows
+import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-import org.scalatest.Assertions.assertThrows
 import unit.kafka.cluster.AbstractPartitionTest
 
 import scala.collection.JavaConverters._
