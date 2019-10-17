@@ -143,7 +143,7 @@ public class AssignmentInfo {
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                        + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                        + "; latest commonly supported version: " + commonlySupportedVersion);
             }
 
             out.flush();
@@ -206,14 +206,14 @@ public class AssignmentInfo {
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
         out.writeInt(3);
-        out.writeInt(LATEST_SUPPORTED_VERSION);
+        out.writeInt(commonlySupportedVersion);
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
         out.writeInt(4);
-        out.writeInt(LATEST_SUPPORTED_VERSION);
+        out.writeInt(commonlySupportedVersion);
         encodeActiveAndStandbyTaskAssignment(out);
         encodePartitionsByHost(out);
         out.writeInt(errCode);
@@ -230,7 +230,7 @@ public class AssignmentInfo {
             final AssignmentInfo assignmentInfo;
 
             final int usedVersion = in.readInt();
-            final int latestSupportedVersion;
+            final int commonlySupportedVersion;
             switch (usedVersion) {
                 case 1:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);
@@ -241,13 +241,13 @@ public class AssignmentInfo {
                     decodeVersionTwoData(assignmentInfo, in);
                     break;
                 case 3:
-                    latestSupportedVersion = in.readInt();
-                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 case 4:
-                    latestSupportedVersion = in.readInt();
-                    assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeVersionFourData(assignmentInfo, in);
                     break;
                 default:
