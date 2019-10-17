@@ -1,0 +1,109 @@
+#!/bin/bash
+#
+# Copyright 2015 Confluent Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+MYSELF=`basename $0`
+
+###
+### Configuration
+###
+CONFLUENT_SUPPORT_METRICS_TOPIC="__confluent.support.metrics"
+TIMESTAMP=`date -u +"%Y%m%d-%H%M%S"`
+BUNDLE_FILE="support-metrics-${CONFLUENT_SUPPORT_METRICS_TOPIC}.${TIMESTAMP}.zip"
+RUNTIME_SEC=10
+
+###
+### Main
+###
+
+print_help() {
+  local script_name="$1"
+  echo "Usage: $script_name --zookeeper <server:port> [--topic <Kafka support topic>] [--file <bundle output file>] [--runtime <time in seconds>]"
+  echo
+  echo "Creates a so-called 'support metrics bundle' file in the current directory."
+  echo "This support metrics bundle contains metrics retrieved from the target Kafka cluster."
+  echo
+  echo "Parameters:"
+  echo "--bootstrap-server  Connection string for a Kafka broker that is a member"
+  echo "                    of the cluster from which metrics support will be retrieved."
+  echo "                    Example: 'localhost:9092'"
+  echo "--topic             The Kafka topic from which the support metrics will be retrieved."
+  echo "                    Default: '$CONFLUENT_SUPPORT_METRICS_TOPIC'"
+  echo "--file              Output filename of the support metrics bundle."
+  echo "                    Default: '$BUNDLE_FILE'"
+  echo "                    Note that, when using the default value, the timestamp is dynamically"
+  echo "                    generated at each run of this tool."
+  echo "--runtime           The time in seconds this tool will run for.  For a large cluster"
+  echo "                    you may need to increase this setting because the tool might need"
+  echo "                    more time to collect all the metrics."
+  echo "                    Default: $RUNTIME_SEC"
+  echo "--help              Print this help message."
+  echo
+  echo "Important notes for running this tool:"
+  echo "* Kafka must be up and running."
+  echo "* Kafka must be accessible from the machine on which this tool is executed."
+  echo
+  echo "Copyright 2015 Confluent Inc. <http://confluent.io/>"
+}
+
+if [ $# -eq 0 ]; then
+  print_help $MYSELF
+  exit 1
+fi
+
+while [ $# -gt 0 ]; do
+  COMMAND=$1
+  case $COMMAND in
+    --bootstrap-server)
+      BOOTSTRAP_SERVER=$2
+      shift 2
+      ;;
+    -t|--topic)
+      CONFLUENT_SUPPORT_METRICS_TOPIC=$2
+      shift 2
+      ;;
+    -f|--file)
+      BUNDLE_FILE=$2
+      shift 2
+      ;;
+    -r|--runtime)
+      RUNTIME_SEC=$2
+      shift 2
+      ;;
+    -h|--help)
+      shift 1
+      print_help $MYSELF
+      exit 1
+      ;;
+    *)
+      echo "*** ERROR: Unknown parameter '$COMMAND'"
+      echo
+      print_help $MYSELF
+      exit 2
+      break
+      ;;
+  esac
+done
+
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+  export KAFKA_HEAP_OPTS="-Xmx512M"
+fi
+
+exec $(dirname $0)/kafka-run-class io.confluent.support.metrics.tools.KafkaMetricsToFile $BOOTSTRAP_SERVER $CONFLUENT_SUPPORT_METRICS_TOPIC $BUNDLE_FILE $RUNTIME_SEC
+if [ $? -eq 0 ]; then
+  echo "Support metrics bundle created at $BUNDLE_FILE.  You may attach this file to your support tickets."
+else
+  echo "ERROR: Could not create support metrics bundle."
+fi
