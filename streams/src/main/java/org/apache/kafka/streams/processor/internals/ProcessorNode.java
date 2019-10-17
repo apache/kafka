@@ -114,7 +114,23 @@ public class ProcessorNode<K, V> {
 
     public void process(final K key, final V value) {
         final long startNs = time.nanoseconds();
-        processor.process(key, value);
+        try {
+            processor.process(key, value);
+        } catch (final ClassCastException e) {
+            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
+                    + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
+                    + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "
+                    + "the deserialized input of type key: %s, and value: %s.%n"
+                    + "Note that although incorrect Serdes are a common cause of error, the cast exception might have "
+                    + "another cause (in user code, for example). For example, if a processor wires in a store, but casts "
+                    + "the generics incorrectly, a class cast exception could be raised during processing, but the "
+                    + "cause would not be wrong Serdes.",
+                    keyClass,
+                    valueClass),
+                e);
+        }
         nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
     }
 
