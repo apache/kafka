@@ -106,6 +106,11 @@
         new overloaded methods.  You can get more details from
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>.
     </p>
+    <p>     
+        As of 2.4.0 Streams now offers a KTable-KTable foreign-key joiner (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-213+Support+non-key+joining+in+KTable">KIP-213</a>). 
+         This joiner allows for records to be joined between two KTables with different keys. 
+         Both INNER and LEFT joins are supported.
+    </p>
 
     <p>
         With the introduction of incremental cooperative rebalancing, Streams no longer requires all tasks be revoked at the beginning of a rebalance. Instead, at the completion of the rebalance only those tasks which are to be migrated to another consumer
