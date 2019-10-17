@@ -161,6 +161,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         public KeyValue keyValue() {
             return keyValue;
         }
+
+        @Override
+        public String toString() {
+            return "CapturedForward{" +
+                "childName='" + childName + '\'' +
+                ", timestamp=" + timestamp +
+                ", keyValue=" + keyValue +
+                '}';
+        }
     }
 
     // constructors ================================================

@@ -217,9 +217,7 @@
               files="SmokeTestDriver.java"/>
 
     <suppress checks="NPathComplexity"
-              files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java"/>
-    <suppress checks="NPathComplexity"
-              files="KStreamKStreamLeftJoinTest.java"/>
+              files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java|KStreamKStreamLeftJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
