@@ -16,36 +16,35 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-        import static org.hamcrest.CoreMatchers.equalTo;
-        import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
-        import java.util.Arrays;
-        import java.util.Properties;
-        import org.apache.kafka.common.serialization.IntegerSerializer;
-        import org.apache.kafka.common.serialization.Serdes;
-        import org.apache.kafka.common.serialization.StringSerializer;
-        import org.apache.kafka.common.utils.Bytes;
-        import org.apache.kafka.streams.KeyValueTimestamp;
-        import org.apache.kafka.streams.StreamsBuilder;
-        import org.apache.kafka.streams.TestInputTopic;
-        import org.apache.kafka.streams.TopologyTestDriver;
-        import org.apache.kafka.streams.kstream.Aggregator;
-        import org.apache.kafka.streams.kstream.Consumed;
-        import org.apache.kafka.streams.kstream.Grouped;
-        import org.apache.kafka.streams.kstream.Initializer;
-        import org.apache.kafka.streams.kstream.CogroupedKStream;
-        import org.apache.kafka.streams.kstream.KGroupedStream;
-        import org.apache.kafka.streams.kstream.KStream;
-        import org.apache.kafka.streams.kstream.KTable;
-        import org.apache.kafka.streams.kstream.Materialized;
-        import org.apache.kafka.streams.kstream.Windows;
-        import org.apache.kafka.streams.state.KeyValueStore;
-        import org.apache.kafka.test.MockAggregator;
-        import org.apache.kafka.test.MockInitializer;
-        import org.apache.kafka.test.MockProcessorSupplier;
-        import org.apache.kafka.test.StreamsTestUtils;
-        import org.junit.Before;
-        import org.junit.Test;
+import java.util.Arrays;
+import java.util.Properties;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
+import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
+import org.junit.Test;
 
 public class CogroupedKStreamImplTest {
 
@@ -58,18 +57,18 @@ public class CogroupedKStreamImplTest {
     private CogroupedKStream<String, String> cogroupedStream;
 
     private final Properties props = StreamsTestUtils
-            .getStreamsConfig(Serdes.String(), Serdes.String());
+        .getStreamsConfig(Serdes.String(), Serdes.String());
 
     private static final Aggregator<String, String, String> STRING_AGGREGATOR = (key, value, aggregate) ->
-            aggregate + value;
+        aggregate + value;
 
     private static final Initializer<String> STRING_INITIALIZER = () -> "";
 
     private static final Aggregator<String, String, Integer> STRSUM_AGGREGATOR = (key, value, aggregate) ->
-            aggregate + Integer.parseInt(value);
+        aggregate + Integer.parseInt(value);
 
     private static final Aggregator<? super String, ? super Integer, Integer> SUM_AGGREGATOR = (key, value, aggregate) ->
-            aggregate + value;
+        aggregate + value;
 
     private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
 
@@ -77,7 +76,7 @@ public class CogroupedKStreamImplTest {
     @Before
     public void setup() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
-                .with(Serdes.String(), Serdes.String()));
+            .with(Serdes.String(), Serdes.String()));
 
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER);
@@ -125,10 +124,10 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>("k1", "A", 0),
-                new KeyValueTimestamp<>("k11", "A", 0),
-                new KeyValueTimestamp<>("k11", "AA", 0),
-                new KeyValueTimestamp<>("k1", "AA", 0)
+            new KeyValueTimestamp<>("k1", "A", 0),
+            new KeyValueTimestamp<>("k11", "A", 0),
+            new KeyValueTimestamp<>("k11", "AA", 0),
+            new KeyValueTimestamp<>("k1", "AA", 0)
         )));
     }
 
@@ -143,8 +142,8 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().process(processorSupplier);
 
@@ -165,16 +164,16 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>("k1", "A", 0),
-                new KeyValueTimestamp<>("k1", "AA", 1),
-                new KeyValueTimestamp<>("k1", "AAA", 10),
-                new KeyValueTimestamp<>("k1", "AAAA", 100),
-                new KeyValueTimestamp<>("k2", "B", 100),
-                new KeyValueTimestamp<>("k2", "BB", 200),
-                new KeyValueTimestamp<>("k2", "BBB", 200),
-                new KeyValueTimestamp<>("k2", "BBBB", 500),
-                new KeyValueTimestamp<>("k2", "BBBBB", 500),
-                new KeyValueTimestamp<>("k2", "BBBBBB", 500)
+            new KeyValueTimestamp<>("k1", "A", 0),
+            new KeyValueTimestamp<>("k1", "AA", 1),
+            new KeyValueTimestamp<>("k1", "AAA", 10),
+            new KeyValueTimestamp<>("k1", "AAAA", 100),
+            new KeyValueTimestamp<>("k2", "B", 100),
+            new KeyValueTimestamp<>("k2", "BB", 200),
+            new KeyValueTimestamp<>("k2", "BBB", 200),
+            new KeyValueTimestamp<>("k2", "BBBB", 500),
+            new KeyValueTimestamp<>("k2", "BBBBB", 500),
+            new KeyValueTimestamp<>("k2", "BBBBBB", 500)
         )));
     }
 
@@ -189,8 +188,8 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().process(processorSupplier);
 
@@ -212,18 +211,18 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>("k1", "A", 0),
-                new KeyValueTimestamp<>("k2", "A", 1),
-                new KeyValueTimestamp<>("k1", "AA", 10),
-                new KeyValueTimestamp<>("k2", "AA", 100),
-                new KeyValueTimestamp<>("k2", "AAB", 100),
-                new KeyValueTimestamp<>("k2", "AABB", 200),
-                new KeyValueTimestamp<>("k1", "AAB", 10),
-                new KeyValueTimestamp<>("k2", "AABBB", 500),
-                new KeyValueTimestamp<>("k1", "AABB", 500),
-                new KeyValueTimestamp<>("k2", "AABBBB", 500),
-                new KeyValueTimestamp<>("k3", "B", 500),
-                new KeyValueTimestamp<>("k2", "AABBBBB", 500)
+            new KeyValueTimestamp<>("k1", "A", 0),
+            new KeyValueTimestamp<>("k2", "A", 1),
+            new KeyValueTimestamp<>("k1", "AA", 10),
+            new KeyValueTimestamp<>("k2", "AA", 100),
+            new KeyValueTimestamp<>("k2", "AAB", 100),
+            new KeyValueTimestamp<>("k2", "AABB", 200),
+            new KeyValueTimestamp<>("k1", "AAB", 10),
+            new KeyValueTimestamp<>("k2", "AABBB", 500),
+            new KeyValueTimestamp<>("k1", "AABB", 500),
+            new KeyValueTimestamp<>("k2", "AABBBB", 500),
+            new KeyValueTimestamp<>("k3", "B", 500),
+            new KeyValueTimestamp<>("k2", "AABBBBB", 500)
         )));
     }
 
@@ -238,8 +237,8 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
-                .cogroup(groupedTwo, STRSUM_AGGREGATOR)
-                .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+            .cogroup(groupedTwo, STRSUM_AGGREGATOR)
+            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
 
         customers.toStream().process(supplier);
 
@@ -261,18 +260,18 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>("k1", 1, 0),
-                new KeyValueTimestamp<>("k2", 1, 1),
-                new KeyValueTimestamp<>("k1", 2, 10),
-                new KeyValueTimestamp<>("k2", 2, 100),
-                new KeyValueTimestamp<>("k2", 4, 100),
-                new KeyValueTimestamp<>("k2", 6, 200),
-                new KeyValueTimestamp<>("k1", 4, 10),
-                new KeyValueTimestamp<>("k2", 8, 500),
-                new KeyValueTimestamp<>("k1", 6, 500),
-                new KeyValueTimestamp<>("k2", 11, 500),
-                new KeyValueTimestamp<>("k3", 2, 500),
-                new KeyValueTimestamp<>("k2", 13, 500)
+            new KeyValueTimestamp<>("k1", 1, 0),
+            new KeyValueTimestamp<>("k2", 1, 1),
+            new KeyValueTimestamp<>("k1", 2, 10),
+            new KeyValueTimestamp<>("k2", 2, 100),
+            new KeyValueTimestamp<>("k2", 4, 100),
+            new KeyValueTimestamp<>("k2", 6, 200),
+            new KeyValueTimestamp<>("k1", 4, 10),
+            new KeyValueTimestamp<>("k2", 8, 500),
+            new KeyValueTimestamp<>("k1", 6, 500),
+            new KeyValueTimestamp<>("k2", 11, 500),
+            new KeyValueTimestamp<>("k3", 2, 500),
+            new KeyValueTimestamp<>("k2", 13, 500)
         )));
     }
 
@@ -288,8 +287,8 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, Integer> groupedTwo = test2.groupByKey();
 
         final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
-                .cogroup(groupedTwo, SUM_AGGREGATOR)
-                .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+            .cogroup(groupedTwo, SUM_AGGREGATOR)
+            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
 
         customers.toStream().process(supplier);
 
@@ -338,8 +337,8 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(MockAggregator.TOSTRING_REMOVER)
-                .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
-                .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
+            .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
+            .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
 
         customers.toStream().process(supplier);
 
@@ -357,14 +356,14 @@ public class CogroupedKStreamImplTest {
         }
 
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>("k1", "0-1", 0),
-                new KeyValueTimestamp<>("k2", "0-1", 1),
-                new KeyValueTimestamp<>("k1", "0-1-1", 10),
-                new KeyValueTimestamp<>("k2", "0-1-1", 100),
-                new KeyValueTimestamp<>("k1", "0-1-1+2", 500L),
-                new KeyValueTimestamp<>("k2", "0-1-1+2", 500L),
-                new KeyValueTimestamp<>("k1", "0-1-1+2+2", 500L),
-                new KeyValueTimestamp<>("k2", "0-1-1+2+2", 500L)
+            new KeyValueTimestamp<>("k1", "0-1", 0),
+            new KeyValueTimestamp<>("k2", "0-1", 1),
+            new KeyValueTimestamp<>("k1", "0-1-1", 10),
+            new KeyValueTimestamp<>("k2", "0-1-1", 100),
+            new KeyValueTimestamp<>("k1", "0-1-1+2", 500L),
+            new KeyValueTimestamp<>("k2", "0-1-1+2", 500L),
+            new KeyValueTimestamp<>("k1", "0-1-1+2+2", 500L),
+            new KeyValueTimestamp<>("k2", "0-1-1+2+2", 500L)
         )));
     }
 }

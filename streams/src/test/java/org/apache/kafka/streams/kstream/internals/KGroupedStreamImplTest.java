@@ -99,8 +99,8 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerWithWindowedReduce() {
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(10)))
-                .reduce(null, Materialized.as("store"));
+            .windowedBy(TimeWindows.of(ofMillis(10)))
+            .reduce(null, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -111,8 +111,8 @@ public class KGroupedStreamImplTest {
     @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameWithWindowedReduce() {
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(10)))
-                .reduce(MockReducer.STRING_ADDER, Materialized.as(INVALID_STORE_NAME));
+            .windowedBy(TimeWindows.of(ofMillis(10)))
+            .reduce(MockReducer.STRING_ADDER, Materialized.as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
@@ -128,23 +128,23 @@ public class KGroupedStreamImplTest {
     @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameOnAggregate() {
         groupedStream.aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.as(INVALID_STORE_NAME));
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() {
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(10)))
-                .aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.as("store"));
+            .windowedBy(TimeWindows.of(ofMillis(10)))
+            .aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnWindowedAggregate() {
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(10)))
-                .aggregate(MockInitializer.STRING_INIT, null, Materialized.as("store"));
+            .windowedBy(TimeWindows.of(ofMillis(10)))
+            .aggregate(MockInitializer.STRING_INIT, null, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -155,8 +155,8 @@ public class KGroupedStreamImplTest {
     @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameOnWindowedAggregate() {
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(10)))
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.as(INVALID_STORE_NAME));
+            .windowedBy(TimeWindows.of(ofMillis(10)))
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.as(INVALID_STORE_NAME));
     }
 
     private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer> supplier) {
@@ -171,30 +171,30 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
-                = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
-                ValueAndTimestamp.make(2, 30L),
-                result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            ValueAndTimestamp.make(2, 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
         assertEquals(
-                ValueAndTimestamp.make(1, 15L),
-                result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            ValueAndTimestamp.make(1, 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
         assertEquals(
-                ValueAndTimestamp.make(3, 100L),
-                result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            ValueAndTimestamp.make(3, 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldAggregateSessionWindows() {
         final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .aggregate(
-                        () -> 0,
-                        (aggKey, value, aggregate) -> aggregate + 1,
-                        (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                        Materialized
-                                .<String, Integer, SessionStore<Bytes, byte[]>>as("session-store").
-                                withValueSerde(Serdes.Integer()));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .aggregate(
+                () -> 0,
+                (aggKey, value, aggregate) -> aggregate + 1,
+                (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                Materialized
+                    .<String, Integer, SessionStore<Bytes, byte[]>>as("session-store").
+                    withValueSerde(Serdes.Integer()));
         table.toStream().process(supplier);
 
         doAggregateSessionWindows(supplier);
@@ -205,12 +205,12 @@ public class KGroupedStreamImplTest {
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
         final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .aggregate(
-                        () -> 0,
-                        (aggKey, value, aggregate) -> aggregate + 1,
-                        (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
-                        Materialized.with(null, Serdes.Integer()));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .aggregate(
+                () -> 0,
+                (aggKey, value, aggregate) -> aggregate + 1,
+                (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                Materialized.with(null, Serdes.Integer()));
         table.toStream().process(supplier);
 
         doAggregateSessionWindows(supplier);
@@ -229,24 +229,24 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
-                ValueAndTimestamp.make(2L, 30L),
-                result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            ValueAndTimestamp.make(2L, 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
         assertEquals(
-                ValueAndTimestamp.make(1L, 15L),
-                result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            ValueAndTimestamp.make(1L, 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
         assertEquals(
-                ValueAndTimestamp.make(3L, 100L),
-                result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            ValueAndTimestamp.make(3L, 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldCountSessionWindows() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .count(Materialized.as("session-store"));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .count(Materialized.as("session-store"));
         table.toStream().process(supplier);
         doCountSessionWindows(supplier);
         assertEquals(table.queryableStoreName(), "session-store");
@@ -256,8 +256,8 @@ public class KGroupedStreamImplTest {
     public void shouldCountSessionWindowsWithInternalStoreName() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .count();
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .count();
         table.toStream().process(supplier);
         doCountSessionWindows(supplier);
         assertNull(table.queryableStoreName());
@@ -275,24 +275,24 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "C", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<String>> result =
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
-                ValueAndTimestamp.make("A:B", 30L),
-                result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            ValueAndTimestamp.make("A:B", 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
         assertEquals(
-                ValueAndTimestamp.make("Z", 15L),
-                result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            ValueAndTimestamp.make("Z", 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
         assertEquals(
-                ValueAndTimestamp.make("A:B:C", 100L),
-                result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            ValueAndTimestamp.make("A:B:C", 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldReduceSessionWindows() {
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as("session-store"));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as("session-store"));
         table.toStream().process(supplier);
         doReduceSessionWindows(supplier);
         assertEquals(table.queryableStoreName(), "session-store");
@@ -302,8 +302,8 @@ public class KGroupedStreamImplTest {
     public void shouldReduceSessionWindowsWithInternalStoreName() {
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .reduce((value1, value2) -> value1 + ":" + value2);
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .reduce((value1, value2) -> value1 + ":" + value2);
         table.toStream().process(supplier);
         doReduceSessionWindows(supplier);
         assertNull(table.queryableStoreName());
@@ -312,8 +312,8 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullReducerWhenReducingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .reduce(null, Materialized.as("store"));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .reduce(null, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -324,50 +324,50 @@ public class KGroupedStreamImplTest {
     @Test(expected = TopologyException.class)
     public void shouldNotAcceptInvalidStoreNameWhenReducingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .reduce(MockReducer.STRING_ADDER, Materialized.as(INVALID_STORE_NAME));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .reduce(MockReducer.STRING_ADDER, Materialized.as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .reduce(
-                        null,
-                        Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .reduce(
+                null,
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .aggregate(
-                        null,
-                        MockAggregator.TOSTRING_ADDER,
-                        (aggKey, aggOne, aggTwo) -> null,
-                        Materialized.as("storeName"));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .aggregate(
+                null,
+                MockAggregator.TOSTRING_ADDER,
+                (aggKey, aggOne, aggTwo) -> null,
+                Materialized.as("storeName"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullAggregatorWhenAggregatingSessionWindows() {
         groupedStream.
-                windowedBy(SessionWindows.with(ofMillis(30)))
-                .aggregate(
-                        MockInitializer.STRING_INIT,
-                        null,
-                        (aggKey, aggOne, aggTwo) -> null,
-                        Materialized.as("storeName"));
+            windowedBy(SessionWindows.with(ofMillis(30)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                null,
+                (aggKey, aggOne, aggTwo) -> null,
+                Materialized.as("storeName"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(30)))
-                .aggregate(
-                        MockInitializer.STRING_INIT,
-                        MockAggregator.TOSTRING_ADDER,
-                        null,
-                        Materialized.as("storeName"));
+            .windowedBy(SessionWindows.with(ofMillis(30)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                null,
+                Materialized.as("storeName"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -378,23 +378,23 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAcceptNullStoreNameWhenAggregatingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(10)))
-                .aggregate(
-                        MockInitializer.STRING_INIT,
-                        MockAggregator.TOSTRING_ADDER,
-                        (aggKey, aggOne, aggTwo) -> null,
-                        Materialized.with(Serdes.String(), Serdes.String()));
+            .windowedBy(SessionWindows.with(ofMillis(10)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                (aggKey, aggOne, aggTwo) -> null,
+                Materialized.with(Serdes.String(), Serdes.String()));
     }
 
     @Test(expected = TopologyException.class)
     public void shouldNotAcceptInvalidStoreNameWhenAggregatingSessionWindows() {
         groupedStream
-                .windowedBy(SessionWindows.with(ofMillis(10)))
-                .aggregate(
-                        MockInitializer.STRING_INIT,
-                        MockAggregator.TOSTRING_ADDER,
-                        (aggKey, aggOne, aggTwo) -> null,
-                        Materialized.as(INVALID_STORE_NAME));
+            .windowedBy(SessionWindows.with(ofMillis(10)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                (aggKey, aggOne, aggTwo) -> null,
+                Materialized.as(INVALID_STORE_NAME));
     }
 
     @SuppressWarnings("unchecked")
@@ -479,10 +479,10 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceAndMaterializeResults() {
         groupedStream.reduce(
-                MockReducer.STRING_ADDER,
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.String()));
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -516,10 +516,10 @@ public class KGroupedStreamImplTest {
 
     private void shouldLogAndMeasureSkipsInReduce(final String builtInMetricsVersion) {
         groupedStream.reduce(
-                MockReducer.STRING_ADDER,
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.String())
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
         );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
@@ -550,11 +550,11 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateAndMaterializeResults() {
         groupedStream.aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.String()));
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
@@ -580,22 +580,22 @@ public class KGroupedStreamImplTest {
     public void shouldAggregateWithDefaultSerdes() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
         groupedStream
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER)
-                .toStream()
-                .process(supplier);
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER)
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
             assertThat(
-                    supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("1"),
-                    equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("1"),
+                equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
             assertThat(
-                    supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("2"),
-                    equalTo(ValueAndTimestamp.make("0+B", 1L)));
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("2"),
+                equalTo(ValueAndTimestamp.make("0+B", 1L)));
             assertThat(
-                    supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("3"),
-                    equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("3"),
+                equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
         }
     }
 
@@ -629,18 +629,18 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("3", "B", 100L);
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
-                new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
-                new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
-                new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
-                new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
-                new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
-                new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
-                new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
-                new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
-                new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
-                new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
-                new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
         )));
     }
 
@@ -648,10 +648,10 @@ public class KGroupedStreamImplTest {
     public void shouldCountWindowed() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(500L)))
-                .count(Materialized.as("aggregate-by-key-windowed"))
-                .toStream()
-                .process(supplier);
+            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .count(Materialized.as("aggregate-by-key-windowed"))
+            .toStream()
+            .process(supplier);
 
         doCountWindowed(supplier);
     }
@@ -661,10 +661,10 @@ public class KGroupedStreamImplTest {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final List<KeyValue<Windowed<String>, KeyValue<Long, Long>>> results = new ArrayList<>();
         groupedStream
-                .windowedBy(TimeWindows.of(ofMillis(500L)))
-                .count()
-                .toStream()
-                .process(supplier);
+            .windowedBy(TimeWindows.of(ofMillis(500L)))
+            .count()
+            .toStream()
+            .process(supplier);
 
         doCountWindowed(supplier);
     }
