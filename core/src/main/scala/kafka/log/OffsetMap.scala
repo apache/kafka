@@ -40,6 +40,7 @@ trait OffsetMap {
 object Constants {
   val OffsetStrategy: String = Defaults.CompactionStrategy
   val TimestampStrategy: String = "timestamp"
+  val HeaderStrategyPrefix: String = "header."
 }
 
 /**
@@ -79,15 +80,12 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
    * and, if applicable, another 8 bytes for non-offset compact strategy (set in the init method).
    */
-  var bytesPerEntry = hashSize + 8
+  var bytesPerEntry = 0
   
   /**
    * The maximum number of entries this map can contain
    */
-  var slots: Int = memory / bytesPerEntry
-
-  /* compact strategy */
-  private var strategy: String = ""
+  var slots: Int = 0
 
   /* compact using offset strategy */
   private var isOffsetStrategy: Boolean = false
@@ -95,16 +93,32 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /* compact using timestamp strategy */
   private var isTimestampStrategy: Boolean = false
 
-  override def init(strategy: String) {
-    this.strategy = strategy
-    this.isOffsetStrategy = strategy == null || Constants.OffsetStrategy.equalsIgnoreCase(strategy)
-    this.isTimestampStrategy = !isOffsetStrategy && Constants.TimestampStrategy.equalsIgnoreCase(strategy)
+  /* header strategy key to look for */
+  private var headerStrategyKey: String = ""
 
-    if (!isOffsetStrategy) {
-      // another 8 bytes for non-offset compact strategy.
-      this.bytesPerEntry = hashSize + 8 + 8
-      this.slots = memory / bytesPerEntry
+  override def init(strategy: String = Constants.OffsetStrategy) {
+    if (strategy != null && Constants.TimestampStrategy.equalsIgnoreCase(strategy)) {
+      this.isOffsetStrategy = false
+      // timestamp strategy
+      this.isTimestampStrategy = true
+      this.headerStrategyKey = ""
+    } else if (strategy != null && strategy.startsWith(Constants.HeaderStrategyPrefix)) {
+      this.isOffsetStrategy = false
+      this.isTimestampStrategy = false
+      // header strategy and extract the header key for look up in the record header
+      this.headerStrategyKey = strategy.substring(Constants.HeaderStrategyPrefix.length()).trim()
+    } else {
+      // make it as offset strategy for anything else
+      //   - offset strategy set explictly 
+      //   - missing topic level strategy config
+      //   - doesn't fall under timestamp/header sequence
+      this.isOffsetStrategy = true
+      this.isTimestampStrategy = false
+      this.headerStrategyKey = ""
     }
+
+    this.bytesPerEntry = hashSize + 8 + (if (isOffsetStrategy) 0 else 8)
+    this.slots = memory / bytesPerEntry
   }
   
   /**
@@ -189,7 +203,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     // header value strategy
     record.headers()
       .filter(it => it.value != null && it.value.nonEmpty)
-      .find(it => strategy.trim.equalsIgnoreCase(it.key.trim))
+      .find(it => headerStrategyKey.equalsIgnoreCase(it.key.trim))
       .map(it => ByteBuffer.wrap(it.value))
       .map(it => ByteUtils.readVarlong(it))
       .getOrElse(-1L)
