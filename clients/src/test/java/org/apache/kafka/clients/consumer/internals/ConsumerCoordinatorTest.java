@@ -2296,7 +2296,7 @@ public class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            client.prepareResponse(joinGroupFollowerResponse(42, memberId, "leader", Errors.NONE));
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
 
             MockTime time = new MockTime(1);
 
@@ -2305,7 +2305,7 @@ public class ConsumerCoordinatorTest {
 
             assertFalse(res);
             assertFalse(client.hasPendingResponses());
-            //SynGroupRequests not responded.
+            //SynGroupRequest not responded.
             assertEquals(1, client.inFlightRequestCount());
             assertEquals(generationId, coordinator.generation().generationId);
             assertEquals(memberId, coordinator.generation().memberId);
