@@ -147,13 +147,13 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Turning off cooperative rebalancing for upgrade from {}.x", upgradeFrom);
+                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-
+        log.info("Cooperative rebalancing enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 
