@@ -423,10 +423,10 @@ public class Worker {
             connectorStatusMetricsGroup.recordTaskAdded(id);
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
-                String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
                 ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
                 savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
+                final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
                 final TaskConfig taskConfig = new TaskConfig(taskProps);
                 final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
                 final Task task = plugins.newTask(taskClass);
