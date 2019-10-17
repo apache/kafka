@@ -24,10 +24,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Optional, Properties}
 
 import kafka.api.Request
-import kafka.cluster.BrokerEndPoint
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import TestUtils.createBroker
+import kafka.utils.TestUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -919,6 +917,96 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true)
     assertFalse(replicaManager.replicaSelectorOpt.isDefined)
+  }
+
+  @Test
+  def testOlderClientFetchFromLeaderOnly(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer, aliveBrokerIds = Seq(0, 1))
+
+    val tp0 = new TopicPartition(topic, 0)
+    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    replicaManager.createPartition(tp0).createLogIfNotExists(0, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    val partition0Replicas = Seq[Integer](0, 1).asJava
+    val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(
+        new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(1)
+          .setLeaderEpoch(0)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+    def doFetch(replicaId: Int, partitionData: FetchRequest.PartitionData, clientMetadataOpt: Option[ClientMetadata]):
+        Option[FetchPartitionData] = {
+      var fetchResult: Option[FetchPartitionData] = None
+      def callback(response: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+        fetchResult = response.headOption.filter(_._1 == tp0).map(_._2)
+      }
+      replicaManager.fetchMessages(
+        timeout = 0L,
+        replicaId = replicaId,
+        fetchMinBytes = 1,
+        fetchMaxBytes = 100,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(tp0 -> partitionData),
+        quota = UnboundedQuota,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        responseCallback = callback,
+        clientMetadata = clientMetadataOpt
+      )
+      fetchResult
+    }
+
+    // Fetch from follower, with non-empty ClientMetadata (FetchRequest v11+)
+    val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
+    var partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(0))
+    var fetchResult = doFetch(Request.OrdinaryConsumerId, partitionData, Some(clientMetadata))
+    assertTrue(fetchResult.isDefined)
+    assertEquals(fetchResult.get.error, Errors.NONE)
+
+    // Fetch from follower, with empty ClientMetadata
+    fetchResult = None
+    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(0))
+    fetchResult = doFetch(Request.OrdinaryConsumerId, partitionData, None)
+    assertTrue(fetchResult.isDefined)
+    assertEquals(fetchResult.get.error, Errors.NOT_LEADER_FOR_PARTITION)
+
+    // Change to a leader, both cases are allowed
+    val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(
+        new LeaderAndIsrPartitionState()
+          .setTopicName(tp0.topic)
+          .setPartitionIndex(tp0.partition)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(1)
+          .setIsr(partition0Replicas)
+          .setZkVersion(0)
+          .setReplicas(partition0Replicas)
+          .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+
+    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(1))
+    fetchResult = doFetch(Request.OrdinaryConsumerId, partitionData, Some(clientMetadata))
+    assertTrue(fetchResult.isDefined)
+    assertEquals(fetchResult.get.error, Errors.NONE)
+
+    fetchResult = None
+    partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.empty())
+    fetchResult = doFetch(Request.OrdinaryConsumerId, partitionData, None)
+    assertTrue(fetchResult.isDefined)
+    assertEquals(fetchResult.get.error, Errors.NONE)
   }
 
   /**
