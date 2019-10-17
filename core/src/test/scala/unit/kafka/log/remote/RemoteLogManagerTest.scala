@@ -30,10 +30,10 @@ import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -137,9 +137,16 @@ class RemoteLogManagerTest {
 
     val leaderEpoch = 1
     val partition = replicaManager.createPartition(topicPartition)
-    partition.makeLeader(1, new PartitionState(1, brokerId, leaderEpoch,
-      Collections.singletonList(brokerId), 1, Collections.singletonList(brokerId), true),
-      1, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+
+    val leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(1)
+      .setLeader(brokerId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(Collections.singletonList(brokerId))
+      .setZkVersion(1)
+      .setReplicas(Collections.singletonList(brokerId))
+      .setIsNew(true)
+    partition.makeLeader(1, leaderState, 1, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
     val recordsArray = Array(new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),

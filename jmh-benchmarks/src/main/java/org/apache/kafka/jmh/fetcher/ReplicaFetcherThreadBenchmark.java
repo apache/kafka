@@ -27,6 +27,7 @@ import kafka.log.Defaults;
 import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.log.remote.RemoteLogManager;
 import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
@@ -133,7 +134,8 @@ public class ReplicaFetcherThreadBenchmark {
                 new BrokerState(),
                 brokerTopicStats,
                 logDirFailureChannel,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                RemoteLogManager.DefaultConfig());
 
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<BaseRecords>> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, OffsetAndEpoch> offsetAndEpochs = new scala.collection.mutable.HashMap<>();
