@@ -1244,8 +1244,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             return ConsumerRecords.empty();
         } finally {
-            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
+            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
     }
 
