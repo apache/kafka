@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import java.lang.reflect.Field;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -35,6 +41,8 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -70,6 +78,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.fail;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -730,6 +739,86 @@ public class IntegrationTestUtils {
             assertThat(reason, emptyPartitionInfos.isEmpty() && invalidBrokerIds.isEmpty());
         });
     }
+
+    /**
+     * Starts the given {@link KafkaStreams} instances and waits for all of them to reach the
+     * {@link State#RUNNING} state at the same time. Note that states may change between the time
+     * that this method returns and the calling function executes its next statement.
+     *
+     * @param streamsList the list of streams instances to run.
+     * @param timeout the time to wait for the streams to all be in @{link State#RUNNING} state.
+     */
+    public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList,
+                                                           final Duration timeout) throws InterruptedException {
+        final Lock stateLock = new ReentrantLock();
+        final Condition stateUpdate = stateLock.newCondition();
+        final Map<KafkaStreams, State> stateMap = new HashMap<>();
+        for (final KafkaStreams streams : streamsList) {
+            stateMap.put(streams, streams.state());
+            final StateListener prevStateListener = getStateListener(streams);
+            final StateListener newStateListener = (newState, oldState) -> {
+                stateLock.lock();
+                try {
+                    stateMap.put(streams, newState);
+                    if (newState == State.RUNNING) {
+                        if (stateMap.values().stream().allMatch(state -> state == State.RUNNING)) {
+                            stateUpdate.signalAll();
+                        }
+                    }
+                } finally {
+                    stateLock.unlock();
+                }
+            };
+
+            streams.setStateListener(prevStateListener != null
+                ? new CompositeStateListener(prevStateListener, newStateListener)
+                : newStateListener);
+        }
+
+        for (final KafkaStreams streams : streamsList) {
+            streams.start();
+        }
+
+        final long expectedEnd = System.currentTimeMillis() + timeout.toMillis();
+        stateLock.lock();
+        try {
+            // We use while true here because we want to run this test at least once, even if the
+            // timeout has expired
+            while (true) {
+                final Map<KafkaStreams, State> nonRunningStreams = new HashMap<>();
+                for (final Entry<KafkaStreams, State> entry : stateMap.entrySet()) {
+                    if (entry.getValue() != State.RUNNING) {
+                        nonRunningStreams.put(entry.getKey(), entry.getValue());
+                    }
+                }
+
+                if (nonRunningStreams.isEmpty()) {
+                    return;
+                }
+
+                final long millisRemaining = expectedEnd - System.currentTimeMillis();
+                if (millisRemaining <= 0) {
+                    fail("Application did not reach a RUNNING state for all streams instances. Non-running instances: " +
+                        nonRunningStreams);
+                }
+
+                stateUpdate.await(millisRemaining, TimeUnit.MILLISECONDS);
+            }
+        } finally {
+            stateLock.unlock();
+        }
+    }
+
+    private static StateListener getStateListener(final KafkaStreams streams) {
+        try {
+            final Field field = streams.getClass().getDeclaredField("stateListener");
+            field.setAccessible(true);
+            return (StateListener) field.get(streams);
+        } catch (final IllegalAccessException | NoSuchFieldException e) {
+            throw new RuntimeException("Failed to get StateListener through reflection", e);
+        }
+    }
+
 
     public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
                                                        final String topic,
