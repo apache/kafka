@@ -167,7 +167,7 @@ public class StreamJoined<K, V1, V2>
      * specified name, the stores will remain unavailable for querying.
      *
      * @param storeName the storeName to use
-     * @return
+     * @return a new {@link StreamJoined} instance
      */
     public StreamJoined<K, V1, V2> withStoreName(final String storeName) {
         return new StreamJoined<>(
