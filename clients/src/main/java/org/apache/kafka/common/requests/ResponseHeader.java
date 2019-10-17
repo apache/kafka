@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
 /**
  * A response header in the kafka protocol.
  */
-public class ResponseHeader extends AbstractRequestResponse {
+public class ResponseHeader implements AbstractRequestResponse {
     private final ResponseHeaderData data;
     private final short headerVersion;
 
