@@ -28,4 +28,6 @@ public interface ClientTestHandler<K, V> {
     void onFlush();
 
     void onTxnCommit();
+
+    void close();
 }

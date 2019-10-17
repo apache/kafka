@@ -29,6 +29,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * A test handler that could inject random payload records.
+ */
 class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
 
     private final String payloadFilePath;
@@ -82,11 +85,15 @@ class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
 
     @Override
     public void onFlush() {
-       producer.flush();
+        producer.flush();
     }
 
     @Override
     public void onTxnCommit() {
         producer.commitTransaction();
+    }
+
+    @Override
+    public void close() {
     }
 }

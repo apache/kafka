@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.IOException;
@@ -34,9 +35,11 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * A consumer based EOS test handler that will poll data from input topic and
@@ -45,29 +48,30 @@ import java.util.Properties;
 class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     private final Consumer<K, V> consumer;
+    private final String consumerGroupId;
     private Deque<ProducerRecord<K, V>> recordsToBeSent;
     private final long pollTimeout;
+    private final String inputTopic;
     private final String outputTopic;
-    private final String applicationId;
     private final Producer<K, V> producer;
 
     ConsumerTestHandler(Namespace res,
-                        String applicationId,
+                        String consumerGroupId,
                         Producer<K, V> producer) throws IOException {
+        this.consumerGroupId = consumerGroupId;
         List<String> consumerProps = res.getList("consumerConfig");
         String consumerConfigFile = res.getString("consumerConfigFile");
         pollTimeout = res.getLong("pollTimeout");
-        String inputTopic = res.getString("inputTopic");
+        inputTopic = res.getString("inputTopic");
         outputTopic = res.getString("topic");
-        this.applicationId = applicationId;
 
         Properties consumerProperties = KafkaClientPerformance.generateProps(consumerProps, consumerConfigFile);
-        consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId);
+        consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
         consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        consumer = new KafkaConsumer<>(consumerProperties);
-        consumer.subscribe(Collections.singletonList(inputTopic));
+        this.consumer = new KafkaConsumer<>(consumerProperties);
+        this.consumer.subscribe(Collections.singletonList(inputTopic));
 
         this.producer = producer;
         recordsToBeSent = new ArrayDeque<>();
@@ -75,7 +79,8 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     @Override
     public ProducerRecord<K, V> getRecord() {
-        if (recordsToBeSent.isEmpty()) {
+        System.out.println("Consumer polls new data with timeout " + pollTimeout);
+        while (recordsToBeSent.isEmpty()) {
             ConsumerRecords<K, V> consumedRecords = consumer.poll(Duration.ofMillis(pollTimeout));
             for (ConsumerRecord<K, V> consumerRecord : consumedRecords) {
                 recordsToBeSent.add(new ProducerRecord<>(outputTopic, consumerRecord.value()));
@@ -92,7 +97,7 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     @Override
     public void onTxnCommit() {
-        producer.sendOffsetsToTransaction(offsets(consumer), applicationId);
+        producer.sendOffsetsToTransaction(offsets(consumer), consumerGroupId);
         producer.commitTransaction();
     }
 
@@ -102,5 +107,18 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
             positions.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition), null));
         }
         return positions;
+    }
+
+    @Override
+    public void close() {
+        List<PartitionInfo> partitionInfos = consumer.partitionsFor(inputTopic);
+        Set<TopicPartition> partitions = new HashSet<>();
+        for (PartitionInfo partitionInfo : partitionInfos) {
+            partitions.add(new TopicPartition(partitionInfo.topic(), partitionInfo.partition()));
+        }
+
+        consumer.seekToBeginning(partitions);
+        consumer.unsubscribe();
+        consumer.close();
     }
 }

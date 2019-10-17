@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Properties;
 import java.util.Arrays;
-import java.util.UUID;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -43,7 +42,7 @@ public class KafkaClientPerformance {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = argParser();
-
+        ClientTestHandler<byte[], byte[]> clientTestHandler = null;
         try {
             Namespace res = parser.parseArgs(args);
 
@@ -52,6 +51,8 @@ public class KafkaClientPerformance {
             int throughput = res.getInt("throughput");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
+            String transactionalId = res.getString("transactionalId");
+            String consumerGroupId = res.getString("consumerGroupId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             long flushDurationMs = res.getLong("flushDurationMs");
@@ -66,21 +67,19 @@ public class KafkaClientPerformance {
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
 
-            final String applicationId = "Customized-EOS-Performance-" + UUID.randomUUID();
             if (transactionsEnabled)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId);
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
             /* initialize test suite */
             String testSuiteName = res.getString("testSuiteName");
-            ClientTestHandler<byte[], byte[]> clientTestHandler;
             switch (testSuiteName) {
                 case "ProducerPerformance":
                     clientTestHandler = new RandomPayloadTestHandler(res, producer);
                     break;
                 case "EosPerformance":
-                    clientTestHandler = new ConsumerTestHandler<>(res, applicationId, producer);
+                    clientTestHandler = new ConsumerTestHandler<>(res, consumerGroupId, producer);
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown test suite name: " + testSuiteName);
@@ -105,6 +104,12 @@ public class KafkaClientPerformance {
                 }
 
                 record = clientTestHandler.getRecord();
+                if (record == null) {
+                    System.out.println("Skipping null record");
+                    // Reset this cycle as we are skipping over null record.
+                    i -= 1;
+                    continue;
+                }
 
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, record.value().length, stats);
@@ -159,8 +164,11 @@ public class KafkaClientPerformance {
                 parser.handleError(e);
                 Exit.exit(1);
             }
+        } finally {
+            if (clientTestHandler != null) {
+                clientTestHandler.close();
+            }
         }
-
     }
 
     /** Get the command-line argument parser. */
@@ -292,6 +300,15 @@ public class KafkaClientPerformance {
                 .dest("printMetrics")
                 .help("print out metrics at the end of the test.");
 
+        parser.addArgument("--transactional-id")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("TRANSACTIONAL-ID")
+                .dest("transactionalId")
+                .setDefault("performance-producer-default-transactional-id")
+                .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+
         parser.addArgument("--transaction-duration-ms")
                 .action(store())
                 .required(false)
@@ -300,6 +317,15 @@ public class KafkaClientPerformance {
                 .dest("transactionDurationMs")
                 .setDefault(0L)
                 .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
+
+        parser.addArgument("--consumer-group-id")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONSUMER-GROUP-ID")
+                .dest("consumerGroupId")
+                .setDefault("performance-consumer-default-group-id")
+                .help("The consumerGroupId to use if we use consumer as the data source.");
 
         parser.addArgument("--flush-duration-ms")
                 .action(store())
