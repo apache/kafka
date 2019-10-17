@@ -90,6 +90,16 @@ public class SubscriptionInfoTest {
         assertEquals(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1, info.latestSupportedVersion());
     }
 
+    @Test
+    public void shouldEncodeAndDecodeSmallerLatestSupportedVersion() {
+        final int usedVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION - 1;
+        final int latestSupportedVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION - 1;
+
+        final SubscriptionInfo info = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, activeTasks, standbyTasks, "localhost:80");
+        final SubscriptionInfo expectedInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion, processId, activeTasks, standbyTasks, "localhost:80");
+        assertEquals(expectedInfo, SubscriptionInfo.decode(info.encode()));
+    }
+
     private ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
                                                    + 4 /* supported version */);
