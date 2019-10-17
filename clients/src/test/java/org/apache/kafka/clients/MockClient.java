@@ -73,6 +73,7 @@ public class MockClient implements KafkaClient {
     }
 
     private int correlation;
+    private Runnable wakeupHook;
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
     private final Map<String, ConnectionState> connections = new HashMap<>();
@@ -253,6 +254,9 @@ public class MockClient implements KafkaClient {
         if (numBlockingWakeups > 0) {
             numBlockingWakeups--;
             notify();
+        }
+        if (wakeupHook != null) {
+            wakeupHook.run();
         }
     }
 
@@ -543,6 +547,10 @@ public class MockClient implements KafkaClient {
                 return node;
         }
         return null;
+    }
+
+    public void setWakeupHook(Runnable wakeupHook) {
+        this.wakeupHook = wakeupHook;
     }
 
     /**
