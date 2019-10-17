@@ -76,8 +76,8 @@
 
     <!-- Placeholder KIP-213 -->
     <p>
-       In the 2.4 release users now have the ability to name all operators in a Kafka Streams DSL topology via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</p>.  The internally generated names on smaller/simple topologies viewing the topology description 
-       genertated from executing <code>Topology#describe()#toString()</code> is easy enough to understand, when the topologies are complex having meaningful names is essential to 
+       In the 2.4 release users now can name all operators in a Kafka Streams DSL topology via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</p>.  The internally generated names on smaller/simple topologies viewing the topology description 
+       generated from executing <code>Topology#describe()#toString()</code> is easy enough to understand, when the topologies are complex having meaningful names is essential to 
        understand the full context of what your Kafka Streams application is doing.
 
        There are new overloads on most <code>KStream</code> and <code>KTable</code> methods that accept a <code>Named</code> object.  Typically you'll provide a name for the DSL operation by 
