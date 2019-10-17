@@ -59,8 +59,8 @@ public class KafkaConsumerMetrics {
                 "The max delay between invocations of poll()."),
                 new Max());
 
-        this.pollIdleSensor = metrics.sensor("poll-idle-ratio");
-        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio",
+        this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
+        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
                 metricGroupName,
                 "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());

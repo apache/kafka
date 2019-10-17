@@ -2126,7 +2126,7 @@ public class KafkaConsumerTest {
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         // MetricName object to check
         Metrics metrics = consumer.metrics;
-        MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio", "consumer-metrics");
+        MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
         // Test default value
         assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
 
