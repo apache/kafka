@@ -2248,8 +2248,8 @@
                             </tr>
                             </tbody>
                         </table>
-                        <p><strong>Semantics of table-table joins:</strong>
-                            The semantics of the various table-table join variants are explained below.
+                        <p><strong>Semantics of table-table equi-joins:</strong>
+                            The semantics of the various table-table equi-join variants are explained below.
                             To improve the readability of the table, you can assume that (1) all records have the same key (and thus the key in the table is omitted) and that (2) all records are processed in timestamp order.
                             The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
                             <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
@@ -2387,8 +2387,15 @@
                       <h5><a class="toc-backref" href="#id16">KTable-KTable Foreign-Key
                           Join</a></h5>
                       <p>KTable-KTable foreign-key joins are always <em>non-windowed</em>
-                        joins. They are designed to be consistent with their
-                        counterparts in relational databases. The changelog streams of
+                        joins. Foreign-key joins are analogous to joins in SQL. As a rough example: 
+                        <div><code class="docutils literal"><span class="pre">
+                        SELECT ... FROM {this KTable} 
+                        JOIN {other KTable} 
+                        ON {other.key} = {result of foreignKeyExtractor(this.value)} ... 
+                        </span></code></div>
+                        The output of the operation is a new KTable containing the join result.
+                        </p>
+                        <p> The changelog streams of
                         both KTables are materialized into local state stores to
                         represent the latest snapshot of their <a class="reference
                           internal" href="#streams_concepts_ktable"><span class="std
