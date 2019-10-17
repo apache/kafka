@@ -569,7 +569,7 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         # these properties will be overridden in test
         self.SOURCE_TOPIC = None
         self.SINK_TOPIC = None
-        self.TASK_DELIMITER = None
+        self.TASK_DELIMITER = "#"
         self.REPORT_INTERVAL = None
 
         self.standby_tasks = None

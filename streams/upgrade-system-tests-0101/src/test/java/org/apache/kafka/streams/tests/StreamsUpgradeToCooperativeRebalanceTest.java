@@ -36,7 +36,6 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 + (args.length > 0 ? args[0] + " " : "")
                 + (args.length > 1 ? args[1] : ""));
         }
-        final String kafka = args[0];
         final String zookeeper = args[1];
         final String propFileName = args.length > 2 ? args[2] : null;
 
@@ -44,7 +43,6 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         final Properties config = new Properties();
 
         System.out.println("StreamsTest instance started (StreamsUpgradeToCooperativeRebalanceTest v0.10.1)");
-        System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
         System.out.println("props=" + config);
 

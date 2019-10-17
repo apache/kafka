@@ -1,3 +1,18 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
 from ducktape.mark import matrix
 from ducktape.tests.test import Test
@@ -78,7 +93,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         for processor in processors:
             self.verify_processing(processor, self.processing_message)
 
-        # first rolling bounce with "upgrade.from" conifg set
+        # first rolling bounce with "upgrade.from" config set
         previous_phase = ""
         self.maybe_upgrade_rolling_bounce_and_verify(processors,
                                                      previous_phase,
@@ -89,7 +104,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
         for processor in processors:
             self.verify_processing(processor, self.first_bounce_phase + self.processing_message)
 
-        # second rolling bounce without "upgrade.from" conifg
+        # second rolling bounce without "upgrade.from" config
         self.maybe_upgrade_rolling_bounce_and_verify(processors,
                                                      self.first_bounce_phase,
                                                      self.second_bounce_phase)
@@ -103,12 +118,16 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
             self.get_tasks_for_processor(processor)
             self.logger.info("Active tasks %s" % processor.active_tasks)
 
-        overlapping_tasks = processor1.active_tasks.intersection(processor2.active_tasks, processor3.active_tasks)
+        overlapping_tasks = processor1.active_tasks.intersection(processor2.active_tasks)
         assert len(overlapping_tasks) == int(0), \
-            "Final task assignments are not unique %s %s %s" % (processor1.active_tasks, processor2.active_tasks, processor3.active_tasks)
+            "Final task assignments are not unique %s %s" % (processor1.active_tasks, processor2.active_tasks)
 
-        other_overlapping_tasks = processor2.active_tasks.intersection(processor3.active_tasks)
-        assert len(other_overlapping_tasks) == int(0), \
+        overlapping_tasks = processor1.active_tasks.intersection(processor3.active_tasks)
+        assert len(overlapping_tasks) == int(0), \
+            "Final task assignments are not unique %s %s" % (processor1.active_tasks, processor3.active_tasks)
+
+        overlapping_tasks = processor2.active_tasks.intersection(processor3.active_tasks)
+        assert len(overlapping_tasks) == int(0), \
             "Final task assignments are not unique %s %s" % (processor2.active_tasks, processor3.active_tasks)
 
         # test done close all down
@@ -186,6 +205,5 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     def set_props(self, processor, upgrade_from=None):
         processor.SOURCE_TOPIC = self.source_topic
         processor.SINK_TOPIC = self.sink_topic
-        processor.TASK_DELIMITER = self.task_delimiter
         processor.REPORT_INTERVAL = self.report_interval
         processor.UPGRADE_FROM = upgrade_from

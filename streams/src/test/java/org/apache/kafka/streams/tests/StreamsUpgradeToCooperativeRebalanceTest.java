@@ -57,7 +57,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         final String sourceTopic = streamsProperties.getProperty("source.topic", "source");
         final String sinkTopic = streamsProperties.getProperty("sink.topic", "sink");
-        final String taskDelimiter = streamsProperties.getProperty("task.delimiter", "#");
+        final String taskDelimiter = "#";
         final int reportInterval = Integer.parseInt(streamsProperties.getProperty("report.interval", "100"));
         final String upgradePhase = streamsProperties.getProperty("upgrade.phase", "");
 

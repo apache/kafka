@@ -35,14 +35,12 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             System.err.println("StreamsUpgradeTest requires three argument (kafka-url, properties-file) but only " + args.length + " provided: "
                 + (args.length > 0 ? args[0] + " " : ""));
         }
-        final String kafka = args[0];
         final String propFileName = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final Properties config = new Properties();
 
         System.out.println("StreamsTest instance started (StreamsUpgradeToCooperativeRebalanceTest v0.10.2)");
-        System.out.println("kafka=" + kafka);
         System.out.println("props=" + config);
 
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "cooperative-rebalance-upgrade");
