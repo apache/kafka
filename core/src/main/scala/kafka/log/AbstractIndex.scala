@@ -182,9 +182,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         try {
           val position = mmap.position()
 
-          /* Windows won't let us modify the file length while the file is mmapped :-( */
-          if (OperatingSystem.IS_WINDOWS)
-            safeForceUnmap()
+          // Necessary on Windows, file length cannot be modified without unmapping
+          // Also, generally a good practice to eagerly unmap rather than leave it to GC (KAFKA-4614)
+          safeForceUnmap()
+
           raf.setLength(roundedNewSize)
           _length = roundedNewSize
           mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
