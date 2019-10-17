@@ -64,17 +64,17 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         final KStream<String, String> upgradeStream = builder.stream(sourceTopic);
         upgradeStream.foreach(new ForeachAction<String, String>() {
-                      int recordCounter = 0;
+            int recordCounter = 0;
 
-                      @Override
-                      public void apply(String key, String value) {
-                          if (recordCounter++ % reportInterval == 0) {
-                              System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
-                              System.out.flush();
-                          }
-                      }
-                  }
-            );
+            @Override
+            public void apply(final String key, final String value) {
+                if (recordCounter++ % reportInterval == 0) {
+                    System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
+                    System.out.flush();
+                }
+            }
+        }
+        );
         upgradeStream.to(sinkTopic);
 
         final KafkaStreams streams = new KafkaStreams(builder, config);

@@ -64,16 +64,16 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         builder.<String, String>stream(sourceTopic)
             .peek(new ForeachAction<String, String>() {
-                      int recordCounter = 0;
+                int recordCounter = 0;
 
-                      @Override
-                      public void apply(String key, String value) {
-                          if (recordCounter++ % reportInterval == 0) {
-                              System.out.println(String.format("Processed %d records so far", recordCounter));
-                              System.out.flush();
-                          }
-                      }
-                  }
+                @Override
+                public void apply(final String key, final String value) {
+                    if (recordCounter++ % reportInterval == 0) {
+                        System.out.println(String.format("Processed %d records so far", recordCounter));
+                        System.out.flush();
+                    }
+                }
+            }
             ).to(sinkTopic);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
@@ -83,9 +83,9 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 System.out.println("STREAMS in a RUNNING State");
                 final Set<ThreadMetadata> allThreadMetadata = streams.localThreadsMetadata();
                 final StringBuilder taskReportBuilder = new StringBuilder();
-                for (ThreadMetadata threadMetadata : allThreadMetadata) {
+                for (final ThreadMetadata threadMetadata : allThreadMetadata) {
                     buildTaskAssignmentReport(taskReportBuilder, threadMetadata.activeTasks(), "ACTIVE-TASKS:");
-                    if(!threadMetadata.standbyTasks().isEmpty()) {
+                    if (!threadMetadata.standbyTasks().isEmpty()) {
                         taskReportBuilder.append(taskDelimiter);
                         buildTaskAssignmentReport(taskReportBuilder, threadMetadata.standbyTasks(), "STANDBY-TASKS:");
                     }
@@ -114,9 +114,9 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                                                   final Set<TaskMetadata> taskMetadata,
                                                   final String taskType) {
         taskReportBuilder.append(taskType);
-        for (TaskMetadata task : taskMetadata) {
+        for (final TaskMetadata task : taskMetadata) {
             final Set<TopicPartition> topicPartitions = task.topicPartitions();
-            for (TopicPartition topicPartition : topicPartitions) {
+            for (final TopicPartition topicPartition : topicPartitions) {
                 taskReportBuilder.append(topicPartition.toString()).append(",");
             }
         }

@@ -66,16 +66,16 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         builder.<String, String>stream(sourceTopic)
             .peek(new ForeachAction<String, String>() {
-                      int recordCounter = 0;
+                int recordCounter = 0;
 
-                      @Override
-                      public void apply(String key, String value) {
-                          if (recordCounter++ % reportInterval == 0) {
-                              System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
-                              System.out.flush();
-                          }
-                      }
-                  }
+                @Override
+                public void apply(final String key, final String value) {
+                    if (recordCounter++ % reportInterval == 0) {
+                        System.out.println(String.format("%sProcessed %d records so far", upgradePhase, recordCounter));
+                        System.out.flush();
+                    }
+                }
+            }
             ).to(sinkTopic);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
@@ -87,15 +87,15 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 final StringBuilder taskReportBuilder = new StringBuilder();
                 final List<String> activeTasks = new ArrayList<>();
                 final List<String> standbyTasks = new ArrayList<>();
-                for (ThreadMetadata threadMetadata : allThreadMetadata) {
+                for (final ThreadMetadata threadMetadata : allThreadMetadata) {
                     getTasks(threadMetadata.activeTasks(), activeTasks);
-                    if(!threadMetadata.standbyTasks().isEmpty()) {
+                    if (!threadMetadata.standbyTasks().isEmpty()) {
                         getTasks(threadMetadata.standbyTasks(), standbyTasks);
                     }
                 }
                 addTasksToBuilder(activeTasks, taskReportBuilder);
                 taskReportBuilder.append(taskDelimiter);
-                if(!standbyTasks.isEmpty()) {
+                if (!standbyTasks.isEmpty()) {
                     addTasksToBuilder(standbyTasks, taskReportBuilder);
                 }
                 System.out.println("TASK-ASSIGNMENTS:" + taskReportBuilder);
@@ -116,9 +116,9 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         }));
     }
 
-    private static void addTasksToBuilder(List<String> tasks, StringBuilder builder) {
-        if(!tasks.isEmpty()) {
-            for (String task : tasks) {
+    private static void addTasksToBuilder(final List<String> tasks, final StringBuilder builder) {
+        if (!tasks.isEmpty()) {
+            for (final String task : tasks) {
                 builder.append(task).append(",");
             }
             builder.setLength(builder.length() - 1);
@@ -126,9 +126,9 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
     }
     private static void getTasks(final Set<TaskMetadata> taskMetadata,
                                  final List<String> taskList) {
-        for (TaskMetadata task : taskMetadata) {
+        for (final TaskMetadata task : taskMetadata) {
             final Set<TopicPartition> topicPartitions = task.topicPartitions();
-            for (TopicPartition topicPartition : topicPartitions) {
+            for (final TopicPartition topicPartition : topicPartitions) {
                 taskList.add(topicPartition.toString());
             }
         }
