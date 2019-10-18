@@ -65,7 +65,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import scala.collection.immutable.Stream;
 
 import java.io.File;
 import java.io.IOException;
