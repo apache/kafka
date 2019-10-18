@@ -967,10 +967,10 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // to wait for new data.
-        val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
+        val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, maybeUpdateHwAndSendResponse)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-        val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp.topic(), tp.partition()) }
+        val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
 
         // try to complete the request immediately, otherwise put it into the purgatory;
         // this is because while the delayed fetch operation is being created, new requests

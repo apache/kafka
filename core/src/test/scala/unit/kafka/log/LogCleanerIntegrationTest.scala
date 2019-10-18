@@ -213,8 +213,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def removeMetric(name: String): Unit = {
-    val metricName = Metrics.defaultRegistry().allMetrics()
-      .asScala.find(p => p._1.getName.endsWith(name)).get._1
-    Metrics.defaultRegistry().removeMetric(metricName)
+    Metrics.defaultRegistry().allMetrics()
+      .asScala.find(p => p._1.getName.endsWith(name))
+      .foreach(metricName => Metrics.defaultRegistry().removeMetric(metricName._1))
   }
 }
