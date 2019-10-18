@@ -27,7 +27,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class NamedCacheMetrics {
     private NamedCacheMetrics() {}
 
-    private static final String HIT_RATIO_0100_TO_23 = "hitRatio";
+    private static final String HIT_RATIO_0100_TO_24 = "hitRatio";
     private static final String HIT_RATIO = "hit-ratio";
     private static final String HIT_RATIO_AVG_DESCRIPTION = "The average cache hit ratio";
     private static final String HIT_RATIO_MIN_DESCRIPTION = "The minimum cache hit ratio";
@@ -42,7 +42,7 @@ public class NamedCacheMetrics {
         final Sensor hitRatioSensor;
         final String hitRatioName;
         if (streamsMetrics.version() == FROM_100_TO_24) {
-            hitRatioName = HIT_RATIO_0100_TO_23;
+            hitRatioName = HIT_RATIO_0100_TO_24;
             final Sensor taskLevelHitRatioSensor = streamsMetrics.taskLevelSensor(
                 threadId,
                 taskName,

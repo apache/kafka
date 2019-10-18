@@ -52,7 +52,7 @@ import static org.powermock.api.easymock.PowerMock.verify;
 public class ThreadMetricsTest {
 
     private static final String THREAD_ID = "thread-id";
-    private static final String THREAD_LEVEL_GROUP_0100_TO_23 = "stream-metrics";
+    private static final String THREAD_LEVEL_GROUP_0100_TO_24 = "stream-metrics";
     private static final String THREAD_LEVEL_GROUP = "stream-thread-metrics";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
@@ -64,7 +64,7 @@ public class ThreadMetricsTest {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
             {Version.LATEST, THREAD_LEVEL_GROUP},
-            {Version.FROM_100_TO_24, THREAD_LEVEL_GROUP_0100_TO_23}
+            {Version.FROM_100_TO_24, THREAD_LEVEL_GROUP_0100_TO_24}
         });
     }
 

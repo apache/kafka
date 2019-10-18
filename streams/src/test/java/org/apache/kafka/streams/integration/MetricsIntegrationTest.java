@@ -74,7 +74,7 @@ public class MetricsIntegrationTest {
 
     // Metric group
     private static final String STREAM_CLIENT_NODE_METRICS = "stream-metrics";
-    private static final String STREAM_THREAD_NODE_METRICS_0100_TO_23 = "stream-metrics";
+    private static final String STREAM_THREAD_NODE_METRICS_0100_TO_24 = "stream-metrics";
     private static final String STREAM_THREAD_NODE_METRICS = "stream-thread-metrics";
     private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
@@ -464,7 +464,7 @@ public class MetricsIntegrationTest {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(
                 StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? STREAM_THREAD_NODE_METRICS
-                    : STREAM_THREAD_NODE_METRICS_0100_TO_23))
+                    : STREAM_THREAD_NODE_METRICS_0100_TO_24))
             .collect(Collectors.toList());
         checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
         checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);

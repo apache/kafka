@@ -109,7 +109,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String CLIENT_ID_TAG = "client-id";
     public static final String THREAD_ID_TAG = "thread-id";
-    public static final String THREAD_ID_TAG_0100_TO_23 = "client-id";
+    public static final String THREAD_ID_TAG_0100_TO_24 = "client-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String STORE_ID_TAG = "state-id";
     public static final String BUFFER_ID_TAG = "buffer-id";
@@ -135,7 +135,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String GROUP_SUFFIX = "-metrics";
     public static final String CLIENT_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + "thread" + GROUP_SUFFIX;
-    public static final String THREAD_LEVEL_GROUP_0100_TO_23 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
@@ -230,7 +230,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_23, threadId);
+        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_24, threadId);
         return tagMap;
     }
 
@@ -400,7 +400,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String storeName) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         if (version == Version.FROM_100_TO_24) {
-            tagMap.put(THREAD_ID_TAG_0100_TO_23, threadId);
+            tagMap.put(THREAD_ID_TAG_0100_TO_24, threadId);
         } else {
             tagMap.put(THREAD_ID_TAG, threadId);
         }
