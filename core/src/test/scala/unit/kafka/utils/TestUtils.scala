@@ -28,8 +28,8 @@ import java.util.Arrays
 import java.util.Collections
 import java.util.Properties
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-import javax.net.ssl.X509TrustManager
 
+import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -49,6 +49,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -1488,24 +1489,27 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
-  def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(Arrays.asList(topicPartition.topic))
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+    waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
+  }
+
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+    waitForLeaderToBecome(client, topicPartition, None)
   }
 
   def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
-    TestUtils.waitUntilTrue(
-      () => currentLeader(client, topicPartition) == leader,
-      s"Expected leader to become $leader", 10000
-    )
+    val topic = topicPartition.topic
+    val partition = topicPartition.partition
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
+        val partitionResult = topicResult.partitions.get(partition)
+        Option(partitionResult.leader).map(_.id) == leader
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, "Timed out waiting for leader metadata")
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
