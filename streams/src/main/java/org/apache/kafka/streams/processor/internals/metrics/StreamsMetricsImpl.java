@@ -50,7 +50,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public enum Version {
         LATEST,
-        FROM_100_TO_23
+        FROM_100_TO_24
     }
 
     static class ImmutableMetricValue<T> implements Gauge<T> {
@@ -164,7 +164,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
             return Version.LATEST;
         } else {
-            return Version.FROM_100_TO_23;
+            return Version.FROM_100_TO_24;
         }
     }
 
@@ -399,7 +399,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String taskId,
                                                 final String storeName) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        if (version == Version.FROM_100_TO_23) {
+        if (version == Version.FROM_100_TO_24) {
             tagMap.put(THREAD_ID_TAG_0100_TO_23, threadId);
         } else {
             tagMap.put(THREAD_ID_TAG, threadId);

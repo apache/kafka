@@ -109,7 +109,7 @@ public class ThreadMetrics {
 
     public static Optional<Sensor> skipRecordSensor(final String threadId,
                                                     final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_100_TO_23) {
+        if (streamsMetrics.version() == Version.FROM_100_TO_24) {
             return Optional.of(invocationRateAndCountSensor(
                 threadId,
                 SKIP_RECORD,
@@ -180,7 +180,7 @@ public class ThreadMetrics {
 
     public static Optional<Sensor> commitOverTasksSensor(final String threadId,
                                                          final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_100_TO_23) {
+        if (streamsMetrics.version() == Version.FROM_100_TO_24) {
             final Sensor commitOverTasksSensor =
                 streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
             final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);

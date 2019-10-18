@@ -599,7 +599,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     public void shouldReturnMetricsVersionFrom100To23() {
         assertThat(
             new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_0100_TO_24).version(),
-            equalTo(Version.FROM_100_TO_23)
+            equalTo(Version.FROM_100_TO_24)
         );
     }
 

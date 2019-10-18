@@ -64,7 +64,7 @@ public class ThreadMetricsTest {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
             {Version.LATEST, THREAD_LEVEL_GROUP},
-            {Version.FROM_100_TO_23, THREAD_LEVEL_GROUP_0100_TO_23}
+            {Version.FROM_100_TO_24, THREAD_LEVEL_GROUP_0100_TO_23}
         });
     }
 
@@ -262,7 +262,7 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldGetSkipRecordSensor() {
-        if (builtInMetricsVersion == Version.FROM_100_TO_23) {
+        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
             final String operation = "skipped-records";
             final String totalDescription = "The total number of skipped records";
             final String rateDescription = "The average per-second number of skipped records";
@@ -282,7 +282,7 @@ public class ThreadMetricsTest {
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
 
-        if (builtInMetricsVersion == Version.FROM_100_TO_23) {
+        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
             assertThat(sensor.orElse(null), is(expectedSensor));
         } else {
             assertFalse(sensor.isPresent());
@@ -291,7 +291,7 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldGetCommitOverTasksSensor() {
-        if (builtInMetricsVersion == Version.FROM_100_TO_23) {
+        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
             final String operation = "commit";
             final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
             final String totalDescription =
@@ -325,7 +325,7 @@ public class ThreadMetricsTest {
         final Optional<Sensor> sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
-        if (builtInMetricsVersion == Version.FROM_100_TO_23) {
+        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
             assertThat(sensor.orElse(null), is(expectedSensor));
         } else {
             assertFalse(sensor.isPresent());
