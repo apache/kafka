@@ -38,13 +38,12 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata
-import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -1298,7 +1297,8 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 1
     val correlationId = 0
     val controllerId = 0
-    val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
+    val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
+    val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
     EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
     EasyMock.replay(mockTopicStats1)
@@ -1385,7 +1385,8 @@ class ReplicaManagerTest {
     val leaderEpochIncrement = 1
     val correlationId = 0
     val controllerId = 0
-    val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
+    val mockTopicStats1: BrokerTopicStats = EasyMock.mock(classOf[BrokerTopicStats])
+    val (rm0, rm1) = prepareDifferentReplicaManagers(EasyMock.mock(classOf[BrokerTopicStats]), mockTopicStats1)
 
     EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
     EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(topic)).andVoid.once
@@ -1466,7 +1467,8 @@ class ReplicaManagerTest {
     EasyMock.verify(mockTopicStats1)
   }
 
-  private def prepareDifferentReplicaManagersWithMockedBrokerTopicStats(): (ReplicaManager, ReplicaManager, BrokerTopicStats, BrokerTopicStats) = {
+  private def prepareDifferentReplicaManagers(brokerTopicStats1: BrokerTopicStats,
+                                              brokerTopicStats2: BrokerTopicStats): (ReplicaManager, ReplicaManager) = {
     val props0 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     val props1 = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
 
@@ -1478,9 +1480,6 @@ class ReplicaManagerTest {
 
     val mockLogMgr0 = TestUtils.createLogManager(config0.logDirs.map(new File(_)))
     val mockLogMgr1 = TestUtils.createLogManager(config1.logDirs.map(new File(_)))
-
-    val mockTopicStats0: BrokerTopicStats = EasyMock.createMock(classOf[BrokerTopicStats])
-    val mockTopicStats1: BrokerTopicStats = EasyMock.createMock(classOf[BrokerTopicStats])
 
     val metadataCache0: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
     val metadataCache1: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
@@ -1495,12 +1494,12 @@ class ReplicaManagerTest {
     // each replica manager is for a broker
     val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
       new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
-      mockTopicStats0, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
+      brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
     val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
       new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
-      mockTopicStats1, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
+      brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
 
-    (rm0, rm1, mockTopicStats0, mockTopicStats1)
+    (rm0, rm1)
   }
 
 }
