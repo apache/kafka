@@ -100,7 +100,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def getGauge[T](metricName: String): Gauge[T] = {
-    getGauge(_.getName.endsWith(metricName))
+    getGauge(mName => mName.getName.endsWith(metricName) && mName.getScope == null)
   }
 
   private def getGauge[T](metricName: String, metricScope: String): Gauge[T] = {
