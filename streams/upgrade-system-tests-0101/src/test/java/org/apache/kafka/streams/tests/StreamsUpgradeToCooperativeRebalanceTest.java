@@ -33,7 +33,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
             System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires two arguments (zookeeper-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] + " " : ""));
+                + (args.length > 0 ? args[0] : ""));
         }
         final String zookeeper = args[0];
         final String propFileName = args[1];
