@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
+import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -312,7 +314,10 @@ public enum Errors {
             EligibleLeadersNotAvailableException::new),
     ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
-            NoReassignmentInProgressException::new);
+            NoReassignmentInProgressException::new),
+    GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
+        GroupSubscribedToTopicException::new),
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

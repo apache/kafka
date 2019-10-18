@@ -30,8 +30,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.function.Supplier;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
@@ -41,7 +41,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 @RunWith(value = Parameterized.class)
@@ -686,38 +685,6 @@ public class MemoryRecordsTest {
         assertEquals(5, records.size());
         for (Record record : records)
             assertNotNull(record.key());
-    }
-
-    @Test
-    public void testToString() {
-        assumeAtLeastV2OrNotZstd();
-
-        long timestamp = 1000000;
-        MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
-                new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()),
-                new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()));
-        switch (magic) {
-            case RecordBatch.MAGIC_VALUE_V0:
-                assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=0, attributes=0, compression=NONE, " +
-                                "crc=1978725405, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, Record(magic=0, " +
-                                "attributes=0, compression=NONE, crc=1964753830, key=4 bytes, value=6 bytes)))]",
-                        memoryRecords.toString());
-                break;
-            case RecordBatch.MAGIC_VALUE_V1:
-                assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=1, attributes=0, compression=NONE, " +
-                                "crc=97210616, CreateTime=1000000, key=4 bytes, value=6 bytes))), (record=LegacyRecordBatch(offset=1, " +
-                                "Record(magic=1, attributes=0, compression=NONE, crc=3535988507, CreateTime=1000001, key=4 bytes, " +
-                                "value=6 bytes)))]",
-                        memoryRecords.toString());
-                break;
-            case RecordBatch.MAGIC_VALUE_V2:
-                assertEquals("[(record=DefaultRecord(offset=0, timestamp=1000000, key=4 bytes, value=6 bytes)), " +
-                                "(record=DefaultRecord(offset=1, timestamp=1000001, key=4 bytes, value=6 bytes))]",
-                        memoryRecords.toString());
-                break;
-            default:
-                fail("Unexpected magic " + magic);
-        }
     }
 
     @Test

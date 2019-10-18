@@ -24,8 +24,10 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
@@ -51,10 +53,14 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Collection;
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
@@ -66,6 +72,8 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+    // visible for testing
+    static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -89,19 +97,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final StreamsMetricsImpl metrics;
         final Sensor taskCommitTimeSensor;
         final Sensor taskEnforcedProcessSensor;
+        private final String threadId;
         private final String taskName;
 
-        TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
-            taskName = id.toString();
+        TaskMetrics(final String threadId,
+                    final TaskId taskId,
+                    final StreamsMetricsImpl metrics) {
+            this.threadId = threadId;
+            taskName = taskId.toString();
             this.metrics = metrics;
             final String group = "stream-task-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
-            final Sensor parent = ThreadMetrics.commitOverTasksSensor(metrics);
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, metrics);
 
             // add the operation metrics with additional tags
-            final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
+            final Map<String, String> tagMap = metrics.taskLevelTagMap(threadId, taskName);
+            taskCommitTimeSensor =
+                metrics.taskLevelSensor(threadId, taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
             taskCommitTimeSensor.add(
                 new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
                 new Avg()
@@ -120,7 +133,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
 
             // add the metrics for enforced processing
-            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-processing", Sensor.RecordingLevel.DEBUG, parent);
+            taskEnforcedProcessSensor = metrics.taskLevelSensor(
+                threadId,
+                taskName,
+                "enforced-processing",
+                Sensor.RecordingLevel.DEBUG,
+                parent
+            );
             taskEnforcedProcessSensor.add(
                     new MetricName("enforced-processing-rate", group, "The average number of occurrence of enforced-processing operation per second.", tagMap),
                     new Rate(TimeUnit.SECONDS, new WindowedCount())
@@ -133,7 +152,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         void removeAllSensors() {
-            metrics.removeAllTaskLevelSensors(taskName);
+            metrics.removeAllTaskLevelSensors(threadId, taskName);
         }
     }
 
@@ -142,7 +161,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public StreamTask(final TaskId id,
-                      final Collection<TopicPartition> partitions,
+                      final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
@@ -156,7 +175,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public StreamTask(final TaskId id,
-                      final Collection<TopicPartition> partitions,
+                      final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
@@ -172,9 +191,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.time = time;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
-        this.taskMetrics = new TaskMetrics(id, streamsMetrics);
+        final String threadId = Thread.currentThread().getName();
+        this.taskMetrics = new TaskMetrics(threadId, id, streamsMetrics);
 
-        closeTaskSensor = ThreadMetrics.closeTaskSensor(streamsMetrics);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
@@ -183,7 +203,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
-                ThreadMetrics.skipRecordSensor(streamsMetrics));
+                ThreadMetrics.skipRecordSensor(threadId, streamsMetrics));
         } else {
             this.recordCollector = recordCollector;
         }
@@ -234,10 +254,69 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public boolean initializeStateStores() {
-        log.trace("Initializing state stores");
-        registerStateStores();
+    public void initializeMetadata() {
+        try {
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions);
+            initializeCommittedOffsets(offsetsAndMetadata);
+            initializeTaskTime(offsetsAndMetadata);
+        } catch (final AuthorizationException e) {
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
+        } catch (final WakeupException e) {
+            throw e;
+        } catch (final KafkaException e) {
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+        }
+    }
 
+    private void initializeCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+        // Currently there is no easy way to tell the ProcessorStateManager to only restore up to
+        // a specific offset. In most cases this is fine. However, in optimized topologies we can
+        // have a source topic that also serves as a changelog, and in this case we want our active
+        // stream task to only play records up to the last consumer committed offset. Here we find
+        // partitions of topics that are both sources and changelogs and set the consumer committed
+        // offset via stateMgr as there is not a more direct route.
+        final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
+        final Map<TopicPartition, Long> committedOffsetsForChangelogs = offsetsAndMetadata
+            .entrySet()
+            .stream()
+            .filter(e -> changelogTopicNames.contains(e.getKey().topic()))
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+
+        // those do not have a committed offset would default to 0
+        for (final TopicPartition tp : partitions) {
+            committedOffsetsForChangelogs.putIfAbsent(tp, 0L);
+        }
+
+        stateMgr.putOffsetLimits(committedOffsetsForChangelogs);
+    }
+
+    private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final OffsetAndMetadata metadata = entry.getValue();
+
+            if (metadata != null) {
+                final long committedTimestamp = decodeTimestamp(metadata.metadata());
+                partitionGroup.setPartitionTime(partition, committedTimestamp);
+                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                    + " to {} in stream task {}", partition, committedTimestamp, this);
+            } else {
+                log.debug("No committed timestamp was found in metadata for partition {}", partition);
+            }
+        }
+
+        final Set<TopicPartition> nonCommitted = new HashSet<>(partitions);
+        nonCommitted.removeAll(offsetsAndMetadata.keySet());
+        for (final TopicPartition partition : nonCommitted) {
+            log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
+        }
+    }
+
+
+    @Override
+    public boolean initializeStateStores() {
+        log.debug("Initializing state stores");
+        registerStateStores();
         return changelogPartitions().isEmpty();
     }
 
@@ -292,6 +371,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw new ProcessorStateException(format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
+        initializeMetadata();
     }
 
     /**
@@ -437,7 +517,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commit(true);
+        commit(true, extractPartitionTimes());
     }
 
     /**
@@ -445,7 +525,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
@@ -459,8 +539,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-            stateMgr.putOffsetLimit(partition, offset);
+            final long partitionTime = partitionTimes.get(partition);
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }
 
         try {
@@ -540,7 +620,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    @Override
     public void suspend() {
         log.debug("Suspending");
         suspend(true, false);
@@ -561,6 +640,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
+        // this is necessary because all partition times are reset to -1 during close
+        // we need to preserve the original partitions times before calling commit
+        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
@@ -572,10 +654,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                commit(false);
+                commit(false, partitionTimes);
             } finally {
                 if (eosEnabled) {
-
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
                     try {
@@ -652,10 +733,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               RuntimeException firstException) {
+    void closeSuspended(final boolean clean, RuntimeException firstException) {
         try {
             closeStateManager(clean);
         } catch (final RuntimeException e) {
@@ -707,7 +785,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.error("Could not close task due to the following error:", e);
         }
 
-        closeSuspended(clean, isZombie, firstException);
+        closeSuspended(clean, firstException);
 
         taskClosed = true;
     }
@@ -851,6 +929,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return recordCollector;
     }
 
+    // used for testing
+    long streamTime() {
+        return partitionGroup.streamTime();
+    }
+
+    // used for testing
+    long partitionTime(final TopicPartition partition) {
+        return partitionGroup.partitionTimestamp(partition);
+    }
+
     Producer<byte[], byte[]> getProducer() {
         return producer;
     }
@@ -872,5 +960,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 retriable
             );
         }
+    }
+
+    // visible for testing
+    String encodeTimestamp(final long partitionTime) {
+        final ByteBuffer buffer = ByteBuffer.allocate(9);
+        buffer.put(LATEST_MAGIC_BYTE);
+        buffer.putLong(partitionTime);
+        return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
+    // visible for testing
+    long decodeTimestamp(final String encryptedString) {
+        if (encryptedString.length() == 0) {
+            return RecordQueue.UNKNOWN;
+        }
+        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+        final byte version = buffer.get();
+        switch (version) {
+            case LATEST_MAGIC_BYTE:
+                return buffer.getLong();
+            default: 
+                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.", 
+                         LATEST_MAGIC_BYTE, version);
+                return RecordQueue.UNKNOWN;
+        }
+    }
+
+    private Map<TopicPartition, Long> extractPartitionTimes() {
+        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
+        for (final TopicPartition partition : partitionGroup.partitions()) {
+            partitionTimes.put(partition, partitionTime(partition));
+        }
+        return partitionTimes;
     }
 }

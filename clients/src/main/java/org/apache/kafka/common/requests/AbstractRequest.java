@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public abstract class AbstractRequest extends AbstractRequestResponse {
+public abstract class AbstractRequest implements AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
@@ -100,7 +100,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
      * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
      */
     public ByteBuffer serialize(RequestHeader header) {
-        return serialize(header.toStruct(), toStruct());
+        return RequestUtils.serialize(header.toStruct(), toStruct());
     }
 
     protected abstract Struct toStruct();
@@ -237,6 +237,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new AlterPartitionReassignmentsRequest(struct, apiVersion);
             case LIST_PARTITION_REASSIGNMENTS:
                 return new ListPartitionReassignmentsRequest(struct, apiVersion);
+            case OFFSET_DELETE:
+                return new OffsetDeleteRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

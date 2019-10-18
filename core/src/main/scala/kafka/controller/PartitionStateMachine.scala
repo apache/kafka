@@ -308,7 +308,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       if (code == Code.OK) {
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(leaderIsrAndControllerEpoch.leaderAndIsr.isr,
-          partition, leaderIsrAndControllerEpoch, controllerContext.partitionReplicaAssignment(partition), isNew = true)
+          partition, leaderIsrAndControllerEpoch, controllerContext.partitionFullReplicaAssignment(partition), isNew = true)
         successfulInitializations += partition
       } else {
         logFailedStateChange(partition, NewPartition, OnlinePartition, code)
@@ -342,6 +342,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
 
       finishedElections ++= finished
+
+      if (remaining.nonEmpty)
+        logger.info(s"Retrying leader election with strategy $partitionLeaderElectionStrategy for partitions $remaining")
     }
 
     finishedElections.toMap
@@ -429,11 +432,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
     finishedUpdates.foreach { case (partition, result) =>
       result.right.foreach { leaderAndIsr =>
-        val replicas = controllerContext.partitionReplicaAssignment(partition)
+        val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipientsPerPartition(partition), partition,
-          leaderIsrAndControllerEpoch, replicas, isNew = false)
+          leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
       }
     }
 

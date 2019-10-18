@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -35,8 +35,8 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessor;
@@ -53,18 +53,18 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class KStreamWindowAggregateTest {
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private final String threadId = Thread.currentThread().getName();
 
     @Test
     public void testAggBasic() {
@@ -81,27 +81,29 @@ public class KStreamWindowAggregateTest {
         table2.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            inputTopic1.pipeInput("A", "1", 0L);
+            inputTopic1.pipeInput("B", "2", 1L);
+            inputTopic1.pipeInput("C", "3", 2L);
+            inputTopic1.pipeInput("D", "4", 3L);
+            inputTopic1.pipeInput("A", "1", 4L);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+            inputTopic1.pipeInput("A", "1", 5L);
+            inputTopic1.pipeInput("B", "2", 6L);
+            inputTopic1.pipeInput("D", "4", 7L);
+            inputTopic1.pipeInput("B", "2", 8L);
+            inputTopic1.pipeInput("C", "3", 9L);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 11L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 12L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
+            inputTopic1.pipeInput("A", "1", 10L);
+            inputTopic1.pipeInput("B", "2", 11L);
+            inputTopic1.pipeInput("D", "4", 12L);
+            inputTopic1.pipeInput("B", "2", 13L);
+            inputTopic1.pipeInput("C", "3", 14L);
 
-            driver.pipeInput(recordFactory.create(topic1, "B", "1", 3L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 2L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "3", 9L));
+            inputTopic1.pipeInput("B", "1", 3L);
+            inputTopic1.pipeInput("B", "2", 2L);
+            inputTopic1.pipeInput("B", "3", 9L);
         }
 
         assertEquals(
@@ -166,11 +168,15 @@ public class KStreamWindowAggregateTest {
         table1.join(table2, (p1, p2) -> p1 + "%" + p2).toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 0L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 9L));
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> inputTopic2 =
+                    driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
+            inputTopic1.pipeInput("A", "1", 0L);
+            inputTopic1.pipeInput("B", "2", 1L);
+            inputTopic1.pipeInput("C", "3", 2L);
+            inputTopic1.pipeInput("D", "4", 3L);
+            inputTopic1.pipeInput("A", "1", 9L);
 
             final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
 
@@ -185,11 +191,11 @@ public class KStreamWindowAggregateTest {
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+            inputTopic1.pipeInput("A", "1", 5L);
+            inputTopic1.pipeInput("B", "2", 6L);
+            inputTopic1.pipeInput("D", "4", 7L);
+            inputTopic1.pipeInput("B", "2", 8L);
+            inputTopic1.pipeInput("C", "3", 9L);
 
             processors.get(0).checkAndClearProcessResult(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1+1",  9),
@@ -206,11 +212,11 @@ public class KStreamWindowAggregateTest {
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
 
-            driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
-            driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
-            driver.pipeInput(recordFactory.create(topic2, "C", "c", 2L));
-            driver.pipeInput(recordFactory.create(topic2, "D", "d", 20L));
-            driver.pipeInput(recordFactory.create(topic2, "A", "a", 20L));
+            inputTopic2.pipeInput("A", "a", 0L);
+            inputTopic2.pipeInput("B", "b", 1L);
+            inputTopic2.pipeInput("C", "c", 2L);
+            inputTopic2.pipeInput("D", "d", 20L);
+            inputTopic2.pipeInput("A", "a", 20L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(1).checkAndClearProcessResult(
@@ -227,11 +233,11 @@ public class KStreamWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2%0+b",  8),
                 new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3+3%0+c",  9));
 
-            driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
-            driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
-            driver.pipeInput(recordFactory.create(topic2, "D", "d", 7L));
-            driver.pipeInput(recordFactory.create(topic2, "D", "d", 18L));
-            driver.pipeInput(recordFactory.create(topic2, "A", "a", 21L));
+            inputTopic2.pipeInput("A", "a", 5L);
+            inputTopic2.pipeInput("B", "b", 6L);
+            inputTopic2.pipeInput("D", "d", 7L);
+            inputTopic2.pipeInput("D", "d", 18L);
+            inputTopic2.pipeInput("A", "a", 21L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(1).checkAndClearProcessResult(
@@ -274,7 +280,9 @@ public class KStreamWindowAggregateTest {
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, null, "1"));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput(null, "1");
             LogCaptureAppender.unregister(appender);
 
             assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
@@ -303,14 +311,16 @@ public class KStreamWindowAggregateTest {
         LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, "k", "100", 100L));
-            driver.pipeInput(recordFactory.create(topic, "k", "0", 0L));
-            driver.pipeInput(recordFactory.create(topic, "k", "1", 1L));
-            driver.pipeInput(recordFactory.create(topic, "k", "2", 2L));
-            driver.pipeInput(recordFactory.create(topic, "k", "3", 3L));
-            driver.pipeInput(recordFactory.create(topic, "k", "4", 4L));
-            driver.pipeInput(recordFactory.create(topic, "k", "5", 5L));
-            driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("k", "100", 100L);
+            inputTopic.pipeInput("k", "0", 0L);
+            inputTopic.pipeInput("k", "1", 1L);
+            inputTopic.pipeInput("k", "2", 2L);
+            inputTopic.pipeInput("k", "3", 3L);
+            inputTopic.pipeInput("k", "4", 4L);
+            inputTopic.pipeInput("k", "5", 5L);
+            inputTopic.pipeInput("k", "6", 6L);
             LogCaptureAppender.unregister(appender);
 
             assertLatenessMetrics(
@@ -330,11 +340,14 @@ public class KStreamWindowAggregateTest {
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
             ));
 
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@95/105]", "+100", 100);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@100/110]", "+100", 100);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@5/15]", "+5", 5);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@5/15]", "+5+6", 6);
-            assertThat(driver.readOutput("output"), nullValue());
+            final TestOutputTopic<String, String> outputTopic =
+                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@95/105]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@100/110]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5", null, 5L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5+6", null, 6L)));
+            assertTrue(outputTopic.isEmpty());
         }
     }
 
@@ -358,14 +371,16 @@ public class KStreamWindowAggregateTest {
         LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, "k", "100", 200L));
-            driver.pipeInput(recordFactory.create(topic, "k", "0", 100L));
-            driver.pipeInput(recordFactory.create(topic, "k", "1", 101L));
-            driver.pipeInput(recordFactory.create(topic, "k", "2", 102L));
-            driver.pipeInput(recordFactory.create(topic, "k", "3", 103L));
-            driver.pipeInput(recordFactory.create(topic, "k", "4", 104L));
-            driver.pipeInput(recordFactory.create(topic, "k", "5", 105L));
-            driver.pipeInput(recordFactory.create(topic, "k", "6", 6L));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("k", "100", 200L);
+            inputTopic.pipeInput("k", "0", 100L);
+            inputTopic.pipeInput("k", "1", 101L);
+            inputTopic.pipeInput("k", "2", 102L);
+            inputTopic.pipeInput("k", "3", 103L);
+            inputTopic.pipeInput("k", "4", 104L);
+            inputTopic.pipeInput("k", "5", 105L);
+            inputTopic.pipeInput("k", "6", 6L);
             LogCaptureAppender.unregister(appender);
 
             assertLatenessMetrics(driver, is(7.0), is(194.0), is(97.375));
@@ -380,8 +395,10 @@ public class KStreamWindowAggregateTest {
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
             ));
 
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@200/210]", "+100", 200);
-            assertThat(driver.readOutput("output"), nullValue());
+            final TestOutputTopic<String, String> outputTopic =
+                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@200/210]", "+100", null, 200L)));
+            assertTrue(outputTopic.isEmpty());
         }
     }
 
@@ -394,7 +411,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -406,7 +423,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -418,7 +435,7 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The max observed lateness of records.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );
@@ -429,14 +446,11 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The average observed lateness of records.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
     }
 
-    private ProducerRecord<String, String> getOutput(final TopologyTestDriver driver) {
-        return driver.readOutput("output", new StringDeserializer(), new StringDeserializer());
-    }
 }

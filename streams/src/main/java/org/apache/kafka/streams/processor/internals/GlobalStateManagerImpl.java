@@ -131,10 +131,30 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         final List<StateStore> stateStores = topology.globalStateStores();
+        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
+        final Set<String> changelogTopics = new HashSet<>();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
+            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
+            changelogTopics.add(sourceTopic);
             stateStore.init(globalProcessorContext, stateStore);
         }
+
+        // make sure each topic-partition from checkpointFileCache is associated with a global state store
+        checkpointFileCache.keySet().forEach(tp -> {
+            if (!changelogTopics.contains(tp.topic())) {
+                log.error("Encountered a topic-partition in the global checkpoint file not associated with any global" +
+                    " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
+                    " an application reset and state store directory cleanup will be required.",
+                    tp.topic(), checkpointFile.toString());
+                try {
+                    stateDirectory.unlockGlobalState();
+                } catch (final IOException e) {
+                    log.error("Failed to unlock the global state directory", e);
+                }
+                throw new StreamsException("Encountered a topic-partition not associated with any global state store");
+            }
+        });
         return Collections.unmodifiableSet(globalStoreNames);
     }
 

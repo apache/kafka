@@ -15,23 +15,30 @@ package kafka.api
 import java.io.File
 import java.util
 
+import kafka.log.LogConfig
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
-import kafka.server.KafkaConfig
+import kafka.security.authorizer.AuthorizerWrapper
+import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Assert, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  // This tests the old SimpleAclAuthorizer, we have another test for the new AclAuthorizer
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -59,8 +66,12 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
+    setUpSasl()
     super.setUp()
+  }
+
+  def setUpSasl(): Unit = {
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
   }
 
   private def clusterAcl(permissionType: PermissionType, operation: Operation): AuthAcl = {
@@ -68,17 +79,17 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
       AuthAcl.WildCardHost, operation)
   }
 
-  private def addClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
+  def addClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
     val acls = Set(clusterAcl(permissionType, operation))
-    val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
+    val authorizer = simpleAclAuthorizer
     val prevAcls = authorizer.getAcls(AuthResource.ClusterResource)
     authorizer.addAcls(acls, AuthResource.ClusterResource)
     TestUtils.waitAndVerifyAcls(prevAcls ++ acls, authorizer, AuthResource.ClusterResource)
   }
 
-  private def removeClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
+  def removeClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
     val acls = Set(clusterAcl(permissionType, operation))
-    val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
+    val authorizer = simpleAclAuthorizer
     val prevAcls = authorizer.getAcls(AuthResource.ClusterResource)
     Assert.assertTrue(authorizer.removeAcls(acls, AuthResource.ClusterResource))
     TestUtils.waitAndVerifyAcls(prevAcls -- acls, authorizer, AuthResource.ClusterResource)
@@ -395,6 +406,78 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     testAclCreateGetDelete(expectAuth = false)
   }
 
+  @Test
+  def testCreateTopicsResponseMetadataAndConfig(): Unit = {
+    val topic1 = "mytopic1"
+    val topic2 = "mytopic2"
+    val denyAcl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, topic2, PatternType.LITERAL),
+      new AccessControlEntry("User:*", "*", AclOperation.DESCRIBE_CONFIGS, AclPermissionType.DENY))
+
+    client = AdminClient.create(createConfig())
+    client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
+
+    val topics = Seq(topic1, topic2)
+    val configsOverride = Map(LogConfig.SegmentBytesProp -> "100000").asJava
+    val newTopics = Seq(
+      new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
+      new NewTopic(topic2, Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava).configs(configsOverride))
+    val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
+    validateResult.all.get()
+    waitForTopics(client, List(), topics)
+
+    def validateMetadataAndConfigs(result: CreateTopicsResult): Unit = {
+      assertEquals(2, result.numPartitions(topic1).get())
+      assertEquals(3, result.replicationFactor(topic1).get())
+      val topicConfigs = result.config(topic1).get().entries.asScala
+      assertTrue(topicConfigs.nonEmpty)
+      val segmentBytesConfig = topicConfigs.find(_.name == LogConfig.SegmentBytesProp).get
+      assertEquals(100000, segmentBytesConfig.value.toLong)
+      assertEquals(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, segmentBytesConfig.source)
+      val compressionConfig = topicConfigs.find(_.name == LogConfig.CompressionTypeProp).get
+      assertEquals(Defaults.CompressionType, compressionConfig.value)
+      assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
+
+      assertFutureExceptionTypeEquals(result.numPartitions(topic2), classOf[TopicAuthorizationException])
+      assertFutureExceptionTypeEquals(result.replicationFactor(topic2), classOf[TopicAuthorizationException])
+      assertFutureExceptionTypeEquals(result.config(topic2), classOf[TopicAuthorizationException])
+    }
+    validateMetadataAndConfigs(validateResult)
+
+    val createResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions())
+    createResult.all.get()
+    waitForTopics(client, topics, List())
+    validateMetadataAndConfigs(createResult)
+    val createResponseConfig = createResult.config(topic1).get().entries.asScala
+
+    val describeResponseConfig = describeConfigs(topic1)
+    assertEquals(describeResponseConfig.map(_.name).toSet, createResponseConfig.map(_.name).toSet)
+    describeResponseConfig.foreach { describeEntry =>
+      val name = describeEntry.name
+      val createEntry = createResponseConfig.find(_.name == name).get
+      assertEquals(s"Value mismatch for $name", describeEntry.value, createEntry.value)
+      assertEquals(s"isReadOnly mismatch for $name", describeEntry.isReadOnly, createEntry.isReadOnly)
+      assertEquals(s"isSensitive mismatch for $name", describeEntry.isSensitive, createEntry.isSensitive)
+      assertEquals(s"Source mismatch for $name", describeEntry.source, createEntry.source)
+    }
+  }
+
+  private def describeConfigs(topic: String): Iterable[ConfigEntry] = {
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    var configEntries: Iterable[ConfigEntry] = null
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResponse = client.describeConfigs(List(topicResource).asJava).all.get.get(topicResource)
+        configEntries = topicResponse.entries.asScala
+        true
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, "Timed out waiting for describeConfigs")
+
+    configEntries
+  }
+
   private def waitForDescribeAcls(client: Admin, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
     var lastResults: util.Collection[AclBinding] = null
     TestUtils.waitUntilTrue(() => {
@@ -411,5 +494,10 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def getAcls(allTopicAcls: AclBindingFilter) = {
     client.describeAcls(allTopicAcls).values.get().asScala.toSet
+  }
+
+  private def simpleAclAuthorizer: Authorizer = {
+    val authorizerWrapper = servers.head.dataPlaneRequestProcessor.authorizer.get.asInstanceOf[AuthorizerWrapper]
+    authorizerWrapper.baseAuthorizer
   }
 }

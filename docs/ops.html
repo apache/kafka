@@ -1371,6 +1371,36 @@
 
   The following metrics are available on consumer instances.
 
+  <table class="data-table">
+    <tbody>
+      <tr>
+        <th>Metric/Attribute name</th>
+        <th>Description</th>
+        <th>Mbean name</th>
+      </tr>
+      <tr>
+        <td>time-between-poll-avg</td>
+        <td>The average delay between invocations of poll().</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>time-between-poll-max</td>
+        <td>The max delay between invocations of poll().</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>last-poll-seconds-ago</td>
+        <td>The number of seconds since the last poll() invocation.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>poll-idle-ratio-avg</td>
+        <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+        <td>kafka.consumer:type=consumer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+  </table>
+
   <h5><a id="consumer_group_monitoring" href="#consumer_group_monitoring">Consumer Group Metrics</a></h5>
   <table class="data-table">
     <tbody>
@@ -1485,7 +1515,8 @@
   the info level records only the thread-level metrics.
 
   <p>
-    Note that the metrics have a 3-layer hierarchy. At the top level there are per-thread metrics. Each thread has tasks, with their
+    Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started
+    Kafka Streams client. Each client has stream threads, with their own metrics. Each stream thread has tasks, with their
     own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores
     and record caches, all with their own metrics.
   </p>
@@ -1494,6 +1525,43 @@
   you want collected:
 
 <pre>metrics.recording.level="info"</pre>
+
+<h5><a id="kafka_streams_client_monitoring" href="#kafka_streams_client_monitoring">Client Metrics</a></h5>
+All the following metrics have a recording level of <code>info</code>:
+<table class="data-table">
+  <tbody>
+  <tr>
+    <th>Metric/Attribute name</th>
+    <th>Description</th>
+    <th>Mbean name</th>
+  </tr>
+  <tr>
+    <td>version</td>
+    <td>The version of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>commit-id</td>
+    <td>The version control commit ID of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>application-id</td>
+    <td>The application ID of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>topology-description</td>
+    <td>The description of the topology executed in the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  <tr>
+    <td>state</td>
+    <td>The state of the Kafka Streams client.</td>
+    <td>kafka.streams:type=stream-metrics,client-id=([-.\w]+)</td>
+  </tr>
+  </tbody>
+</table>
 
 <h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
 All the following metrics have a recording level of <code>info</code>:
@@ -1978,6 +2046,108 @@ All the following metrics have a recording level of <code>debug</code>:
       </tr>
     </tbody>
  </table>
+
+  <h5><a id="kafka_streams_rocksdb_monitoring" href="#kafka_streams_rocksdb_monitoring">RocksDB Metrics</a></h5>
+  All the following metrics have a recording level of <code>debug</code>.
+  The metrics are collected every minute from the RocksDB state stores.
+  If a state store consists of multiple RocksDB instances as it is the case for aggregations over time and session windows,
+  each metric reports an aggregation over the RocksDB instances of the state store.
+  Note that the <code>store-scope</code> for built-in RocksDB state stores are currently the following:
+  <ul>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+  </ul>
+
+  <table class="data-table">
+    <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>bytes-written-rate</td>
+      <td>The average number of bytes written per second to the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-written-total</td>
+      <td>The total number of bytes written to the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-rate</td>
+      <td>The average number of bytes read per second from the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-total</td>
+      <td>The total number of bytes read from the RocksDB state store.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-bytes-flushed-rate</td>
+      <td>The average number of bytes flushed per second from the memtable to disk.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-bytes-flushed-total</td>
+      <td>The total number of bytes flushed from the memtable to disk.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>memtable-hit-ratio</td>
+      <td>The ratio of memtable hits relative to all lookups to the memtable.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-data-hit-ratio</td>
+      <td>The ratio of block cache hits for data blocks relative to all lookups for data blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-index-hit-ratio</td>
+      <td>The ratio of block cache hits for index blocks relative to all lookups for index blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>block-cache-filter-hit-ratio</td>
+      <td>The ratio of block cache hits for filter blocks relative to all lookups for filter blocks to the block cache.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>write-stall-duration-avg</td>
+      <td>The average duration of write stalls in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>write-stall-duration-total</td>
+      <td>The total duration of write stalls in ms.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-read-compaction-rate</td>
+      <td>The average number of bytes read per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-written-compaction-rate</td>
+      <td>The average number of bytes written per second during compaction.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>number-open-files</td>
+      <td>The number of current open files.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>number-file-errors-total</td>
+      <td>The total number of file errors occurred.</td>
+      <td>kafka.streams:type=stream-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+    </tr>
+    </tbody>
+  </table>
 
   <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
   All the following metrics have a recording level of <code>debug</code>:

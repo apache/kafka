@@ -17,19 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -44,11 +37,11 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
 import static org.easymock.EasyMock.expect;
@@ -64,33 +57,12 @@ public class AbstractTaskTest {
     private final TopicPartition storeTopicPartition2 = new TopicPartition("t2", 0);
     private final TopicPartition storeTopicPartition3 = new TopicPartition("t3", 0);
     private final TopicPartition storeTopicPartition4 = new TopicPartition("t4", 0);
-    private final Collection<TopicPartition> storeTopicPartitions =
+    private final Set<TopicPartition> storeTopicPartitions =
         Utils.mkSet(storeTopicPartition1, storeTopicPartition2, storeTopicPartition3, storeTopicPartition4);
 
     @Before
     public void before() {
         expect(stateDirectory.directoryForTask(id)).andReturn(TestUtils.tempDirectory());
-    }
-
-    @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
-        final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
-    }
-
-    @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
-        final Consumer consumer = mockConsumer(new KafkaException("blah"));
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
-    }
-
-    @Test(expected = WakeupException.class)
-    public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
-        final Consumer consumer = mockConsumer(new WakeupException());
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
-        task.updateOffsetLimits();
     }
 
     @Test
@@ -247,19 +219,16 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
+            public void initializeMetadata() {}
+
+            @Override
             public void resume() {}
 
             @Override
             public void commit() {}
 
             @Override
-            public void suspend() {}
-
-            @Override
             public void close(final boolean clean, final boolean isZombie) {}
-
-            @Override
-            public void closeSuspended(final boolean clean, final boolean isZombie, final RuntimeException e) {}
 
             @Override
             public boolean initializeStateStores() {
@@ -270,14 +239,4 @@ public class AbstractTaskTest {
             public void initializeTopology() {}
         };
     }
-
-    private Consumer mockConsumer(final RuntimeException toThrow) {
-        return new MockConsumer(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public OffsetAndMetadata committed(final TopicPartition partition) {
-                throw toThrow;
-            }
-        };
-    }
-
 }
