@@ -16,10 +16,9 @@
  */
 package kafka.cluster
 
-import java.io.File
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
+import java.util.concurrent.{CountDownLatch, Executors, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.yammer.metrics.Metrics
@@ -28,87 +27,28 @@ import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, ListOffsetRequest}
-import org.junit.{After, Before, Test}
+import org.junit.Test
 import org.junit.Assert._
-import org.mockito.Mockito.{doAnswer, doNothing, mock, spy, times, verify, when}
+import org.mockito.Mockito._
 import org.scalatest.Assertions.assertThrows
 import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
+import unit.kafka.cluster.AbstractPartitionTest
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
-class PartitionTest {
-
-  val brokerId = 101
-  val topicPartition = new TopicPartition("test-topic", 0)
-  val time = new MockTime()
-  var tmpDir: File = _
-  var logDir1: File = _
-  var logDir2: File = _
-  var logManager: LogManager = _
-  var logConfig: LogConfig = _
-  val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
-  val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
-  val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-  val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
-  var partition: Partition = _
-
-  @Before
-  def setup(): Unit = {
-    TestUtils.clearYammerMetrics()
-
-    val logProps = createLogProperties(Map.empty)
-    logConfig = LogConfig(logProps)
-
-    tmpDir = TestUtils.tempDir()
-    logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
-    logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
-    logManager = TestUtils.createLogManager(
-      logDirs = Seq(logDir1, logDir2), defaultConfig = logConfig, CleanerConfig(enableCleaner = false), time)
-    logManager.startup()
-
-    partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
-      localBrokerId = brokerId,
-      time,
-      stateStore,
-      delayedOperations,
-      metadataCache,
-      logManager)
-
-    when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
-    when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
-      .thenReturn(None)
-  }
-
-  private def createLogProperties(overrides: Map[String, String]): Properties = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
-    overrides.foreach { case (k, v) => logProps.put(k, v) }
-    logProps
-  }
-
-  @After
-  def tearDown(): Unit = {
-    logManager.shutdown()
-    Utils.delete(tmpDir)
-    TestUtils.clearYammerMetrics()
-  }
+class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testMakeLeaderUpdatesEpochCache(): Unit = {
@@ -1543,6 +1483,65 @@ class PartitionTest {
     Partition.removeMetrics(topicPartition)
 
     assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
+  }
+
+  @Test
+  def testUnderReplicatedPartitionsCorrectSemantics(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 3
+    val replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2).asJava
+    val isr = List[Integer](brokerId, brokerId + 1).asJava
+
+    var leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(brokerId)
+      .setLeaderEpoch(6)
+      .setIsr(isr)
+      .setZkVersion(1)
+      .setReplicas(replicas)
+      .setIsNew(false)
+    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    assertTrue(partition.isUnderReplicated)
+
+    leaderState = leaderState.setIsr(replicas)
+    partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
+    assertFalse(partition.isUnderReplicated)
+  }
+
+  @Test
+  def testUpdateAssignmentAndIsr(): Unit = {
+    val topicPartition = new TopicPartition("test", 1)
+    val partition = new Partition(
+      topicPartition, 1000, ApiVersion.latestVersion, 0,
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]))
+
+    val replicas = Seq(0, 1, 2, 3)
+    val isr = Set(0, 1, 2, 3)
+    val adding = Seq(4, 5)
+    val removing = Seq(1, 2)
+
+    // Test with ongoing reassignment
+    partition.updateAssignmentAndIsr(replicas, isr, adding, removing)
+
+    assertTrue("The assignmentState is not OngoingReassignmentState",
+      partition.assignmentState.isInstanceOf[OngoingReassignmentState])
+    assertEquals(replicas, partition.assignmentState.replicas)
+    assertEquals(isr, partition.inSyncReplicaIds)
+    assertEquals(adding, partition.assignmentState.asInstanceOf[OngoingReassignmentState].addingReplicas)
+    assertEquals(removing, partition.assignmentState.asInstanceOf[OngoingReassignmentState].removingReplicas)
+    assertEquals(Seq(1, 2, 3), partition.remoteReplicas.map(_.brokerId))
+
+    // Test with simple assignment
+    val replicas2 = Seq(0, 3, 4, 5)
+    val isr2 = Set(0, 3, 4, 5)
+    partition.updateAssignmentAndIsr(replicas2, isr2, Seq.empty, Seq.empty)
+
+    assertTrue("The assignmentState is not SimpleAssignmentState",
+      partition.assignmentState.isInstanceOf[SimpleAssignmentState])
+    assertEquals(replicas2, partition.assignmentState.replicas)
+    assertEquals(isr2, partition.inSyncReplicaIds)
+    assertEquals(Seq(3, 4, 5), partition.remoteReplicas.map(_.brokerId))
   }
 
   /**

@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -30,7 +29,6 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -54,7 +52,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 
-@RunWith(value = Parameterized.class)
+@RunWith(Parameterized.class)
 public class KTableKTableForeignKeyJoinIntegrationTest {
 
     private static final String LEFT_TABLE = "left_table";
@@ -265,10 +263,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     }
 
     @Test
-    public void shouldEmitTombstonedWhenDeletingNonJoiningRecords() {
+    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords() {
         final Topology topology = getTopology(streamsConfig, "store", leftJoin);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
-            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
@@ -295,7 +292,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
-                    is(Utils.<String, String>mkMap(mkEntry("lhs1", null)))
+                    is(mkMap(mkEntry("lhs1", null)))
                 );
                 assertThat(
                     asMap(store),
@@ -322,7 +319,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     public void shouldNotEmitTombstonesWhenDeletingNonExistingRecords() {
         final Topology topology = getTopology(streamsConfig, "store", leftJoin);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
-            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
@@ -369,9 +365,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs1", "lhsValue1|rhs2");
             assertThat(
                 outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs2,null)" : null)
-                ))
+                is(mkMap(mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs2,null)" : null)))
             );
             assertThat(
                 asMap(store),
@@ -381,9 +375,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs1", "lhsValue1|rhs3");
             assertThat(
                 outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs3,null)" : null)
-                ))
+                is(mkMap(mkEntry("lhs1", leftJoin ? "(lhsValue1|rhs3,null)" : null)))
             );
             assertThat(
                 asMap(store),
@@ -448,29 +440,35 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
         final KTable<String, String> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
 
-        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            Materialized.<String, String>as(Stores.inMemoryKeyValueStore(queryableStoreName))
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())
-                .withCachingDisabled();
-
         final Function<String, String> extractor = value -> value.split("\\|")[1];
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
-        if (leftJoin)
-            left.leftJoin(right,
-                          extractor,
-                          joiner,
-                          materialized)
-                .toStream()
-                .to(OUTPUT, Produced.with(Serdes.String(), Serdes.String()));
-        else
-            left.join(right,
-                      extractor,
-                      joiner,
-                      materialized)
-                .toStream()
-                .to(OUTPUT, Produced.with(Serdes.String(), Serdes.String()));
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            Materialized.<String, String>as(Stores.inMemoryKeyValueStore(queryableStoreName))
+                .withValueSerde(Serdes.String())
+                // the cache suppresses some of the unnecessary tombstones we want to make assertions about
+                .withCachingDisabled();
+
+        final KTable<String, String> joinResult;
+        if (leftJoin) {
+            joinResult = left.leftJoin(
+                right,
+                extractor,
+                joiner,
+                materialized
+            );
+        } else {
+            joinResult = left.join(
+                right,
+                extractor,
+                joiner,
+                materialized
+            );
+        }
+
+        joinResult
+            .toStream()
+            .to(OUTPUT);
 
         return builder.build(streamsConfig);
     }

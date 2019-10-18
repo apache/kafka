@@ -114,6 +114,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -1998,7 +1999,7 @@ public class FetcherTest {
 
         ByteBuffer buffer = ApiVersionsResponse.
             createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
-                serialize(ApiKeys.API_VERSIONS, 0);
+                serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -2015,7 +2016,9 @@ public class FetcherTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             FetchResponse response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.FETCH, request.correlationId());
+            buffer = response.serialize(ApiKeys.FETCH,
+                    ApiKeys.FETCH.latestVersion(),
+                    request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -3770,6 +3773,33 @@ public class FetcherTest {
 
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(selected.id(), -1);
+    }
+
+    @Test
+    public void testFetchCompletedBeforeHandlerAdded() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+        fetcher.sendFetches();
+        client.prepareResponse(fullFetchResponse(tp0, buildRecords(1L, 1, 1), Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        fetchedRecords();
+        Node node = fetcher.selectReadReplica(tp0, subscriptions.position(tp0).currentLeader.leader, time.milliseconds());
+
+        AtomicBoolean wokenUp = new AtomicBoolean(false);
+        client.setWakeupHook(() -> {
+            if (!wokenUp.getAndSet(true)) {
+                consumerClient.disconnectAsync(node);
+                consumerClient.poll(time.timer(0));
+            }
+        });
+
+        assertEquals(1, fetcher.sendFetches());
+
+        consumerClient.disconnectAsync(node);
+        consumerClient.poll(time.timer(0));
+
+        assertEquals(1, fetcher.sendFetches());
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

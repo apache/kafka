@@ -131,7 +131,9 @@ class SimpleFetchTest {
     val allReplicas = Seq(configs.head.brokerId, followerId)
     partition.updateAssignmentAndIsr(
       assignment = allReplicas,
-      isr = allReplicas.toSet
+      isr = allReplicas.toSet,
+      addingReplicas = Seq.empty,
+      removingReplicas = Seq.empty
     )
     val leo = LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
     partition.updateFollowerFetchState(

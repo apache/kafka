@@ -213,7 +213,9 @@ class IsrExpirationTest {
 
     partition.updateAssignmentAndIsr(
       assignment = configs.map(_.brokerId),
-      isr = configs.map(_.brokerId).toSet
+      isr = configs.map(_.brokerId).toSet,
+      addingReplicas = Seq.empty,
+      removingReplicas = Seq.empty
     )
 
     // set lastCaughtUpTime to current time

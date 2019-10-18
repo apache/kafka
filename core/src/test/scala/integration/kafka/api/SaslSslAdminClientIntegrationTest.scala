@@ -24,7 +24,7 @@ import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.Assert.{assertEquals, assertTrue}
@@ -33,6 +33,7 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
@@ -448,8 +449,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     validateMetadataAndConfigs(createResult)
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
-    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    val describeResponseConfig = client.describeConfigs(List(topicResource).asJava).values.get(topicResource).get().entries.asScala
+    val describeResponseConfig = describeConfigs(topic1)
     assertEquals(describeResponseConfig.map(_.name).toSet, createResponseConfig.map(_.name).toSet)
     describeResponseConfig.foreach { describeEntry =>
       val name = describeEntry.name
@@ -459,6 +459,23 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
       assertEquals(s"isSensitive mismatch for $name", describeEntry.isSensitive, createEntry.isSensitive)
       assertEquals(s"Source mismatch for $name", describeEntry.source, createEntry.source)
     }
+  }
+
+  private def describeConfigs(topic: String): Iterable[ConfigEntry] = {
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    var configEntries: Iterable[ConfigEntry] = null
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResponse = client.describeConfigs(List(topicResource).asJava).all.get.get(topicResource)
+        configEntries = topicResponse.entries.asScala
+        true
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, "Timed out waiting for describeConfigs")
+
+    configEntries
   }
 
   private def waitForDescribeAcls(client: Admin, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
