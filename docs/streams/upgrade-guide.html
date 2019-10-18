@@ -90,11 +90,11 @@
 
     </p>
     <p>
-        Before the 2.4.0 version of Kafa Streams, users of the DSL could not name the state stores involved in a Stream-Stream join.  If users added DSL operations upstream of the 
-        join, the internal names of the state stores would shift, requiring an application reset when redeploying.  Now in the 2.4.0 release Kafka Streams adds the <code>StreamJoined</code>
+        Before the 2.4.0 version of Kafa Streams, users of the DSL could not name the state stores involved in a stream-stream join.  If users added DSL operations before of the 
+        join, the internal names of the state stores would shift, requiring an application reset when redeploying.  In the 2.4.0 release, Kafka Streams adds the <code>StreamJoined</code>
         object, which gives users the ability to name the join processor, repartition topic(s) (if a repartition is required), and the state stores involved in the join.  Also, by naming the state stores, the changelog topics backing the state stores are named as well.
 
-        Another feature delivered by <code>StreamJoined</code> that will be of interest to users is that you can now configure the type of state store used in the join.  Users can now elect to use in-memory stores or custom state stores for a Stream-Stream join.  Users should note that the provided stores will not be available for searching via Interactive Queries.  With the addition of <code>StreamJoined</code> Stream-Stream join operations using <code>Joined</code> have been deprecated, and users are encouraged to switch over to Stream-Stream join methods using the new overloaded methods.  You can get more details from <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>
+        Another feature delivered by <code>StreamJoined</code> is that you can now configure the type of state store used in the join.  You can now elect to use in-memory stores or custom state stores for a stream-stream join.  Note that the provided stores will not be available for querying via Interactive Queries.  With the addition of <code>StreamJoined</code>, stream-stream join operations using <code>Joined</code> have been deprecated. Please switch over to stream-stream join methods using the new overloaded methods.  You can get more details from <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>
     </p>
     <p>
         With the introduction of incremental cooperative rebalancing, Streams no longer requires all tasks be revoked at the beginning of a rebalance. Instead, at the completion of the rebalance only those tasks which are to be migrated to another consumer
