@@ -265,7 +265,7 @@ public class SelectorTest {
     @Test
     public void testPartialSendAndReceiveReflectedInMetrics() throws Exception {
         // We use a large payload to attempt to trigger the partial send and receive logic.
-        int payloadSize = 200 * BUFFER_SIZE;
+        int payloadSize = 20 * BUFFER_SIZE;
         String payload = TestUtils.randomString(payloadSize);
         String nodeId = "0";
         blockingConnect(nodeId);
