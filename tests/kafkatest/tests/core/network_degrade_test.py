@@ -62,6 +62,8 @@ class NetworkDegradeTest(Test):
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=2 ttl=64 time=0.197 ms
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=3 ttl=64 time=0.145 ms
         times = []
+        self.logger.info("devices: %s" % zk0.account.ssh_output("ifconfig -a", allow_fail=True))
+        self.logger.info("devices: %s" % zk0.account.ssh_output("ipconfig -a", allow_fail=True))
 
         self.logger.info("network device: %s" % zk0.account.ssh_output("ip route get %s | head -n1 | awk '{ print $5 }" %
                                            self.trogdor.coordinator_node.account.externally_routable_ip, allow_fail=True))
