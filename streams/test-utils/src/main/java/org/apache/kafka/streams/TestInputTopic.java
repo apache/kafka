@@ -97,7 +97,7 @@ public class TestInputTopic<K, V> {
         currentTime = currentTime.plus(advance);
     }
 
-    private Instant getTimestampAndAdvanced() {
+    private Instant getTimestampAndAdvance() {
         final Instant timestamp = currentTime;
         currentTime = currentTime.plus(advanceDuration);
         return timestamp;
@@ -111,7 +111,7 @@ public class TestInputTopic<K, V> {
      */
     public void pipeInput(final TestRecord<K, V> record) {
         //if record timestamp not set get timestamp and advance
-        final Instant timestamp = (record.getRecordTime() == null) ? getTimestampAndAdvanced() : record.getRecordTime();
+        final Instant timestamp = (record.getRecordTime() == null) ? getTimestampAndAdvance() : record.getRecordTime();
         driver.pipeRecord(topic, record, keySerializer, valueSerializer, timestamp);
     }
 
