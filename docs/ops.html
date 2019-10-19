@@ -861,6 +861,26 @@
         <td></td>
       </tr>
       <tr>
+        <td>Message validation failure rate due to no key specified for compacted topic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to invalid magic number</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to incorrect crc checksum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>Log flush rate and time</td>
         <td>kafka.log:type=LogFlushStats,name=LogFlushRateAndTimeMs</td>
         <td></td>
@@ -1490,8 +1510,78 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>rebalance-latency-avg</td>
+        <td>The average time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-max</td>
+        <td>The max time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-total</td>
+        <td>The total time taken for group rebalances so far</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-total</td>
+        <td>The total number of group rebalances participated</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-rate-per-hour</td>
+        <td>The number of group rebalance participated per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-total</td>
+        <td>The total number of failed group rebalances</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-rate-per-hour</td>
+        <td>The number of failed group rebalance event per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>last-rebalance-seconds-ago</td>
+        <td>The number of seconds since the last rebalance event</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>last-heartbeat-seconds-ago</td>
         <td>The number of seconds since the last controller heartbeat</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-avg</td>
+        <td>The average time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-max</td>
+        <td>The max time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-avg</td>
+        <td>The average time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-max</td>
+        <td>The max time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-avg</td>
+        <td>The average time taken by the on-partitions-lost rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-max</td>
+        <td>The max time taken by the on-partitions-lost rebalance listener callback</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
