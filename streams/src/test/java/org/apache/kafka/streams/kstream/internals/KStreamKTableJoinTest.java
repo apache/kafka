@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -62,6 +63,8 @@ public class KStreamKTableJoinTest {
     private MockProcessor<Integer, String> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+    private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
 
     @Before
     public void setUp() {
@@ -70,12 +73,10 @@ public class KStreamKTableJoinTest {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
         final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         stream = builder.stream(streamTopic, consumed);
         table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(supplier);
-
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
         driver = new TopologyTestDriver(builder.build(), props);
         inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -168,7 +169,6 @@ public class KStreamKTableJoinTest {
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1+Y1", 1));
-
     }
 
     @Test
@@ -195,22 +195,65 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKey() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        inputStreamTopic.pipeInput(null, "A");
-        LogCaptureAppender.unregister(appender);
-
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] offset=[0]"));
+    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeterWhenSkippingNullLeftKey(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        inputStreamTopic.pipeInput(1, null);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        driver = new TopologyTestDriver(builder.build(), props);
+        final TestInputTopic<Integer, String> inputTopic =
+            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+        inputTopic.pipeInput(null, "A");
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] offset=[0]"));
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+            assertEquals(
+                1.0,
+                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            );
+        }
+        assertThat(
+            appender.getMessages(),
+            hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
+                + "offset=[0]"));
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
+        driver = new TopologyTestDriver(builder.build(), props);
+        final TestInputTopic<Integer, String> inputTopic =
+            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+        inputTopic.pipeInput(1, null);
+        LogCaptureAppender.unregister(appender);
+
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+            assertEquals(
+                1.0,
+                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            );
+        }
+        assertThat(
+            appender.getMessages(),
+            hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
+                + "offset=[0]")
+        );
     }
 }

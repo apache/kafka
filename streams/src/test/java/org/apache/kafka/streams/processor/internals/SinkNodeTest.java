@@ -29,6 +29,8 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Optional;
+
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -41,7 +43,7 @@ public class SinkNodeTest {
         null,
         new LogContext("sinknode-test "),
         new DefaultProductionExceptionHandler(),
-        new Metrics().sensor("skipped-records")
+        Optional.of(new Metrics().sensor("skipped-records"))
     );
 
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(

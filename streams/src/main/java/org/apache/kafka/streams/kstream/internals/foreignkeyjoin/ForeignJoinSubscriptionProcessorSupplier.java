@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 
 public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements ProcessorSupplier<KO, Change<VO>> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionProcessorSupplier.class);
@@ -57,7 +58,7 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
 
 
     private final class KTableKTableJoinProcessor extends AbstractProcessor<KO, Change<VO>> {
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
         private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
 
         @Override
@@ -81,7 +82,7 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                skippedRecordsSensor.ifPresent(Sensor::record);
                 return;
             }
 

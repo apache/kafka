@@ -40,6 +40,7 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -109,7 +110,7 @@ public class ProcessorNodeTest {
                 null,
                 new LogContext("processnode-test "),
                 new DefaultProductionExceptionHandler(),
-                metrics.sensor("skipped-records")
+                Optional.of(metrics.sensor("skipped-records"))
             ),
             metrics
         );
