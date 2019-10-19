@@ -14,7 +14,7 @@
     <suppress checks="NPathComplexity"
               files="(FieldSpec).java"/>
     <suppress checks="JavaNCSS"
-              files="(ApiMessageType).java"/>
+              files="(ApiMessageType).java|MessageDataGenerator.java"/>
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
@@ -34,7 +34,7 @@
               files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java|KafkaConsumer.java"/>
 
     <suppress checks="ParameterNumber"
-              files="NetworkClient.java"/>
+              files="NetworkClient.java|FieldSpec.java"/>
     <suppress checks="ParameterNumber"
               files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
