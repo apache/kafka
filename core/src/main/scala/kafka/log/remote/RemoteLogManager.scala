@@ -140,6 +140,14 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
   }
 
+  /**
+   * Callback to receive any leadership changes for the topic partitions assigned to this broker. If there are no
+   * existing tasks for a given topic partition then it will assign new leader or follower task else it will convert the
+   * task to respective target state(leader or follower).
+   *
+   * @param partitionsBecomeLeader
+   * @param partitionsBecomeFollower
+   */
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]): Unit = {
     // Partitions logs are available when this callback is invoked.
     // Compact topics are filtered here as they are not supported with tiered storage.
@@ -159,8 +167,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
    * is set as true.
    *
-   * @param topicPartitions Set of topic partitions with a flag to be deleted or not.
-   * @return
+   * @param topicPartitions Set of topic partitions.
+   * @param delete          flag to indicate whether the given topic partitions to be deleted or not.
    */
   def stopPartitions(topicPartitions: Set[TopicPartition], delete:Boolean): Unit = {
     topicPartitions.foreach { tp =>
@@ -340,15 +348,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     rlmIndexer.lookupLastOffset(tp)
   }
 
-  /**
-   * Read topic partition data from remote
-   *
-   * @param fetchMaxByes
-   * @param minOneMessage
-   * @param tp
-   * @param fetchInfo
-   * @return
-   */
   def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
     val offset = fetchInfo.fetchOffset
     val entry = rlmIndexer.lookupEntryForOffset(tp, offset)

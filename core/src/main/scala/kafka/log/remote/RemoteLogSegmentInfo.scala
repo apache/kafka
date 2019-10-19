@@ -24,9 +24,10 @@ import org.apache.kafka.common.TopicPartition
  * @param baseOffset     baseOffset of this segment
  * @param lastOffset     last offset of this segment
  * @param topicPartition topic partition of this segment
+ * @param leaderEpoch    leader epoch from which this segment is copied
  * @param props          any custom props to be stored by RemoteStorageManager, which can be used later when it
  *                       is passed through different methods in RemoteStorageManager.
  */
-case class RemoteLogSegmentInfo(baseOffset: Long, lastOffset: Long, topicPartition: TopicPartition, leaderEpoch:Int,
+case class RemoteLogSegmentInfo(baseOffset: Long, lastOffset: Long, topicPartition: TopicPartition, leaderEpoch: Int,
                                 props: java.util.Map[String, _]) {
 }

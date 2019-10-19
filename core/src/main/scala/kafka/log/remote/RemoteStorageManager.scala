@@ -23,12 +23,17 @@ import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
-// all these APIs are still experimental, in poc mode.
+/**
+ * RemoteStorageManager is an interface that allows to plugin different remote storage implementations to copy and
+ * retrieve the log segments.
+ *
+ * All these APIs are still experimental.
+ */
 trait RemoteStorageManager extends Configurable with AutoCloseable {
 
   /**
-   * Earliest log offset exists for a topic partition in remote storage. Return -1 if there are no segments in
-   * the remote storage.
+   * Earliest log offset if exists for the given topic partition in the remote storage. Return -1 if there are no
+   * segments in the remote storage.
    *
    * @param tp
    * @return
@@ -37,11 +42,13 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def earliestLogOffset(tp: TopicPartition): Long
 
   /**
-   * Copies LogSegment provided by [[RemoteLogManager]]
-   * Returns the RDIs of the remote data
-   * This method is used by the leader
+   * Copies LogSegment provided by [[RemoteLogManager]] for the given topic partition with the given leader epoch.
+   * Returns the RDIs of the remote data. This method is invoked by the leader of topic partition.
    *
-   * @param topicPartition The topic-partition this LogSegment belongs to
+   * //todo LogSegment is not public, this will be changed with an interface which provides base and end offset of the
+   * segment, log and offset/time indexes.
+   *
+   * @param topicPartition
    * @param logSegment
    * @return
    */
@@ -49,15 +56,15 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment, leaderEpoch: Int): util.List[RemoteLogIndexEntry]
 
   /**
-   * Cancels the unfinished LogSegment copying of this given topic-partition
+   * Cancels the unfinished LogSegment copying of the given topic-partition.
    *
    * @param topicPartition
    */
   def cancelCopyingLogSegment(topicPartition: TopicPartition): Unit
 
   /**
-   * List the remote log segment files of the specified topicPartition
-   * The RLM of a follower uses this method to find out the remote data
+   * List the remote log segment files of the given topicPartition.
+   * The RemoteLogManager of a follower uses this method to find out the remote data for the given topic partition.
    *
    * @return List of remote segments, sorted by baseOffset in ascending order.
    */
@@ -77,7 +84,8 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def listRemoteSegments(topicPartition: TopicPartition, minBaseOffset: Long): util.List[RemoteLogSegmentInfo]
 
   /**
-   * Called by the RLM to retrieve the RemoteLogIndex entries of the specified remoteLogSegment.
+   * Returns a List of RemoteLogIndexEntry for the given RemoteLogSegmentInfo. This is used by follower to store remote
+   * log indexes locally.
    *
    * @param remoteLogSegment
    * @return
@@ -86,13 +94,13 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry]
 
   /**
-   * Deletes remote LogSegment file provided by the RLM
+   * Deletes remote LogSegment file and indexes for the given remoteLogSegmentInfo
    *
-   * @param remoteLogSegment
+   * @param remoteLogSegmentInfo
    * @return
    */
   @throws(classOf[IOException])
-  def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean
+  def deleteLogSegment(remoteLogSegmentInfo: RemoteLogSegmentInfo): Boolean
 
   /**
    * Delete all the log segments for the given topic partition. This can be done by rename the existing locations
@@ -106,7 +114,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
 
   /**
    * Remove the log segments which are older than the given cleanUpTillMs. Return the log start offset of the
-   * earliest remote log segment if exists or -1 if there are no log segments in the remote tier storage.
+   * earliest remote log segment if exists or -1 if there are no log segments in the remote storage.
    *
    * @param topicPartition
    * @param cleanUpTillMs
@@ -116,10 +124,8 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long
 
   /**
-   * Read up to maxBytes data from remote storage, starting from the 1st batch that
-   * is greater than or equals to the startOffset.
-   *
-   * Will read at least one batch, if the 1st batch size is larger than maxBytes.
+   * Read up to maxBytes data from remote storage, starting from the 1st batch that is greater than or equals to the
+   * startOffset. It will read at least one batch, if the 1st batch size is larger than maxBytes.
    *
    * @param remoteLogIndexEntry The first remoteLogIndexEntry that remoteLogIndexEntry.lastOffset >= startOffset
    * @param maxBytes            maximum bytes to fetch for the given entry
@@ -131,7 +137,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long, minOneMessage: Boolean): Records
 
   /**
-   * stops all the threads and closes the instance.
+   * Release any system resources used by this instance.
    */
   def close(): Unit
 }
