@@ -36,9 +36,9 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
     private final Logger log;
 
     StreamsRebalanceListener(final Time time,
-        final TaskManager taskManager,
-        final StreamThread streamThread,
-        final Logger log) {
+                             final TaskManager taskManager,
+                             final StreamThread streamThread,
+                             final Logger log) {
         this.time = time;
         this.taskManager = taskManager;
         this.streamThread = streamThread;

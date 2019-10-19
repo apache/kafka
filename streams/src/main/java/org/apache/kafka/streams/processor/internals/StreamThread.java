@@ -249,6 +249,11 @@ public class StreamThread extends Thread {
         return assignmentErrorCode.get();
     }
 
+    // For testing only
+    void setAssignmentErrorCode(int code) {
+        assignmentErrorCode.set(code);
+    }
+
     void setRebalanceException(final Throwable rebalanceException) {
         this.rebalanceException = rebalanceException;
     }

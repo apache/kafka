@@ -18,10 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -37,6 +39,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -44,7 +47,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
@@ -58,6 +63,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -73,10 +79,12 @@ import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -131,6 +139,9 @@ public class StreamThreadTest {
 
     private InternalTopologyBuilder internalTopologyBuilder;
     private StreamsMetadataState streamsMetadataState;
+
+    @ClassRule
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @Before
     public void setUp() {
@@ -654,40 +665,98 @@ public class StreamThreadTest {
         }
     }
 
+    /**
+     * Let the stream thread runs 2 loops. In the first loop we hit a stream migrated exception and enforce rebalance
+     * On the second run we shall hit a bad state and exit the run loop.
+     * Finally we check and make sure the task state is closed.
+     */
     @Test
-    public void shouldHaveTaskClosedOnTaskMigratedException() {
+    public void shouldHaveAllTasksClosedOnEnforceRebalance() throws InterruptedException, IOException {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        String storeName = "store";
+        internalStreamsBuilder
+            .stream(Collections.singleton(topic1), consumed)
+            .groupByKey()
+            .count(Materialized.as(storeName));
 
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
+        CLUSTER.createTopic(topic1);
+        CLUSTER.start();
+        Properties consumerProperties = mkProperties(mkMap(
+            mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "groupId"),
+            mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+            mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName()),
+            mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName())
+        ));
 
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
+        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProperties);
+
+        final TaskManager taskManager = new TaskManager(
+            new MockChangelogReader(),
+            PROCESS_ID,
+            "log-prefix",
+            consumer,
+            streamsMetadataState,
+            new StreamThread.TaskCreator(
+                internalTopologyBuilder,
+                new StreamsConfig(configProps(false)),
+                streamsMetrics,
+                stateDirectory,
+                new MockChangelogReader(),
+                null,
+                mockTime,
+                clientSupplier,
+                clientSupplier.getProducer(new HashMap<>()),
+                "thread",
+                new LogContext("").logger(StreamThreadTest.class)
+            ),
+            null,
+            null,
+            new AssignedStreamsTasks(new LogContext()),
+            new AssignedStandbyTasks(new LogContext())
+        );
+        taskManager.setConsumer(consumer);
+
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
         activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
 
+        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
         thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
-        mockConsumer.assign(assignedPartitions);
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
+//        consumer.subscribe(Collections.singletonList(topic1));
+        thread.setStateListener(
+            (t, newState, oldState) -> {
+                if (oldState == StreamThread.State.CREATED) {
+//                    thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+//                    thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+                    // Trigger enforce rebalance through version probing.
+                    thread.setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+                } else if (newState == StreamThread.State.RUNNING) {
+                    taskManager.updateNewAndRestoringTasks();
+                    assertEquals(1, thread.tasks().size());
+                    thread.setState(StreamThread.State.PENDING_SHUTDOWN);
+                }
+            });
 
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-
-        thread.shutdown();
         thread.run();
-
-        for (final Task task : thread.tasks().values()) {
-            assertTrue(((MockProducer) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
-        }
+        assertEquals(0, thread.tasks().size());
     }
 
     @Test
