@@ -616,7 +616,7 @@ public class InternalTopologyBuilder {
         internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
     }
 
-    public final void copartitionSources(final Collection<String> sourceNodes) {
+    public final synchronized void copartitionSources(final Collection<String> sourceNodes) {
         copartitionSourceGroups.add(new HashSet<>(sourceNodes));
     }
 
