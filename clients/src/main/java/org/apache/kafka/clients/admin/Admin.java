@@ -25,6 +25,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -1079,6 +1081,55 @@ public interface Admin extends AutoCloseable {
      * @return The MembershipChangeResult.
      */
     MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata.
+     * @return The AlterOffsetsResult.
+     */
+    default AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
+        return alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata. Partitions not specified in the map are ignored.
+     * @param options The options to use when altering the offsets.
+     * @return The AlterOffsetsResult.
+     */
+    AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
+
+    /**
+     * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
+     * the beginning offset, end offset as well as the offset matching a timestamp in partitions.
+     *
+     * <p>This is a convenience method for {@link #listOffsets(Map, ListOffsetsOptions)}
+     *
+     * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
+     * @return The ListOffsetsResult.
+     */
+    default ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+        return listOffsets(topicPartitionOffsets, new ListOffsetsOptions());
+    }
+
+    /**
+     * <p>List offset for the specified partitions. This operation enables to find
+     * the beginning offset, end offset as well as the offset matching a timestamp in partitions.
+     *
+     * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
+     * @param options The options to use when retrieving the offsets
+     * @return The ListOffsetsResult.
+     */
+    ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
 
     /**
      * Get the metrics kept by the adminClient
