@@ -620,13 +620,13 @@ public class InternalTopologyBuilder {
         copartitionSourceGroups.add(new HashSet<>(sourceNodes));
     }
 
-    public synchronized void maybeUpdateCopartitionSourceGroups(final String replacedNodeName,
-                                                                final String optimizedNodeName) {
+    public final synchronized void maybeUpdateCopartitionSourceGroups(final String oldNodeName,
+                                                                      final String newNodeName) {
         for (final Set<String> copartitionSourceGroup : copartitionSourceGroups) {
-            if (copartitionSourceGroup.contains(replacedNodeName)) {
-                copartitionSourceGroup.remove(replacedNodeName);
-                copartitionSourceGroup.add(optimizedNodeName);
-                log.debug("replaced node '{}' with '{}' in copartition source group", replacedNodeName, optimizedNodeName);
+            if (copartitionSourceGroup.contains(oldNodeName)) {
+                copartitionSourceGroup.remove(oldNodeName);
+                copartitionSourceGroup.add(newNodeName);
+                log.debug("replaced node '{}' with '{}' in copartition source group", oldNodeName, newNodeName);
             }
         }
     }
