@@ -109,7 +109,7 @@ public class SmokeTestDriverIntegrationTest {
 
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {
-                SmokeTestClient client = clients.remove(0);
+                final SmokeTestClient client = clients.remove(0);
 
                 client.closeAsync();
                 while (!client.closed()) {
