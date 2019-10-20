@@ -439,7 +439,7 @@ public interface Admin extends AutoCloseable {
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
      * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
      * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
-     * log directory if it is not already there.
+     * log directory if it is not already there. For detailed result, inspect the returned {@link AlterReplicaLogDirsResult} instance.
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
@@ -448,8 +448,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
      *
-     * @param replicaAssignment The replicas with their log directory absolute path
-     * @return The AlterReplicaLogDirsResult
+     * @param replicaAssignment     The replicas with their log directory absolute path
+     * @return                      The AlterReplicaLogDirsResult
+     * @throws InterruptedException Interrupted while joining I/O thread
      */
     default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
@@ -459,15 +460,16 @@ public interface Admin extends AutoCloseable {
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
      * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
      * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
-     * log directory if it is not already there.
+     * log directory if it is not already there. For detailed result, inspect the returned {@link AlterReplicaLogDirsResult} instance.
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
      *
-     * @param replicaAssignment The replicas with their log directory absolute path
-     * @param options           The options to use when changing replica dir
-     * @return The AlterReplicaLogDirsResult
+     * @param replicaAssignment     The replicas with their log directory absolute path
+     * @param options               The options to use when changing replica dir
+     * @return                      The AlterReplicaLogDirsResult
+     * @throws InterruptedException Interrupted while joining I/O thread
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
                                                   AlterReplicaLogDirsOptions options);
