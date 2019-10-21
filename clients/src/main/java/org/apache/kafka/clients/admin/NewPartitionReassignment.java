@@ -28,17 +28,17 @@ import java.util.Optional;
  * A new partition reassignment, which can be applied via {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
  */
 public class NewPartitionReassignment {
-    private final List<Integer> targetBrokers;
+    private final List<Integer> targetReplicas;
 
-    public static Optional<NewPartitionReassignment> of(Integer... brokers) {
-        return Optional.of(new NewPartitionReassignment(Arrays.asList(brokers)));
+    public static Optional<NewPartitionReassignment> of(Integer... replicas) {
+        return Optional.of(new NewPartitionReassignment(Arrays.asList(replicas)));
     }
 
-    public NewPartitionReassignment(List<Integer> targetBrokers) {
-        this.targetBrokers = Collections.unmodifiableList(new ArrayList<>(targetBrokers));
+    public NewPartitionReassignment(List<Integer> targetReplicas) {
+        this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }
 
-    public List<Integer> targetBrokers() {
-        return targetBrokers;
+    public List<Integer> targetReplicas() {
+        return targetReplicas;
     }
 }

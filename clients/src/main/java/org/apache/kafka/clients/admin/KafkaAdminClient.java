@@ -3277,7 +3277,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         ReassignablePartition reassignablePartition = new ReassignablePartition()
                                 .setPartitionIndex(partitionIndex)
-                                .setReplicas(reassignment.map(NewPartitionReassignment::targetBrokers).orElse(null));
+                                .setReplicas(reassignment.map(NewPartitionReassignment::targetReplicas).orElse(null));
                         reassignablePartitions.add(reassignablePartition);
                     }
 
