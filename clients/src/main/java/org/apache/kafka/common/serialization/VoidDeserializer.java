@@ -14,29 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
+package org.apache.kafka.common.serialization;
 
-public enum IsolationLevel {
-    READ_UNCOMMITTED((byte) 0), READ_COMMITTED((byte) 1);
+public class VoidDeserializer implements Deserializer<Void> {
+    @Override
+    public Void deserialize(String topic, byte[] data) {
+        if (data != null)
+            throw new IllegalArgumentException("Data should be null for a VoidDeserializer.");
 
-    private final byte id;
-
-    IsolationLevel(byte id) {
-        this.id = id;
-    }
-
-    public byte id() {
-        return id;
-    }
-
-    public static IsolationLevel forId(byte id) {
-        switch (id) {
-            case 0:
-                return READ_UNCOMMITTED;
-            case 1:
-                return READ_COMMITTED;
-            default:
-                throw new IllegalArgumentException("Unknown isolation level " + id);
-        }
+        return null;
     }
 }

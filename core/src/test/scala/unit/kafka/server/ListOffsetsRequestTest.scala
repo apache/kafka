@@ -19,9 +19,9 @@ package kafka.server
 import java.util.Optional
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse}
 import org.junit.Assert._
 import org.junit.Test
 

@@ -44,8 +44,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
-import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
@@ -487,9 +487,9 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldAcceptBuiltInMetricsVersion0100To23() {
-        // don't use `StreamsConfig.METRICS_0100_TO_23` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.3");
+    public void shouldAcceptBuiltInMetricsVersion0100To24() {
+        // don't use `StreamsConfig.METRICS_0100_TO_24` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.4");
         new StreamsConfig(props);
     }
 

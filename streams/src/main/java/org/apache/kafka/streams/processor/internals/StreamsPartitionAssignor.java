@@ -383,8 +383,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         if (minReceivedMetadataVersion < LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading metadata to version {}. Latest supported version is {}.",
+            log.info("Downgrade metadata to version {}. Latest supported version is {}.",
                 minReceivedMetadataVersion,
+                LATEST_SUPPORTED_VERSION);
+        }
+        if (minSupportedMetadataVersion < LATEST_SUPPORTED_VERSION) {
+            log.info("Downgrade latest supported metadata to version {}. Latest supported version is {}.",
+                minSupportedMetadataVersion,
                 LATEST_SUPPORTED_VERSION);
         }
 
@@ -1055,9 +1060,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 log.info(
                     "Sent a version {} subscription and got version {} assignment back (successful version probing). "
                         +
-                        "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
+                        "Downgrade subscription metadata to commonly supported version {} and trigger new rebalance.",
                     usedSubscriptionMetadataVersion,
-                    receivedAssignmentMetadataVersion
+                    receivedAssignmentMetadataVersion,
+                    latestCommonlySupportedVersion
                 );
                 usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
                 return true;
@@ -1237,7 +1243,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {
-        return supportedVersion < minSupportedMetadataVersion ? supportedVersion : minSupportedMetadataVersion;
+        if (supportedVersion < minSupportedMetadataVersion) {
+            log.debug("Downgrade the current minimum supported version {} to the smaller seen supported version {}",
+                minSupportedMetadataVersion, supportedVersion);
+            return supportedVersion;
+        } else {
+            log.debug("Current minimum supported version remains at {}, last seen supported version was {}",
+                minSupportedMetadataVersion, supportedVersion);
+            return minSupportedMetadataVersion;
+        }
     }
 
     protected void setAssignmentErrorCode(final Integer errorCode) {

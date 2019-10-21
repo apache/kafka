@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.{Iterable, JavaConverters, Seq}
@@ -41,6 +41,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
+
+  @After
+  def cleanup(): Unit = {
+    TestUtils.clearYammerMetrics()
+  }
 
   @Test(timeout = DEFAULT_MAX_WAIT_MS)
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
@@ -95,7 +100,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   }
 
   private def getGauge[T](metricName: String): Gauge[T] = {
-    getGauge(_.getName.endsWith(metricName))
+    getGauge(mName => mName.getName.endsWith(metricName) && mName.getScope == null)
   }
 
   private def getGauge[T](metricName: String, metricScope: String): Gauge[T] = {
@@ -196,7 +201,6 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testIsThreadFailed(): Unit = {
     val metricName = "DeadThreadCount"
-    removeMetric(metricName) // remove the existing metric so it will be attached to this object below on creation
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
@@ -210,11 +214,5 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     )
     assertEquals(cleaner.cleaners.size, getGauge[Int](metricName).value())
     assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
-  }
-
-  private def removeMetric(name: String): Unit = {
-    val metricName = Metrics.defaultRegistry().allMetrics()
-      .asScala.find(p => p._1.getName.endsWith(name)).get._1
-    Metrics.defaultRegistry().removeMetric(metricName)
   }
 }

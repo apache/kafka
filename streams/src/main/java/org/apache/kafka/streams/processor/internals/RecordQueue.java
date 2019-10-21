@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -49,7 +50,7 @@ public class RecordQueue {
     private StampedRecord headRecord = null;
     private long partitionTime = RecordQueue.UNKNOWN;
 
-    private Sensor skipRecordsSensor;
+    private final Optional<Sensor> skipRecordsSensor;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
@@ -191,7 +192,7 @@ public class RecordQueue {
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
 
-                skipRecordsSensor.record();
+                skipRecordsSensor.ifPresent(Sensor::record);
                 continue;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
