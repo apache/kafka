@@ -950,8 +950,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
-        log.info("Trying to subscribe to {}", topics);
-        System.out.println("start subscription");
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
@@ -959,8 +957,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
             if (topics.isEmpty()) {
                 // treat subscribing to empty topic list as the same as unsubscribing
-                log.info("Treat empty sub {}", topics);
-
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
