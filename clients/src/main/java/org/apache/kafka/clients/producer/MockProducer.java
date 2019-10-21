@@ -229,7 +229,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Adds the record to the list of sent records. The {@link RecordMetadata} returned will be immediately satisfied.
-     * 
+     *
      * @see #history()
      */
     @Override
@@ -289,10 +289,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    public synchronized void flush() {
+    public synchronized void flush(Duration timeout) {
         verifyProducerState();
         while (!this.completions.isEmpty())
             completeNext();
+    }
+
+    public synchronized void flush() {
+        flush(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {

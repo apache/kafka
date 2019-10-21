@@ -79,6 +79,11 @@ public interface Producer<K, V> extends Closeable {
     void flush();
 
     /**
+     * See {@link KafkaProducer#flush(Duration)}
+     */
+    void flush(Duration timeout);
+
+     /**
      * See {@link KafkaProducer#partitionsFor(String)}
      */
     List<PartitionInfo> partitionsFor(String topic);

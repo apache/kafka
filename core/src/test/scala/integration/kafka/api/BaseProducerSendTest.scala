@@ -436,6 +436,36 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       producer.close()
     }
   }
+  /**
+  * Test that flush return with TimeoutException when producer is unable to finish sending buffered records in time.
+*/
+  @Test
+  def testBoundedFlush() {
+    val producer = createProducer(brokerList)
+    createTopic(topic, 2, 2)
+    try {
+      producer.send(new ProducerRecord(topic, null, "value1".getBytes())).get()
+      try {
+        killBroker(0)
+        } catch {
+        case _: Throwable =>
+        }
+      try {
+        killBroker(1)
+        } catch {
+        case _: Throwable =>
+        }
+      producer.send(new ProducerRecord(topic, null, "value2".getBytes()))
+      try {
+        producer.flush(Duration.ofMillis(1000))
+        fail("TimeoutException should have thrown")
+        } catch {
+        case _: TimeoutException =>
+        }
+      }finally {
+      producer.close(Duration.ofMillis(1000))
+      }
+    }
 
   /**
    * Test close with zero timeout from caller thread

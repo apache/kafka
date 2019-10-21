@@ -1059,11 +1059,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void flush() {
-        log.trace("Flushing accumulated records in producer.");
-        this.accumulator.beginFlush();
-        this.sender.wakeup();
+        flush(Duration.ofMillis(Integer.MAX_VALUE));
+    }
+
+    /**
+     * This method waits up to <code>timeout</code> for the producer to send out all the buffered records.
+     *
+     * @param timeout The maximum time to wait for producer to complete.
+     * @throws TimeoutException If producer fail to finish in time
+     * @throws InterruptException If the thread is interrupted while blocked
+     */
+    @Override
+    public void flush(Duration timeout) {
+        long timeoutMs = timeout.toMillis();
         try {
-            this.accumulator.awaitFlushCompletion();
+            this.accumulator.beginFlush();
+            this.sender.wakeup();
+            this.accumulator.awaitFlushCompletion(timeoutMs);
         } catch (InterruptedException e) {
             throw new InterruptException("Flush interrupted.", e);
         }
