@@ -109,14 +109,18 @@ public class SmokeTestDriverIntegrationTest {
 
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {
-                clients.remove(0).closeAsync();
+                final SmokeTestClient client = clients.remove(0);
+
+                client.closeAsync();
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
             }
         }
+
         try {
             // wait for verification to finish
             driver.join();
-
-
         } finally {
             // whether or not the assertions failed, tell all the streams instances to stop
             for (final SmokeTestClient client : clients) {
@@ -125,7 +129,9 @@ public class SmokeTestDriverIntegrationTest {
 
             // then, wait for them to stop
             for (final SmokeTestClient client : clients) {
-                client.close();
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
             }
         }
 
