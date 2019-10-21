@@ -848,7 +848,7 @@ public class StreamTaskTest {
 
         assertFalse(task.isProcessable(time.milliseconds()));
 
-        assertFalse(task.isProcessable(time.milliseconds() + 50L));
+        assertFalse(task.isProcessable(time.milliseconds() + 99L));
 
         assertTrue(task.isProcessable(time.milliseconds() + 100L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
@@ -873,6 +873,52 @@ public class StreamTaskTest {
 
         assertTrue(task.isProcessable(time.milliseconds() + 250L));
         assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
+    }
+
+    @Test
+    public void shouldNotBeProcessableIfNoDataAvailble() {
+        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        final MetricName enforcedProcessMetric = metrics.metricName(
+            "enforced-processing-total",
+            "stream-task-metrics",
+            mkMap(mkEntry("thread-id", Thread.currentThread().getName()), mkEntry("task-id", taskId00.toString()))
+        );
+
+        assertFalse(task.isProcessable(0L));
+        assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
+
+        task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
+
+        assertFalse(task.isProcessable(time.milliseconds()));
+
+        assertFalse(task.isProcessable(time.milliseconds() + 99L));
+
+        assertTrue(task.isProcessable(time.milliseconds() + 100L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // once the buffer is drained and no new records coming, the timer should be reset
+        task.process();
+
+        assertFalse(task.isProcessable(time.milliseconds() + 110L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        // check that after time is reset, we only falls into enforced processing after the
+        // whole timeout has elapsed again
+        task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
+
+        assertFalse(task.isProcessable(time.milliseconds() + 150L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertFalse(task.isProcessable(time.milliseconds() + 249L));
+        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+
+        assertTrue(task.isProcessable(time.milliseconds() + 250L));
+        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
     }
 
 
