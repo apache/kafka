@@ -31,11 +31,10 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("StreamsUpgradeTest requires three argument (kafka-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] + " " : ""));
+        if (args.length < 1) {
+            System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires one argument (properties-file) but none provided");
         }
-        final String propFileName = args[1];
+        final String propFileName = args[0];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final Properties config = new Properties();
