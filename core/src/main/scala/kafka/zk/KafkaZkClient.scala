@@ -512,7 +512,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @throws KeeperException if there is an error while creating assignment
    */
   def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
-    val persistedAssignments = assignment.mapValues(ReplicaAssignment(_, List(), List())).toMap
+    val persistedAssignments = assignment.mapValues(ReplicaAssignment(_)).toMap
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(persistedAssignments))
   }
 

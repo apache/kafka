@@ -52,8 +52,10 @@ case class ReplicaAssignment(replicas: Seq[Int],
     ReplicaAssignment.fromOldAndNewReplicas(originReplicas, newReplicas)
   }
 
-  override def toString: String = s"PartitionReplicaAssignment(replicas: ${replicas.mkString(",")}, " +
-    s"addingReplicas: ${addingReplicas.mkString(",")}, removingReplicas: ${removingReplicas.mkString(",")})"
+  override def toString: String = s"ReplicaAssignment(" +
+    s"replicas=${replicas.mkString(",")}, " +
+    s"addingReplicas=${addingReplicas.mkString(",")}, " +
+    s"removingReplicas=${removingReplicas.mkString(",")})"
 }
 
 class ControllerContext {

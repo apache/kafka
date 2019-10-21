@@ -140,7 +140,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testReassignmentMatchesCurrentAssignment(): Unit = {
-    //Given a single replica on server 100
+    // Given a single replica on server 100
     startBrokers(Seq(100))
     adminClient = createAdminClient(servers)
     createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
@@ -152,7 +152,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
     waitForZkReassignmentToComplete()
 
-    //Then the replica should be on 101
+    // The replica should remain on 100
     val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)(tp0.partition)
     assertMoveForPartitionOccurred(Seq(100), partitionAssignment)
   }
