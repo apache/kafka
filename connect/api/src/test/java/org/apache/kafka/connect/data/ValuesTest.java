@@ -22,7 +22,6 @@ import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;

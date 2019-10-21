@@ -941,7 +941,7 @@ public class Values {
             }
         } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
             try {
-              return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
+                return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
             } catch (ParseException e) {
               // not a valid date
             }
@@ -1141,7 +1141,7 @@ public class Values {
 
         public String nextTokens(int n, int startingIndex) {
             int start = mark();
-            for (int i=0; i!=n; ++i) {
+            for (int i = 0; i != n; ++i) {
                 if (!hasNext()) {
                     rewindTo(start);
                     return null;
