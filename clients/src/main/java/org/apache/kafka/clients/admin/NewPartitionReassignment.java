@@ -30,8 +30,8 @@ import java.util.Optional;
 public class NewPartitionReassignment {
     private final List<Integer> targetReplicas;
 
-    public static Optional<NewPartitionReassignment> of(Integer... replicas) {
-        return Optional.of(new NewPartitionReassignment(Arrays.asList(replicas)));
+    public static NewPartitionReassignment of(Integer... replicas) {
+        return new NewPartitionReassignment(Arrays.asList(replicas));
     }
 
     public NewPartitionReassignment(List<Integer> targetReplicas) {
