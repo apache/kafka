@@ -70,9 +70,9 @@ public class Values {
     private static final String FALSE_LITERAL = Boolean.FALSE.toString();
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
-    private static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
-    private static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
-    private static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
+    protected static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
+    protected static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
+    protected static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
 
     private static final String QUOTE_DELIMITER = "\"";
     private static final String COMMA_DELIMITER = ",";
@@ -838,7 +838,9 @@ public class Values {
                     }
 
                     if (!parser.canConsume(ENTRY_DELIMITER)) {
-                        throw new DataException("Map entry is missing '=': " + parser.original());
+                        throw new DataException("Map entry is missing '" + ENTRY_DELIMITER
+                                                + "' at " + parser.position()
+                                                + " in " + parser.original());
                     }
                     SchemaAndValue value = parse(parser, true);
                     Object entryValue = value != null ? value.value() : null;
@@ -867,6 +869,24 @@ public class Values {
 
         char firstChar = token.charAt(0);
         boolean firstCharIsDigit = Character.isDigit(firstChar);
+
+        // Temporal types are more restrictive, so try them first
+        if (firstCharIsDigit) {
+            // The time and timestamp literals may be split into 5 tokens since an unescaped colon
+            // is a delimiter. Check these first since the first of these tokens is a simple numeric
+            int position = parser.mark();
+            String timeOrTimestampStr = parser.nextTokens(4, startPosition); // may be null
+            SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
+            if (temporal != null) {
+                return temporal;
+            }
+            // No match was found using the 5 tokens, so rewind and see if the current token has a date, time, or timestamp
+            parser.rewindTo(position);
+            temporal = parseAsTemporal(token);
+            if (temporal != null) {
+                return temporal;
+            }
+        }
         if (firstCharIsDigit || firstChar == '+' || firstChar == '-') {
             try {
                 // Try to parse as a number ...
@@ -901,35 +921,38 @@ public class Values {
                 // can't parse as a number
             }
         }
-        if (firstCharIsDigit) {
-            // Check for a date, time, or timestamp ...
-            int tokenLength = token.length();
-            if (tokenLength == ISO_8601_DATE_LENGTH) {
-                try {
-                    return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));
-                } catch (ParseException e) {
-                    // not a valid date
-                }
-            } else if (tokenLength == ISO_8601_TIME_LENGTH) {
-                try {
-                    return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN).parse(token));
-                } catch (ParseException e) {
-                    // not a valid date
-                }
-            } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
-                try {
-                    return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
-                } catch (ParseException e) {
-                    // not a valid date
-                }
-            }
-        }
-        if (embedded) {
-            throw new DataException("Failed to parse embedded value");
-        }
         // At this point, the only thing this can be is a string. Embedded strings were processed above,
         // so this is not embedded and we can use the original string...
         return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
+    }
+
+    protected static SchemaAndValue parseAsTemporal(String token) {
+        if (token == null) {
+            return null;
+        }
+        // If the colons were escaped, we'll see the escape chars and need to remove them
+        token = token.replace("\\:", ":");
+        int tokenLength = token.length();
+        if (tokenLength == ISO_8601_TIME_LENGTH) {
+            try {
+                return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN).parse(token));
+            } catch (ParseException e) {
+              // not a valid date
+            }
+        } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
+            try {
+              return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
+            } catch (ParseException e) {
+              // not a valid date
+            }
+        } else if (tokenLength == ISO_8601_DATE_LENGTH) {
+            try {
+                return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));
+            } catch (ParseException e) {
+                // not a valid date
+            }
+        }
+        return null;
     }
 
     protected static Schema commonSchemaFor(Schema previous, SchemaAndValue latest) {
@@ -1110,6 +1133,22 @@ public class Values {
                 previousToken = consumeNextToken();
             }
             return previousToken;
+        }
+
+        public String nextTokens(int n) {
+            return nextTokens(n, mark());
+        }
+
+        public String nextTokens(int n, int startingIndex) {
+            int start = mark();
+            for (int i=0; i!=n; ++i) {
+                if (!hasNext()) {
+                    rewindTo(start);
+                    return null;
+                }
+                next();
+            }
+            return original.substring(startingIndex, position());
         }
 
         private String consumeNextToken() throws NoSuchElementException {

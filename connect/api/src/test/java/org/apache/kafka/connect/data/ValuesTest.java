@@ -21,6 +21,8 @@ import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
+import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -383,6 +385,58 @@ public class ValuesTest {
         assertEquals(str, result.value());
     }
 
+    @Test
+    public void shouldParseTimestampStringAsTimestamp() throws Exception {
+        String str = "2019-08-23T14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseDateStringAsDate() throws Exception {
+        String str = "2019-08-23";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Date.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsDate() throws Exception {
+        String str = "14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringWithEscapedColonsAsTimestamp() throws Exception {
+        String str = "2019-08-23T14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "2019-08-23T14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringWithEscapedColonsAsDate() throws Exception {
+        String str = "14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
     /**
      * This is technically invalid JSON, and we don't want to simply ignore the blank elements.
      */
@@ -430,6 +484,20 @@ public class ValuesTest {
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
         Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
+    }
+
+    @Test
+    public void shouldConsumeMultipleTokens() {
+        String value = "a:b:c:d:e:f:g:h";
+        Parser parser = new Parser(value);
+        String firstFive = parser.nextTokens(5);
+        assertEquals("a:b:c", firstFive);
+        assertEquals(":", parser.next());
+        assertEquals("d", parser.next());
+        assertEquals(":", parser.next());
+        String lastEight = parser.nextTokens(8); // only 7 remain
+        assertNull(lastEight);
+        assertEquals("e", parser.next());
     }
 
     @Test
