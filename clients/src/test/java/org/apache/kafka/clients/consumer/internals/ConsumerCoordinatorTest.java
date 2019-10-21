@@ -2672,7 +2672,7 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    public static class MockRebalanceListener implements ConsumerRebalanceListener {
+    private static class MockRebalanceListener implements ConsumerRebalanceListener {
         public Collection<TopicPartition> lost;
         public Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;

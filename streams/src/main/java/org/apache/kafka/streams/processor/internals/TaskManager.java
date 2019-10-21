@@ -469,9 +469,20 @@ public class TaskManager {
             }
         }
 
-        log.debug("Assigning metadata with activeTasks: {}. The updated active task states are: \n" +
+        log.debug("Assigning metadata with: " +
+                      "\tactiveTasks: {},\n" +
+                      "\tstandbyTasks: {}\n" +
+                      "The updated active task states are: \n" +
+                      "\tassignedActiveTasks {},\n" +
+                      "\tassignedStandbyTasks {},\n" +
                       "\taddedActiveTasks {},\n" +
-                      "\tassignedActiveTasks {}", activeTasks, addedActiveTasks, assignedActiveTasks);
+                      "\taddedStandbyTasks {},\n" +
+                      "\trevokedActiveTasks {},\n" +
+                      "\trevokedStandbyTasks {}",
+                  activeTasks, standbyTasks,
+                  assignedActiveTasks, assignedStandbyTasks,
+                  addedActiveTasks, addedStandbyTasks,
+                  revokedActiveTasks, revokedStandbyTasks);
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }

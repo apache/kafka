@@ -136,4 +136,5 @@ public class SmokeTestDriverIntegrationTest {
         }
         Assert.assertTrue(driver.result().result(), driver.result().passed());
     }
+
 }

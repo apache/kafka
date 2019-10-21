@@ -642,7 +642,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
         final Set<TopicPartition> revokedPartitions;
-        generation();
         if (generation == Generation.NO_GENERATION.generationId &&
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
