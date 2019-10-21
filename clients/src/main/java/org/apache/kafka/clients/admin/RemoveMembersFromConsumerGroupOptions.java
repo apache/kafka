@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
@@ -33,18 +34,36 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private List<MemberIdentity> members;
+    /**
+     * A struct containing member's info.
+     */
+    public static class RemovingMemberInfo {
+        public String memberId;
+        public String groupInstanceId;
+
+        public RemovingMemberInfo(String memberId, String groupInstanceId) {
+            this.memberId = memberId;
+            this.groupInstanceId = groupInstanceId;
+        }
+    }
+
+    private List<RemovingMemberInfo> members;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<String> groupInstanceIds) {
         members = groupInstanceIds.stream().map(
-            instanceId -> new MemberIdentity()
-                              .setGroupInstanceId(instanceId)
-                              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+            instanceId -> new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceId)
         ).collect(Collectors.toList());
     }
 
-    public List<MemberIdentity> members() {
+    public List<RemovingMemberInfo> members() {
         return members;
     }
+
+    static MemberIdentity convertToMemberIdentity(RemovingMemberInfo memberInfo) {
+        return new MemberIdentity()
+                   .setGroupInstanceId(memberInfo.groupInstanceId)
+                   .setMemberId(memberInfo.memberId);
+    }
+
 }
 

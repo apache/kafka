@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -23,6 +24,9 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 
 /**
  * The result of the {@link Admin#removeMembersFromConsumerGroup(String, RemoveMembersFromConsumerGroupOptions)} call.
@@ -35,26 +39,31 @@ public class RemoveMembersFromConsumerGroupResult {
     private final List<MemberIdentity> memberIdentities;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         List<MemberIdentity> memberIdentities) {
+                                         List<RemovingMemberInfo> memberInfos) {
         this.future = future;
-        this.memberIdentities = memberIdentities;
+        this.memberIdentities = memberInfos.stream()
+                                    .map(RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity)
+                                    .collect(Collectors.toList());
     }
 
     /**
      * Returns a future which indicates whether the request was 100% success, i.e. no
      * either top level or member level error.
+     * If not, the first member error shall be returned.
      */
     public KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
         this.future.whenComplete((memberErrors, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else for (MemberIdentity memberToRemove : memberIdentities) {
-                if (hasMemberLevelError(memberErrors, memberToRemove, result)) {
-                    return;
+            } else {
+                for (MemberIdentity memberToRemove : memberIdentities) {
+                    if (maybeCompleteExceptionally(memberErrors, memberToRemove, result)) {
+                        return;
+                    }
                 }
+                result.complete(null);
             }
-            result.complete(null);
         });
         return result;
     }
@@ -62,21 +71,22 @@ public class RemoveMembersFromConsumerGroupResult {
     /**
      * Returns the selected member future.
      */
-    public KafkaFuture<Void> memberResult(MemberIdentity member) {
+    public KafkaFuture<Void> memberResult(RemovingMemberInfo member) {
+        MemberIdentity memberIdentity = convertToMemberIdentity(member);
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
         this.future.whenComplete((memberErrors, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!hasMemberLevelError(memberErrors, member, result)) {
+            } else if (!maybeCompleteExceptionally(memberErrors, memberIdentity, result)) {
                 result.complete(null);
             }
         });
         return result;
     }
 
-    private boolean hasMemberLevelError(Map<MemberIdentity, Errors> memberErrors,
-                                        MemberIdentity member,
-                                        KafkaFutureImpl<Void>  result) {
+    private boolean maybeCompleteExceptionally(Map<MemberIdentity, Errors> memberErrors,
+                                               MemberIdentity member,
+                                               KafkaFutureImpl<Void>  result) {
         Throwable exception = KafkaAdminClient.getSubLevelError(memberErrors, member,
             "Member \"" + member + "\" was not included in the removal response");
         if (exception != null) {

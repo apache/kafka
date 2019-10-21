@@ -50,7 +50,7 @@ public class DeleteConsumerGroupOffsetsResult {
         this.future.whenComplete((topicPartitions, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!hasPartitionLevelError(topicPartitions, partition, result)) {
+            } else if (!maybeCompleteExceptionally(topicPartitions, partition, result)) {
                 result.complete(null);
             }
         });
@@ -59,6 +59,7 @@ public class DeleteConsumerGroupOffsetsResult {
 
     /**
      * Return a future which succeeds only if all the deletions succeed.
+     * If not, the first partition error shall be returned.
      */
     public KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
@@ -66,19 +67,21 @@ public class DeleteConsumerGroupOffsetsResult {
         this.future.whenComplete((topicPartitions, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else for (TopicPartition partition : partitions) {
-                if (hasPartitionLevelError(topicPartitions, partition, result)) {
-                    return;
+            } else {
+                for (TopicPartition partition : partitions) {
+                    if (maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                        return;
+                    }
                 }
+                result.complete(null);
             }
-            result.complete(null);
         });
         return result;
     }
 
-    private boolean hasPartitionLevelError(Map<TopicPartition, Errors> partitionLevelErrors,
-                                           TopicPartition partition,
-                                           KafkaFutureImpl<Void> result) {
+    private boolean maybeCompleteExceptionally(Map<TopicPartition, Errors> partitionLevelErrors,
+                                               TopicPartition partition,
+                                               KafkaFutureImpl<Void> result) {
         Throwable exception = KafkaAdminClient.getSubLevelError(partitionLevelErrors, partition,
             "Group offset deletion for partition \"" + partition + "\" was not attempted");
         if (exception != null) {

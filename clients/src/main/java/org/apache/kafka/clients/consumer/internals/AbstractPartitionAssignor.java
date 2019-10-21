@@ -124,7 +124,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
 
         @Override
         public String toString() {
-            return "MemberInfo [member.id: " + memberId
+            return "RemovingMemberInfo [member.id: " + memberId
                     + ", group.instance.id: " + groupInstanceId.orElse("{}")
                     + "]";
         }

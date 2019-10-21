@@ -216,6 +216,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -3491,7 +3492,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(),
-                                                     context.options().members());
+                                                     context.options().members().stream()
+                                                         .map(RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity).collect(Collectors.toList()));
             }
 
             @Override
