@@ -92,6 +92,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
@@ -261,6 +262,16 @@ public class QueryableStateIntegrationTest {
         @Override
         public void run() {
             myStream.start();
+
+            try {
+                TestUtils.waitForCondition(
+                    () -> stateListener.mapStates.containsKey(KafkaStreams.State.RUNNING),
+                    "Did not start successfully after " + TestUtils.DEFAULT_MAX_WAIT_MS + " ms"
+                );
+            } catch (final InterruptedException e) {
+                if (!stateListener.mapStates.containsKey(KafkaStreams.State.RUNNING))
+                    fail("Did not start successfully");
+            }
         }
 
         public void close() {
@@ -446,7 +457,8 @@ public class QueryableStateIntegrationTest {
             windowStoreName,
             streamsConfiguration);
 
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
         producerThread.start();
 
         try {
@@ -515,7 +527,7 @@ public class QueryableStateIntegrationTest {
         t2.toStream().to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -581,7 +593,7 @@ public class QueryableStateIntegrationTest {
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
@@ -629,7 +641,7 @@ public class QueryableStateIntegrationTest {
         t3.toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -690,7 +702,7 @@ public class QueryableStateIntegrationTest {
             .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
             .count(Materialized.as(windowStoreName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
@@ -716,7 +728,7 @@ public class QueryableStateIntegrationTest {
         final String storeName = "count-by-key";
         stream.groupByKey().count(Materialized.as(storeName));
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -747,9 +759,9 @@ public class QueryableStateIntegrationTest {
         // close stream
         kafkaStreams.close();
 
-        // start again
+        // start again, and since it may take time to restore we wait for it to transit to RUNNING a bit longer
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams, maxWaitMs);
 
         // make sure we never get any value other than 8 for hello
         TestUtils.waitForCondition(
@@ -810,7 +822,9 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.setUncaughtExceptionHandler((t, e) -> failed.set(true));
-        kafkaStreams.start();
+
+        // since we start with two threads, wait for a bit longer for both of them to transit to running
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams, 30000);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,

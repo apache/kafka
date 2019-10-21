@@ -24,11 +24,13 @@ import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
+import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -241,7 +243,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback) {
+    public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature) {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
     }
 
@@ -378,6 +380,11 @@ public class StandaloneHerder extends AbstractHerder {
                 if (targetState == TargetState.STARTED)
                     updateConnectorTasks(connector);
             }
+        }
+
+        @Override
+        public void onSessionKeyUpdate(SessionKey sessionKey) {
+            // no-op
         }
     }
 

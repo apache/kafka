@@ -16,26 +16,22 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.junit.Assert.fail;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -46,7 +42,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -76,9 +71,7 @@ public class OptimizedKTableIntegrationTest {
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final Map<KafkaStreams, State> kafkaStreamsStates = new HashMap<>();
-    private final Lock kafkaStreamsStatesLock = new ReentrantLock();
-    private final Condition kafkaStreamsStateUpdate = kafkaStreamsStatesLock.newCondition();
+    private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
 
     @Before
@@ -88,7 +81,7 @@ public class OptimizedKTableIntegrationTest {
 
     @After
     public void after() {
-        for (final KafkaStreams kafkaStreams : kafkaStreamsStates.keySet()) {
+        for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
         }
     }
@@ -116,9 +109,8 @@ public class OptimizedKTableIntegrationTest {
         final AtomicLong restoreStartOffset = new AtomicLong(-1);
         kafkaStreamsList.forEach(kafkaStreams -> {
             kafkaStreams.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, new AtomicLong()));
-            kafkaStreams.start();
         });
-        waitForKafkaStreamssToEnterRunningState(kafkaStreamsList, 60, TimeUnit.SECONDS);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(numMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
@@ -150,9 +142,8 @@ public class OptimizedKTableIntegrationTest {
         final AtomicLong restoreEndOffset = new AtomicLong(-1L);
         kafkaStreamsList.forEach(kafkaStreams -> {
             kafkaStreams.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, restoreEndOffset));
-            kafkaStreams.start();
         });
-        waitForKafkaStreamssToEnterRunningState(kafkaStreamsList, 60, TimeUnit.SECONDS);
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         produceValueRange(key, 0, batch1NumMessages);
 
@@ -189,7 +180,7 @@ public class OptimizedKTableIntegrationTest {
 
         final ReadOnlyKeyValueStore<Integer, Integer> newActiveStore =
             kafkaStreams1WasFirstActive ? store2 : store1;
-        retryOnExceptionWithTimeout(100, 60 * 1000, TimeUnit.MILLISECONDS, () -> {
+        TestUtils.retryOnExceptionWithTimeout(100, 60 * 1000, () -> {
             // Assert that after failover we have recovered to the last store write
             assertThat(newActiveStore.get(key), is(equalTo(batch1NumMessages - 1)));
         });
@@ -226,68 +217,10 @@ public class OptimizedKTableIntegrationTest {
             mockTime);
     }
 
-    private void retryOnExceptionWithTimeout(final long pollInterval,
-                                             final long timeout,
-                                             final TimeUnit timeUnit,
-                                             final Runnable runnable) throws InterruptedException {
-        final long expectedEnd = System.currentTimeMillis() + timeUnit.toMillis(timeout);
-
-        while (true) {
-            try {
-                runnable.run();
-                return;
-            } catch (final Throwable t) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    throw new AssertionError(t);
-                }
-                Thread.sleep(timeUnit.toMillis(pollInterval));
-            }
-        }
-    }
-
-    private void waitForKafkaStreamssToEnterRunningState(final Collection<KafkaStreams> kafkaStreamss,
-                                                         final long time,
-                                                         final TimeUnit timeUnit) throws InterruptedException {
-
-        final long expectedEnd = System.currentTimeMillis() + timeUnit.toMillis(time);
-
-        kafkaStreamsStatesLock.lock();
-        try {
-            while (!kafkaStreamss.stream().allMatch(kafkaStreams -> kafkaStreamsStates.get(kafkaStreams) == State.RUNNING)) {
-                if (expectedEnd <= System.currentTimeMillis()) {
-                    fail("one or more kafkaStreamss did not enter RUNNING in a timely manner");
-                }
-                final long millisRemaining = Math.max(1, expectedEnd - System.currentTimeMillis());
-                kafkaStreamsStateUpdate.await(millisRemaining, TimeUnit.MILLISECONDS);
-            }
-        } finally {
-            kafkaStreamsStatesLock.unlock();
-        }
-    }
-
     private KafkaStreams createKafkaStreams(final StreamsBuilder builder, final Properties config) {
-        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(config), config);
-        kafkaStreamsStatesLock.lock();
-        try {
-            kafkaStreamsStates.put(kafkaStreams, kafkaStreams.state());
-        } finally {
-            kafkaStreamsStatesLock.unlock();
-        }
-
-        kafkaStreams.setStateListener((newState, oldState) -> {
-            kafkaStreamsStatesLock.lock();
-            try {
-                kafkaStreamsStates.put(kafkaStreams, newState);
-                if (newState == State.RUNNING) {
-                    if (kafkaStreamsStates.values().stream().allMatch(state -> state == State.RUNNING)) {
-                        kafkaStreamsStateUpdate.signalAll();
-                    }
-                }
-            } finally {
-                kafkaStreamsStatesLock.unlock();
-            }
-        });
-        return kafkaStreams;
+        final KafkaStreams streams = new KafkaStreams(builder.build(config), config);
+        streamsToCleanup.add(streams);
+        return streams;
     }
 
     private StateRestoreListener createTrackingRestoreListener(final AtomicLong restoreStartOffset,

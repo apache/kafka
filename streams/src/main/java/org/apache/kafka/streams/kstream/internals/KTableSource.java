@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.Optional;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
@@ -72,14 +73,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
@@ -98,7 +99,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
                     context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                skippedRecordsSensor.ifPresent(Sensor::record);
                 return;
             }
 

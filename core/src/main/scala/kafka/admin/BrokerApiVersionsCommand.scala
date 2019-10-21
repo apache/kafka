@@ -36,10 +36,10 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
 import scala.collection.JavaConverters._
@@ -160,10 +160,10 @@ object BrokerApiVersionsCommand {
       throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
     }
 
-    private def getApiVersions(node: Node): List[ApiVersion] = {
+    private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
       val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
-      response.error.maybeThrow()
-      response.apiVersions.asScala.toList
+      Errors.forCode(response.data.errorCode()).maybeThrow()
+      response.data.apiKeys()
     }
 
     /**
@@ -189,7 +189,7 @@ object BrokerApiVersionsCommand {
 
     def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
       findAllBrokers().map { broker =>
-        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
+        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker)))
       }.toMap
 
     def close(): Unit = {

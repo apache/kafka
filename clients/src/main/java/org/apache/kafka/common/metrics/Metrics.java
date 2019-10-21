@@ -413,7 +413,7 @@ public class Metrics implements Closeable {
                     children.add(s);
                 }
             }
-            log.debug("Added sensor with name {}", name);
+            log.trace("Added sensor with name {}", name);
         }
         return s;
     }
@@ -446,7 +446,7 @@ public class Metrics implements Closeable {
                     if (sensors.remove(name, sensor)) {
                         for (KafkaMetric metric : sensor.metrics())
                             removeMetric(metric.metricName());
-                        log.debug("Removed sensor with name {}", name);
+                        log.trace("Removed sensor with name {}", name);
                         childSensors = childrenSensors.remove(sensor);
                         for (final Sensor parent : sensor.parents()) {
                             childrenSensors.getOrDefault(parent, emptyList()).remove(sensor);

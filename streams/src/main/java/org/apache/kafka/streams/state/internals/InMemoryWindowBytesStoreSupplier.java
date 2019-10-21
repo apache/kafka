@@ -82,4 +82,14 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     public boolean retainDuplicates() {
         return retainDuplicates;
     }
+
+    @Override
+    public String toString() {
+        return "InMemoryWindowBytesStoreSupplier{" +
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            '}';
+    }
 }

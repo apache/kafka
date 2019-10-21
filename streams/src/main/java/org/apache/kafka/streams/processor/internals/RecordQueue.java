@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -49,7 +50,7 @@ public class RecordQueue {
     private StampedRecord headRecord = null;
     private long partitionTime = RecordQueue.UNKNOWN;
 
-    private Sensor skipRecordsSensor;
+    private final Optional<Sensor> skipRecordsSensor;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
@@ -62,7 +63,8 @@ public class RecordQueue {
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
         this.processorContext = processorContext;
-        skipRecordsSensor = ThreadMetrics.skipRecordSensor(processorContext.metrics());
+        skipRecordsSensor =
+            ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), processorContext.metrics());
         recordDeserializer = new RecordDeserializer(
             source,
             deserializationExceptionHandler,
@@ -70,6 +72,10 @@ public class RecordQueue {
             skipRecordsSensor
         );
         this.log = logContext.logger(RecordQueue.class);
+    }
+ 
+    void setPartitionTime(final long partitionTime) {
+        this.partitionTime = partitionTime;
     }
 
     /**
@@ -149,15 +155,6 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition time
-     *
-     * @return partition time
-     */
-    long partitionTime() {
-        return partitionTime;
-    }
-
-    /**
      * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {
@@ -195,13 +192,19 @@ public class RecordQueue {
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
 
-                skipRecordsSensor.record();
+                skipRecordsSensor.ifPresent(Sensor::record);
                 continue;
             }
-
             headRecord = new StampedRecord(deserialized, timestamp);
 
             partitionTime = Math.max(partitionTime, timestamp);
         }
+    }
+
+    /**
+     * @return the local partitionTime for this particular RecordQueue
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 }

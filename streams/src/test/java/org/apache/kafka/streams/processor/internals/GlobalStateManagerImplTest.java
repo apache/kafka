@@ -66,6 +66,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -169,6 +170,29 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.checkpointed();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionForOldTopicPartitions() throws IOException {
+        final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 1L);
+        expectedOffsets.put(t2, 1L);
+        expectedOffsets.put(t3, 1L);
+        expectedOffsets.put(t4, 1L);
+
+        // add an old topic (a topic not associated with any global state store)
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>(expectedOffsets);
+        final TopicPartition tOld = new TopicPartition("oldTopic", 1);
+        startOffsets.put(tOld, 1L);
+
+        // start with a checkpoint file will all topic-partitions: expected and old (not
+        // associated with any global state store).
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
+        checkpoint.write(startOffsets);
+
+        // initialize will throw exception
+        final StreamsException e = assertThrows(StreamsException.class, () -> stateManager.initialize());
+        assertThat(e.getMessage(), equalTo("Encountered a topic-partition not associated with any global state store"));
     }
 
     @Test

@@ -28,8 +28,8 @@ import java.util.Arrays
 import java.util.Collections
 import java.util.Properties
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-import javax.net.ssl.X509TrustManager
 
+import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -49,6 +49,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -795,6 +796,17 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
+  def subscribeAndWaitForRecords(topic: String,
+                                 consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records",
+      waitTimeMs)
+  }
+
   /**
    * Wait for the presence of an optional value.
    *
@@ -910,16 +922,14 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
-          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
-          partitionStateOpt match {
-            case None => false
-            case Some(partitionState) =>
-              leader = partitionState.basePartitionState.leader
-              result && Request.isValidBrokerId(leader)
-          }
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
+            leader = partitionState.leader
+            true
+          case _ => false
+        }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
@@ -1432,11 +1442,12 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+    val committed = consumer.committed(consumer.assignment).asScala.mapValues(_.offset)
+
     consumer.assignment.asScala.foreach { topicPartition =>
-      val offset = consumer.committed(topicPartition)
-      if (offset != null)
-        consumer.seek(topicPartition, offset.offset)
+      if (committed.contains(topicPartition))
+        consumer.seek(topicPartition, committed(topicPartition))
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }
@@ -1478,24 +1489,27 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
-  def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(Arrays.asList(topicPartition.topic))
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+    waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
+  }
+
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+    waitForLeaderToBecome(client, topicPartition, None)
   }
 
   def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
-    TestUtils.waitUntilTrue(
-      () => currentLeader(client, topicPartition) == leader,
-      s"Expected leader to become $leader", 10000
-    )
+    val topic = topicPartition.topic
+    val partition = topicPartition.partition
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
+        val partitionResult = topicResult.partitions.get(partition)
+        Option(partitionResult.leader).map(_.id) == leader
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, "Timed out waiting for leader metadata")
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
@@ -1615,5 +1629,59 @@ object TestUtils extends Logging {
     } finally {
       resource.close()
     }
+  }
+
+  /**
+    * Throttles all replication across the cluster.
+    * @param adminClient is the adminClient to use for making connection with the cluster
+    * @param brokerIds all broker ids in the cluster
+    * @param throttleBytes is the target throttle
+    */
+  def throttleAllBrokersReplication(adminClient: Admin, brokerIds: Seq[Int], throttleBytes: Int): Unit = {
+    val throttleConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    adminClient.incrementalAlterConfigs(
+      brokerIds.map { brokerId =>
+        new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString) -> throttleConfigs
+      }.toMap.asJava
+    ).all().get()
+  }
+
+  def resetBrokersThrottle(adminClient: Admin, brokerIds: Seq[Int]): Unit =
+    throttleAllBrokersReplication(adminClient, brokerIds, Int.MaxValue)
+
+  def assignThrottledPartitionReplicas(adminClient: Admin, allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
+    val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
+      case (topic, replicasByPartition) =>
+        new ConfigResource(ConfigResource.Type.TOPIC, topic) -> Seq(
+          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
+        ).asJavaCollection
+    }
+    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
+  }
+
+  def removePartitionReplicaThrottles(adminClient: Admin, partitions: Set[TopicPartition]): Unit = {
+    val throttles = partitions.map {
+      tp =>
+        new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()) -> Seq(
+          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
+        ).asJavaCollection
+    }.toMap
+    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
+  }
+
+  def formatReplicaThrottles(moves: Map[TopicPartition, Seq[Int]]): String =
+    moves.flatMap { case (tp, assignment) =>
+      assignment.map(replicaId => s"${tp.partition}:$replicaId")
+    }.mkString(",")
+
+  def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
+    waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
+      s"There still are ongoing reassignments", pause = pause)
   }
 }

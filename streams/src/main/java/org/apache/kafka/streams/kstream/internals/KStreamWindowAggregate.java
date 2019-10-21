@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -80,7 +81,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
@@ -92,7 +93,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             metrics = internalProcessorContext.metrics();
 
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
-            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
             windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
@@ -108,7 +109,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                skippedRecordsSensor.ifPresent(Sensor::record);
                 return;
             }
 

@@ -79,9 +79,8 @@ public class StoreChangelogReader implements ChangelogReader {
             initialize(active);
         }
 
-        if (needsRestoring.isEmpty()) {
-            restoreConsumer.unsubscribe();
-            return completed();
+        if (checkForCompletedRestoration()) {
+            return completedRestorers;
         }
 
         try {
@@ -116,11 +115,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
         needsRestoring.removeAll(completedRestorers);
 
-        if (needsRestoring.isEmpty()) {
-            restoreConsumer.unsubscribe();
-        }
+        checkForCompletedRestoration();
 
-        return completed();
+        return completedRestorers;
     }
 
     private void initialize(final RestoringTasks active) {
@@ -255,10 +252,6 @@ public class StoreChangelogReader implements ChangelogReader {
                   endOffset);
     }
 
-    private Collection<TopicPartition> completed() {
-        return completedRestorers;
-    }
-
     private void refreshChangelogInfo() {
         try {
             partitionInfo.putAll(restoreConsumer.listTopics());
@@ -280,7 +273,19 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void reset() {
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            partitionInfo.remove(partition.topic());
+            stateRestorers.remove(partition);
+            needsRestoring.remove(partition);
+            restoreToOffsets.remove(partition);
+            needsInitializing.remove(partition);
+            completedRestorers.remove(partition);
+        }
+    }
+
+    @Override
+    public void clear() {
         partitionInfo.clear();
         stateRestorers.clear();
         needsRestoring.clear();
@@ -329,7 +334,14 @@ public class StoreChangelogReader implements ChangelogReader {
         return nextPosition;
     }
 
-
+    private boolean checkForCompletedRestoration() {
+        if (needsRestoring.isEmpty()) {
+            log.info("Finished restoring all active tasks");
+            restoreConsumer.unsubscribe();
+            return true;
+        }
+        return false;
+    }
 
     private boolean hasPartition(final TopicPartition topicPartition) {
         final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());

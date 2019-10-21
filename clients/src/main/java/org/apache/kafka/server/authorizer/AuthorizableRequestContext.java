@@ -32,7 +32,7 @@ public interface AuthorizableRequestContext {
     /**
      * Returns name of listener on which request was received.
      */
-    String listener();
+    String listenerName();
 
     /**
      * Returns the security protocol for the listener on which request was received.

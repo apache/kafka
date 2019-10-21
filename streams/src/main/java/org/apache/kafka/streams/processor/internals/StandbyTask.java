@@ -16,31 +16,36 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import java.util.stream.Collectors;
 
 /**
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask {
-    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
+    private boolean updateOffsetLimits;
     private final Sensor closeTaskSensor;
     private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
-    private final Set<TopicPartition> updateableOffsetLimits = new HashSet<>();
+    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -54,7 +59,7 @@ public class StandbyTask extends AbstractTask {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final Collection<TopicPartition> partitions,
+                final Set<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final Consumer<byte[], byte[]> consumer,
                 final ChangelogReader changelogReader,
@@ -63,17 +68,19 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
-        closeTaskSensor = metrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+        closeTaskSensor = metrics
+            .threadLevelSensor(Thread.currentThread().getName(), "task-closed", Sensor.RecordingLevel.INFO);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
 
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
         partitions.stream()
             .filter(tp -> changelogTopicNames.contains(tp.topic()))
-            .forEach(tp -> {
-                offsetLimits.put(tp, 0L);
-                updateableOffsetLimits.add(tp);
-            });
+            .forEach(tp -> offsetLimits.put(tp, 0L));
+        updateOffsetLimits = true;
     }
+
+    @Override
+    public void initializeMetadata() {}
 
     @Override
     public boolean initializeStateStores() {
@@ -86,9 +93,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void initializeTopology() {
-        //no-op
-    }
+    public void initializeTopology() {}
 
     /**
      * <pre>
@@ -114,18 +119,6 @@ public class StandbyTask extends AbstractTask {
         flushAndCheckpointState();
         allowUpdateOfOffsetLimit();
         commitNeeded = false;
-    }
-
-    /**
-     * <pre>
-     * - flush store
-     * - checkpoint store
-     * </pre>
-     */
-    @Override
-    public void suspend() {
-        log.debug("Suspending");
-        flushAndCheckpointState();
     }
 
     private void flushAndCheckpointState() {
@@ -159,13 +152,6 @@ public class StandbyTask extends AbstractTask {
         taskClosed = true;
     }
 
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               final RuntimeException e) {
-        close(clean, isZombie);
-    }
-
     /**
      * Updates a state store using records from one change log partition
      *
@@ -188,7 +174,7 @@ public class StandbyTask extends AbstractTask {
             // Check if we're unable to process records due to an offset limit (e.g. when our
             // partition is both a source and a changelog). If we're limited then try to refresh
             // the offset limit if possible.
-            if (record.offset() >= limit && updateableOffsetLimits.contains(partition)) {
+            if (record.offset() >= limit && updateOffsetLimits) {
                 limit = updateOffsetLimits(partition);
             }
 
@@ -217,18 +203,44 @@ public class StandbyTask extends AbstractTask {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);
         }
 
-        updateableOffsetLimits.remove(partition);
+        final Map<TopicPartition, Long> newLimits = committedOffsetForPartitions(offsetLimits.keySet());
 
-        final long newLimit = committedOffsetForPartition(partition);
-        final long previousLimit = offsetLimits.put(partition, newLimit);
-        if (previousLimit > newLimit) {
-            throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
-                "New limit: " + newLimit + ". Previous limit: " + previousLimit);
+        for (final Map.Entry<TopicPartition, Long> newlimit : newLimits.entrySet()) {
+            final Long previousLimit = offsetLimits.get(newlimit.getKey());
+            if (previousLimit != null && previousLimit > newlimit.getValue()) {
+                throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
+                    "New limit: " + newlimit.getValue() + ". Previous limit: " + previousLimit);
+            }
+
         }
-        return newLimit;
+
+        offsetLimits.putAll(newLimits);
+        updateOffsetLimits = false;
+
+        return offsetLimits.get(partition);
+    }
+
+    private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
+        try {
+            final Map<TopicPartition, Long> results = consumer.committed(partitions)
+                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+
+            // those do not have a committed offset would default to 0
+            for (final TopicPartition tp : partitions) {
+                results.putIfAbsent(tp, 0L);
+            }
+
+            return results;
+        } catch (final AuthorizationException e) {
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
+        } catch (final WakeupException e) {
+            throw e;
+        } catch (final KafkaException e) {
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
+        }
     }
 
     void allowUpdateOfOffsetLimit() {
-        updateableOffsetLimits.addAll(offsetLimits.keySet());
+        updateOffsetLimits = true;
     }
 }

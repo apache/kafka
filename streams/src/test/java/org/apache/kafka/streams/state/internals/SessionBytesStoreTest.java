@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -89,7 +90,8 @@ public abstract class SessionBytesStoreTest {
         return new RecordCollectorImpl(name,
             new LogContext(name),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")) {
+            Optional.of(new Metrics().sensor("skipped-records"))
+        ) {
             @Override
             public <K1, V1> void send(final String topic,
                 final K1 key,
@@ -443,15 +445,16 @@ public abstract class SessionBytesStoreTest {
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
         final String metricScope = getMetricsScope();
+        final String threadId = Thread.currentThread().getName();
 
         final Metric dropTotal = metrics.get(new MetricName(
             "expired-window-record-drop-total",
             "stream-" + metricScope + "-metrics",
             "The total number of occurrence of expired-window-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", sessionStore.name())
+                mkEntry(metricScope + "-state-id", sessionStore.name())
             )
         ));
 
@@ -460,9 +463,9 @@ public abstract class SessionBytesStoreTest {
             "stream-" + metricScope + "-metrics",
             "The average number of occurrence of expired-window-record-drop operation per second.",
             mkMap(
-                mkEntry("client-id", "mock"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", sessionStore.name())
+                mkEntry(metricScope + "-state-id", sessionStore.name())
             )
         ));
 

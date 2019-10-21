@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -70,6 +71,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private static final long GAP_MS = 5 * 60 * 1000L;
     private static final String STORE_NAME = "session-store";
 
+    private final String threadId = Thread.currentThread().getName();
     private final ToInternal toInternal = new ToInternal();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
@@ -93,7 +95,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final File stateDir = TestUtils.tempDirectory();
         metrics = new Metrics();
         final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
-        ThreadMetrics.skipRecordSensor(metrics);
 
         context = new InternalMockProcessorContext(
             stateDir,
@@ -367,20 +368,66 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullKey() {
-        initStore(false);
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
+        final InternalMockProcessorContext context =
+            createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
-        context.setRecordContext(new ProcessorRecordContext(-1, -2, -3, "topic", null));
+        context.setRecordContext(
+            new ProcessorRecordContext(-1, -2, -3, "topic", null)
+        );
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         processor.process(null, "1");
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(
-            1.0,
-            getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(
+                1.0,
+                getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            );
+        }
         assertThat(
             appender.getMessages(),
-            hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]"));
+            hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]")
+        );
+    }
+
+    private InternalMockProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-thread", builtInMetricsVersion);
+        ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            NoOpRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
+        ) {
+            @Override
+            public <K, V> void forward(final K key, final V value, final To to) {
+                toInternal.update(to);
+                results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
+            }
+        };
+        final StoreBuilder<SessionStore<String, Long>> storeBuilder =
+            Stores.sessionStoreBuilder(
+                Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
+                Serdes.String(),
+                Serdes.Long())
+                .withLoggingDisabled();
+        final SessionStore sessionStore = storeBuilder.build();
+        sessionStore.init(context, sessionStore);
+        return context;
     }
 
     @Test
@@ -420,7 +467,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -433,7 +480,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -494,7 +541,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )
@@ -507,7 +554,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "test"),
+                mkEntry("thread-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "TESTING_NODE")
             )

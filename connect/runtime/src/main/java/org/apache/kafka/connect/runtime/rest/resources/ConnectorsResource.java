@@ -19,12 +19,15 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import javax.ws.rs.core.HttpHeaders;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -66,6 +69,8 @@ import java.util.concurrent.TimeoutException;
 @Consumes(MediaType.APPLICATION_JSON)
 public class ConnectorsResource {
     private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
+    private static final TypeReference<List<Map<String, String>>> TASK_CONFIGS_TYPE =
+        new TypeReference<List<Map<String, String>>>() { };
 
     // TODO: This should not be so long. However, due to potentially long rebalances that may have to wait a full
     // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
@@ -230,9 +235,10 @@ public class ConnectorsResource {
     public void putTaskConfigs(final @PathParam("connector") String connector,
                                final @Context HttpHeaders headers,
                                final @QueryParam("forward") Boolean forward,
-                               final List<Map<String, String>> taskConfigs) throws Throwable {
+                               final byte[] requestBody) throws Throwable {
+        List<Map<String, String>> taskConfigs = new ObjectMapper().readValue(requestBody, TASK_CONFIGS_TYPE);
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder.putTaskConfigs(connector, taskConfigs, cb);
+        herder.putTaskConfigs(connector, taskConfigs, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
         completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward);
     }
 

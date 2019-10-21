@@ -104,27 +104,22 @@ public class StreamsBrokerDownResilienceTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(final Thread t, final Throwable e) {
+        streams.setUncaughtExceptionHandler((t, e) -> {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
                 streams.close(Duration.ofSeconds(30));
             }
-        });
+        );
+
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                streams.close(Duration.ofSeconds(30));
-                System.out.println("Complete shutdown of streams resilience test app now");
-                System.out.flush();
-            }
-        }));
-
-
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            streams.close(Duration.ofSeconds(30));
+            System.out.println("Complete shutdown of streams resilience test app now");
+            System.out.flush();
+        }
+        ));
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {
