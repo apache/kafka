@@ -284,7 +284,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private Exception invokePartitionsRevoked(final Set<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
-        System.out.println("Revoke previously assigned partitions");
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {

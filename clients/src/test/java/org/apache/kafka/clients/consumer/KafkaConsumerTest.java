@@ -22,8 +22,6 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
-import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorTest;
-import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorTest.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
@@ -1109,7 +1107,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testUnsubscribeWillTriggerPartitionsRevokeWithNoGeneration() {
+    public void testUnsubscribeWillTriggerPartitionsRevokeWithValidGeneration() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1167,7 +1165,9 @@ public class KafkaConsumerTest {
         AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator, Errors.UNKNOWN_MEMBER_ID);
 
         time.sleep(heartbeatIntervalMs);
-        Thread.sleep(heartbeatIntervalMs);
+        TestUtils.waitForCondition(heartbeatReceived::get, "Heartbeat response did not occur within timeout.");
+
+
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         assertTrue(heartbeatReceived.get());
@@ -1789,11 +1789,6 @@ public class KafkaConsumerTest {
                 // set initial position so we don't need a lookup
                 for (TopicPartition partition : partitions)
                     consumer.seek(partition, 0);
-            }
-
-            @Override
-            public void onPartitionsLost(Collection<TopicPartition> partitions) {
-                System.out.println("hit partitions lost " + partitions);
             }
         };
     }
