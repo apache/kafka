@@ -16,21 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
-import static org.easymock.EasyMock.expect;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.io.File;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -48,6 +33,22 @@ import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
+import static org.easymock.EasyMock.expect;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 public class AbstractTaskTest {
 
     private final TaskId id = new TaskId(0, 0);
@@ -56,7 +57,7 @@ public class AbstractTaskTest {
     private final TopicPartition storeTopicPartition2 = new TopicPartition("t2", 0);
     private final TopicPartition storeTopicPartition3 = new TopicPartition("t3", 0);
     private final TopicPartition storeTopicPartition4 = new TopicPartition("t4", 0);
-    private final Collection<TopicPartition> storeTopicPartitions =
+    private final Set<TopicPartition> storeTopicPartitions =
         Utils.mkSet(storeTopicPartition1, storeTopicPartition2, storeTopicPartition3, storeTopicPartition4);
 
     @Before
@@ -218,7 +219,7 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
-            public void initializeTaskTime() {}
+            public void initializeMetadata() {}
 
             @Override
             public void resume() {}

@@ -17,8 +17,10 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.util.Collections;
 import org.junit.Test;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -37,5 +39,26 @@ public class DelegatingClassLoaderTest {
         assertFalse(
             DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.transforms.Transformation"));
         assertFalse(DelegatingClassLoader.serviceLoaderManifestForPlugin("resource/version.properties"));
+    }
+
+    @Test(expected = ClassNotFoundException.class)
+    public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
+        TestPlugins.assertAvailable();
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
+        classLoader.initLoaders();
+        for (String pluginClassName : TestPlugins.pluginClasses()) {
+            classLoader.loadClass(pluginClassName);
+        }
+    }
+
+    @Test
+    public void testLoadingPluginClass() throws ClassNotFoundException {
+        TestPlugins.assertAvailable();
+        DelegatingClassLoader classLoader = new DelegatingClassLoader(TestPlugins.pluginPath());
+        classLoader.initLoaders();
+        for (String pluginClassName : TestPlugins.pluginClasses()) {
+            assertNotNull(classLoader.loadClass(pluginClassName));
+            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
+        }
     }
 }

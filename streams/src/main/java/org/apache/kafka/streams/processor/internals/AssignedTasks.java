@@ -67,11 +67,13 @@ abstract class AssignedTasks<T extends Task> {
         for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             try {
-                if (!entry.getValue().initializeStateStores()) {
+                final T task = entry.getValue();
+                task.initializeMetadata();
+                if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
+                    ((AssignedStreamsTasks) this).addToRestoring((StreamTask) task);
                 } else {
-                    transitionToRunning(entry.getValue());
+                    transitionToRunning(task);
                 }
                 it.remove();
             } catch (final LockException e) {
@@ -110,7 +112,6 @@ abstract class AssignedTasks<T extends Task> {
     void transitionToRunning(final T task) {
         log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
-        task.initializeTaskTime();
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
@@ -251,7 +252,7 @@ abstract class AssignedTasks<T extends Task> {
         task.close(clean, false);
     }
 
-    private boolean closeUnclean(final T task) {
+    private void closeUnclean(final T task) {
         log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
         try {
             task.close(false, false);
@@ -260,10 +261,7 @@ abstract class AssignedTasks<T extends Task> {
                 task.getClass().getSimpleName(),
                 task.id(),
                 fatalException);
-            return false;
         }
-
-        return true;
     }
 
 }

@@ -14,28 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Configurable;
-
-import java.security.Provider;
-import java.util.Map;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * An interface for generating security providers.
+ * Options for {@link AdminClient#listOffsets(Map)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public interface SecurityProviderCreator extends Configurable {
+@InterfaceStability.Evolving
+public class ListOffsetsOptions extends AbstractOptions<ListOffsetsOptions> {
 
-    /**
-     * Configure method is used to configure the generator to create the Security Provider
-     * @param config configuration parameters for initialising security provider
-     */
-    default void configure(Map<String, ?> config) {
+    private final IsolationLevel isolationLevel;
 
+    public ListOffsetsOptions() {
+        this(IsolationLevel.READ_UNCOMMITTED);
     }
 
-    /**
-     * Generate the security provider configured
-     */
-    Provider getProvider();
+    public ListOffsetsOptions(IsolationLevel isolationLevel) {
+        this.isolationLevel = isolationLevel;
+    }
+
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
+    }
 }

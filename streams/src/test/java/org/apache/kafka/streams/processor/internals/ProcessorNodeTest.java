@@ -16,10 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
+import java.util.Properties;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
@@ -32,8 +40,13 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ProcessorNodeTest {
@@ -52,7 +65,7 @@ public class ProcessorNodeTest {
         node.close();
     }
 
-    private static class ExceptionalProcessor implements Processor {
+    private static class ExceptionalProcessor implements Processor<Object, Object> {
         @Override
         public void init(final ProcessorContext context) {
             throw new RuntimeException();
@@ -97,7 +110,7 @@ public class ProcessorNodeTest {
                 null,
                 new LogContext("processnode-test "),
                 new DefaultProductionExceptionHandler(),
-                metrics.sensor("skipped-records")
+                Optional.of(metrics.sensor("skipped-records"))
             ),
             metrics
         );
@@ -142,4 +155,42 @@ public class ProcessorNodeTest {
                 groupName, threadId, context.taskId().toString(), node.name())));
     }
 
+    @Test
+    public void testTopologyLevelClassCastException() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Arrays.asList("");
+            });
+        final Topology topology = builder.build();
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+
+        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+        final String msg = se.getMessage();
+        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+    }
+
+    private static class ClassCastProcessor extends ExceptionalProcessor {
+        @Override
+        public void process(final Object key, final Object value) {
+            throw new ClassCastException("Incompatible types simulation exception.");
+        }
+    }
+
+    @Test
+    public void testTopologyLevelClassCastExceptionDirect() {
+        final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
+        final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
+        assertThat(se.getCause(), instanceOf(ClassCastException.class));
+        assertThat(se.getMessage(), containsString("default Serdes"));
+        assertThat(se.getMessage(), containsString("input types"));
+    }
 }
