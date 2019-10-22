@@ -572,7 +572,7 @@ class KafkaController(val config: KafkaConfig,
    *   4 Replicas in URS -> Offline (force those replicas out of ISR)
    *   5 Replicas in URS -> NonExistentReplica (force those replicas to be deleted)
    *
-   * Phase A: Initial trigger (when AR \notin ISR)
+   * Phase A: Initial trigger (when TRS != ISR)
    *   A1. Update ZK with RS = ORS + TRS,
    *                      AR = TRS - ORS and
    *                      RR = ORS - TRS.
@@ -581,7 +581,7 @@ class KafkaController(val config: KafkaConfig,
    *       We do this by forcing an update of the leader epoch in zookeeper.
    *   A4. Start new replicas AR by moving replicas in AR to NewReplica state.
    *
-   * Phase B: All of AR have caught up with the leaders and are in ISR
+   * Phase B: All of TRS have caught up with the leaders and are in ISR
    *   B1. Move all replicas in AR to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
    *   B3. Send a LeaderAndIsr request with RS = TRS. This will prevent the leader from adding any replica in TRS - ORS back in the isr.
