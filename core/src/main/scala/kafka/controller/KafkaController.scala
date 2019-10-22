@@ -620,12 +620,13 @@ class KafkaController(val config: KafkaConfig,
     // A2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
     val updatedAssignment = updateCurrentReassignment(topicPartition, reassignedPartitionContext)
     val targetReplicas = updatedAssignment.targetReplicas
+    val addingReplicas = updatedAssignment.addingReplicas
 
-    if (!areReplicasInIsr(topicPartition, targetReplicas)) {
+    if (!areReplicasInIsr(topicPartition, addingReplicas)) {
       // A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
       updateLeaderEpochAndSendRequest(topicPartition, updatedAssignment)
       // A4. replicas in AR -> NewReplica
-      startNewReplicasForReassignedPartition(topicPartition, updatedAssignment.addingReplicas)
+      startNewReplicasForReassignedPartition(topicPartition, addingReplicas)
     } else {
       // B1. replicas in TRS -> OnlineReplica
       replicaStateMachine.handleStateChanges(targetReplicas.map(PartitionAndReplica(topicPartition, _)), OnlineReplica)
@@ -1616,7 +1617,7 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReassignmentContext]
 
       reassignments.foreach { case (tp, targetReplicas) =>
-        if (replicasAreValid(targetReplicas)) {
+        if (replicasAreValid(tp, targetReplicas)) {
           maybeBuildNewReassignmentContext(tp, targetReplicas) match {
             case Some(context) => partitionsToReassign.put(tp, context)
             case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
@@ -1635,25 +1636,29 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def replicasAreValid(replicasOpt: Option[Seq[Int]]): Boolean = {
+  private def replicasAreValid(topicPartition: TopicPartition, replicasOpt: Option[Seq[Int]]): Boolean = {
     replicasOpt match {
       case Some(replicas) =>
         val replicaSet = replicas.toSet
-
         if (replicas.isEmpty || replicas.size != replicaSet.size)
           false
         else if (replicas.exists(_ < 0))
           false
-        else
-          replicaSet.subsetOf(controllerContext.liveBrokerIds)
+        else {
+          // Ensure that any new replicas are among the live brokers
+          val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+          val newAssignment = currentAssignment.reassignTo(replicas)
+          newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+        }
+
       case None => true
     }
   }
 
-  private def maybeBuildNewReassignmentContext(partition: TopicPartition,
+  private def maybeBuildNewReassignmentContext(topicPartition: TopicPartition,
                                                targetReplicasOpt: Option[Seq[Int]]): Option[ReassignmentContext] = {
-    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, partition)
-    val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
+    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
+    val replicaAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
 
     if (replicaAssignment.isBeingReassigned) {
       val targetReplicas = targetReplicasOpt.getOrElse(replicaAssignment.originReplicas)
@@ -1665,28 +1670,30 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def processPartitionReassignmentIsrChange(partition: TopicPartition): Unit = {
+  private def processPartitionReassignmentIsrChange(topicPartition: TopicPartition): Unit = {
     if (!isActive) return
-    // check if this partition is still being reassigned or not
-    controllerContext.partitionsBeingReassigned.get(partition).foreach { reassignedPartitionContext =>
-      val reassignedReplicas = reassignedPartitionContext.newReplicas.toSet
-      zkClient.getTopicPartitionStates(Seq(partition)).get(partition) match {
+
+    val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+    if (currentAssignment.isBeingReassigned) {
+      val addingReplicas = currentAssignment.addingReplicas
+      zkClient.getTopicPartitionStates(Seq(topicPartition)).get(topicPartition) match {
         case Some(leaderIsrAndControllerEpoch) => // check if new replicas have joined ISR
           val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-          val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
-          if (caughtUpReplicas == reassignedReplicas) {
+          val inSyncReplicas = leaderAndIsr.isr.toSet
+
+          if (addingReplicas.toSet.subsetOf(inSyncReplicas)) {
             // resume the partition reassignment process
-            info(s"${caughtUpReplicas.size}/${reassignedReplicas.size} replicas have caught up with the leader for " +
-              s"partition $partition being reassigned. Resuming partition reassignment")
-            onPartitionReassignment(partition, reassignedPartitionContext)
+            info(s"Adding replicas $addingReplicas have all caught up with the leader for " +
+              s"reassigning partition $topicPartition")
+            val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
+            val reassignContext = ReassignmentContext(currentAssignment.targetReplicas, reassignIsrChangeHandler)
+            onPartitionReassignment(topicPartition, reassignContext)
+          } else {
+            debug(s"Received notification of ISR update (isr=$inSyncReplicas) for reassigning " +
+              s"partition $topicPartition with current assignment $currentAssignment" )
           }
-          else {
-            info(s"${caughtUpReplicas.size}/${reassignedReplicas.size} replicas have caught up with the leader for " +
-              s"partition $partition being reassigned. Replica(s) " +
-              s"${(reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")} still need to catch up")
-          }
-        case None => error(s"Error handling reassignment of partition $partition to replicas " +
-          s"${reassignedReplicas.mkString(",")} as it was never created")
+        case None => error(s"Error handling ISR update for reassigning partition $topicPartition " +
+          s"with assignment $currentAssignment since the leader and ISR state does not exist")
       }
     }
   }
