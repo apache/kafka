@@ -1140,8 +1140,7 @@ public final class MessageDataGenerator {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else {
                 if (field.zeroCopy()) {
-                    buffer.printf("if (%s.remaining() != 0) {%n",
-                        field.camelCaseName(), field.camelCaseName());
+                    buffer.printf("if (%s.remaining() != 0) {%n", field.camelCaseName());
                 } else {
                     buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
                 }
@@ -1525,9 +1524,7 @@ public final class MessageDataGenerator {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             if (field.zeroCopy()) {
                                 buffer.printf("_bytesSize += " +
-                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1);%n",
-                                    field.camelCaseName(), field.camelCaseName());
-
+                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1);%n", field.camelCaseName());
                             } else {
                                 buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
                                     field.camelCaseName());
