@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class DeleteConsumerGroupOffsetsResultTest {
 
@@ -67,18 +68,11 @@ public class DeleteConsumerGroupOffsetsResultTest {
 
     @Test
     public void testPartitionLevelErrorConstructor() throws ExecutionException, InterruptedException {
-        partitionFutures.complete(errorsMap);
-        assertFalse(partitionFutures.isCompletedExceptionally());
-        DeleteConsumerGroupOffsetsResult partitionLevelErrorResult =
-            new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);
-
-        TestUtils.assertFutureError(partitionLevelErrorResult.all(), UnknownTopicOrPartitionException.class);
-        assertNull(partitionLevelErrorResult.partitionResult(tpZero).get());
-        TestUtils.assertFutureError(partitionLevelErrorResult.partitionResult(tpOne), UnknownTopicOrPartitionException.class);
+        createAndVerifyPartitionLevelErrror();
     }
 
     @Test
-    public void testPartitionMissingErrorConstructor() throws InterruptedException, ExecutionException {
+    public void testPartitionMissingInResponseErrorConstructor() throws InterruptedException, ExecutionException {
         errorsMap.remove(tpOne);
         partitionFutures.complete(errorsMap);
         assertFalse(partitionFutures.isCompletedExceptionally());
@@ -88,6 +82,13 @@ public class DeleteConsumerGroupOffsetsResultTest {
         TestUtils.assertFutureError(missingPartitionResult.all(), IllegalArgumentException.class);
         assertNull(missingPartitionResult.partitionResult(tpZero).get());
         TestUtils.assertFutureError(missingPartitionResult.partitionResult(tpOne), IllegalArgumentException.class);
+    }
+
+    @Test
+    public void testPartitionMissingInRequestErrorConstructor() throws InterruptedException, ExecutionException {
+        DeleteConsumerGroupOffsetsResult partitionLevelErrorResult = createAndVerifyPartitionLevelErrror();
+        assertThrows(IllegalArgumentException.class,
+                     () -> partitionLevelErrorResult.partitionResult(new TopicPartition("invalid-topic", 0)));
     }
 
     @Test
@@ -102,5 +103,17 @@ public class DeleteConsumerGroupOffsetsResultTest {
         assertNull(noErrorResult.all().get());
         assertNull(noErrorResult.partitionResult(tpZero).get());
         assertNull(noErrorResult.partitionResult(tpOne).get());
+    }
+
+    private DeleteConsumerGroupOffsetsResult createAndVerifyPartitionLevelErrror() throws InterruptedException, ExecutionException {
+        partitionFutures.complete(errorsMap);
+        assertFalse(partitionFutures.isCompletedExceptionally());
+        DeleteConsumerGroupOffsetsResult partitionLevelErrorResult =
+            new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);
+
+        TestUtils.assertFutureError(partitionLevelErrorResult.all(), UnknownTopicOrPartitionException.class);
+        assertNull(partitionLevelErrorResult.partitionResult(tpZero).get());
+        TestUtils.assertFutureError(partitionLevelErrorResult.partitionResult(tpOne), UnknownTopicOrPartitionException.class);
+        return partitionLevelErrorResult;
     }
 }

@@ -45,6 +45,9 @@ public class DeleteConsumerGroupOffsetsResult {
      * Return a future which can be used to check the result for a given partition.
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        if (!partitions.contains(partition)) {
+            throw new IllegalArgumentException("Partition " + partition + " was not included in the original request");
+        }
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         this.future.whenComplete((topicPartitions, throwable) -> {
@@ -83,7 +86,7 @@ public class DeleteConsumerGroupOffsetsResult {
                                                TopicPartition partition,
                                                KafkaFutureImpl<Void> result) {
         Throwable exception = KafkaAdminClient.getSubLevelError(partitionLevelErrors, partition,
-            "Group offset deletion for partition \"" + partition + "\" was not attempted");
+            "Offset deletion result for partition \"" + partition + "\" was not included in the response");
         if (exception != null) {
             result.completeExceptionally(exception);
             return true;

@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutionException;
 import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class RemoveMembersFromConsumerGroupResultTest {
 
@@ -69,18 +70,11 @@ public class RemoveMembersFromConsumerGroupResultTest {
 
     @Test
     public void testMemberLevelErrorConstructor() throws InterruptedException, ExecutionException {
-        memberFutures.complete(errorsMap);
-        assertFalse(memberFutures.isCompletedExceptionally());
-        RemoveMembersFromConsumerGroupResult memberLevelErrorResult =
-            new RemoveMembersFromConsumerGroupResult(memberFutures, removingMemberInfos);
-
-        TestUtils.assertFutureError(memberLevelErrorResult.all(), FencedInstanceIdException.class);
-        assertNull(memberLevelErrorResult.memberResult(removingMemberInfos.get(0)).get());
-        TestUtils.assertFutureError(memberLevelErrorResult.memberResult(removingMemberInfos.get(1)), FencedInstanceIdException.class);
+        createAndVerifyMemberLevelError();
     }
 
     @Test
-    public void testMemberMissingErrorConstructor() throws InterruptedException, ExecutionException {
+    public void testMemberMissingErrorInRequestConstructor() throws InterruptedException, ExecutionException {
         errorsMap.remove(convertToMemberIdentity(removingMemberInfos.get(1)));
         memberFutures.complete(errorsMap);
         assertFalse(memberFutures.isCompletedExceptionally());
@@ -90,6 +84,15 @@ public class RemoveMembersFromConsumerGroupResultTest {
         TestUtils.assertFutureError(missingMemberResult.all(), IllegalArgumentException.class);
         assertNull(missingMemberResult.memberResult(removingMemberInfos.get(0)).get());
         TestUtils.assertFutureError(missingMemberResult.memberResult(removingMemberInfos.get(1)), IllegalArgumentException.class);
+    }
+
+    @Test
+    public void testMemberLevelErrorInResponseConstructor() throws InterruptedException, ExecutionException {
+        RemoveMembersFromConsumerGroupResult memberLevelErrorResult = createAndVerifyMemberLevelError();
+        assertThrows(IllegalArgumentException.class,
+                     () -> memberLevelErrorResult.memberResult(
+                         new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "invalid-instance-id"))
+        );
     }
 
     @Test
@@ -104,5 +107,17 @@ public class RemoveMembersFromConsumerGroupResultTest {
         assertNull(noErrorResult.all().get());
         assertNull(noErrorResult.memberResult(removingMemberInfos.get(0)).get());
         assertNull(noErrorResult.memberResult(removingMemberInfos.get(1)).get());
+    }
+
+    private RemoveMembersFromConsumerGroupResult createAndVerifyMemberLevelError() throws InterruptedException, ExecutionException {
+        memberFutures.complete(errorsMap);
+        assertFalse(memberFutures.isCompletedExceptionally());
+        RemoveMembersFromConsumerGroupResult memberLevelErrorResult =
+            new RemoveMembersFromConsumerGroupResult(memberFutures, removingMemberInfos);
+
+        TestUtils.assertFutureError(memberLevelErrorResult.all(), FencedInstanceIdException.class);
+        assertNull(memberLevelErrorResult.memberResult(removingMemberInfos.get(0)).get());
+        TestUtils.assertFutureError(memberLevelErrorResult.memberResult(removingMemberInfos.get(1)), FencedInstanceIdException.class);
+        return memberLevelErrorResult;
     }
 }

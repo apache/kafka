@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 
@@ -36,14 +35,12 @@ import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptio
 public class RemoveMembersFromConsumerGroupResult {
 
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
-    private final List<MemberIdentity> memberIdentities;
+    private final List<RemovingMemberInfo> memberInfos;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
                                          List<RemovingMemberInfo> memberInfos) {
         this.future = future;
-        this.memberIdentities = memberInfos.stream()
-                                    .map(RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity)
-                                    .collect(Collectors.toList());
+        this.memberInfos = memberInfos;
     }
 
     /**
@@ -57,8 +54,8 @@ public class RemoveMembersFromConsumerGroupResult {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
-                for (MemberIdentity memberToRemove : memberIdentities) {
-                    if (maybeCompleteExceptionally(memberErrors, memberToRemove, result)) {
+                for (RemovingMemberInfo memberToRemove : memberInfos) {
+                    if (maybeCompleteExceptionally(memberErrors, convertToMemberIdentity(memberToRemove), result)) {
                         return;
                     }
                 }
@@ -72,12 +69,15 @@ public class RemoveMembersFromConsumerGroupResult {
      * Returns the selected member future.
      */
     public KafkaFuture<Void> memberResult(RemovingMemberInfo member) {
-        MemberIdentity memberIdentity = convertToMemberIdentity(member);
+        if (!memberInfos.contains(member)) {
+            throw new IllegalArgumentException("Member " + member + " was not included in the original request");
+        }
+
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
         this.future.whenComplete((memberErrors, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!maybeCompleteExceptionally(memberErrors, memberIdentity, result)) {
+            } else if (!maybeCompleteExceptionally(memberErrors, convertToMemberIdentity(member), result)) {
                 result.complete(null);
             }
         });
