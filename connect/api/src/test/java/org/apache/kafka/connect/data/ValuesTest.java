@@ -489,12 +489,12 @@ public class ValuesTest {
     public void shouldConsumeMultipleTokens() {
         String value = "a:b:c:d:e:f:g:h";
         Parser parser = new Parser(value);
-        String firstFive = parser.nextTokens(5);
+        String firstFive = parser.next(5);
         assertEquals("a:b:c", firstFive);
         assertEquals(":", parser.next());
         assertEquals("d", parser.next());
         assertEquals(":", parser.next());
-        String lastEight = parser.nextTokens(8); // only 7 remain
+        String lastEight = parser.next(8); // only 7 remain
         assertNull(lastEight);
         assertEquals("e", parser.next());
     }

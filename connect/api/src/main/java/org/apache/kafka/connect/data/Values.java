@@ -70,9 +70,9 @@ public class Values {
     private static final String FALSE_LITERAL = Boolean.FALSE.toString();
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
-    protected static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
-    protected static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
-    protected static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
+    static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
+    static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
+    static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
 
     private static final String QUOTE_DELIMITER = "\"";
     private static final String COMMA_DELIMITER = ",";
@@ -875,14 +875,17 @@ public class Values {
             // The time and timestamp literals may be split into 5 tokens since an unescaped colon
             // is a delimiter. Check these first since the first of these tokens is a simple numeric
             int position = parser.mark();
-            String timeOrTimestampStr = parser.nextTokens(4, startPosition); // may be null
-            SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
-            if (temporal != null) {
-                return temporal;
+            String remainder = parser.next(4);
+            if (remainder != null) {
+                String timeOrTimestampStr = token + remainder;
+                SchemaAndValue temporal = parseAsTemporal(timeOrTimestampStr);
+                if (temporal != null) {
+                    return temporal;
+                }
             }
             // No match was found using the 5 tokens, so rewind and see if the current token has a date, time, or timestamp
             parser.rewindTo(position);
-            temporal = parseAsTemporal(token);
+            SchemaAndValue temporal = parseAsTemporal(token);
             if (temporal != null) {
                 return temporal;
             }
@@ -926,7 +929,7 @@ public class Values {
         return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
     }
 
-    protected static SchemaAndValue parseAsTemporal(String token) {
+    private static SchemaAndValue parseAsTemporal(String token) {
         if (token == null) {
             return null;
         }
@@ -1135,11 +1138,8 @@ public class Values {
             return previousToken;
         }
 
-        public String nextTokens(int n) {
-            return nextTokens(n, mark());
-        }
-
-        public String nextTokens(int n, int startingIndex) {
+        public String next(int n) {
+            int current = mark();
             int start = mark();
             for (int i = 0; i != n; ++i) {
                 if (!hasNext()) {
@@ -1148,7 +1148,7 @@ public class Values {
                 }
                 next();
             }
-            return original.substring(startingIndex, position());
+            return original.substring(current, position());
         }
 
         private String consumeNextToken() throws NoSuchElementException {
