@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Collections;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -29,7 +34,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testDownstreamTopicRenaming() {
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), null);
+            new DefaultReplicationPolicy(), null, Collections.emptyMap(), Collections.emptyMap());
         assertEquals(new TopicPartition("source1.topic3", 4),
             mirrorCheckpointTask.renameTopicPartition(new TopicPartition("topic3", 4)));
         assertEquals(new TopicPartition("topic3", 5),
@@ -42,7 +47,7 @@ public class MirrorCheckpointTaskTest {
     public void testCheckpoint() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), offsetSyncStore);
+            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptyMap(), Collections.emptyMap());
         offsetSyncStore.sync(new TopicPartition("topic1", 2), 3L, 4L);
         offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
         Checkpoint checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
@@ -63,5 +68,57 @@ public class MirrorCheckpointTaskTest {
         assertEquals(12, checkpoint2.upstreamOffset());
         assertEquals(13, checkpoint2.downstreamOffset());
         assertEquals(234L, sourceRecord2.timestamp().longValue());
+    }
+
+    @Test
+    public void testSyncOffset() {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, List<Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+
+        // 'c1t1' denotes consumer offsets of all partitions of topic1 for consumer1
+        Map<TopicPartition, OffsetAndMetadata> c1t1 = new HashMap<>();
+        // 't1p0' denotes topic1, partition 0
+        TopicPartition t1p0 = new TopicPartition(topic1, 0);
+
+        c1t1.put(t1p0, new OffsetAndMetadata(100));
+
+        Map<TopicPartition, OffsetAndMetadata> c2t2 = new HashMap<>();
+        TopicPartition t2p0 = new TopicPartition(topic2, 0);
+
+        c2t2.put(t2p0, new OffsetAndMetadata(50));
+
+        idleConsumerGroupsOffset.put(consumer1, c1t1);
+        idleConsumerGroupsOffset.put(consumer2, c2t2);
+
+        // 'cpC1T1P0' denotes 'checkpoint' of topic1, partition 0 for consumer1
+        Checkpoint cpC1T1P0 = new Checkpoint(consumer1, new TopicPartition(topic1, 0), 200, 101, "metadata");
+
+        // 'cpC2T2p0' denotes 'checkpoint' of topic2, partition 0 for consumer2
+        Checkpoint cpC2T2P0 = new Checkpoint(consumer2, new TopicPartition(topic2, 0), 100, 51, "metadata");
+
+        // 'checkpointListC1' denotes 'checkpoint' list for consumer1
+        List<Checkpoint> checkpointListC1 = new ArrayList<>();
+        checkpointListC1.add(cpC1T1P0);
+
+        // 'checkpointListC2' denotes 'checkpoint' list for consumer2
+        List<Checkpoint> checkpointListC2 = new ArrayList<>();
+        checkpointListC2.add(cpC2T2P0);
+
+        checkpointsPerConsumerGroup.put(consumer1, checkpointListC1);
+        checkpointsPerConsumerGroup.put(consumer2, checkpointListC2);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
+            new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertEquals(101, output.get(consumer1).get(t1p0).offset());
+        assertEquals(51, output.get(consumer2).get(t2p0).offset());
     }
 }
