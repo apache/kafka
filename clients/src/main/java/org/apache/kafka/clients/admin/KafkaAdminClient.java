@@ -110,7 +110,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -217,7 +216,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -3492,9 +3490,8 @@ public class KafkaAdminClient extends AdminClient {
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                return LeaveGroupRequest.Builder
-                           .builderWithGroupInstanceIdSupport(context.groupId(),
-                                                              context.options().members().stream().map(
+                return new LeaveGroupRequest.Builder(context.groupId(),
+                                                     context.options().members().stream().map(
                     RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity).collect(Collectors.toList()));
             }
 

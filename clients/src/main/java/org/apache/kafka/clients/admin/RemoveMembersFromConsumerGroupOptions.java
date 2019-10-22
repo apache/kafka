@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,17 +45,33 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
             this.memberId = memberId;
             this.groupInstanceId = groupInstanceId;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof RemovingMemberInfo) {
+                RemovingMemberInfo otherMember = (RemovingMemberInfo) o;
+                return this.memberId.equals(otherMember.memberId) &&
+                           this.groupInstanceId.equals(otherMember.groupInstanceId);
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(groupInstanceId, memberId);
+        }
     }
 
-    private List<RemovingMemberInfo> members;
+    private Set<RemovingMemberInfo> members;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<String> groupInstanceIds) {
         members = groupInstanceIds.stream().map(
             instanceId -> new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceId)
-        ).collect(Collectors.toList());
+        ).collect(Collectors.toSet());
     }
 
-    public List<RemovingMemberInfo> members() {
+    public Set<RemovingMemberInfo> members() {
         return members;
     }
 
@@ -64,6 +80,5 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
                    .setGroupInstanceId(memberInfo.groupInstanceId)
                    .setMemberId(memberInfo.memberId);
     }
-
 }
 

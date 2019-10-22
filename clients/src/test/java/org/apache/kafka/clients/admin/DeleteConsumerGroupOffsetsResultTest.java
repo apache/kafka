@@ -87,8 +87,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
     @Test
     public void testPartitionMissingInRequestErrorConstructor() throws InterruptedException, ExecutionException {
         DeleteConsumerGroupOffsetsResult partitionLevelErrorResult = createAndVerifyPartitionLevelErrror();
-        assertThrows(IllegalArgumentException.class,
-                     () -> partitionLevelErrorResult.partitionResult(new TopicPartition("invalid-topic", 0)));
+        assertThrows(IllegalArgumentException.class, () -> partitionLevelErrorResult.partitionResult(new TopicPartition("invalid-topic", 0)));
     }
 
     @Test

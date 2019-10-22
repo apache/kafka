@@ -28,10 +28,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
@@ -41,9 +41,9 @@ import static org.junit.Assert.assertThrows;
 
 public class RemoveMembersFromConsumerGroupResultTest {
 
-    private final String instanceOne = "instance-1";
-    private final String instanceTwo = "instance-2";
-    private List<RemovingMemberInfo> removingMemberInfos;
+    private final RemovingMemberInfo instanceOne = new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "instance-1");
+    private final RemovingMemberInfo instanceTwo = new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "instance-2");
+    private Set<RemovingMemberInfo> removingMemberInfos;
     private Map<MemberIdentity, Errors> errorsMap;
 
     private KafkaFutureImpl<Map<MemberIdentity, Errors>> memberFutures;
@@ -51,13 +51,13 @@ public class RemoveMembersFromConsumerGroupResultTest {
     @Before
     public void setUp() {
         memberFutures = new KafkaFutureImpl<>();
-        removingMemberInfos = Arrays.asList(
-            new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceOne),
-            new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceTwo)
-        );
+        removingMemberInfos = new HashSet<>();
+        removingMemberInfos.add(instanceOne);
+        removingMemberInfos.add(instanceTwo);
+
         errorsMap = new HashMap<>();
-        errorsMap.put(convertToMemberIdentity(removingMemberInfos.get(0)), Errors.NONE);
-        errorsMap.put(convertToMemberIdentity(removingMemberInfos.get(1)), Errors.FENCED_INSTANCE_ID);
+        errorsMap.put(convertToMemberIdentity(instanceOne), Errors.NONE);
+        errorsMap.put(convertToMemberIdentity(instanceTwo), Errors.FENCED_INSTANCE_ID);
     }
 
     @Test
@@ -75,38 +75,37 @@ public class RemoveMembersFromConsumerGroupResultTest {
 
     @Test
     public void testMemberMissingErrorInRequestConstructor() throws InterruptedException, ExecutionException {
-        errorsMap.remove(convertToMemberIdentity(removingMemberInfos.get(1)));
+        errorsMap.remove(convertToMemberIdentity(instanceTwo));
         memberFutures.complete(errorsMap);
         assertFalse(memberFutures.isCompletedExceptionally());
         RemoveMembersFromConsumerGroupResult missingMemberResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, removingMemberInfos);
 
         TestUtils.assertFutureError(missingMemberResult.all(), IllegalArgumentException.class);
-        assertNull(missingMemberResult.memberResult(removingMemberInfos.get(0)).get());
-        TestUtils.assertFutureError(missingMemberResult.memberResult(removingMemberInfos.get(1)), IllegalArgumentException.class);
+        assertNull(missingMemberResult.memberResult(instanceOne).get());
+        TestUtils.assertFutureError(missingMemberResult.memberResult(instanceTwo), IllegalArgumentException.class);
     }
 
     @Test
     public void testMemberLevelErrorInResponseConstructor() throws InterruptedException, ExecutionException {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult = createAndVerifyMemberLevelError();
-        assertThrows(IllegalArgumentException.class,
-                     () -> memberLevelErrorResult.memberResult(
-                         new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "invalid-instance-id"))
+        assertThrows(IllegalArgumentException.class, () -> memberLevelErrorResult.memberResult(
+            new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "invalid-instance-id"))
         );
     }
 
     @Test
     public void testNoErrorConstructor() throws ExecutionException, InterruptedException {
         Map<MemberIdentity, Errors> errorsMap = new HashMap<>();
-        errorsMap.put(convertToMemberIdentity(removingMemberInfos.get(0)), Errors.NONE);
-        errorsMap.put(convertToMemberIdentity(removingMemberInfos.get(1)), Errors.NONE);
+        errorsMap.put(convertToMemberIdentity(instanceOne), Errors.NONE);
+        errorsMap.put(convertToMemberIdentity(instanceTwo), Errors.NONE);
         RemoveMembersFromConsumerGroupResult noErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, removingMemberInfos);
         memberFutures.complete(errorsMap);
 
         assertNull(noErrorResult.all().get());
-        assertNull(noErrorResult.memberResult(removingMemberInfos.get(0)).get());
-        assertNull(noErrorResult.memberResult(removingMemberInfos.get(1)).get());
+        assertNull(noErrorResult.memberResult(instanceOne).get());
+        assertNull(noErrorResult.memberResult(instanceTwo).get());
     }
 
     private RemoveMembersFromConsumerGroupResult createAndVerifyMemberLevelError() throws InterruptedException, ExecutionException {
@@ -116,8 +115,8 @@ public class RemoveMembersFromConsumerGroupResultTest {
             new RemoveMembersFromConsumerGroupResult(memberFutures, removingMemberInfos);
 
         TestUtils.assertFutureError(memberLevelErrorResult.all(), FencedInstanceIdException.class);
-        assertNull(memberLevelErrorResult.memberResult(removingMemberInfos.get(0)).get());
-        TestUtils.assertFutureError(memberLevelErrorResult.memberResult(removingMemberInfos.get(1)), FencedInstanceIdException.class);
+        assertNull(memberLevelErrorResult.memberResult(instanceOne).get());
+        TestUtils.assertFutureError(memberLevelErrorResult.memberResult(instanceTwo), FencedInstanceIdException.class);
         return memberLevelErrorResult;
     }
 }

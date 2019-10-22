@@ -32,8 +32,8 @@ import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -41,9 +41,7 @@ import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -1287,8 +1285,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           ))
 
           TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberIdentity()
-            .setGroupInstanceId(invalidInstanceId))
+          val firstMemberFuture = removeMembersResult.memberResult(new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, invalidInstanceId))
           TestUtils.assertFutureExceptionTypeEquals(firstMemberFuture, classOf[UnknownMemberIdException])
 
           // Test consumer group deletion
@@ -1311,7 +1308,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new MemberIdentity().setGroupInstanceId(testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, testInstanceId))
           assertNull(validMemberFuture.get())
 
           // The group should contain no member now.

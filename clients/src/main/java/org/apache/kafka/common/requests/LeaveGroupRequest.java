@@ -49,14 +49,6 @@ public class LeaveGroupRequest extends AbstractRequest {
         }
 
         /**
-         * Return a builder with minimum version support for group.instance.id. With this builder the client
-         * request shall fail if the broker version is too old.
-         */
-        public static Builder builderWithGroupInstanceIdSupport(String groupId, List<MemberIdentity> members) {
-            return new Builder(groupId, members, (short) 3, ApiKeys.LEAVE_GROUP.latestVersion());
-        }
-
-        /**
          * Based on the request version to choose fields.
          */
         @Override

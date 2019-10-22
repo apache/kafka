@@ -22,8 +22,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.protocol.Errors;
 
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.convertToMemberIdentity;
 
@@ -35,10 +35,10 @@ import static org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptio
 public class RemoveMembersFromConsumerGroupResult {
 
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
-    private final List<RemovingMemberInfo> memberInfos;
+    private final Set<RemovingMemberInfo> memberInfos;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         List<RemovingMemberInfo> memberInfos) {
+                                         Set<RemovingMemberInfo> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
     }

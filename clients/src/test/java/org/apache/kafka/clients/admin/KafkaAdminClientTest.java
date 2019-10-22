@@ -2021,7 +2021,6 @@ public class KafkaAdminClientTest {
                         ))
             ));
 
-
             final RemoveMembersFromConsumerGroupResult noErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
