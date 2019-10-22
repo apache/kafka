@@ -624,7 +624,7 @@ class KafkaController(val config: KafkaConfig,
     val addingReplicas = updatedAssignment.addingReplicas
     val removingReplicas = updatedAssignment.removingReplicas
 
-    if (!areReplicasInIsr(topicPartition, addingReplicas)) {
+    if (!isReassignmentComplete(topicPartition, updatedAssignment)) {
       // A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
       updateLeaderEpochAndSendRequest(topicPartition, updatedAssignment)
       // A4. replicas in AR -> NewReplica
@@ -864,9 +864,27 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def areReplicasInIsr(partition: TopicPartition, replicas: Seq[Int]): Boolean = {
-    zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
-      replicas.forall(leaderIsrAndControllerEpoch.leaderAndIsr.isr.contains)
+  private def isReassignmentComplete(partition: TopicPartition, assignment: ReplicaAssignment): Boolean = {
+    if (!assignment.isBeingReassigned) {
+      true
+    } else {
+      zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
+        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.toSet
+        val addingReplicas = assignment.addingReplicas.toSet
+        val targetReplicas = assignment.targetReplicas.toSet
+        val originReplicas = assignment.originReplicas.toSet
+
+        // The primary purpose of a reassignment is to bring the new replicas into sync. However,
+        // we have to be careful that completion of the reassignment itself does not result in an
+        // under-replicated partition. We finish the reassignment when either of the following
+        // are satisfied:
+        //   1. All target replicas are in the ISR
+        //   2. All adding replicas are in the ISR and the effective ISR size after
+        //      reassignment is at least as large as the effective size prior to reassignment
+
+        targetReplicas.subsetOf(isr) ||
+          (addingReplicas.subsetOf(isr) && (isr & targetReplicas).size >= (isr & originReplicas).size)
+      }
     }
   }
 
@@ -1666,27 +1684,13 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) return
 
     val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-    if (currentAssignment.isBeingReassigned) {
-      val addingReplicas = currentAssignment.addingReplicas
-      zkClient.getTopicPartitionStates(Seq(topicPartition)).get(topicPartition) match {
-        case Some(leaderIsrAndControllerEpoch) => // check if new replicas have joined ISR
-          val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-          val inSyncReplicas = leaderAndIsr.isr.toSet
-
-          if (addingReplicas.toSet.subsetOf(inSyncReplicas)) {
-            // resume the partition reassignment process
-            info(s"Adding replicas $addingReplicas have all caught up with the leader for " +
-              s"reassigning partition $topicPartition")
-            val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
-            val reassignContext = ReassignmentContext(currentAssignment.targetReplicas, reassignIsrChangeHandler)
-            onPartitionReassignment(topicPartition, reassignContext)
-          } else {
-            debug(s"Received notification of ISR update (isr=$inSyncReplicas) for reassigning " +
-              s"partition $topicPartition with current assignment $currentAssignment" )
-          }
-        case None => error(s"Error handling ISR update for reassigning partition $topicPartition " +
-          s"with assignment $currentAssignment since the leader and ISR state does not exist")
-      }
+    if (currentAssignment.isBeingReassigned && isReassignmentComplete(topicPartition, currentAssignment)) {
+      // resume the partition reassignment process
+      info(s"Adding replicas ${currentAssignment.addingReplicas} have all caught up with the leader for " +
+        s"reassigning partition $topicPartition")
+      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
+      val reassignContext = ReassignmentContext(currentAssignment.targetReplicas, reassignIsrChangeHandler)
+      onPartitionReassignment(topicPartition, reassignContext)
     }
   }
 
