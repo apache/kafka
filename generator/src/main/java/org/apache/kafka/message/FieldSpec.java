@@ -121,6 +121,10 @@ public final class FieldSpec {
         checkTagInvariants();
 
         this.zeroCopy = zeroCopy;
+        if (this.zeroCopy && !this.type.isBytes()) {
+            throw new RuntimeException("Invalid zeroCopy value for " + name +
+                ". Only fields of type bytes can use zeroCopy flag.");
+        }
     }
 
     private void checkTagInvariants() {

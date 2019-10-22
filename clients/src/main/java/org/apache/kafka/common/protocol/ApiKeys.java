@@ -122,9 +122,10 @@ import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES;
-import static org.apache.kafka.common.protocol.types.Type.BYTE_BUFFER;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 /**
@@ -374,7 +375,7 @@ public enum ApiKeys {
         Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
-                if (field == BYTE_BUFFER || field == RECORDS ||
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS ||
                     field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES)
                     hasBuffer.set(true);
             }

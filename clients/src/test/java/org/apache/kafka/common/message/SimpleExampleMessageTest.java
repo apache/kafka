@@ -20,6 +20,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -33,35 +34,48 @@ public class SimpleExampleMessageTest {
     @Test
     public void shouldStoreField() {
         final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
+
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
+        out.setZeroCopyByteBuffer(buf);
+
         assertEquals(uuid, out.processId());
+        assertEquals(buf, out.zeroCopyByteBuffer());
     }
 
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
+        assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
     }
 
     @Test
     public void shouldRoundTripFieldThroughStruct() {
         final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
+        out.setZeroCopyByteBuffer(buf);
 
         final Struct struct = out.toStruct((short) 1);
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.fromStruct(struct, (short) 1);
 
+        buf.rewind();
+
         assertEquals(uuid, in.processId());
+        assertEquals(buf, in.zeroCopyByteBuffer());
     }
 
     @Test
     public void shouldRoundTripFieldThroughBuffer() {
         final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
+        out.setZeroCopyByteBuffer(buf);
 
         ObjectSerializationCache cache = new ObjectSerializationCache();
         final ByteBuffer buffer = ByteBuffer.allocate(out.size(cache, (short) 1));
@@ -71,17 +85,23 @@ public class SimpleExampleMessageTest {
         final SimpleExampleMessageData in = new SimpleExampleMessageData();
         in.read(new ByteBufferAccessor(buffer), (short) 1);
 
+        buf.rewind();
+
         assertEquals(uuid, in.processId());
+        assertEquals(buf, in.zeroCopyByteBuffer());
     }
 
     @Test
     public void shouldImplementJVMMethods() {
         final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData a = new SimpleExampleMessageData();
         a.setProcessId(uuid);
+        a.setZeroCopyByteBuffer(buf);
 
         final SimpleExampleMessageData b = new SimpleExampleMessageData();
         b.setProcessId(uuid);
+        b.setZeroCopyByteBuffer(buf);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());

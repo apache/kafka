@@ -1063,7 +1063,7 @@ public final class MessageDataGenerator {
                     lengthExpression = "_stringBytes.length";
                 } else if (type.isBytes()) {
                     if (zeroCopy) {
-                        lengthExpression = String.format("%s.limit() - %s.position()", name, name);
+                        lengthExpression = String.format("%s.remaining()", name, name);
                     } else {
                         lengthExpression = String.format("%s.length", name);
                     }
@@ -1139,7 +1139,12 @@ public final class MessageDataGenerator {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else {
-                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+                if (field.zeroCopy()) {
+                    buffer.printf("if (%s.remaining() != 0) {%n",
+                        field.camelCaseName(), field.camelCaseName());
+                } else {
+                    buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+                }
             }
         } else if (field.type().isString()) {
             if (fieldDefault(field).equals("null")) {
@@ -1511,16 +1516,22 @@ public final class MessageDataGenerator {
                     }
                 } else if (field.type().isBytes()) {
                     if (field.zeroCopy()) {
-                        buffer.printf("int _bytesSize = %s.limit() - %s.position();%n", field.camelCaseName(), field.camelCaseName());
+                        buffer.printf("int _bytesSize = %s.remaining();%n", field.camelCaseName());
                     } else {
                         buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
                     }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
-                                field.camelCaseName());
+                            if (field.zeroCopy()) {
+                                buffer.printf("_bytesSize += " +
+                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1);%n",
+                                    field.camelCaseName(), field.camelCaseName());
+
+                            } else {
+                                buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                                    field.camelCaseName());
+                            }
                         }).
                         ifNotMember(__ -> {
                             buffer.printf("_bytesSize += 4;%n");

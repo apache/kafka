@@ -272,7 +272,7 @@ final class SchemaGenerator {
             if (fieldFlexibleVersions.contains(version)) {
                 return nullable ? "Type.COMPACT_NULLABLE_BYTES" : "Type.COMPACT_BYTES";
             } else {
-                return zeroCopy ? "Type.BYTE_BUFFER" : (nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES");
+                return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
             }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
