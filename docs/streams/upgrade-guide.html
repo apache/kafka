@@ -75,7 +75,20 @@
     <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
 
     <!-- Placeholder KIP-213 -->
-    <!-- Placeholder KIP-307 -->
+    <p>
+        In the 2.4 release, you now can name all operators in a Kafka Streams DSL topology via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</p>. 
+        Giving your operators meaningful names makes it easier to understand the topology 
+        description (<code>Topology#describe()#toString()</code>) and 
+        understand the full context of what your Kafka Streams application is doing.
+        <br />
+        There are new overloads on most <code>KStream</code> and <code>KTable</code> methods 
+        that accept a <code>Named</code> object.  Typically you'll provide a name for the DSL operation by 
+        using <code>Named.as("my operator name")</code>.  Naming of repartition topics for aggregation 
+        operations will still use <code>Grouped</code> and join operations will use 
+        either <code>Joined</code> or the new <code>StreamJoined</code> object.
+
+    </p>
     <!-- Placeholder KIP-479 -->
 
     <p>
