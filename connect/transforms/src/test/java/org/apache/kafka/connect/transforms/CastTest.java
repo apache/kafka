@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
@@ -339,7 +340,7 @@ public class CastTest {
 
         Date day = new Date(MILLIS_PER_DAY);
         xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
-            String.join(",", specParts)));
+            Utils.join(specParts, ",")));
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("date_to_int32", org.apache.kafka.connect.data.Date.SCHEMA);
