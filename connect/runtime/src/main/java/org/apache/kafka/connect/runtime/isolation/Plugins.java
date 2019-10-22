@@ -63,11 +63,35 @@ public class Plugins {
     }
 
     protected static <T> T newPlugin(Class<T> klass) {
+        // KAFKA-8340: The thread classloader is used during static initialization and must be
+        // set to the plugin's classloader during instantiation
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected <U> Class<? extends U> pluginClassFromConfig(
+            AbstractConfig config,
+            String propertyName,
+            Class<U> pluginClass,
+            Collection<PluginDesc<U>> plugins
+    ) {
+        Class<?> klass = config.getClass(propertyName);
+        if (pluginClass.isAssignableFrom(klass)) {
+            return (Class<? extends U>) klass;
+        }
+        throw new ConnectException(
+            "Failed to find any class that implements " + pluginClass.getSimpleName()
+                + " for the config "
+                + propertyName + ", available classes are: "
+                + pluginNames(plugins)
+        );
     }
 
     protected static <T> T newConfiguredPlugin(AbstractConfig config, Class<T> klass) {
@@ -198,13 +222,18 @@ public class Plugins {
             );
         } catch (ClassNotFoundException e) {
             throw new ConnectException(
-                    "Failed to find any class that implements Converter and which name matches "
-                            + converterClassOrAlias
-                            + ", available connectors are: "
-                            + pluginNames(delegatingLoader.converters())
+                "Failed to find any class that implements Converter and which name matches "
+                    + converterClassOrAlias
+                    + ", available connectors are: "
+                    + pluginNames(delegatingLoader.converters())
             );
         }
-        return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
