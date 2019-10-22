@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class SimpleExampleMessageTest {
 
@@ -42,6 +43,11 @@ public class SimpleExampleMessageTest {
 
         assertEquals(uuid, out.processId());
         assertEquals(buf, out.zeroCopyByteBuffer());
+
+        out.setNullableZeroCopyByteBuffer(null);
+        assertNull(out.nullableZeroCopyByteBuffer());
+        out.setNullableZeroCopyByteBuffer(buf);
+        assertEquals(buf, out.nullableZeroCopyByteBuffer());
     }
 
     @Test
@@ -49,6 +55,7 @@ public class SimpleExampleMessageTest {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
         assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
+        assertEquals(ByteUtils.EMPTY_BUF, out.nullableZeroCopyByteBuffer());
     }
 
     @Test
@@ -67,6 +74,29 @@ public class SimpleExampleMessageTest {
 
         assertEquals(uuid, in.processId());
         assertEquals(buf, in.zeroCopyByteBuffer());
+        assertEquals(ByteUtils.EMPTY_BUF, in.nullableZeroCopyByteBuffer());
+    }
+
+    @Test
+    public void shouldRoundTripFieldThroughStructWithNullable() {
+        final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
+        final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
+        out.setProcessId(uuid);
+        out.setZeroCopyByteBuffer(buf1);
+        out.setNullableZeroCopyByteBuffer(buf2);
+
+        final Struct struct = out.toStruct((short) 1);
+        final SimpleExampleMessageData in = new SimpleExampleMessageData();
+        in.fromStruct(struct, (short) 1);
+
+        buf1.rewind();
+        buf2.rewind();
+
+        assertEquals(uuid, in.processId());
+        assertEquals(buf1, in.zeroCopyByteBuffer());
+        assertEquals(buf2, in.nullableZeroCopyByteBuffer());
     }
 
     @Test
@@ -89,6 +119,33 @@ public class SimpleExampleMessageTest {
 
         assertEquals(uuid, in.processId());
         assertEquals(buf, in.zeroCopyByteBuffer());
+        assertEquals(ByteUtils.EMPTY_BUF, in.nullableZeroCopyByteBuffer());
+    }
+
+    @Test
+    public void shouldRoundTripFieldThroughBufferWithNullable() {
+        final UUID uuid = UUID.randomUUID();
+        final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
+        final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
+        final SimpleExampleMessageData out = new SimpleExampleMessageData();
+        out.setProcessId(uuid);
+        out.setZeroCopyByteBuffer(buf1);
+        out.setNullableZeroCopyByteBuffer(buf2);
+
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        final ByteBuffer buffer = ByteBuffer.allocate(out.size(cache, (short) 1));
+        out.write(new ByteBufferAccessor(buffer), cache, (short) 1);
+        buffer.rewind();
+
+        final SimpleExampleMessageData in = new SimpleExampleMessageData();
+        in.read(new ByteBufferAccessor(buffer), (short) 1);
+
+        buf1.rewind();
+        buf2.rewind();
+
+        assertEquals(uuid, in.processId());
+        assertEquals(buf1, in.zeroCopyByteBuffer());
+        assertEquals(buf2, in.nullableZeroCopyByteBuffer());
     }
 
     @Test
@@ -106,6 +163,20 @@ public class SimpleExampleMessageTest {
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
         // just tagging this on here
+        assertEquals(a.toString(), b.toString());
+
+        a.setNullableZeroCopyByteBuffer(buf);
+        b.setNullableZeroCopyByteBuffer(buf);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+        assertEquals(a.toString(), b.toString());
+
+        a.setNullableZeroCopyByteBuffer(null);
+        b.setNullableZeroCopyByteBuffer(null);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
         assertEquals(a.toString(), b.toString());
     }
 
