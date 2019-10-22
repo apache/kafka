@@ -2452,10 +2452,6 @@
                                   <pre><code class="docutils literal"><span class="pre">foreignKeyExtractor.apply(leftRecord.value)</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code></pre>
                                 </li>
                                 <li>
-                                    Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
-                                    If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
-                                </li>
-                                <li>
                                   <p class="first">The join will be triggered under the
                                     conditions listed below whenever new input is
                                     received. When it is triggered, the user-supplied <code
@@ -2464,9 +2460,10 @@
                                   <blockquote>
                                     <div>
                                       <ul class="simple">
-                                        <li>Input records with a <code class="docutils
-                                            literal"><span class="pre">null</span></code>
-                                          key are ignored and do not trigger the join.</li>
+                                      <li>
+                                            Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
+                                            If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
+                                        </li>
                                         <li>Input records with a <code class="docutils
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
@@ -2515,10 +2512,6 @@
                                   <pre><code class="docutils literal"><span class="pre">foreignKeyExtractor.apply(leftRecord.value)</span> <span class="pre">==</span> <span class="pre">rightRecord.key</span></code></pre>
                                 </li>
                                 <li>
-                                    Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
-                                    If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
-                                </li>
-                                <li>
                                   <p class="first">The join will be triggered under the
                                     conditions listed below whenever new input is
                                     received. When it is triggered, the user-supplied <code
@@ -2527,9 +2520,10 @@
                                   <blockquote>
                                     <div>
                                       <ul class="simple">
-                                        <li>Input records with a <code class="docutils
-                                            literal"><span class="pre">null</span></code>
-                                          key are ignored and do not trigger the join.</li>
+                                        <li>
+                                            Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
+                                            If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
+                                        </li>
                                         <li>Input records with a <code class="docutils
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>
