@@ -150,7 +150,7 @@ public class NetworkReceive implements Receive {
     public int bytesRead() {
         if (buffer == null)
             return size.position();
-        return payload().position() + size.position();
+        return buffer.position() + size.position();
     }
 
     /**
