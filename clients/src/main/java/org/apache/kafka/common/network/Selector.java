@@ -592,7 +592,7 @@ public class Selector implements Selectable, AutoCloseable {
                         long bytesSent = channel.write();
                         if (bytesSent > 0) {
                             long currentTimeMs = time.milliseconds();
-                            this.sensors.recordPartialSend(nodeId, bytesSent, currentTimeMs);
+                            this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
 
                             Send send = channel.maybeCompleteSend();
                             if (send != null) {
@@ -665,7 +665,7 @@ public class Selector implements Selectable, AutoCloseable {
                     break;
 
                 long currentTimeMs = time.milliseconds();
-                sensors.recordPartialReceive(nodeId, bytesReceived, currentTimeMs);
+                sensors.recordBytesReceived(nodeId, bytesReceived, currentTimeMs);
                 madeReadProgressLastPoll = true;
 
                 NetworkReceive receive = channel.maybeCompleteReceive();
@@ -1242,7 +1242,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
-        public void recordPartialSend(String connectionId, long bytes, long currentTimeMs) {
+        public void recordBytesSent(String connectionId, long bytes, long currentTimeMs) {
             this.bytesSent.record(bytes, currentTimeMs);
             if (!connectionId.isEmpty()) {
                 String bytesSentName = "node-" + connectionId + ".bytes-sent";
@@ -1262,7 +1262,7 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
-        public void recordPartialReceive(String connectionId, long bytes, long currentTimeMs) {
+        public void recordBytesReceived(String connectionId, long bytes, long currentTimeMs) {
             this.bytesReceived.record(bytes, currentTimeMs);
             if (!connectionId.isEmpty()) {
                 String bytesReceivedName = "node-" + connectionId + ".bytes-received";
