@@ -1232,7 +1232,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // since even if we are 1) in the middle of a rebalance or 2) have partitions
                     // with unknown starting positions we may still want to return some data
                     // as long as there are some partitions fetchable
-                    updateAssignmentMetadataIfNeeded(time.timer(1L));
+                    updateAssignmentMetadataIfNeeded(timer.remainingMs() > 0 ? time.timer(1L) : timer);
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
@@ -1563,8 +1563,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             final Set<TopicPartition> partitions = assignment();
             for (final TopicPartition tp : offsets.keySet()) {
                 if (!partitions.contains(tp))
-                    throw new CommitFailedException("cannot commit offsets out of owned partitions with " +
-                        "dynamic partition assigned from subscription");
+                    throw new CommitFailedException("Cannot commit offset of topic partition " + tp +
+                        " since the partition was not dynamically assigned to this consumer");
             }
         }
     }

@@ -1858,7 +1858,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureActiveGroup(time.timer(0L));
 
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertNull(coordinator.generation());
+        assertNull(coordinator.generationIfStable());
 
         // when the state is REBALANCING, we would not even send out the request but fail immediatelyå
         assertThrows(RebalanceInProgressException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
@@ -2297,7 +2297,7 @@ public class ConsumerCoordinatorTest {
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
 
-            assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(
+            assertThrows(RebalanceInProgressException.class, () -> coordinator.commitOffsetsSync(
                 singletonMap(t1p, new OffsetAndMetadata(100L)),
                 time.timer(Long.MAX_VALUE)));
 

@@ -1136,12 +1136,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             requestRejoin();
                             future.raise(new RebalanceInProgressException());
                             return;
-                        } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                            // need to reset generation and re-join group
-                            resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                            future.raise(new CommitFailedException());
-                            return;
-                        } else if (error == Errors.ILLEGAL_GENERATION) {
+                        } else if (error == Errors.UNKNOWN_MEMBER_ID ||
+                                   error == Errors.ILLEGAL_GENERATION) {
                             // need to reset generation and re-join group
                             resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
                             future.raise(new CommitFailedException());

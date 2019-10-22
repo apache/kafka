@@ -222,7 +222,7 @@ public class SubscriptionState {
         if (this.assignment.partitionSet().equals(partitions))
             return false;
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(partitions);
+        final Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(partitions);
 
         assignmentId++;
 
@@ -237,14 +237,14 @@ public class SubscriptionState {
     }
 
     private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
-        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
+        final Map<TopicPartition, TopicPartitionState> partitionToStateMap = new HashMap<>(assignments.size());
         for (final TopicPartition tp : assignments) {
             if (assignment.contains(tp))
-                map.put(tp, assignment.stateValue(tp));
+                partitionToStateMap.put(tp, assignment.stateValue(tp));
             else
-                map.put(tp, new TopicPartitionState());
+                partitionToStateMap.put(tp, new TopicPartitionState());
         }
-        return map;
+        return partitionToStateMap;
     }
 
     /**
