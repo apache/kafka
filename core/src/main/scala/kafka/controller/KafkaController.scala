@@ -870,20 +870,8 @@ class KafkaController(val config: KafkaConfig,
     } else {
       zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
         val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.toSet
-        val addingReplicas = assignment.addingReplicas.toSet
         val targetReplicas = assignment.targetReplicas.toSet
-        val originReplicas = assignment.originReplicas.toSet
-
-        // The primary purpose of a reassignment is to bring the new replicas into sync. However,
-        // we have to be careful that completion of the reassignment itself does not result in an
-        // under-replicated partition. We finish the reassignment when either of the following
-        // are satisfied:
-        //   1. All target replicas are in the ISR
-        //   2. All adding replicas are in the ISR and the effective ISR size after
-        //      reassignment is at least as large as the effective size prior to reassignment
-
-        targetReplicas.subsetOf(isr) ||
-          (addingReplicas.subsetOf(isr) && (isr & targetReplicas).size >= (isr & originReplicas).size)
+        targetReplicas.subsetOf(isr)
       }
     }
   }

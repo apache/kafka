@@ -381,34 +381,6 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAwaitAddingReplicasOnlyToCompleteReassignmnet(): Unit = {
-    // If a replica is part of the original assignment, but not in the ISR, we should
-    // still be able to complete the reassignment once the new replicas come into sync
-    val brokers = Array(100, 101, 102, 103)
-    startBrokers(brokers)
-
-    createTopic(zkClient, topicName, Map(
-      0 -> Seq(100, 101, 102)
-    ), servers = servers)
-
-    servers.filter(_.config.brokerId == 101).foreach(_.shutdown())
-
-    adminClient = createAdminClient(servers)
-    val newAssignment = Seq(100, 101, 103)
-
-    val future = adminClient.alterPartitionReassignments(
-      Map(reassignmentEntry(new TopicPartition(topicName, 0), newAssignment)).asJava)
-      .all()
-
-    future.get()
-
-    waitForAllReassignmentsToComplete()
-
-    val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
-    assertMoveForTopicOccurred(newAssignment, actual)
-  }
-
-  @Test
   def shouldChangeThrottleOnRerunAndRemoveOnVerify(): Unit = {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
