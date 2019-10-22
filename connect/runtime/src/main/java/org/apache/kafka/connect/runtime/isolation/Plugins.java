@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -72,11 +71,35 @@ public class Plugins {
     }
 
     protected static <T> T newPlugin(Class<T> klass) {
+        // KAFKA-8340: The thread classloader is used during static initialization and must be
+        // set to the plugin's classloader during instantiation
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
         try {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected <U> Class<? extends U> pluginClassFromConfig(
+            AbstractConfig config,
+            String propertyName,
+            Class<U> pluginClass,
+            Collection<PluginDesc<U>> plugins
+    ) {
+        Class<?> klass = config.getClass(propertyName);
+        if (pluginClass.isAssignableFrom(klass)) {
+            return (Class<? extends U>) klass;
+        }
+        throw new ConnectException(
+            "Failed to find any class that implements " + pluginClass.getSimpleName()
+                + " for the config "
+                + propertyName + ", available classes are: "
+                + pluginNames(plugins)
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -199,18 +222,17 @@ public class Plugins {
             // This configuration does not define the converter via the specified property name
             return null;
         }
-        Converter plugin = null;
+        Class<? extends Converter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-                plugin = getInstance(config, classPropertyName, Converter.class);
+                klass = pluginClassFromConfig(config, classPropertyName, Converter.class, delegatingLoader.converters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
                 String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends Converter> klass;
                 try {
                     klass = pluginClass(delegatingLoader, converterClassOrAlias, Converter.class);
                 } catch (ClassNotFoundException e) {
@@ -220,11 +242,10 @@ public class Plugins {
                             + pluginNames(delegatingLoader.converters())
                     );
                 }
-                plugin = newPlugin(klass);
                 break;
         }
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        if (klass == null) {
+            throw new ConnectException("Unable to initialize the Converter specified in '" + classPropertyName + "'");
         }
 
         // Determine whether this is a key or value converter based upon the supplied property name ...
@@ -236,7 +257,14 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         log.debug("Configuring the {} converter with configuration keys:{}{}",
                   isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
-        plugin.configure(converterConfig, isKeyConverter);
+        Converter plugin;
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
+            plugin.configure(converterConfig, isKeyConverter);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
+        }
         return plugin;
     }
 
@@ -251,7 +279,7 @@ public class Plugins {
      * @throws ConnectException if the {@link HeaderConverter} implementation class could not be found
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        HeaderConverter plugin = null;
+        Class<? extends HeaderConverter> klass = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 if (!config.originals().containsKey(classPropertyName)) {
@@ -261,13 +289,12 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                plugin = getInstance(config, classPropertyName, HeaderConverter.class);
+                klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class, delegatingLoader.headerConverters());
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
                 // Note that there will always be at least a default header converter for the worker
                 String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends HeaderConverter> klass;
                 try {
                     klass = pluginClass(
                             delegatingLoader,
@@ -282,38 +309,25 @@ public class Plugins {
                                     + pluginNames(delegatingLoader.headerConverters())
                     );
                 }
-                plugin = newPlugin(klass);
         }
-        if (plugin == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        if (klass == null) {
+            throw new ConnectException("Unable to initialize the HeaderConverter specified in '" + classPropertyName + "'");
         }
 
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
-        plugin.configure(converterConfig);
-        return plugin;
-    }
 
-    /**
-     * Get an instance of the give class specified by the given configuration key.
-     *
-     * @param key The configuration key for the class
-     * @param t The interface the class should implement
-     * @return A instance of the class
-     */
-    private <T> T getInstance(AbstractConfig config, String key, Class<T> t) {
-        Class<?> c = config.getClass(key);
-        if (c == null) {
-            return null;
+        HeaderConverter plugin;
+        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+        try {
+            plugin = newPlugin(klass);
+            plugin.configure(converterConfig);
+        } finally {
+            compareAndSwapLoaders(savedLoader);
         }
-        // Instantiate the class, but we don't know if the class extends the supplied type
-        Object o = Utils.newInstance(c);
-        if (!t.isInstance(o)) {
-            throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
-        }
-        return t.cast(o);
+        return plugin;
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
