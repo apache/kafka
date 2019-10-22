@@ -30,10 +30,6 @@ import java.util.Optional;
 public class NewPartitionReassignment {
     private final List<Integer> targetReplicas;
 
-    public static NewPartitionReassignment of(Integer... replicas) {
-        return new NewPartitionReassignment(Arrays.asList(replicas));
-    }
-
     public NewPartitionReassignment(List<Integer> targetReplicas) {
         this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }
