@@ -234,10 +234,6 @@ public class Selector implements Selectable, AutoCloseable {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
     }
 
-    SelectorMetrics sensors() {
-        return sensors;
-    }
-
     /**
      * Begin connecting to the given address and add the connection to this nioSelector associated with the given id
      * number.

@@ -301,18 +301,6 @@ public final class Sensor {
     }
 
     /**
-     * Find a metric attached to this sensor by name.
-     */
-    public synchronized KafkaMetric findByName(String name) {
-        for (Map.Entry<MetricName, KafkaMetric> metricEntry : metrics.entrySet()) {
-            if (name.equals(metricEntry.getKey().name())) {
-                return metricEntry.getValue();
-            }
-        }
-        return null;
-    }
-
-    /**
      * KafkaMetrics of sensors which use SampledStat should be synchronized on the same lock
      * for sensor record and metric value read to allow concurrent reads and updates. For simplicity,
      * all sensors are synchronized on this object.

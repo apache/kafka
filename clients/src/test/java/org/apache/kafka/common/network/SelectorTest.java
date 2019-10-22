@@ -71,8 +71,8 @@ import static org.mockito.Mockito.when;
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
 public class SelectorTest {
-
     protected static final int BUFFER_SIZE = 4 * 1024;
+    private static final String METRIC_GROUP = "MetricGroup";
 
     protected EchoServer server;
     protected Time time;
@@ -89,7 +89,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, this.metrics, time, METRIC_GROUP, channelBuilder, new LogContext());
     }
 
     @After
@@ -274,11 +274,8 @@ public class SelectorTest {
         selector.send(send);
         KafkaChannel channel = selector.channel(nodeId);
 
-        KafkaMetric outgoingByteTotal = selector.sensors().bytesSent.findByName("outgoing-byte-total");
-        assertNotNull(outgoingByteTotal);
-
-        KafkaMetric incomingByteTotal = selector.sensors().bytesReceived.findByName("incoming-byte-total");
-        assertNotNull(incomingByteTotal);
+        KafkaMetric outgoingByteTotal = findUntaggedMetricByName("outgoing-byte-total");
+        KafkaMetric incomingByteTotal = findUntaggedMetricByName("incoming-byte-total");
 
         TestUtils.waitForCondition(() -> {
             long bytesSent = send.size() - send.remaining();
@@ -293,12 +290,10 @@ public class SelectorTest {
             return !selector.completedReceives().isEmpty();
         }, "Failed to receive expected response");
 
-        KafkaMetric requestTotal = selector.sensors().requestsSent.findByName("request-total");
-        assertNotNull(requestTotal);
+        KafkaMetric requestTotal = findUntaggedMetricByName("request-total");
         assertEquals(1, ((Double) requestTotal.metricValue()).intValue());
 
-        KafkaMetric responseTotal = selector.sensors().responsesReceived.findByName("response-total");
-        assertNotNull(responseTotal);
+        KafkaMetric responseTotal = findUntaggedMetricByName("response-total");
         assertEquals(1, ((Double) responseTotal.metricValue()).intValue());
     }
 
@@ -887,4 +882,12 @@ public class SelectorTest {
 
         return metric.get().getValue();
     }
+
+    private KafkaMetric findUntaggedMetricByName(String name) {
+        MetricName metricName = new MetricName(name, METRIC_GROUP + "-metrics", "", new HashMap<>());
+        KafkaMetric metric = metrics.metrics().get(metricName);
+        assertNotNull(metric);
+        return metric;
+    }
+
 }
