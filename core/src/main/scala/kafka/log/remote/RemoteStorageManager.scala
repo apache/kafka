@@ -20,6 +20,7 @@ import java._
 import java.io.IOException
 
 import kafka.log.LogSegment
+import org.apache.kafka.common.annotation.InterfaceStability
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
@@ -29,6 +30,7 @@ import org.apache.kafka.common.{Configurable, TopicPartition}
  *
  * All these APIs are still experimental.
  */
+@InterfaceStability.Unstable
 trait RemoteStorageManager extends Configurable with AutoCloseable {
 
   /**
@@ -54,13 +56,6 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    */
   @throws(classOf[IOException])
   def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment, leaderEpoch: Int): util.List[RemoteLogIndexEntry]
-
-  /**
-   * Cancels the unfinished LogSegment copying of the given topic-partition.
-   *
-   * @param topicPartition
-   */
-  def cancelCopyingLogSegment(topicPartition: TopicPartition): Unit
 
   /**
    * List the remote log segment files of the given topicPartition.

@@ -149,11 +149,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return remoteIndex;
     }
 
-    @Override
-    public void cancelCopyingLogSegment(TopicPartition topicPartition) {
-        // Not implemented
-    }
-
     public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition) throws IOException {
         return listRemoteSegments(topicPartition, 0);
     }
