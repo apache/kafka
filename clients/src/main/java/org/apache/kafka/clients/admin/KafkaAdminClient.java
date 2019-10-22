@@ -110,6 +110,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -3491,9 +3492,10 @@ public class KafkaAdminClient extends AdminClient {
                         new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
-                return new LeaveGroupRequest.Builder(context.groupId(),
-                                                     context.options().members().stream()
-                                                         .map(RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity).collect(Collectors.toList()));
+                return LeaveGroupRequest.Builder
+                           .builderWithGroupInstanceIdSupport(context.groupId(),
+                                                              context.options().members().stream().map(
+                    RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity).collect(Collectors.toList()));
             }
 
             @Override

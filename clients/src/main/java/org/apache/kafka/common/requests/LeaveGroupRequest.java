@@ -36,12 +36,24 @@ public class LeaveGroupRequest extends AbstractRequest {
         private final List<MemberIdentity> members;
 
         public Builder(String groupId, List<MemberIdentity> members) {
-            super(ApiKeys.LEAVE_GROUP);
+            this(groupId, members, ApiKeys.LEAVE_GROUP.oldestVersion(), ApiKeys.LEAVE_GROUP.latestVersion());
+        }
+
+        Builder(String groupId, List<MemberIdentity> members, short oldestVersion, short latestVersion) {
+            super(ApiKeys.LEAVE_GROUP, oldestVersion, latestVersion);
             this.groupId = groupId;
             this.members = members;
             if (members.isEmpty()) {
                 throw new IllegalArgumentException("leaving members should not be empty");
             }
+        }
+
+        /**
+         * Return a builder with minimum version support for group.instance.id. With this builder the client
+         * request shall fail if the broker version is too old.
+         */
+        public static Builder builderWithGroupInstanceIdSupport(String groupId, List<MemberIdentity> members) {
+            return new Builder(groupId, members, (short) 3, ApiKeys.LEAVE_GROUP.latestVersion());
         }
 
         /**
