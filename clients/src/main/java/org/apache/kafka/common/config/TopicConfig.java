@@ -76,7 +76,7 @@ public class TopicConfig {
         "their data. If set to -1, no time limit is applied.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
-    public static final String MAX_MESSAGE_BYTES_DOC = "The largest record batch size allowed by Kafka. If this " +
+    public static final String MAX_MESSAGE_BYTES_DOC = "The largest compressed record batch size allowed by Kafka. If this " +
         "is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that " +
         "the they can fetch record batches this large. " +
         "In the latest message format version, records are always grouped into batches for efficiency. In previous " +
