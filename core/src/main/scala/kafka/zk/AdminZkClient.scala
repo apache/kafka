@@ -140,7 +140,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.mapValues(_.replicas))
+        zkClient.createTopicAssignment(topic, assignment.mapValues(_.replicas).toMap)
       } else {
         zkClient.setTopicAssignment(topic, assignment)
       }

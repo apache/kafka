@@ -685,20 +685,20 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-   * Trigger partition reassignment for the provided partitions if the assigned replicas are not the same as the
-   * reassigned replicas (as defined in `ControllerContext.partitionsBeingReassigned`) and if the topic has not been
-   * deleted.
+   * Trigger a partition reassignment provided that the topic exists and is not being deleted.
    *
    * Called when:
-   * 1. zNode is first created
+   * 1. Reassignment zNode is first created
    * 2. Controller fail over
    * 3. AlterPartitionReassignments API is called
    *
-   * `partitionsBeingReassigned` must be populated with all partitions being reassigned before this method is invoked
-   * as explained in the method documentation of `removePartitionFromReassignedPartitions` (which is invoked by this
-   * method).
+   * The `partitionsBeingReassigned` field in the controller context will be updated by this
+   * call after the reassignment completes validation and is successfully stored in the topic
+   * assignment zNode.
    *
-   * @throws IllegalStateException if a partition is not in `partitionsBeingReassigned`
+   * @param reassignments The reassignments to begin processing
+   * @return A map of any errors in the reassignment. If the error is NONE for a given partition,
+   *         then the reassignment was submitted successfully.
    */
   private def maybeTriggerPartitionReassignment(reassignments: Map[TopicPartition, ReassignmentContext]): Map[TopicPartition, ApiError] = {
     reassignments.map { case (tp, reassignmentContext) =>
