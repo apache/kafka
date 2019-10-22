@@ -222,10 +222,10 @@ public class Plugins {
             );
         } catch (ClassNotFoundException e) {
             throw new ConnectException(
-                "Failed to find any class that implements Converter and which name matches "
-                    + converterClassOrAlias
-                    + ", available connectors are: "
-                    + pluginNames(delegatingLoader.converters())
+                    "Failed to find any class that implements Converter and which name matches "
+                            + converterClassOrAlias
+                            + ", available connectors are: "
+                            + pluginNames(delegatingLoader.converters())
             );
         }
         ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());

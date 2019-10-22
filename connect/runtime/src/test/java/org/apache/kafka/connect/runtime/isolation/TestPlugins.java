@@ -80,11 +80,6 @@ public class TestPlugins {
      */
     public static final String SAMPLING_CONVERTER = "test.plugins.SamplingConverter";
     /**
-     * Class name of a {@link org.apache.kafka.connect.storage.HeaderConverter}
-     * which samples information about its method calls.
-     */
-    public static final String SAMPLING_HEADER_CONVERTER = "test.plugins.SamplingHeaderConverter";
-    /**
      * Class name of a plugin which uses a {@link java.util.ServiceLoader}
      * to load internal classes, and samples information about their initialization.
      */
@@ -101,7 +96,6 @@ public class TestPlugins {
             pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
             pluginJars.put(ALIASED_STATIC_FIELD, createPluginJar("aliased-static-field"));
             pluginJars.put(SAMPLING_CONVERTER, createPluginJar("sampling-converter"));
-            pluginJars.put(SAMPLING_HEADER_CONVERTER, createPluginJar("sampling-header-converter"));
             pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
