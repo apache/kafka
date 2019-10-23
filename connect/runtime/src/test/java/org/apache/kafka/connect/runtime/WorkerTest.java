@@ -1145,6 +1145,9 @@ public class WorkerTest extends ThreadedTest {
 
         Map<String, String> expectedConfigs = new HashMap<>();
         expectedConfigs.putAll(props);
+        expectedConfigs.remove("admin.client.id");
+        expectedConfigs.remove("admin.metadata.max.age.ms");
+
         expectedConfigs.put("bootstrap.servers", "localhost:9092");
         expectedConfigs.put("client.id", "testid");
         expectedConfigs.put("metadata.max.age.ms", "10000");
@@ -1154,7 +1157,6 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.adminConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
                                                              null, allConnectorClientConfigOverridePolicy));
-
     }
 
     @Test(expected = ConnectException.class)
@@ -1172,7 +1174,6 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
         Worker.adminConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
                                                           null, noneConnectorClientConfigOverridePolicy);
-
     }
 
     private void assertStatusMetrics(long expected, String metricName) {
