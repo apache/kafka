@@ -47,7 +47,7 @@
         "about": "Each partition to produce to.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
+        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "zeroCopy": true,
           "about": "The record data to be produced." }
       ]}
     ]}

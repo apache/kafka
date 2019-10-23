@@ -30,10 +30,12 @@ import java.util.TreeSet;
 final class StructRegistry {
     private final Map<String, StructSpec> structSpecs;
     private final Set<String> commonStructNames;
+    private boolean containsZeroCopyFields;
 
     StructRegistry() {
         this.structSpecs = new TreeMap<>();
         this.commonStructNames = new TreeSet<>();
+        this.containsZeroCopyFields = false;
     }
 
     /**
@@ -52,6 +54,11 @@ final class StructRegistry {
             commonStructNames.add(struct.name());
         }
 
+        // Register inline structures contained in common structures.
+        for (StructSpec struct : message.commonStructs()) {
+            addStructSpecs(struct.fields());
+        }
+
         // Register inline structures.
         addStructSpecs(message.fields());
     }
@@ -59,6 +66,9 @@ final class StructRegistry {
     @SuppressWarnings("unchecked")
     private void addStructSpecs(List<FieldSpec> fields) {
         for (FieldSpec field : fields) {
+            if (field.zeroCopy()) {
+                containsZeroCopyFields = true;
+            }
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                 if (commonStructNames.contains(arrayType.elementName())) {
@@ -79,6 +89,10 @@ final class StructRegistry {
                 addStructSpecs(field.fields());
             }
         }
+    }
+
+    boolean containsZeroCopyFields() {
+        return containsZeroCopyFields;
     }
 
     /**

@@ -1900,4 +1900,8 @@ public final class MessageDataGenerator {
             return messageFlexibleVersions;
         }
     }
+
+    boolean containsZeroCopyFields() {
+        return structRegistry.containsZeroCopyFields();
+    }
 }

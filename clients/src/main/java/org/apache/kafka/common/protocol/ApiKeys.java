@@ -120,13 +120,6 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.apache.kafka.common.protocol.types.Type.BYTES;
-import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
-import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
-import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
 /**
  * Identifiers for all the Kafka APIs
@@ -237,7 +230,6 @@ public enum ApiKeys {
 
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
-    public final boolean requiresDelayedAllocation;
 
     ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas) {
         this(id, name, false, requestSchemas, responseSchemas);
@@ -267,14 +259,6 @@ public enum ApiKeys {
                 throw new IllegalStateException("Response schema for api " + name + " for version " + i + " is null");
         }
 
-        boolean requestRetainsBufferReference = false;
-        for (Schema requestVersionSchema : requestSchemas) {
-            if (retainsBufferReference(requestVersionSchema)) {
-                requestRetainsBufferReference = true;
-                break;
-            }
-        }
-        this.requiresDelayedAllocation = requestRetainsBufferReference;
         this.requestSchemas = requestSchemas;
         this.responseSchemas = responseSchemas;
     }
@@ -369,19 +353,4 @@ public enum ApiKeys {
     public static void main(String[] args) {
         System.out.println(toHtml());
     }
-
-    private static boolean retainsBufferReference(Schema schema) {
-        final AtomicBoolean hasBuffer = new AtomicBoolean(false);
-        Schema.Visitor detector = new Schema.Visitor() {
-            @Override
-            public void visit(Type field) {
-                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS ||
-                    field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES)
-                    hasBuffer.set(true);
-            }
-        };
-        schema.walk(detector);
-        return hasBuffer.get();
-    }
-
 }
