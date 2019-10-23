@@ -10,7 +10,7 @@
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
-              files="(SchemaGenerator|MessageDataGenerator).java"/>
+              files="(SchemaGenerator|MessageDataGenerator|FieldSpec).java"/>
     <suppress checks="NPathComplexity"
               files="(FieldSpec).java"/>
     <suppress checks="JavaNCSS"
