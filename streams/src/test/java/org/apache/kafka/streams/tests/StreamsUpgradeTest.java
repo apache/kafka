@@ -132,6 +132,9 @@ public class StreamsUpgradeTest {
             final Object o = configs.get("test.future.metadata");
             if (o instanceof AtomicInteger) {
                 usedSubscriptionMetadataVersionPeek = (AtomicInteger) o;
+            } else {
+                // will not be used, just adding a dummy container for simpler code paths
+                usedSubscriptionMetadataVersionPeek = new AtomicInteger();
             }
             configs.remove("test.future.metadata");
             super.configure(configs);
