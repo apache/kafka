@@ -1147,7 +1147,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       try {
         adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()
       } catch {
-        case e: Exception =>
+        case e: ExecutionException =>
           doesThrowException = true
           if (shouldThrowException) {
             assertEquals(classOf[ReassignmentInProgressException], e.getCause().getClass())
