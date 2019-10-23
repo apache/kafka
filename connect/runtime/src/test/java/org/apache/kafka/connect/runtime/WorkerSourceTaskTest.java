@@ -694,6 +694,20 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
+    public void testCancel() {
+        createWorkerTask();
+
+        offsetReader.close();
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.cancel();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testMetricsGroup() {
         SourceTaskMetricsGroup group = new SourceTaskMetricsGroup(taskId, metrics);
         SourceTaskMetricsGroup group1 = new SourceTaskMetricsGroup(taskId1, metrics);
