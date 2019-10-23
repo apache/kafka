@@ -80,7 +80,7 @@ public class TopicConfig {
         "The largest record batch size allowed by Kafka  (after compression if compression is enabled). " +
         "If this is increased and there are consumers older than 0.10.2, the consumers' fetch " +
         "size must also be increased so that the they can fetch record batches this large. " +
-        "In the latest message format version, records are always grouped into batches for efficiency." +
+        "In the latest message format version, records are always grouped into batches for efficiency. " +
         "In previous message format versions, uncompressed records are not grouped into batches and this " +
         "limit only applies to a single record in that case.";
 
