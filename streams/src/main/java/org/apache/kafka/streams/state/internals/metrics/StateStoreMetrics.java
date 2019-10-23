@@ -156,6 +156,14 @@ public class StateStoreMetrics {
     private static final String SUPPRESSION_BUFFER_SIZE_MAX_DESCRIPTION =
         MAX_DESCRIPTION_PREFIX + SUPPRESSION_BUFFER_SIZE_DESCRIPTION;
 
+    private static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
+    private static final String EXPIRED_WINDOW_RECORD_DROP_DESCRIPTION = "dropped records due to an expired window";
+    private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL_DESCRIPTION =
+        TOTAL_DESCRIPTION + EXPIRED_WINDOW_RECORD_DROP_DESCRIPTION;
+    private static final String EXPIRED_WINDOW_RECORD_DROP_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + EXPIRED_WINDOW_RECORD_DROP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
+
     public static Sensor putSensor(final String threadId,
                                    final String taskId,
                                    final String storeType,
@@ -373,6 +381,32 @@ public class StateStoreMetrics {
             RecordingLevel.DEBUG,
             streamsMetrics
         );
+    }
+
+    public static Sensor expiredWindowRecordDropSensor(final String threadId,
+                                                       final String taskId,
+                                                       final String storeType,
+                                                       final String storeName,
+                                                       final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.storeLevelSensor(
+            threadId,
+            taskId,
+            storeName,
+            EXPIRED_WINDOW_RECORD_DROP,
+            RecordingLevel.INFO
+        );
+        final Version version = streamsMetrics.version();
+        if (version == Version.FROM_0100_TO_24) {
+            addInvocationRateAndCountToSensor(
+                sensor,
+                "stream-" + storeType + "-metrics",
+                streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName),
+                EXPIRED_WINDOW_RECORD_DROP,
+                EXPIRED_WINDOW_RECORD_DROP_RATE_DESCRIPTION,
+                EXPIRED_WINDOW_RECORD_DROP_TOTAL_DESCRIPTION
+            );
+        }
+        return sensor;
     }
 
     public static Sensor suppressionBufferCountSensor(final String threadId,

@@ -82,8 +82,6 @@ public class MetricsIntegrationTest {
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
     private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
 
-    private static final String SUPPRESSION_BUFFER_TAG_KEY_0100_TO_24 = "buffer-id";
-    private static final String SUPPRESSION_BUFFER_TAG_KEY = "suppression-buffer-state-id";
     private static final String IN_MEMORY_KVSTORE_TAG_KEY = "in-memory-state-id";
     private static final String IN_MEMORY_LRUCACHE_TAG_KEY = "in-memory-lru-state-id";
     private static final String ROCKSDB_KVSTORE_TAG_KEY = "rocksdb-state-id";
@@ -193,6 +191,8 @@ public class MetricsIntegrationTest {
     private static final String SUPPRESSION_BUFFER_COUNT_CURRENT = "suppression-buffer-count-current";
     private static final String SUPPRESSION_BUFFER_COUNT_AVG = "suppression-buffer-count-avg";
     private static final String SUPPRESSION_BUFFER_COUNT_MAX = "suppression-buffer-count-max";
+    private static final String EXPIRED_WINDOW_RECORD_DROP_RATE = "expired-window-record-drop-rate";
+    private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL = "expired-window-record-drop-total";
 
     // RocksDB metrics
     private static final String BYTES_WRITTEN_RATE = "bytes-written-rate";
@@ -777,12 +777,13 @@ public class MetricsIntegrationTest {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STATE_STORE_LEVEL_GROUP_ROCKSDB_WINDOW_STORE_0100_TO_24) ||
                 m.metricName().group().equals(BUFFER_LEVEL_GROUP_0100_TO_24) ||
+                m.metricName().group().equals("stream-rocksdb-window-metrics") ||
                 m.metricName().group().equals(STATE_STORE_LEVEL_GROUP)
             ).collect(Collectors.toList());
         final int expectedNumberOfLatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfRateMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfTotalMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 0;
-        final int expectedNumberOfCurrentMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 1 : 0;
+        final int expectedNumberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 1 : 0;
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
@@ -827,23 +828,27 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, RESTORE_TOTAL, expectedNumberOfTotalMetrics);
         checkMetricByName(listMetricStore, FETCH_RATE, expectedNumberOfRateMetrics);
         checkMetricByName(listMetricStore, FETCH_TOTAL, expectedNumberOfTotalMetrics);
-        checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_CURRENT, expectedNumberOfCurrentMetrics);
+        checkMetricByName(listMetricStore, EXPIRED_WINDOW_RECORD_DROP_RATE, expectedNumberOfRemovedMetrics);
+        checkMetricByName(listMetricStore, EXPIRED_WINDOW_RECORD_DROP_TOTAL, expectedNumberOfRemovedMetrics);
+        checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_CURRENT, expectedNumberOfRemovedMetrics);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_AVG, 1);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_MAX, 1);
-        checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, expectedNumberOfCurrentMetrics);
+        checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, expectedNumberOfRemovedMetrics);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 1);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 1);
     }
 
     private void checkSessionStoreMetrics(final String builtInMetricsVersion) {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(
-                StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)
-                    ? STATE_STORE_LEVEL_GROUP_ROCKSDB_SESSION_STORE_0100_TO_24 : STATE_STORE_LEVEL_GROUP)
+            .filter(m -> m.metricName().group().equals(STATE_STORE_LEVEL_GROUP_ROCKSDB_SESSION_STORE_0100_TO_24) ||
+                m.metricName().group().equals(BUFFER_LEVEL_GROUP_0100_TO_24) ||
+                m.metricName().group().equals("stream-rocksdb-session-metrics") ||
+                m.metricName().group().equals(STATE_STORE_LEVEL_GROUP)
             ).collect(Collectors.toList());
         final int expectedNumberOfLatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfRateMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfTotalMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 0;
+        final int expectedNumberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 1 : 0;
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
@@ -888,6 +893,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, RESTORE_TOTAL, expectedNumberOfTotalMetrics);
         checkMetricByName(listMetricStore, FETCH_RATE, expectedNumberOfRateMetrics);
         checkMetricByName(listMetricStore, FETCH_TOTAL, expectedNumberOfTotalMetrics);
+        checkMetricByName(listMetricStore, EXPIRED_WINDOW_RECORD_DROP_RATE, expectedNumberOfRemovedMetrics);
+        checkMetricByName(listMetricStore, EXPIRED_WINDOW_RECORD_DROP_TOTAL, expectedNumberOfRemovedMetrics);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_CURRENT, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_AVG, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_COUNT_MAX, 0);

@@ -37,11 +37,9 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -77,19 +75,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor = metrics.storeLevelSensor(
-            threadId,
-            taskName,
-            name(),
-            EXPIRED_WINDOW_RECORD_DROP,
-            Sensor.RecordingLevel.INFO
-        );
-        addInvocationRateAndCountToSensor(
-            expiredRecordSensor,
-            "stream-" + metricScope + "-metrics",
-            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
-            EXPIRED_WINDOW_RECORD_DROP
-        );
+        expiredRecordSensor =
+            StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskName, metricScope, name, metrics);
 
         if (root != null) {
             context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));
@@ -106,7 +93,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
             expiredRecordSensor.record();
-            LOG.debug("Skipping record for expired segment.");
+            LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {
                 endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
