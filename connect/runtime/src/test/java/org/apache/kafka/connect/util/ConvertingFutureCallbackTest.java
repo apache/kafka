@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,8 +32,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ConvertingFutureCallbackTest {
+
+    private ExecutorService executor;
+
+    @Before
+    public void setup() {
+        executor = Executors.newSingleThreadExecutor();
+    }
   
     @Test
     public void shouldConvertBeforeGetOnSuccessfulCompletion() throws Exception {
@@ -61,6 +72,7 @@ public class ConvertingFutureCallbackTest {
         assertEquals(0, testCallback.numberOfConversions());
         try {
             testCallback.get();
+            fail("Expected ExecutionException");
         } catch (ExecutionException e) {
             assertEquals(expectedError, e.getCause());
         }
@@ -77,6 +89,7 @@ public class ConvertingFutureCallbackTest {
         assertEquals(0, testCallback.numberOfConversions());
         try {
             testCallback.get();
+            fail("Expected ExecutionException");
         } catch (ExecutionException e) {
             assertEquals(expectedError, e.getCause());
         }
@@ -88,23 +101,13 @@ public class ConvertingFutureCallbackTest {
         assertTrue(testCallback.cancel(true));
         testCallback.get();
     }
-  
-    @Test
-    public void shouldNotCancelBeforeGetIfMayNotCancelWhileRunning() throws Exception {
-        TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
-        assertFalse(testCallback.cancel(false));
-        final Object expectedConversion = new Object();
-        testCallback.onCompletion(null, expectedConversion);
-        assertEquals(1, testCallback.numberOfConversions());
-        assertEquals(expectedConversion, testCallback.get());
-    }
 
     @Test
     public void shouldBlockUntilSuccessfulCompletion() throws Exception {
         AtomicReference<Exception> testThreadException = new AtomicReference<>();
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         final Object expectedConversion = new Object();
-        runSeparateTestThread(() -> {
+        executor.submit(() -> {
             try {
                 testCallback.waitForGet();
                 testCallback.onCompletion(null, expectedConversion);
@@ -126,7 +129,7 @@ public class ConvertingFutureCallbackTest {
         AtomicReference<Exception> testThreadException = new AtomicReference<>();
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         final Throwable expectedError = new Throwable();
-        runSeparateTestThread(() -> {
+        executor.submit(() -> {
             try {
                 testCallback.waitForGet();
                 testCallback.onCompletion(expectedError, null);
@@ -137,6 +140,7 @@ public class ConvertingFutureCallbackTest {
         assertFalse(testCallback.isDone());
         try {
             testCallback.get();
+            fail("Expected ExecutionException");
         } catch (ExecutionException e) {
             assertEquals(expectedError, e.getCause());
         }
@@ -151,7 +155,7 @@ public class ConvertingFutureCallbackTest {
     public void shouldBlockUntilCancellation() throws Exception {
         AtomicReference<Exception> testThreadException = new AtomicReference<>();
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
-        runSeparateTestThread(() -> {
+        executor.submit(() -> {
             try {
                 testCallback.waitForGet();
                 testCallback.cancel(true);
@@ -166,15 +170,35 @@ public class ConvertingFutureCallbackTest {
         }
     }
 
-    protected static void runSeparateTestThread(Runnable task) {
-        Thread t = new Thread(task);
-        t.setDaemon(true);
-        t.start();
+    @Test
+    public void shouldNotCancelIfMayNotCancelWhileRunning() throws Exception {
+        AtomicReference<Exception> testThreadException = new AtomicReference<>();
+        TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
+        final Object expectedConversion = new Object();
+        executor.submit(() -> {
+            try {
+                testCallback.waitForCancel();
+                testCallback.onCompletion(null, expectedConversion);
+            } catch (Exception e) {
+                testThreadException.compareAndSet(null, e);
+            }
+        });
+        assertFalse(testCallback.isCancelled());
+        assertFalse(testCallback.isDone());
+        testCallback.cancel(false);
+        assertFalse(testCallback.isCancelled());
+        assertTrue(testCallback.isDone());
+        assertEquals(expectedConversion, testCallback.get());
+        assertEquals(1, testCallback.numberOfConversions());
+        if (testThreadException.get() != null) {
+            throw testThreadException.get();
+        }
     }
   
     protected static class TestConvertingFutureCallback extends ConvertingFutureCallback<Object, Object> {
         private AtomicInteger numberOfConversions = new AtomicInteger();
         private CountDownLatch getInvoked = new CountDownLatch(1);
+        private CountDownLatch cancelInvoked = new CountDownLatch(1);
     
         public int numberOfConversions() {
             return numberOfConversions.get();
@@ -182,6 +206,10 @@ public class ConvertingFutureCallbackTest {
 
         public void waitForGet() throws InterruptedException {
             getInvoked.await();
+        }
+
+        public void waitForCancel() throws InterruptedException {
+            cancelInvoked.await();
         }
     
         @Override
@@ -203,6 +231,12 @@ public class ConvertingFutureCallbackTest {
         ) throws InterruptedException, ExecutionException, TimeoutException {
             getInvoked.countDown();
             return super.get(duration, unit);
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            cancelInvoked.countDown();
+            return super.cancel(mayInterruptIfRunning);
         }
     }
 }

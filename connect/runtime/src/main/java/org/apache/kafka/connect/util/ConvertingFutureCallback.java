@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.connect.errors.ConnectException;
+
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -62,19 +64,23 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     }
 
     @Override
-    public boolean cancel(boolean b) {
-        if (!b) {
-            return false;
-        }
-
+    public boolean cancel(boolean mayInterruptIfRunning) {
         synchronized (this) {
             if (isDone()) {
                 return false;
             }
-            this.cancelled = true;
-            finishedLatch.countDown();
-            return true;
+            if (mayInterruptIfRunning) {
+                this.cancelled = true;
+                finishedLatch.countDown();
+                return true;
+            }
         }
+        try {
+            finishedLatch.await();
+        } catch (InterruptedException e) {
+            throw new ConnectException("Interrupted while waiting for task to complete", e);
+        }
+        return false;
     }
 
     @Override
