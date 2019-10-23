@@ -268,7 +268,7 @@ class AdminManager(val config: KafkaConfig,
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
           case (topicPartition, assignment) =>
             if (assignment.isBeingReassigned) {
-              // We prevent adding partitions while topic reassignment is in progress, to protect from race condition
+              // We prevent adding partitions while topic reassignment is in progress, to protect from a race condition
               // between the controller thread processing reassignment update and createPartitions(this) request.
               throw new ReassignmentInProgressException(s"A partition reassignment is in progress for the topic '$topic'.")
             }
