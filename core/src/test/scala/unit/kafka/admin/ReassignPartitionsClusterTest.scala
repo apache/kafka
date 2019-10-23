@@ -12,16 +12,15 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Properties}
-
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
+import kafka.controller.PartitionReplicaAssignment
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Assert, Before, Test}
+import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment, AdminClient => JAdminClient}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
@@ -30,10 +29,9 @@ import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 import scala.util.Random
 import java.io.File
-import java.util
+import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 
-import kafka.controller.PartitionReplicaAssignment
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.errors.{NoReassignmentInProgressException, ReassignmentInProgressException}
 
@@ -1152,10 +1150,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
           if (shouldThrowException) {
             assertEquals(classOf[ReassignmentInProgressException], e.getCause().getClass())
           } else {
-            Assert.fail("createPartitions call did not expect an exception" + e.toString)
+            org.junit.Assert.fail("createPartitions call did not expect an exception" + e.toString)
           }
         case e: Exception =>
-          Assert.fail("createPartitions call did not expect an exception" + e.toString)
+          org.junit.Assert.fail("createPartitions call did not expect an exception" + e.toString)
       }
       if (shouldThrowException) {
         assertTrue("createPartitions for topic under reassignment should throw an exception", doesThrowException)
