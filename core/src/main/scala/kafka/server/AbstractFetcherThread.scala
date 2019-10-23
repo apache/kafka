@@ -666,8 +666,6 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def updatePartition
-
   def partitionCount(): Int = {
     partitionMapLock.lockInterruptibly()
     try partitionStates.size
@@ -781,7 +779,6 @@ case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartiti
 
 sealed trait ReplicaState
 case object Truncating extends ReplicaState
-case object Delayed extends ReplicaState
 case object Fetching extends ReplicaState
 case object FetchingWithNewState extends ReplicaState
 
