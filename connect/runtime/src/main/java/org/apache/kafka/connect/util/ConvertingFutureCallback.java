@@ -48,8 +48,13 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
             if (isDone()) {
                 return;
             }
-            this.exception = error;
-            this.result = convert(result);
+            
+            if (error != null) {
+                this.exception = error;
+            } else {
+                this.result = convert(result);
+            }
+
             if (underlying != null)
                 underlying.onCompletion(error, this.result);
             finishedLatch.countDown();
@@ -58,6 +63,10 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
 
     @Override
     public boolean cancel(boolean b) {
+        if (!b) {
+            return false;
+        }
+
         synchronized (this) {
             if (isDone()) {
                 return false;
