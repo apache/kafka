@@ -29,12 +29,10 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -188,6 +186,11 @@ public class FetchSessionHandler {
         private LinkedHashMap<TopicPartition, PartitionData> next;
         private final boolean copySessionPartitions;
 
+        private List<TopicPartition> added = new ArrayList<>();
+        private List<TopicPartition> removed = new ArrayList<>();
+        private List<TopicPartition> altered = new ArrayList<>();
+
+
         Builder() {
             this.next = new LinkedHashMap<>();
             this.copySessionPartitions = true;
@@ -202,7 +205,23 @@ public class FetchSessionHandler {
          * Mark that we want data from this partition in the upcoming fetch.
          */
         public void add(TopicPartition topicPartition, PartitionData data) {
+            if (sessionPartitions.containsKey(topicPartition)) {
+                altered.add(topicPartition);
+            } else {
+                added.add(topicPartition);
+            }
+
             next.put(topicPartition, data);
+            sessionPartitions.put(topicPartition, data);
+        }
+
+        /**
+         * Mark that we want to exclude this partition in the upcoming fetch.
+         */
+        public void remove(TopicPartition topicPartition) {
+            removed.add(topicPartition);
+            next.remove(topicPartition);
+            sessionPartitions.remove(topicPartition);
         }
 
         public FetchRequestData build() {
@@ -211,50 +230,13 @@ public class FetchSessionHandler {
                     log.debug("Built full fetch {} for node {} with {}.",
                               nextMetadata, node, partitionsToLogString(next.keySet()));
                 }
-                sessionPartitions = next;
                 next = null;
-                Map<TopicPartition, PartitionData> toSend =
-                    Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
+                Map<TopicPartition, PartitionData> toSend = copySessionPartitions
+                    ? Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions))
+                    : Collections.unmodifiableMap(sessionPartitions);
                 return new FetchRequestData(toSend, Collections.emptyList(), toSend, nextMetadata);
             }
 
-            List<TopicPartition> added = new ArrayList<>();
-            List<TopicPartition> removed = new ArrayList<>();
-            List<TopicPartition> altered = new ArrayList<>();
-            for (Iterator<Entry<TopicPartition, PartitionData>> iter =
-                     sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
-                Entry<TopicPartition, PartitionData> entry = iter.next();
-                TopicPartition topicPartition = entry.getKey();
-                PartitionData prevData = entry.getValue();
-                PartitionData nextData = next.remove(topicPartition);
-                if (nextData != null) {
-                    if (!prevData.equals(nextData)) {
-                        // Re-add the altered partition to the end of 'next'
-                        next.put(topicPartition, nextData);
-                        entry.setValue(nextData);
-                        altered.add(topicPartition);
-                    }
-                } else {
-                    // Remove this partition from the session.
-                    iter.remove();
-                    // Indicate that we no longer want to listen to this partition.
-                    removed.add(topicPartition);
-                }
-            }
-            // Add any new partitions to the session.
-            for (Entry<TopicPartition, PartitionData> entry : next.entrySet()) {
-                TopicPartition topicPartition = entry.getKey();
-                PartitionData nextData = entry.getValue();
-                if (sessionPartitions.containsKey(topicPartition)) {
-                    // In the previous loop, all the partitions which existed in both sessionPartitions
-                    // and next were moved to the end of next, or removed from next.  Therefore,
-                    // once we hit one of them, we know there are no more unseen entries to look
-                    // at in next.
-                    break;
-                }
-                sessionPartitions.put(topicPartition, nextData);
-                added.add(topicPartition);
-            }
             if (log.isDebugEnabled()) {
                 log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
                           "out of {}", nextMetadata, node, partitionsToLogString(added),

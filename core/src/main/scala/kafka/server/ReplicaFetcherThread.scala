@@ -175,6 +175,7 @@ class ReplicaFetcherThread(name: String,
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
     val followerHighWatermark = log.updateHighWatermark(partitionData.highWatermark)
     log.maybeIncrementLogStartOffset(leaderLogStartOffset)
+    markPartitionsForUpdates(topicPartition)
     if (isTraceEnabled)
       trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
 
@@ -254,14 +255,29 @@ class ReplicaFetcherThread(name: String,
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
-          val logStartOffset = this.logStartOffset(topicPartition)
-          builder.add(topicPartition, new FetchRequest.PartitionData(
-            fetchState.fetchOffset, logStartOffset, fetchSize, Optional.of(fetchState.currentLeaderEpoch)))
+          // A fetch needs to be used to update the session only if:
+          //   1. fetch offset has changed
+          //   2. log start offset has changed
+          //   3. leader epoch has changed
+          //   4. the fetch was excluded before and now
+          if (fetchState.updateNeeded) {
+            val logStartOffset = this.logStartOffset(topicPartition)
+            builder.add(topicPartition, new FetchRequest.PartitionData(
+              fetchState.fetchOffset, logStartOffset, fetchSize, Optional.of(fetchState.currentLeaderEpoch)))
+          }
         } catch {
           case _: KafkaStorageException =>
             // The replica has already been marked offline due to log directory failure and the original failure should have already been logged.
             // This partition should be removed from ReplicaFetcherThread soon by ReplicaManager.handleLogDirFailure()
             partitionsWithError += topicPartition
+        }
+      } else {
+        // Exclude this partition from the upcoming session;
+        // if we have to exclude this fetch because it is delayed, we need to update its state
+        // so that it would always be included when the delay has elapsed
+        builder.remove(topicPartition)
+        if (fetchState.isDelayed) {
+          markPartitionsForUpdates(topicPartition, fetchState)
         }
       }
     }
@@ -290,6 +306,7 @@ class ReplicaFetcherThread(name: String,
     val log = partition.localLogOrException
 
     partition.truncateTo(offsetTruncationState.offset, isFuture = false)
+    markPartitionsForUpdates(tp)
 
     if (offsetTruncationState.offset < log.highWatermark)
       warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark " +
@@ -304,6 +321,7 @@ class ReplicaFetcherThread(name: String,
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     partition.truncateFullyAndStartAt(offset, isFuture = false)
+    markPartitionsForUpdates(topicPartition)
   }
 
   override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {

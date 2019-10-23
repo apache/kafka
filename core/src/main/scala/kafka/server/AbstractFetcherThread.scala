@@ -328,7 +328,8 @@ abstract class AbstractFetcherThread(name: String,
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                       if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                         // Update partitionStates only if there is no exception during processPartitionData
-                        val newFetchState = PartitionFetchState(nextOffset, Some(lag), currentFetchState.currentLeaderEpoch, state = Fetching)
+                        val newFetchState = PartitionFetchState(nextOffset, Some(lag), currentFetchState.currentLeaderEpoch,
+                          state = if (nextOffset != currentFetchState.fetchOffset) FetchingWithNewState else Fetching)
                         partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                         fetcherStats.byteRate.mark(validBytes)
                       }
@@ -390,8 +391,30 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-        val newState = PartitionFetchState(math.min(truncationOffset, state.fetchOffset),
+        val newFetchOffset = math.min(truncationOffset, state.fetchOffset)
+        val newState = PartitionFetchState(newFetchOffset,
           state.lag, state.currentLeaderEpoch, state.delay, state = Truncating)
+
+        partitionStates.updateAndMoveToEnd(topicPartition, newState)
+        partitionMapCond.signalAll()
+      }
+    } finally partitionMapLock.unlock()
+  }
+
+  def markPartitionsForUpdates(topicPartition: TopicPartition): Unit = {
+    Option(partitionStates.stateValue(topicPartition)).foreach { state =>
+      markPartitionsForUpdates(topicPartition, state)
+    }
+  }
+
+  def markPartitionsForUpdates(topicPartition: TopicPartition, state: PartitionFetchState): Unit = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      if (state.state == Fetching) {
+        val newState = PartitionFetchState(state.fetchOffset,
+          state.lag, state.currentLeaderEpoch, state.delay,
+          FetchingWithNewState)
+
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
         partitionMapCond.signalAll()
       }
@@ -440,8 +463,15 @@ abstract class AbstractFetcherThread(name: String,
         val currentFetchState = state.value
         val maybeTruncationComplete = fetchOffsets.get(state.topicPartition) match {
           case Some(offsetTruncationState) =>
-            val state = if (offsetTruncationState.truncationCompleted) Fetching else Truncating
-            PartitionFetchState(offsetTruncationState.offset, currentFetchState.lag,
+            val newFetchOffset = offsetTruncationState.offset
+            val state = if (offsetTruncationState.truncationCompleted)
+              if (newFetchOffset != currentFetchState.fetchOffset)
+                FetchingWithNewState
+              else
+                Fetching
+            else
+              Truncating
+            PartitionFetchState(newFetchOffset, currentFetchState.lag,
               currentFetchState.currentLeaderEpoch, currentFetchState.delay, state)
           case None => currentFetchState
         }
@@ -574,7 +604,7 @@ abstract class AbstractFetcherThread(name: String,
       truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = 0
-      PartitionFetchState(leaderEndOffset, Some(0), currentLeaderEpoch, state = Fetching)
+      PartitionFetchState(leaderEndOffset, Some(0), currentLeaderEpoch, state = FetchingWithNewState)
     } else {
       /**
        * If the leader's log end offset is greater than the follower's log end offset, there are two possibilities:
@@ -607,7 +637,7 @@ abstract class AbstractFetcherThread(name: String,
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
-      PartitionFetchState(offsetToFetch, Some(initialLag), currentLeaderEpoch, state = Fetching)
+      PartitionFetchState(offsetToFetch, Some(initialLag), currentLeaderEpoch, state = FetchingWithNewState)
     }
   }
 
@@ -635,6 +665,8 @@ abstract class AbstractFetcherThread(name: String,
       }
     } finally partitionMapLock.unlock()
   }
+
+  def updatePartition
 
   def partitionCount(): Int = {
     partitionMapLock.lockInterruptibly()
@@ -749,7 +781,10 @@ case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartiti
 
 sealed trait ReplicaState
 case object Truncating extends ReplicaState
+case object Delayed extends ReplicaState
 case object Fetching extends ReplicaState
+case object FetchingWithNewState extends ReplicaState
+
 
 object PartitionFetchState {
   def apply(offset: Long, lag: Option[Long], currentLeaderEpoch: Int, state: ReplicaState): PartitionFetchState = {
@@ -763,15 +798,19 @@ object PartitionFetchState {
  * This represents a partition as being either:
  * (1) Truncating its log, for example having recently become a follower
  * (2) Delayed, for example due to an error, where we subsequently back off a bit
- * (3) ReadyForFetch, the is the active state where the thread is actively fetching data.
+ * (3) ReadyForFetch, the is the active state where the thread is actively fetching data; also it distinguish
+ *     between cases where the log start offset of fetch offset has changed since the last time.
  */
 case class PartitionFetchState(fetchOffset: Long,
                                lag: Option[Long],
                                currentLeaderEpoch: Int,
                                delay: Option[DelayedItem],
                                state: ReplicaState) {
+  var logStartOffsetUpdated = false
 
-  def isReadyForFetch: Boolean = state == Fetching && !isDelayed
+  def isReadyForFetch: Boolean = (state == Fetching || state == FetchingWithNewState) && !isDelayed
+
+  def updateNeeded: Boolean = state == FetchingWithNewState
 
   def isReplicaInSync: Boolean = lag.isDefined && lag.get <= 0
 
