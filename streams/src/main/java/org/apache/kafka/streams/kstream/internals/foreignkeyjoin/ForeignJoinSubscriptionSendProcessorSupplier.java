@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
@@ -67,7 +68,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
 
     private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
 
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -94,7 +95,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                         "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         change.oldValue, context().topic(), context().partition(), context().offset()
                     );
-                    skippedRecordsSensor.record();
+                    skippedRecordsSensor.ifPresent(Sensor::record);
                     return;
                 }
                 if (change.newValue != null) {
@@ -104,7 +105,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                             "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                             change.newValue, context().topic(), context().partition(), context().offset()
                         );
-                        skippedRecordsSensor.record();
+                        skippedRecordsSensor.ifPresent(Sensor::record);
                         return;
                     }
 
@@ -141,7 +142,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                         "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         change.newValue, context().topic(), context().partition(), context().offset()
                     );
-                    skippedRecordsSensor.record();
+                    skippedRecordsSensor.ifPresent(Sensor::record);
                 } else {
                     context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, instruction, key));
                 }

@@ -19,7 +19,7 @@ package org.apache.kafka.common.utils;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.security.SecurityProviderCreator;
+import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

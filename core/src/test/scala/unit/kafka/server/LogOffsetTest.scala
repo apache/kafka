@@ -24,10 +24,10 @@ import java.util.{Optional, Properties, Random}
 import kafka.log.{Log, LogSegment}
 import kafka.network.SocketServer
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test

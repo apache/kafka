@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.ssl.mock;
 
-import org.apache.kafka.common.security.SecurityProviderCreator;
+import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 
 import java.security.Provider;
 

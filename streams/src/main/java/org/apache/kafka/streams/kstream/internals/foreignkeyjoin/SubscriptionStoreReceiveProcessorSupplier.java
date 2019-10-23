@@ -35,6 +35,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
 public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
     implements ProcessorSupplier<KO, SubscriptionWrapper<K>> {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionStoreReceiveProcessorSupplier.class);
@@ -57,7 +59,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
 
             private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
             private StreamsMetricsImpl metrics;
-            private Sensor skippedRecordsSensor;
+            private Optional<Sensor> skippedRecordsSensor;
 
             @Override
             public void init(final ProcessorContext context) {
@@ -76,7 +78,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                         "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         value, context().topic(), context().partition(), context().offset()
                     );
-                    skippedRecordsSensor.record();
+                    skippedRecordsSensor.ifPresent(Sensor::record);
                     return;
                 }
                 if (value.getVersion() != SubscriptionWrapper.CURRENT_VERSION) {

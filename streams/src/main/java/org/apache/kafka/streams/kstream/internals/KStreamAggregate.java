@@ -29,6 +29,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
@@ -59,7 +61,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
         private TimestampedKeyValueStore<K, T> store;
         private StreamsMetricsImpl metrics;
-        private Sensor skippedRecordsSensor;
+        private Optional<Sensor> skippedRecordsSensor;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
@@ -84,7 +86,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     key, value, context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                skippedRecordsSensor.ifPresent(Sensor::record);
                 return;
             }
 

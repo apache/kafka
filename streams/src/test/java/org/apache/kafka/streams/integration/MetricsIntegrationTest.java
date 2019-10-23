@@ -74,7 +74,8 @@ public class MetricsIntegrationTest {
 
     // Metric group
     private static final String STREAM_CLIENT_NODE_METRICS = "stream-metrics";
-    private static final String STREAM_THREAD_NODE_METRICS = "stream-metrics";
+    private static final String STREAM_THREAD_NODE_METRICS_0100_TO_24 = "stream-metrics";
+    private static final String STREAM_THREAD_NODE_METRICS = "stream-thread-metrics";
     private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
     private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
@@ -297,8 +298,8 @@ public class MetricsIntegrationTest {
     }
 
     @Test
-    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To23() throws Exception {
-        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_23);
+    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To24() throws Exception {
+        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_24);
     }
 
     private void shouldAddMetricsOnAllLevels(final String builtInMetricsVersion) throws Exception {
@@ -321,8 +322,9 @@ public class MetricsIntegrationTest {
         startApplication();
 
         verifyStateMetric(State.RUNNING);
-        checkThreadLevelMetrics();
-        checkTaskLevelMetrics();
+        checkClientLevelMetrics();
+        checkThreadLevelMetrics(builtInMetricsVersion);
+        checkTaskLevelMetrics(builtInMetricsVersion);
         checkProcessorLevelMetrics();
         checkKeyValueStoreMetricsByGroup(STREAM_STORE_IN_MEMORY_STATE_METRICS);
         checkKeyValueStoreMetricsByGroup(STREAM_STORE_ROCKSDB_STATE_METRICS);
@@ -447,17 +449,23 @@ public class MetricsIntegrationTest {
         assertThat(metricsList.get(0).metricValue(), is(applicationId));
     }
 
-    private void checkThreadLevelMetrics() {
+    private void checkClientLevelMetrics() {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS))
+            .filter(m -> m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
-        // instance-level metrics start
         checkMetricByName(listMetricThread, VERSION, 1);
         checkMetricByName(listMetricThread, COMMIT_ID, 1);
         checkMetricByName(listMetricThread, APPLICATION_ID, 1);
         checkMetricByName(listMetricThread, TOPOLOGY_DESCRIPTION, 1);
         checkMetricByName(listMetricThread, STATE, 1);
-        // instance-level metrics end
+    }
+
+    private void checkThreadLevelMetrics(final String builtInMetricsVersion) {
+        final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().group().equals(
+                StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? STREAM_THREAD_NODE_METRICS
+                    : STREAM_THREAD_NODE_METRICS_0100_TO_24))
+            .collect(Collectors.toList());
         checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
         checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
         checkMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);
@@ -478,18 +486,42 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TASK_CREATED_TOTAL, 1);
         checkMetricByName(listMetricThread, TASK_CLOSED_RATE, 1);
         checkMetricByName(listMetricThread, TASK_CLOSED_TOTAL, 1);
-        checkMetricByName(listMetricThread, SKIPPED_RECORDS_RATE, 1);
-        checkMetricByName(listMetricThread, SKIPPED_RECORDS_TOTAL, 1);
+        checkMetricByName(
+            listMetricThread,
+            SKIPPED_RECORDS_RATE,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 1
+        );
+        checkMetricByName(
+            listMetricThread,
+            SKIPPED_RECORDS_TOTAL,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 0 : 1
+        );
     }
 
-    private void checkTaskLevelMetrics() {
+    private void checkTaskLevelMetrics(final String builtInMetricsVersion) {
         final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS))
             .collect(Collectors.toList());
-        checkMetricByName(listMetricTask, COMMIT_LATENCY_AVG, 5);
-        checkMetricByName(listMetricTask, COMMIT_LATENCY_MAX, 5);
-        checkMetricByName(listMetricTask, COMMIT_RATE, 5);
-        checkMetricByName(listMetricTask, COMMIT_TOTAL, 5);
+        checkMetricByName(
+            listMetricTask,
+            COMMIT_LATENCY_AVG,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
+        );
+        checkMetricByName(
+            listMetricTask,
+            COMMIT_LATENCY_MAX,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
+        );
+        checkMetricByName(
+            listMetricTask,
+            COMMIT_RATE,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
+        );
+        checkMetricByName(
+            listMetricTask,
+            COMMIT_TOTAL,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
+        );
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
     }
