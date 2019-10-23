@@ -22,4 +22,4 @@
 # Instead, in
 #
 # For example, when Kafka is at version 1.0.0-SNAPSHOT, this should be something like "1.0.0
-__version__ = '2.2.2.dev0'
+__version__ = '2.2.2'
