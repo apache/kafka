@@ -1671,14 +1671,14 @@ class KafkaController(val config: KafkaConfig,
   private def processPartitionReassignmentIsrChange(topicPartition: TopicPartition): Unit = {
     if (!isActive) return
 
-    val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-    if (isReassignmentComplete(topicPartition, currentAssignment)) {
-      // resume the partition reassignment process
-      info(s"Target replicas ${currentAssignment.targetReplicas} have all caught up with the leader for " +
-        s"reassigning partition $topicPartition")
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
-      val reassignContext = ReassignmentContext(currentAssignment.targetReplicas, reassignIsrChangeHandler)
-      onPartitionReassignment(topicPartition, reassignContext)
+    controllerContext.partitionsBeingReassigned.get(topicPartition).foreach { reassignmentContext =>
+      val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+      if (isReassignmentComplete(topicPartition, currentAssignment)) {
+        // resume the partition reassignment process
+        info(s"Target replicas ${currentAssignment.targetReplicas} have all caught up with the leader for " +
+          s"reassigning partition $topicPartition")
+        onPartitionReassignment(topicPartition, reassignmentContext)
+      }
     }
   }
 
