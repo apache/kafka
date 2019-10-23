@@ -1147,9 +1147,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       try {
         adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()
       } catch {
-        case e: ExecutionException =>
+        case e: Exception =>
           doesThrowException = true
-          assertEquals(classOf[ReassignmentInProgressException], e.getCause().getClass  ())
+          if (shouldThrowException) {
+            assertEquals(classOf[ReassignmentInProgressException], e.getCause().getClass())
+          } else {
+            Assert.fail("createPartitions call did not expect an exception" + e.toString)
+          }
         case e: Exception =>
           Assert.fail("createPartitions call did not expect an exception" + e.toString)
       }
