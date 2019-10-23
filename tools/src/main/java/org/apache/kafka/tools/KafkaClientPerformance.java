@@ -56,6 +56,7 @@ public class KafkaClientPerformance {
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             long flushDurationMs = res.getLong("flushDurationMs");
+            long discountStartRecords = res.getLong("discountStartRecords");
             boolean flushEnabled = 0 < flushDurationMs;
             boolean transactionsEnabled =  0 < transactionDurationMs;
 
@@ -89,7 +90,7 @@ public class KafkaClientPerformance {
                 producer.initTransactions();
 
             ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
+            Stats stats = new Stats(numRecords, 5000, discountStartRecords);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
@@ -97,7 +98,8 @@ public class KafkaClientPerformance {
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             long lastFlushTime = 0;
-            for (long i = 0; i < numRecords; i++) {
+            // First iterations will be discarded for correctness.
+            for (long i = 0; i < numRecords + discountStartRecords; i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
@@ -336,6 +338,16 @@ public class KafkaClientPerformance {
                 .setDefault(0L)
                 .help("When configured, the amount of time to elapse before making a producer.flush() call. Explicit flush is only enabled if this value is positive.");
 
+        parser.addArgument("--discount-start-records")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("DISCOUNT-RECORDS")
+                .dest("discountStartRecords")
+                .setDefault(100L)
+                .help("Drop the first few records to avoid start-up jitters affecting the throughput result");
+
+
         return parser;
     }
 
@@ -365,6 +377,8 @@ public class KafkaClientPerformance {
         private int iteration;
         private int index;
         private long count;
+        // Records discounted for final result
+        private long discount;
         private long bytes;
         private int maxLatency;
         private long totalLatency;
@@ -374,9 +388,7 @@ public class KafkaClientPerformance {
         private long windowBytes;
         private long reportingInterval;
 
-        public Stats(long numRecords, int reportingInterval) {
-            this.start = System.currentTimeMillis();
-            this.windowStart = System.currentTimeMillis();
+        public Stats(long numRecords, int reportingInterval, long discount) {
             this.iteration = 0;
             this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
@@ -389,9 +401,25 @@ public class KafkaClientPerformance {
             this.windowBytes = 0;
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
+            if (discount < 0L) {
+                throw new IllegalArgumentException("Record discount must be greater or equal to 0");
+            }
+            this.discount = discount;
         }
 
         public void record(int iter, int latency, int bytes, long time) {
+            // Discount records will not be included in the final result
+            if (discount > 0) {
+                discount--;
+                return;
+            } else if (discount == 0) {
+                // When all the discount records are disgarded, offically starts the window recording
+                this.start = System.currentTimeMillis();
+                this.windowStart = System.currentTimeMillis();
+                this.iteration = 0;
+                discount--;
+            }
+
             this.count++;
             this.bytes += bytes;
             this.totalLatency += latency;
@@ -418,9 +446,9 @@ public class KafkaClientPerformance {
         }
 
         public void printWindow() {
-            long ellapsed = System.currentTimeMillis() - windowStart;
-            double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
-            double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
+            long elapsed = System.currentTimeMillis() - windowStart;
+            double recsPerSec = 1000.0 * windowCount / (double) elapsed;
+            double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
             System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,
