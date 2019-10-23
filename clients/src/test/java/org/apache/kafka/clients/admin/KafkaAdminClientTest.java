@@ -161,6 +161,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1715,7 +1716,7 @@ public class KafkaAdminClientTest {
             assertNull(errorResult.partitionResult(tp1).get());
             TestUtils.assertFutureError(errorResult.all(), GroupSubscribedToTopicException.class);
             TestUtils.assertFutureError(errorResult.partitionResult(tp2), GroupSubscribedToTopicException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp3), IllegalArgumentException.class);
+            assertThrows(IllegalArgumentException.class, () -> errorResult.partitionResult(tp3));
         }
     }
 

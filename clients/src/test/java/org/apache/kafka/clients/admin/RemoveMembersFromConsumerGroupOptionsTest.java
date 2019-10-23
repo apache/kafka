@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -32,7 +33,7 @@ public class RemoveMembersFromConsumerGroupOptionsTest {
 
         RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(groupInstanceIds);
 
-        assertEquals(Collections.singletonList(
-            new MemberIdentity().setGroupInstanceId("instance-1")), options.members());
+        assertEquals(Collections.singleton(
+            new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "instance-1")), options.members());
     }
 }

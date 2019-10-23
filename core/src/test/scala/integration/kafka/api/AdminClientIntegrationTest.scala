@@ -1402,11 +1402,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       // Test offset deletion when group is empty
       val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
 
-      assertNull(offsetDeleteResult.all().get())
+      assertFutureExceptionTypeEquals(offsetDeleteResult.all(),
+        classOf[UnknownTopicOrPartitionException])
       assertNull(offsetDeleteResult.partitionResult(tp1).get())
       assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
         classOf[UnknownTopicOrPartitionException])
-
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
