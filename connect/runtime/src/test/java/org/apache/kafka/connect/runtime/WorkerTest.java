@@ -1143,10 +1143,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, Object> connConfig = new HashMap<String, Object>();
         connConfig.put("metadata.max.age.ms", "10000");
 
-        Map<String, String> expectedConfigs = new HashMap<>();
-        expectedConfigs.putAll(props);
-        expectedConfigs.remove("admin.client.id");
-        expectedConfigs.remove("admin.metadata.max.age.ms");
+        Map<String, String> expectedConfigs = new HashMap<>(workerProps);
 
         expectedConfigs.put("bootstrap.servers", "localhost:9092");
         expectedConfigs.put("client.id", "testid");
