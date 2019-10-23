@@ -453,6 +453,10 @@ public class QueryableStateIntegrationTest {
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
 
+            // It's not enough to assert that the first instance is RUNNING because it is possible
+            // for the above checks to succeed while the instance is in a REBALANCING state.
+            waitForApplicationState(streamsList.subList(0, 1), State.RUNNING, Duration.ofSeconds(60));
+
             // Even though the closed instance(s) are now in NOT_RUNNING there is no guarantee that
             // the running instance is aware of this, so we must run our follow up queries with
             // enough time for the shutdown to be detected.
@@ -474,10 +478,6 @@ public class QueryableStateIntegrationTest {
                 0L,
                 WINDOW_SIZE,
                 DEFAULT_TIMEOUT_MS);
-
-            // It's not enough to assert that the first instance is RUNNING because it is possible
-            // for the above checks to succeed while the instance is in a REBALANCING state.
-            waitForApplicationState(streamsList.subList(0, 1), State.RUNNING, Duration.ofSeconds(60));
         } finally {
             for (final KafkaStreams streams : streamsList) {
                 streams.close();
