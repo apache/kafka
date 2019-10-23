@@ -173,9 +173,14 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
+    public void cancel() {
+        super.cancel();
+        offsetReader.close();
+    }
+
+    @Override
     public void stop() {
         super.stop();
-        offsetReader.close();
         stopRequestedLatch.countDown();
         synchronized (this) {
             if (finishedStart)

@@ -55,7 +55,7 @@ public interface OffsetBackingStore {
      * @param keys list of keys to look up
      * @return future for the resulting map from key to value
      */
-    OffsetReadFuture get(Collection<ByteBuffer> keys);
+    Future<Map<ByteBuffer, ByteBuffer>> get(Collection<ByteBuffer> keys);
 
     /**
      * Set the specified keys and values.

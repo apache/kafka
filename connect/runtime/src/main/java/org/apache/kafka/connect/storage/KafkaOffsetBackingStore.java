@@ -42,7 +42,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * <p>
@@ -119,8 +118,16 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public OffsetReadFuture get(final Collection<ByteBuffer> keys) {
-        KafkaOffsetReadFuture future = new KafkaOffsetReadFuture(keys);
+    public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
+        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>>() {
+            @Override
+            public Map<ByteBuffer, ByteBuffer> convert(Void result) {
+                Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
+                for (ByteBuffer key : keys)
+                    values.put(key, data.get(key));
+                return values;
+            }
+        };
         // This operation may be relatively (but not too) expensive since it always requires checking end offsets, even
         // if we've already read up to the end. However, it also should not be common (offsets should only be read when
         // resetting a task). Always requiring that we read to the end is simpler than trying to differentiate when it
@@ -221,52 +228,5 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
                 throw new ExecutionException(exception);
             return null;
         }
-    }
-
-    private class KafkaOffsetReadFuture extends ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> implements OffsetReadFuture {
-        private final Collection<ByteBuffer> keys;
-        private final AtomicBoolean completed;
-        private transient boolean forceComplete;
-
-        public KafkaOffsetReadFuture(Collection<ByteBuffer> keys) {
-            super(null);
-            this.keys = keys;
-            this.completed = new AtomicBoolean(false);
-            this.forceComplete = false;
-        }
-
-        @Override
-        public Map<ByteBuffer, ByteBuffer> convert(Void result) {
-            Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
-            if (!forceComplete) {
-                for (ByteBuffer key : keys)
-                    values.put(key, data.get(key));
-            }
-            return values;
-        }
-
-        @Override
-        public void forceComplete() {
-            log.debug("Forcing completion of offset read future");
-            forceComplete = true;
-            onCompletion(null, null);
-        }
-
-        @Override
-        public Map<ByteBuffer, ByteBuffer> get() throws InterruptedException, ExecutionException {
-            log.trace("Blocking on offset read request");
-            return super.get();
-        }
-
-        @Override
-        public void onCompletion(Throwable error, Void result) {
-            if (!completed.getAndSet(true)) {
-                log.trace("Offset request completed (either normally or forcibly)");
-                super.onCompletion(error, result);
-            } else {
-                log.trace("Ignoring onCompletion invocation as offset read has already completed");
-            }
-        }
-
     }
 }

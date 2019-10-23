@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -44,7 +46,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final AtomicBoolean closed;
-    private final Set<OffsetReadFuture> offsetReadFutures;
+    private final Set<Future<Map<ByteBuffer, ByteBuffer>>> offsetReadFutures;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
                                    Converter keyConverter, Converter valueConverter) {
@@ -83,10 +85,13 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
-            OffsetReadFuture offsetReadFuture;
+            Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture;
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
-                    return Collections.emptyMap();
+                    throw new ConnectException(
+                        "Offset reader is closed. This is likely because the task has already been "
+                            + "scheduled to stop but has taken longer than the graceful shutdown "
+                            + "period to do so.");
                 }
                 offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
@@ -94,6 +99,11 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
 
             try {
                 raw = offsetReadFuture.get();
+            } catch (CancellationException e) {
+                throw new ConnectException(
+                    "Offset reader closed while attempting to read offsets. This is likely because "
+                        + "the task was been scheduled to stop but has taken longer than the "
+                        + "graceful shutdown period to do so.");
             } finally {
                 synchronized (offsetReadFutures) {
                     offsetReadFutures.remove(offsetReadFuture);
@@ -134,8 +144,8 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     public void close() {
         synchronized (offsetReadFutures) {
             closed.set(true);
-            for (OffsetReadFuture offsetReadFuture : offsetReadFutures) {
-                offsetReadFuture.forceComplete();
+            for (Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture : offsetReadFutures) {
+                offsetReadFuture.cancel(true);
             }
             offsetReadFutures.clear();
         }

@@ -19,14 +19,15 @@ package org.apache.kafka.connect.storage;
 import java.io.Closeable;
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageReader {
 
     /**
-     * Invoke {@link OffsetReadFuture#forceComplete()} on all outstanding offset read requests, and
-     * return an empty map and {@code null} in all future calls to {@link #offsets(Collection)} and
-     * {@link #offset(Map)}, respectively. This is useful for unblocking task threads which need to shut
-     * down but are blocked on offset reads.
+     * {@link Future#cancel(boolean) Cancel} all outstanding offset read requests, and throw an
+     * exception in all current and future calls to {@link #offsets(Collection)} and
+     * {@link #offset(Map)}. This is useful for unblocking task threads which need to shut down but
+     * are blocked on offset reads.
      */
     void close();
 }

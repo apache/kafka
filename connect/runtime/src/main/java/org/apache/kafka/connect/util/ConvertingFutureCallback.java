@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.util;
 
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -24,10 +25,15 @@ import java.util.concurrent.TimeoutException;
 
 public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Future<T> {
 
-    private Callback<T> underlying;
-    private CountDownLatch finishedLatch;
-    private T result = null;
-    private Throwable exception = null;
+    private final Callback<T> underlying;
+    private final CountDownLatch finishedLatch;
+    private volatile T result = null;
+    private volatile Throwable exception = null;
+    private volatile boolean cancelled = false;
+
+    public ConvertingFutureCallback() {
+        this(null);
+    }
 
     public ConvertingFutureCallback(Callback<T> underlying) {
         this.underlying = underlying;
@@ -38,21 +44,33 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
 
     @Override
     public void onCompletion(Throwable error, U result) {
-        this.exception = error;
-        this.result = convert(result);
-        if (underlying != null)
-            underlying.onCompletion(error, this.result);
-        finishedLatch.countDown();
+        synchronized (this) {
+            if (isDone()) {
+                return;
+            }
+            this.exception = error;
+            this.result = convert(result);
+            if (underlying != null)
+                underlying.onCompletion(error, this.result);
+            finishedLatch.countDown();
+        }
     }
 
     @Override
     public boolean cancel(boolean b) {
-        return false;
+        synchronized (this) {
+            if (isDone()) {
+                return false;
+            }
+            this.cancelled = true;
+            finishedLatch.countDown();
+            return true;
+        }
     }
 
     @Override
     public boolean isCancelled() {
-        return false;
+        return cancelled;
     }
 
     @Override
@@ -75,6 +93,9 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     }
 
     private T result() throws ExecutionException {
+        if (cancelled) {
+            throw new CancellationException();
+        }
         if (exception != null) {
             throw new ExecutionException(exception);
         }
