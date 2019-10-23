@@ -1141,7 +1141,7 @@ public class KafkaConsumerTest {
             consumer.unsubscribe();
             fail("Should throw exception");
         } catch (Throwable e) {
-            assertEquals(partitionRevoked + singleTopicPartition , e.getCause().getMessage());
+            assertEquals(partitionRevoked + singleTopicPartition, e.getCause().getMessage());
         }
     }
 
