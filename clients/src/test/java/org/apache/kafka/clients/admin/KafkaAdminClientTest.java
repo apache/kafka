@@ -22,7 +22,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -103,7 +102,6 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
@@ -1960,14 +1958,15 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
             String groupId = "groupId";
-            List<String> membersToRemove = Arrays.asList(instanceOne, instanceTwo);
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
+                                                                       new MemberToRemove(instanceTwo));
             final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
                 new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            RemovingMemberInfo memberOne = new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceOne);
-            RemovingMemberInfo memberTwo = new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceTwo);
+            MemberToRemove memberOne = new MemberToRemove(instanceOne);
+            MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
 
             TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
             TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);

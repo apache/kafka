@@ -160,6 +160,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
@@ -3492,7 +3493,7 @@ public class KafkaAdminClient extends AdminClient {
             LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.groupId(),
                                                      context.options().members().stream().map(
-                    RemoveMembersFromConsumerGroupOptions::convertToMemberIdentity).collect(Collectors.toList()));
+                                                         MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
             }
 
             @Override
@@ -3510,8 +3511,10 @@ public class KafkaAdminClient extends AdminClient {
 
                 final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
                 for (MemberResponse memberResponse : response.memberResponses()) {
+                    // We set member.id to empty here explicitly, so that the lookup will succeed as user doesn't
+                    // know the exact member.id.
                     memberErrors.put(new MemberIdentity()
-                                         .setMemberId(memberResponse.memberId())
+                                         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
                                          .setGroupInstanceId(memberResponse.groupInstanceId()),
                                      Errors.forCode(memberResponse.errorCode()));
                 }

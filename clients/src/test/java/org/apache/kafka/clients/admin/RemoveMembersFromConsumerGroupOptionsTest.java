@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
@@ -29,11 +26,10 @@ public class RemoveMembersFromConsumerGroupOptionsTest {
 
     @Test
     public void testConstructor() {
-        List<String> groupInstanceIds = Collections.singletonList("instance-1");
-
-        RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(groupInstanceIds);
+        RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(new MemberToRemove("instance-1")));
 
         assertEquals(Collections.singleton(
-            new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, "instance-1")), options.members());
+            new MemberToRemove("instance-1")), options.members());
     }
 }

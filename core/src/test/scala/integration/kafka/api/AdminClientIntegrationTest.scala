@@ -32,7 +32,6 @@ import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions.RemovingMemberInfo
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -41,7 +40,7 @@ import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -1281,11 +1280,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
           var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singletonList(invalidInstanceId)
+            Collections.singleton(new MemberToRemove(invalidInstanceId))
           ))
 
           TestUtils.assertFutureExceptionTypeEquals(removeMembersResult.all, classOf[UnknownMemberIdException])
-          val firstMemberFuture = removeMembersResult.memberResult(new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, invalidInstanceId))
+          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
           TestUtils.assertFutureExceptionTypeEquals(firstMemberFuture, classOf[UnknownMemberIdException])
 
           // Test consumer group deletion
@@ -1304,11 +1303,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
           // Test delete correct member
           removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singletonList(testInstanceId)
+            Collections.singleton(new MemberToRemove(testInstanceId))
           ))
 
           assertNull(removeMembersResult.all().get())
-          val validMemberFuture = removeMembersResult.memberResult(new RemovingMemberInfo(JoinGroupRequest.UNKNOWN_MEMBER_ID, testInstanceId))
+          val validMemberFuture = removeMembersResult.memberResult(new MemberToRemove(testInstanceId))
           assertNull(validMemberFuture.get())
 
           // The group should contain no member now.

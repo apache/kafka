@@ -130,7 +130,7 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
       val service = getConsumerGroupService(getArgs(group, topic))
       val (topLevelError, partitions) = service.deleteOffsets(group, List(topic))
       val tp = new TopicPartition(inputTopic, expectedPartition)
-      // Partition level error should populate to top level, unless this is due to a missed partition attempt.
+      // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
       if (inputPartition >= 0) {
         assertEquals(expectedError, topLevelError)
       }
