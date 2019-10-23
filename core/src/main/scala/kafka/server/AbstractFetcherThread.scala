@@ -777,6 +777,18 @@ case class ClientIdTopicPartition(clientId: String, topicPartition: TopicPartiti
   override def toString: String = s"$clientId-$topicPartition"
 }
 
+/**
+  * State transition for replicas is the following:
+  *
+  * 1. Fetching can transit to Truncating when getting the notification from fetch response.
+  * 2. Truncating always transit to FetchingWithNewState since the log start offset would potentially change.
+  * 3. Fetching can transit to FetchingWithNewState when it was delayed and hence excluded from the next session;
+  *    meaning that after the delay has elapsed it has to be included in as updated fetching to the new session.
+  * 4. Fetching can also transit to FetchignWithNewState when the fetch offset has changed, or the leader epoch as changed.
+  * 5. FetchingWithNewState can transit to Fetching if the returned fetch response contains no data, and hence in the
+  *    next session we do not need to include in the fetch session anymore.
+  */
+
 sealed trait ReplicaState
 case object Truncating extends ReplicaState
 case object Fetching extends ReplicaState
