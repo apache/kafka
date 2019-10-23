@@ -348,7 +348,12 @@ public final class MessageDataGenerator {
         } else if (field.type().isString()) {
             return "String";
         } else if (field.type().isBytes()) {
-            return "byte[]";
+            if (field.zeroCopy()) {
+                headerGenerator.addImport(MessageGenerator.BYTE_BUFFER_CLASS);
+                return "ByteBuffer";
+            } else {
+                return "byte[]";
+            }
         } else if (field.type().isStruct()) {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
@@ -453,7 +458,8 @@ public final class MessageDataGenerator {
                                 field.nullableVersions(),
                                 String.format("this.%s = ", field.camelCaseName()),
                                 String.format(";%n"),
-                                structRegistry.isStructArrayWithKeys(field));
+                                structRegistry.isStructArrayWithKeys(field),
+                                field.zeroCopy());
                         };
                         // For arrays where the field type needs to be serialized differently in flexible
                         // versions, lift the flexible version check outside of the array.
@@ -507,7 +513,8 @@ public final class MessageDataGenerator {
                                         field.nullableVersions(),
                                         String.format("this.%s = ", field.camelCaseName()),
                                         String.format(";%n"),
-                                        structRegistry.isStructArrayWithKeys(field));
+                                        structRegistry.isStructArrayWithKeys(field),
+                                        field.zeroCopy());
                                 } else {
                                     buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                                         primitiveReadExpression(field.type()));
@@ -565,7 +572,8 @@ public final class MessageDataGenerator {
                                               Versions nullableVersions,
                                               String assignmentPrefix,
                                               String assignmentSuffix,
-                                              boolean isStructArrayWithKeys) {
+                                              boolean isStructArrayWithKeys,
+                                              boolean zeroCopy) {
         String lengthVar = type.isArray() ? "arrayLength" : "length";
         buffer.printf("int %s;%n", lengthVar);
         VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
@@ -607,9 +615,13 @@ public final class MessageDataGenerator {
             buffer.printf("%s_readable.readString(%s)%s",
                 assignmentPrefix, lengthVar, assignmentSuffix);
         } else if (type.isBytes()) {
-            buffer.printf("byte[] newBytes = new byte[%s];%n", lengthVar);
-            buffer.printf("_readable.readArray(newBytes);%n");
-            buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
+            if (zeroCopy) {
+                buffer.printf("%s_readable.readByteBuffer(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
+            } else {
+                buffer.printf("byte[] newBytes = new byte[%s];%n", lengthVar);
+                buffer.printf("_readable.readArray(newBytes);%n");
+                buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
+            }
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (isStructArrayWithKeys) {
@@ -636,6 +648,7 @@ public final class MessageDataGenerator {
                     Versions.NONE,
                     "newCollection.add(",
                     String.format(");%n"),
+                    false,
                     false);
             } else {
                 buffer.printf("newCollection.add(%s);%n",
@@ -694,7 +707,7 @@ public final class MessageDataGenerator {
                             } else {
                                 buffer.printf("this.%s = %s;%n",
                                     field.camelCaseName(),
-                                    readFieldFromStruct(field.type(), field.snakeCaseName()));
+                                    readFieldFromStruct(field.type(), field.snakeCaseName(), field.zeroCopy()));
                             }
                         }).
                         ifMember(presentAndTaggedVersions -> {
@@ -802,7 +815,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private String readFieldFromStruct(FieldType type, String name) {
+    private String readFieldFromStruct(FieldType type, String name, boolean zeroCopy) {
         if (type instanceof FieldType.BoolFieldType) {
             return String.format("struct.getBoolean(\"%s\")", name);
         } else if (type instanceof FieldType.Int8FieldType) {
@@ -818,7 +831,11 @@ public final class MessageDataGenerator {
         } else if (type.isString()) {
             return String.format("struct.getString(\"%s\")", name);
         } else if (type.isBytes()) {
-            return String.format("struct.getByteArray(\"%s\")", name);
+            if (zeroCopy) {
+                return String.format("struct.getBytes(\"%s\")", name);
+            } else {
+                return String.format("struct.getByteArray(\"%s\")", name);
+            }
         } else if (type.isStruct()) {
             return String.format("new %s(struct, _version)", type.toString());
         } else {
@@ -855,7 +872,8 @@ public final class MessageDataGenerator {
                                         field.camelCaseName(),
                                         field.type(),
                                         versions,
-                                        field.nullableVersions());
+                                        field.nullableVersions(),
+                                        field.zeroCopy());
                                 };
                                 // For arrays where the field type needs to be serialized differently in flexible
                                 // versions, lift the flexible version check outside of the array.
@@ -953,7 +971,8 @@ public final class MessageDataGenerator {
                                     field.camelCaseName(),
                                     field.type(),
                                     presentAndTaggedVersions,
-                                    field.nullableVersions());
+                                    field.nullableVersions(),
+                                    field.zeroCopy());
                             } else {
                                 buffer.printf("_writable.writeUnsignedVarint(%d);%n",
                                     field.type().fixedLength().get());
@@ -1009,7 +1028,8 @@ public final class MessageDataGenerator {
                                               String name,
                                               FieldType type,
                                               Versions possibleVersions,
-                                              Versions nullableVersions) {
+                                              Versions nullableVersions,
+                                              boolean zeroCopy) {
         IsNullConditional.forName(name).
             possibleVersions(possibleVersions).
             nullableVersions(nullableVersions).
@@ -1042,7 +1062,11 @@ public final class MessageDataGenerator {
                         name);
                     lengthExpression = "_stringBytes.length";
                 } else if (type.isBytes()) {
-                    lengthExpression = String.format("%s.length", name);
+                    if (zeroCopy) {
+                        lengthExpression = String.format("%s.remaining()", name, name);
+                    } else {
+                        lengthExpression = String.format("%s.length", name);
+                    }
                 } else if (type.isArray()) {
                     lengthExpression = String.format("%s.size()", name);
                 } else {
@@ -1070,7 +1094,11 @@ public final class MessageDataGenerator {
                 if (type.isString()) {
                     buffer.printf("_writable.writeByteArray(_stringBytes);%n");
                 } else if (type.isBytes()) {
-                    buffer.printf("_writable.writeByteArray(%s);%n", name);
+                    if (zeroCopy) {
+                        buffer.printf("_writable.writeByteBuffer(%s);%n", name);
+                    } else {
+                        buffer.printf("_writable.writeByteArray(%s);%n", name);
+                    }
                 } else if (type.isArray()) {
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                     FieldType elementType = arrayType.elementType();
@@ -1088,7 +1116,8 @@ public final class MessageDataGenerator {
                             elementName,
                             elementType,
                             possibleVersions,
-                            Versions.NONE);
+                            Versions.NONE,
+                            false);
                     } else {
                         buffer.printf("%s;%n", primitiveWriteExpression(elementType, elementName));
                     }
@@ -1110,7 +1139,11 @@ public final class MessageDataGenerator {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else {
-                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+                if (field.zeroCopy()) {
+                    buffer.printf("if (%s.remaining() != 0) {%n", field.camelCaseName());
+                } else {
+                    buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+                }
             }
         } else if (field.type().isString()) {
             if (fieldDefault(field).equals("null")) {
@@ -1195,8 +1228,13 @@ public final class MessageDataGenerator {
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
-            buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
-                field.snakeCaseName(), field.camelCaseName());
+            if (field.zeroCopy()) {
+                buffer.printf("struct.set(\"%s\", this.%s);%n",
+                    field.snakeCaseName(), field.camelCaseName());
+            } else {
+                buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
+                    field.snakeCaseName(), field.camelCaseName());
+            }
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
                 possibleVersions(versions).
@@ -1476,13 +1514,21 @@ public final class MessageDataGenerator {
                         buffer.printf("_size += _arraySize;%n");
                     }
                 } else if (field.type().isBytes()) {
-                    buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
+                    if (field.zeroCopy()) {
+                        buffer.printf("int _bytesSize = %s.remaining();%n", field.camelCaseName());
+                    } else {
+                        buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
+                    }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
-                                field.camelCaseName());
+                            if (field.zeroCopy()) {
+                                buffer.printf("_bytesSize += " +
+                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1);%n", field.camelCaseName());
+                            } else {
+                                buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                                    field.camelCaseName());
+                            }
                         }).
                         ifNotMember(__ -> {
                             buffer.printf("_bytesSize += 4;%n");
@@ -1547,10 +1593,16 @@ public final class MessageDataGenerator {
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else if (field.type().isBytes()) {
-            // Arrays#equals handles nulls.
-            headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
-            buffer.printf("if (!Arrays.equals(this.%s, other.%s)) return false;%n",
-                field.camelCaseName(), field.camelCaseName());
+            if (field.zeroCopy()) {
+                headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
+                buffer.printf("if (!Objects.equals(this.%s, other.%s)) return false;%n",
+                    field.camelCaseName(), field.camelCaseName());
+            } else {
+                // Arrays#equals handles nulls.
+                headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
+                buffer.printf("if (!Arrays.equals(this.%s, other.%s)) return false;%n",
+                    field.camelCaseName(), field.camelCaseName());
+            }
         } else {
             buffer.printf("if (%s != other.%s) return false;%n",
                 field.camelCaseName(), field.camelCaseName());
@@ -1588,9 +1640,15 @@ public final class MessageDataGenerator {
             buffer.printf("hashCode = 31 * hashCode + %s.hashCode();%n",
                 field.camelCaseName());
         } else if (field.type().isBytes()) {
-            headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
-            buffer.printf("hashCode = 31 * hashCode + Arrays.hashCode(%s);%n",
-                field.camelCaseName());
+            if (field.zeroCopy()) {
+                headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
+                buffer.printf("hashCode = 31 * hashCode + Objects.hashCode(%s);%n",
+                    field.camelCaseName());
+            } else {
+                headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
+                buffer.printf("hashCode = 31 * hashCode + Arrays.hashCode(%s);%n",
+                    field.camelCaseName());
+            }
         } else if (field.type().isStruct()
                    || field.type().isArray()
                    || field.type().isString()) {
@@ -1632,11 +1690,17 @@ public final class MessageDataGenerator {
             buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : \"'\" + %s.toString() + \"'\")%n",
                 prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
-            headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
-            buffer.printf("+ \"%s%s=\" + Arrays.toString(%s)%n",
-                prefix, field.camelCaseName(), field.camelCaseName());
+            if (field.zeroCopy()) {
+                buffer.printf("+ \"%s%s=\" + %s%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            } else {
+                headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
+                buffer.printf("+ \"%s%s=\" + Arrays.toString(%s)%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            }
         } else if (field.type().isStruct() ||
             field.type() instanceof FieldType.UUIDFieldType) {
+        } else if (field.type().isStruct()) {
             buffer.printf("+ \"%s%s=\" + %s.toString()%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
@@ -1745,8 +1809,13 @@ public final class MessageDataGenerator {
                         field.name() + ".  The only valid default for a bytes field " +
                         "is empty or null.");
             }
-            headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
-            return "Bytes.EMPTY";
+            if (field.zeroCopy()) {
+                headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                return "ByteUtils.EMPTY_BUF";
+            } else {
+                headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
+                return "Bytes.EMPTY";
+            }
         } else if (field.type().isStruct()) {
             if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for struct field " +

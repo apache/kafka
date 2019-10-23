@@ -59,6 +59,16 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
+    public ByteBuffer readByteBuffer(int length) {
+        ByteBuffer res = buf.slice();
+        res.limit(length);
+
+        buf.position(buf.position() + length);
+
+        return res;
+    }
+
+    @Override
     public void writeByte(byte val) {
         buf.put(val);
     }
@@ -86,5 +96,10 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public void writeUnsignedVarint(int i) {
         ByteUtils.writeUnsignedVarint(i, buf);
+    }
+
+    @Override
+    public void writeByteBuffer(ByteBuffer src) {
+        buf.put(src);
     }
 }

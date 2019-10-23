@@ -28,6 +28,8 @@ import java.nio.ByteBuffer;
  */
 public final class ByteUtils {
 
+    public static final ByteBuffer EMPTY_BUF = ByteBuffer.wrap(new byte[0]);
+
     private ByteUtils() {}
 
     /**
