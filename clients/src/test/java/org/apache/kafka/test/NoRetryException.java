@@ -14,23 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.test;
 
-package org.apache.kafka.common.protocol;
+/**
+ * This class can be used in the callback given to {@link TestUtils#retryOnExceptionWithTimeout(long, long, ValuelessCallable)}
+ * to indicate that a particular exception should not be retried. Instead the retry operation will
+ * be aborted immediately and the exception will be rethrown.
+ */
+public class NoRetryException extends RuntimeException {
+    private final Throwable cause;
 
-import java.nio.ByteBuffer;
-import java.util.UUID;
+    public NoRetryException(Throwable cause) {
+        this.cause = cause;
+    }
 
-public interface Writable {
-    void writeByte(byte val);
-    void writeShort(short val);
-    void writeInt(int val);
-    void writeLong(long val);
-    void writeByteArray(byte[] arr);
-    void writeUnsignedVarint(int i);
-    void writeByteBuffer(ByteBuffer buf);
-
-    default void writeUUID(UUID uuid) {
-        writeLong(uuid.getMostSignificantBits());
-        writeLong(uuid.getLeastSignificantBits());
+    @Override
+    public Throwable getCause() {
+        return this.cause;
     }
 }

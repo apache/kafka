@@ -20,6 +20,22 @@
   "fields": [
     { "name": "processId", "versions": "1+", "type": "uuid" },
     { "name": "myTaggedIntArray", "type": "[]int32",
-        "versions": "1+", "taggedVersions": "1+", "tag": 0 }
+        "versions": "1+", "taggedVersions": "1+", "tag": 0 },
+
+    {
+      "name": "zeroCopyByteBuffer",
+      "type": "bytes",
+      "zeroCopy": true,
+      "versions": "1",
+      "about": "Byte buffer field."
+    },
+    {
+      "name": "nullableZeroCopyByteBuffer",
+      "type": "bytes",
+      "zeroCopy": true,
+      "nullableVersions": "0+",
+      "versions": "1",
+      "about": "Nullable byte buffer field."
+    }
   ]
 }

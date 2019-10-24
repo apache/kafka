@@ -56,6 +56,8 @@ public final class FieldSpec {
 
     private final Optional<Integer> tag;
 
+    private boolean zeroCopy;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -69,7 +71,8 @@ public final class FieldSpec {
                      @JsonProperty("about") String about,
                      @JsonProperty("taggedVersions") String taggedVersions,
                      @JsonProperty("flexibleVersions") String flexibleVersions,
-                     @JsonProperty("tag") Integer tag) {
+                     @JsonProperty("tag") Integer tag,
+                     @JsonProperty("zeroCopy") boolean zeroCopy) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
@@ -116,6 +119,12 @@ public final class FieldSpec {
         }
         this.tag = Optional.ofNullable(tag);
         checkTagInvariants();
+
+        this.zeroCopy = zeroCopy;
+        if (this.zeroCopy && !this.type.isBytes()) {
+            throw new RuntimeException("Invalid zeroCopy value for " + name +
+                ". Only fields of type bytes can use zeroCopy flag.");
+        }
     }
 
     private void checkTagInvariants() {
@@ -246,5 +255,10 @@ public final class FieldSpec {
 
     public Optional<Integer> tag() {
         return tag;
+    }
+
+    @JsonProperty("zeroCopy")
+    public boolean zeroCopy() {
+        return zeroCopy;
     }
 }
