@@ -2038,7 +2038,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val extraNonExistentReplica = new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
     val negativeIdReplica = new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
     val duplicateReplica = new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
-    val noReplicas = new NewPartitionReassignment(Seq().map(_.asInstanceOf[Integer]).asJava)
+    val noReplicas = new NewPartitionReassignment(Seq().asJava)
     val invalidReplicaResult = client.alterPartitionReassignments(Map(
       tp1 -> java.util.Optional.of(extraNonExistentReplica),
       tp2 -> java.util.Optional.of(negativeIdReplica),

@@ -1696,7 +1696,12 @@ class KafkaController(val config: KafkaConfig,
         if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
           val partitionReassignment = zkClient.getPartitionReassignment
           val (savedReassignments, _) = partitionReassignment.partition { case (tp, targetReplicas) =>
-            savePartitionReassignment(reassignmentResults, tp, Some(targetReplicas), zkTriggered = true)
+            if (replicasAreValid(Some(targetReplicas))) {
+              savePartitionReassignment(reassignmentResults, tp, Some(targetReplicas), zkTriggered = true)
+            } else {
+              logger.info(s"Ignored ZK reassignment for $tp because its target replicas $targetReplicas were invalid.")
+              false
+            }
           }
           savedReassignments.keySet
         } else {
