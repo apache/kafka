@@ -49,15 +49,6 @@ public class StreamsUpgradeTestIntegrationTest {
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 1, "data");
     }
 
-    @AfterClass
-    public static void teardown() {
-        try {
-            CLUSTER.deleteAllTopicsAndWait(IntegrationTestUtils.DEFAULT_TIMEOUT);
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @Test
     public void testVersionProbingUpgrade() throws InterruptedException {
         final KafkaStreams kafkaStreams1 = StreamsUpgradeTest.buildStreams(mkProperties(
