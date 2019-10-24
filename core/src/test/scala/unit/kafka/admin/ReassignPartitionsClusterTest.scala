@@ -1102,8 +1102,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   /**
-   * Validates that partitions can be created for topics not in reassignment and for the topics that are in reassignment
-   * an ReassignmentInProgressException should be thrown.cThe test creates two topics `topicName` and `otherTopicName`,
+   * Verifies that partitions can be created for topics not in reassignment and for the topics that are in reassignment
+   * an ReassignmentInProgressException should be thrown. The test creates two topics `topicName` and `otherTopicName`,
    * the `topicName` topic undergoes partition reassignment and the test validates that during reassignment createPartitions
    * call throws ReassignmentInProgressException `topicName` topic and for topic `otherTopicName` which is not being reassigned
    * successfully creates partitions. Further validates that after the reassignment is complete for topic `topicName`
