@@ -672,6 +672,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw taskMigratedException;
             }
         } else {
+            flushState();
+
             maybeAbortTransactionAndCloseRecordCollector(isZombie);
         }
     }
