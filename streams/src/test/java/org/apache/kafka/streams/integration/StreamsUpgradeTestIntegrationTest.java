@@ -29,6 +29,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -90,6 +91,13 @@ public class StreamsUpgradeTestIntegrationTest {
         assertThat(usedVersion6.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
         assertThat(usedVersion5.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
         assertThat(usedVersion4.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
+
+        kafkaStreams4.close(Duration.ZERO);
+        kafkaStreams5.close(Duration.ZERO);
+        kafkaStreams6.close(Duration.ZERO);
+        kafkaStreams4.close();
+        kafkaStreams5.close();
+        kafkaStreams6.close();
     }
 
     public static KafkaStreams buildFutureStreams(final AtomicInteger usedVersion4) {
