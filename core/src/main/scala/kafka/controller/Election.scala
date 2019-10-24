@@ -42,9 +42,9 @@ object Election extends Logging {
         val newLeaderAndIsrOpt = leaderOpt.map { case (leader, uncleanElection) =>
           if (uncleanElection) {
             controllerContext.stats.uncleanLeaderElectionRate.mark()
-            warn(s"Unclean leader election. Partition $partition has been assigned leader $leader from deposed " +
+            info(s"Unclean leader election. Partition $partition has been assigned leader $leader from deposed " +
               s"leader ${leaderAndIsr.leader}.")
-            }
+          }
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
           leaderAndIsr.newLeaderAndIsr(leader, newIsr)
