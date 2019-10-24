@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutionException
 
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.errors.{NoReassignmentInProgressException, ReassignmentInProgressException}
+import org.scalatest.Assertions.intercept
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = null
@@ -1140,24 +1141,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       !adminClient.listPartitionReassignments().reassignments().get().isEmpty
     }, "Controller should have picked up on znode creation", 1000)
 
-    def testCreatePartitions(topicName: String, shouldThrowException: Boolean): Unit = {
-      var doesThrowException = false
-      try {
+    def testCreatePartitions(topicName: String, isTopicBeingReassigned: Boolean): Unit = {
+      if (isTopicBeingReassigned)
+        assertTrue("createPartitions for topic under reassignment should throw an exception", intercept[ExecutionException](
+          adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()).
+          getCause.isInstanceOf[ReassignmentInProgressException])
+      else
         adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()
-      } catch {
-        case e: ExecutionException =>
-          doesThrowException = true
-          if (shouldThrowException) {
-            assertEquals(classOf[ReassignmentInProgressException], e.getCause().getClass())
-          } else {
-            org.junit.Assert.fail("createPartitions call did not expect an exception" + e.toString)
-          }
-        case e: Exception =>
-          org.junit.Assert.fail("createPartitions call did not expect an exception" + e.toString)
-      }
-      if (shouldThrowException) {
-        assertTrue("createPartitions for topic under reassignment should throw an exception", doesThrowException)
-      }
     }
 
     // Test case: createPartitions throws ReassignmentInProgressException Topics with partitions in reassignment.
