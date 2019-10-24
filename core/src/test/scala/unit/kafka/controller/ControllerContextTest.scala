@@ -19,7 +19,6 @@ package unit.kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{ControllerContext, ReplicaAssignment}
-import kafka.zk.ReassignPartitionsZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
