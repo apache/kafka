@@ -81,8 +81,8 @@ public class TaskMetricsTest {
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.LATEST) {
-            final String avgLatencyDescription = "The average processing latency";
-            final String maxLatencyDescription = "The maximum processing latency";
+            final String avgLatencyDescription = "The average latency of processing";
+            final String maxLatencyDescription = "The maximum latency of processing";
             expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
             StreamsMetricsImpl.addAvgAndMaxToSensor(
                 expectedSensor,
@@ -108,10 +108,10 @@ public class TaskMetricsTest {
             .andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.LATEST) {
             final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-            final String totalDescription = "The total number of punctuate calls";
-            final String rateDescription = "The average per-second number of punctuate calls";
-            final String avgLatencyDescription = "The average punctuate latency";
-            final String maxLatencyDescription = "The maximum punctuate latency";
+            final String totalDescription = "The total number of calls to punctuate";
+            final String rateDescription = "The average number of calls to punctuate per second";
+            final String avgLatencyDescription = "The average latency of calls to punctuate";
+            final String maxLatencyDescription = "The maximum latency of calls to punctuate";
             expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
             StreamsMetricsImpl.addInvocationRateAndCountToSensor(
                 expectedSensor,
@@ -142,10 +142,10 @@ public class TaskMetricsTest {
     public void shouldGetCommitSensor() {
         final String operation = "commit";
         final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
-        final String totalDescription = "The total number of commit calls";
-        final String rateDescription = "The average per-second number of commit calls";
-        final String avgLatencyDescription = "The average commit latency";
-        final String maxLatencyDescription = "The maximum commit latency";
+        final String totalDescription = "The total number of calls to commit";
+        final String rateDescription = "The average number of calls to commit per second";
+        final String avgLatencyDescription = "The average latency of calls to commit";
+        final String maxLatencyDescription = "The maximum latency of calls to commit";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
@@ -198,8 +198,12 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetRecordLatenessSensor() {
         final String operation = "record-lateness";
-        final String avgDescription = "The observed average lateness of records";
-        final String maxDescription = "The observed maximum lateness of records";
+        final String avgDescription =
+            "The observed average lateness of records in milliseconds, measured by comparing the record timestamp with "
+                + "the current stream time";
+        final String maxDescription =
+            "The observed maximum lateness of records in milliseconds, measured by comparing the record timestamp with "
+                + "the current stream time";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
@@ -222,7 +226,7 @@ public class TaskMetricsTest {
     public void shouldGetDroppedRecordsSensor() {
         final String operation = "dropped-records";
         final String totalDescription = "The total number of dropped records";
-        final String rateDescription = "The average per-second number of dropped records";
+        final String rateDescription = "The average number of dropped records per second";
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(

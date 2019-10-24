@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
@@ -32,46 +31,52 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class TaskMetrics {
     private TaskMetrics() {}
 
-    private static final String COMMIT = "commit";
-    private static final String PROCESS = "process";
-    private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
-    private static final String PUNCTUATE = "punctuate";
-    private static final String ENFORCED_PROCESSING = "enforced-processing";
-    private static final String RECORD_LATENESS = "record-lateness";
-    private static final String DROPPED_RECORDS = "dropped-records";
+    private static final String AVG_LATENCY_DESCRIPTION = "The average latency of ";
+    private static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
+    private static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
+    private static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
-    private static final String LATENCY_DESCRIPTION_SUFFIX = " latency";
-    private static final String AVG_LATENCY_DESCRIPTION_PREFIX = "The average ";
-    private static final String MAX_LATENCY_DESCRIPTION_PREFIX = "The maximum ";
-    private static final String COMMIT_DESCRIPTION = "commit calls";
+    private static final String COMMIT = "commit";
+    private static final String COMMIT_DESCRIPTION = "calls to commit";
     private static final String COMMIT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_DESCRIPTION;
-    private static final String COMMIT_RATE_DESCRIPTION = RATE_DESCRIPTION + COMMIT_DESCRIPTION;
-    private static final String COMMIT_AVG_LATENCY_DESCRIPTION =
-        AVG_LATENCY_DESCRIPTION_PREFIX + COMMIT + LATENCY_DESCRIPTION_SUFFIX;
-    private static final String COMMIT_MAX_LATENCY_DESCRIPTION =
-        MAX_LATENCY_DESCRIPTION_PREFIX + COMMIT + LATENCY_DESCRIPTION_SUFFIX;
-    private static final String PUNCTUATE_DESCRIPTION = "punctuate calls";
+    private static final String COMMIT_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + COMMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String COMMIT_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + COMMIT_DESCRIPTION;
+    private static final String COMMIT_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + COMMIT_DESCRIPTION;
+
+    private static final String PUNCTUATE = "punctuate";
+    private static final String PUNCTUATE_DESCRIPTION = "calls to punctuate";
     private static final String PUNCTUATE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PUNCTUATE_DESCRIPTION;
-    private static final String PUNCTUATE_RATE_DESCRIPTION = RATE_DESCRIPTION + PUNCTUATE_DESCRIPTION;
-    private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION =
-        AVG_LATENCY_DESCRIPTION_PREFIX + PUNCTUATE + LATENCY_DESCRIPTION_SUFFIX;
-    private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION =
-        MAX_LATENCY_DESCRIPTION_PREFIX + PUNCTUATE + LATENCY_DESCRIPTION_SUFFIX;
+    private static final String PUNCTUATE_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + PUNCTUATE_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PUNCTUATE_DESCRIPTION;
+    private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PUNCTUATE_DESCRIPTION;
+
+    private static final String ENFORCED_PROCESSING = "enforced-processing";
     private static final String ENFORCED_PROCESSING_TOTAL_DESCRIPTION =
         "The total number of occurrences of enforced-processing operations";
     private static final String ENFORCED_PROCESSING_RATE_DESCRIPTION =
         "The average number of occurrences of enforced-processing operations per second";
-    private static final String RECORD_LATENESS_MAX_DESCRIPTION = "The observed maximum lateness of records";
-    private static final String RECORD_LATENESS_AVG_DESCRIPTION = "The observed average lateness of records";
+
+    private static final String RECORD_LATENESS = "record-lateness";
+    private static final String RECORD_LATENESS_MAX_DESCRIPTION =
+        "The observed maximum lateness of records in milliseconds, measured by comparing the record timestamp with the "
+            + "current stream time";
+    private static final String RECORD_LATENESS_AVG_DESCRIPTION =
+        "The observed average lateness of records in milliseconds, measured by comparing the record timestamp with the "
+            + "current stream time";
+
+    private static final String DROPPED_RECORDS = "dropped-records";
     private static final String DROPPED_RECORDS_DESCRIPTION = "dropped records";
     private static final String DROPPED_RECORDS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + DROPPED_RECORDS_DESCRIPTION;
-    private static final String DROPPED_RECORDS_RATE_DESCRIPTION = RATE_DESCRIPTION + DROPPED_RECORDS_DESCRIPTION;
-    private static final String PROCESS_DESCRIPTION = "processing";
-    private static final String PROCESS_AVG_LATENCY_DESCRIPTION =
-        AVG_LATENCY_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION + LATENCY_DESCRIPTION_SUFFIX;
-    private static final String PROCESS_MAX_LATENCY_DESCRIPTION =
-        MAX_LATENCY_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION + LATENCY_DESCRIPTION_SUFFIX;
+    private static final String DROPPED_RECORDS_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + DROPPED_RECORDS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
+    private static final String PROCESS = "process";
+    private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
+    private static final String PROCESS_DESCRIPTION = "processing";
+    private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
+    private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
 
     public static Sensor processLatencySensor(final String threadId,
                                               final String taskId,
