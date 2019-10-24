@@ -73,8 +73,12 @@
     </p>
 
     <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
-
-    <!-- Placeholder KIP-213 -->
+    <p>     
+         As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-213+Support+non-key+joining+in+KTable">KIP-213</a>). 
+         This joiner allows for records to be joined between two KTables with different keys. 
+         Both <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#ktable-ktable-fk-join">INNER and LEFT foreign-key joins</a> 
+         are supported.
+    </p>
     <p>
         In the 2.4 release, you now can name all operators in a Kafka Streams DSL topology via
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</a>.
@@ -90,7 +94,7 @@
 
     </p>
     <p>
-        Before the 2.4.0 version of Kafa Streams, users of the DSL could not name the state stores involved in a stream-stream join.
+        Before the 2.4.0 version of Kafka Streams, users of the DSL could not name the state stores involved in a stream-stream join.
         If users changed their topology and added a operator before the
         join, the internal names of the state stores would shift, requiring an application reset when redeploying.
         In the 2.4.0 release, Kafka Streams adds the <code>StreamJoined</code>
@@ -107,7 +111,6 @@
         new overloaded methods.  You can get more details from
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>.
     </p>
-
     <p>
         With the introduction of incremental cooperative rebalancing, Streams no longer requires all tasks be revoked at the beginning of a rebalance. Instead, at the completion of the rebalance only those tasks which are to be migrated to another consumer
         for overall load balance will need to be closed and revoked. This changes the semantics of the <code>StateListener</code> a bit, as it will not necessarily transition to <code>REBALANCING</code> at the beginning of a rebalance anymore. Note that
@@ -158,7 +161,7 @@
         Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly.
         If you use a custom <code>PartitionGrouper</code> and stop to use it, the created tasks might change.
         Hence, you will need to reset your application to upgrade it.
-    </p>
+    
 
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
