@@ -154,8 +154,8 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
     val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
 
-    partitionStates.partitionStateMap.asScala.foreach {
-      case (tp, state) =>
+    partitionStates.partitionStateMap.forEach(new BiConsumer[TopicPartition, PartitionFetchState] {
+      override def accept(tp: TopicPartition, state: PartitionFetchState): Unit = {
         if (state.isTruncating) {
           latestEpoch(tp) match {
             case Some(epoch) if isOffsetForLeaderEpochSupported =>
@@ -164,7 +164,8 @@ abstract class AbstractFetcherThread(name: String,
               partitionsWithoutEpochs += tp
           }
         }
-    }
+      }
+    })
 
     (partitionsWithEpochs, partitionsWithoutEpochs)
   }
