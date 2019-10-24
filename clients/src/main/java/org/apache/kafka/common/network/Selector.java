@@ -202,28 +202,27 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     public Selector(int maxReceiveSize,
-                long connectionMaxIdleMs,
-                int failedAuthenticationDelayMs,
-                Metrics metrics,
-                Time time,
-                String metricGrpPrefix,
-                Map<String, String> metricTags,
-                boolean metricsPerConnection,
-                ChannelBuilder channelBuilder,
-                LogContext logContext) {
+                    long connectionMaxIdleMs,
+                    int failedAuthenticationDelayMs,
+                    Metrics metrics,
+                    Time time,
+                    String metricGrpPrefix,
+                    Map<String, String> metricTags,
+                    boolean metricsPerConnection,
+                    ChannelBuilder channelBuilder,
+                    LogContext logContext) {
         this(maxReceiveSize, connectionMaxIdleMs, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
     }
 
-
     public Selector(int maxReceiveSize,
-            long connectionMaxIdleMs,
-            Metrics metrics,
-            Time time,
-            String metricGrpPrefix,
-            Map<String, String> metricTags,
-            boolean metricsPerConnection,
-            ChannelBuilder channelBuilder,
-            LogContext logContext) {
+                    long connectionMaxIdleMs,
+                    Metrics metrics,
+                    Time time,
+                    String metricGrpPrefix,
+                    Map<String, String> metricTags,
+                    boolean metricsPerConnection,
+                    ChannelBuilder channelBuilder,
+                    LogContext logContext) {
         this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, channelBuilder, logContext);
     }
 
@@ -519,24 +518,25 @@ public class Selector implements Selectable, AutoCloseable {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
             boolean sendFailed = false;
+            String nodeId = channel.id();
 
             // register all per-connection metrics at once
-            sensors.maybeRegisterConnectionMetrics(channel.id());
+            sensors.maybeRegisterConnectionMetrics(nodeId);
             if (idleExpiryManager != null)
-                idleExpiryManager.update(channel.id(), currentTimeNanos);
+                idleExpiryManager.update(nodeId, currentTimeNanos);
 
             try {
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
                     if (channel.finishConnect()) {
-                        this.connected.add(channel.id());
+                        this.connected.add(nodeId);
                         this.sensors.connectionCreated.record();
                         SocketChannel socketChannel = (SocketChannel) key.channel();
                         log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
                                 socketChannel.socket().getReceiveBufferSize(),
                                 socketChannel.socket().getSendBufferSize(),
                                 socketChannel.socket().getSoTimeout(),
-                                channel.id());
+                                nodeId);
                     } else {
                         continue;
                     }
@@ -582,18 +582,27 @@ public class Selector implements Selectable, AutoCloseable {
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                if (channel.ready() && key.isWritable() && !channel.maybeBeginClientReauthentication(
-                    () -> channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos)) {
-                    Send send;
+
+                long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
+                if (channel.hasSend()
+                        && channel.ready()
+                        && key.isWritable()
+                        && !channel.maybeBeginClientReauthentication(() -> nowNanos)) {
                     try {
-                        send = channel.write();
+                        long bytesSent = channel.write();
+                        if (bytesSent > 0) {
+                            long currentTimeMs = time.milliseconds();
+                            this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
+
+                            Send send = channel.maybeCompleteSend();
+                            if (send != null) {
+                                this.completedSends.add(send);
+                                this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
+                            }
+                        }
                     } catch (Exception e) {
                         sendFailed = true;
                         throw e;
-                    }
-                    if (send != null) {
-                        this.completedSends.add(send);
-                        this.sensors.recordBytesSent(channel.id(), send.size());
                     }
                 }
 
@@ -647,12 +656,27 @@ public class Selector implements Selectable, AutoCloseable {
         //previous receive(s) already staged or otherwise in progress then read from it
         if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasStagedReceive(channel)
             && !explicitlyMutedChannels.contains(channel)) {
-            NetworkReceive networkReceive;
-            while ((networkReceive = channel.read()) != null) {
+
+            String nodeId = channel.id();
+
+            while (true) {
+                long bytesReceived = channel.read();
+                if (bytesReceived == 0)
+                    break;
+
+                long currentTimeMs = time.milliseconds();
+                sensors.recordBytesReceived(nodeId, bytesReceived, currentTimeMs);
                 madeReadProgressLastPoll = true;
-                addToStagedReceives(channel, networkReceive);
+
+                NetworkReceive receive = channel.maybeCompleteReceive();
+                if (receive == null)
+                    break;
+
+                sensors.recordCompletedReceive(nodeId, receive.size(), currentTimeMs);
+                addToStagedReceives(channel, receive);
             }
-            if (channel.isMute()) {
+
+            if (channel.isMuted()) {
                 outOfMemory = true; //channel has muted itself due to memory pressure.
             } else {
                 madeReadProgressLastPoll = true;
@@ -971,7 +995,7 @@ public class Selector implements Selectable, AutoCloseable {
      */
     private boolean hasStagedReceives() {
         for (KafkaChannel channel : this.stagedReceives.keySet()) {
-            if (!channel.isMute())
+            if (!channel.isMuted())
                 return true;
         }
         return false;
@@ -1011,7 +1035,6 @@ public class Selector implements Selectable, AutoCloseable {
     private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
         NetworkReceive networkReceive = stagedDeque.poll();
         this.completedReceives.add(networkReceive);
-        this.sensors.recordBytesReceived(channel.id(), networkReceive.size());
     }
 
     // only for testing
@@ -1025,7 +1048,7 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
-    private class SelectorMetrics implements AutoCloseable {
+    class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final String metricGrpPrefix;
         private final Map<String, String> metricTags;
@@ -1041,7 +1064,9 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor failedReauthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
+        public final Sensor requestsSent;
         public final Sensor bytesReceived;
+        public final Sensor responsesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
 
@@ -1111,17 +1136,21 @@ public class Selector implements Selectable, AutoCloseable {
             this.bytesSent = sensor("bytes-sent:" + tagsSuffix, bytesTransferred);
             this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags,
                     "outgoing-byte", "outgoing bytes sent to all servers"));
-            this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags, new WindowedCount(),
+
+            this.requestsSent = sensor("requests-sent:" + tagsSuffix);
+            this.requestsSent.add(createMeter(metrics, metricGrpName, metricTags, new WindowedCount(),
                     "request", "requests sent"));
             MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", metricTags);
-            this.bytesSent.add(metricName, new Avg());
+            this.requestsSent.add(metricName, new Avg());
             metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", metricTags);
-            this.bytesSent.add(metricName, new Max());
+            this.requestsSent.add(metricName, new Max());
 
             this.bytesReceived = sensor("bytes-received:" + tagsSuffix, bytesTransferred);
             this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
                     "incoming-byte", "bytes read off all sockets"));
-            this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
+
+            this.responsesReceived = sensor("responses-received:" + tagsSuffix);
+            this.responsesReceived.add(createMeter(metrics, metricGrpName, metricTags,
                     new WindowedCount(), "response", "responses received"));
 
             this.selectTime = sensor("select-time:" + tagsSuffix);
@@ -1177,26 +1206,31 @@ public class Selector implements Selectable, AutoCloseable {
             if (!connectionId.isEmpty() && metricsPerConnection) {
                 // if one sensor of the metrics has been registered for the connection,
                 // then all other sensors should have been registered; and vice versa
-                String nodeRequestName = "node-" + connectionId + ".bytes-sent";
+                String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
                 if (nodeRequest == null) {
                     String metricGrpName = metricGrpPrefix + "-node-metrics";
-
                     Map<String, String> tags = new LinkedHashMap<>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
                     nodeRequest.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "request", "requests sent"));
                     MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
                     metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
-                    String nodeResponseName = "node-" + connectionId + ".bytes-received";
+                    String bytesSentName = "node-" + connectionId + ".bytes-sent";
+                    Sensor bytesSent = sensor(bytesSentName);
+                    bytesSent.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+
+                    String nodeResponseName = "node-" + connectionId + ".responses-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
                     nodeResponse.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "response", "responses received"));
+
+                    String bytesReceivedName = "node-" + connectionId + ".bytes-received";
+                    Sensor bytesReceive = sensor(bytesReceivedName);
+                    bytesReceive.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);
@@ -1208,25 +1242,43 @@ public class Selector implements Selectable, AutoCloseable {
             }
         }
 
-        public void recordBytesSent(String connectionId, long bytes) {
-            long now = time.milliseconds();
-            this.bytesSent.record(bytes, now);
+        public void recordBytesSent(String connectionId, long bytes, long currentTimeMs) {
+            this.bytesSent.record(bytes, currentTimeMs);
             if (!connectionId.isEmpty()) {
-                String nodeRequestName = "node-" + connectionId + ".bytes-sent";
-                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null)
-                    nodeRequest.record(bytes, now);
+                String bytesSentName = "node-" + connectionId + ".bytes-sent";
+                Sensor bytesSent = this.metrics.getSensor(bytesSentName);
+                if (bytesSent != null)
+                    bytesSent.record(bytes, currentTimeMs);
             }
         }
 
-        public void recordBytesReceived(String connection, int bytes) {
-            long now = time.milliseconds();
-            this.bytesReceived.record(bytes, now);
-            if (!connection.isEmpty()) {
-                String nodeRequestName = "node-" + connection + ".bytes-received";
+        public void recordCompletedSend(String connectionId, long totalBytes, long currentTimeMs) {
+            requestsSent.record(totalBytes, currentTimeMs);
+            if (!connectionId.isEmpty()) {
+                String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
                 if (nodeRequest != null)
-                    nodeRequest.record(bytes, now);
+                    nodeRequest.record(totalBytes, currentTimeMs);
+            }
+        }
+
+        public void recordBytesReceived(String connectionId, long bytes, long currentTimeMs) {
+            this.bytesReceived.record(bytes, currentTimeMs);
+            if (!connectionId.isEmpty()) {
+                String bytesReceivedName = "node-" + connectionId + ".bytes-received";
+                Sensor bytesReceived = this.metrics.getSensor(bytesReceivedName);
+                if (bytesReceived != null)
+                    bytesReceived.record(bytes, currentTimeMs);
+            }
+        }
+
+        public void recordCompletedReceive(String connectionId, long totalBytes, long currentTimeMs) {
+            responsesReceived.record(totalBytes, currentTimeMs);
+            if (!connectionId.isEmpty()) {
+                String nodeRequestName = "node-" + connectionId + ".responses-received";
+                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
+                if (nodeRequest != null)
+                    nodeRequest.record(totalBytes, currentTimeMs);
             }
         }
 

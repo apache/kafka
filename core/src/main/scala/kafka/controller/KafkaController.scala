@@ -1716,7 +1716,7 @@ class KafkaController(val config: KafkaConfig,
       case Some(replicas) =>
         val replicaSet = replicas.toSet
 
-        if (replicas.size != replicaSet.size)
+        if (replicas.isEmpty || replicas.size != replicaSet.size)
           false
         else if (replicas.exists(_ < 0))
           false

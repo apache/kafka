@@ -397,6 +397,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 return false;
             }
         } else {
+            // there's no data in any of the topics; we should reset the enforced
+            // processing timer
+            idleStartTime = RecordQueue.UNKNOWN;
             return false;
         }
     }

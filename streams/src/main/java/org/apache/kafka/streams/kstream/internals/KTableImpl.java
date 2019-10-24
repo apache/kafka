@@ -712,7 +712,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
 
         if (materializedInternal != null) {
-            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            if (materializedInternal.keySerde() == null) {
+                materializedInternal.withKeySerde(this.keySerde);
+            }
+            keySerde = materializedInternal.keySerde();
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.storeName();
             storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();

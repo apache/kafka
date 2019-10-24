@@ -240,7 +240,9 @@ public class StreamsUpgradeTest {
                                 info.prevTasks(),
                                 info.standbyTasks(),
                                 info.userEndPoint())
-                                .encode()));
+                                .encode(),
+                            subscription.ownedPartitions()
+                        ));
                 }
                 assignment = super.assign(metadata, new GroupSubscription(downgradedSubscriptions)).groupAssignment();
                 bumpUsedVersion = true;
