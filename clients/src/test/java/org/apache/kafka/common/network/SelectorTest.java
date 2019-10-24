@@ -48,18 +48,18 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -71,8 +71,8 @@ import static org.mockito.Mockito.when;
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
 public class SelectorTest {
-
     protected static final int BUFFER_SIZE = 4 * 1024;
+    private static final String METRIC_GROUP = "MetricGroup";
 
     protected EchoServer server;
     protected Time time;
@@ -89,7 +89,7 @@ public class SelectorTest {
         this.channelBuilder = new PlaintextChannelBuilder(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, this.metrics, time, METRIC_GROUP, channelBuilder, new LogContext());
     }
 
     @After
@@ -260,6 +260,41 @@ public class SelectorTest {
         blockingConnect(node);
         String big = TestUtils.randomString(10 * BUFFER_SIZE);
         assertEquals(big, blockingRequest(node, big));
+    }
+
+    @Test
+    public void testPartialSendAndReceiveReflectedInMetrics() throws Exception {
+        // We use a large payload to attempt to trigger the partial send and receive logic.
+        int payloadSize = 20 * BUFFER_SIZE;
+        String payload = TestUtils.randomString(payloadSize);
+        String nodeId = "0";
+        blockingConnect(nodeId);
+        NetworkSend send = createSend(nodeId, payload);
+
+        selector.send(send);
+        KafkaChannel channel = selector.channel(nodeId);
+
+        KafkaMetric outgoingByteTotal = findUntaggedMetricByName("outgoing-byte-total");
+        KafkaMetric incomingByteTotal = findUntaggedMetricByName("incoming-byte-total");
+
+        TestUtils.waitForCondition(() -> {
+            long bytesSent = send.size() - send.remaining();
+            assertEquals(bytesSent, ((Double) outgoingByteTotal.metricValue()).longValue());
+
+            NetworkReceive currentReceive = channel.currentReceive();
+            if (currentReceive != null) {
+                assertEquals(currentReceive.bytesRead(), ((Double) incomingByteTotal.metricValue()).intValue());
+            }
+
+            selector.poll(50);
+            return !selector.completedReceives().isEmpty();
+        }, "Failed to receive expected response");
+
+        KafkaMetric requestTotal = findUntaggedMetricByName("request-total");
+        assertEquals(1, ((Double) requestTotal.metricValue()).intValue());
+
+        KafkaMetric responseTotal = findUntaggedMetricByName("response-total");
+        assertEquals(1, ((Double) responseTotal.metricValue()).intValue());
     }
 
     @Test
@@ -767,8 +802,8 @@ public class SelectorTest {
             selector.poll(10000L);
     }
 
-    protected NetworkSend createSend(String node, String s) {
-        return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
+    protected NetworkSend createSend(String node, String payload) {
+        return new NetworkSend(node, ByteBuffer.wrap(payload.getBytes()));
     }
 
     protected String asString(NetworkReceive receive) {
@@ -847,4 +882,12 @@ public class SelectorTest {
 
         return metric.get().getValue();
     }
+
+    private KafkaMetric findUntaggedMetricByName(String name) {
+        MetricName metricName = new MetricName(name, METRIC_GROUP + "-metrics", "", new HashMap<>());
+        KafkaMetric metric = metrics.metrics().get(metricName);
+        assertNotNull(metric);
+        return metric;
+    }
+
 }

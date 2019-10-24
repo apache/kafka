@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.clients.admin;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+package org.apache.kafka.test;
 
 /**
- * A new partition reassignment, which can be applied via {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
+ * This class can be used in the callback given to {@link TestUtils#retryOnExceptionWithTimeout(long, long, ValuelessCallable)}
+ * to indicate that a particular exception should not be retried. Instead the retry operation will
+ * be aborted immediately and the exception will be rethrown.
  */
-public class NewPartitionReassignment {
-    private final List<Integer> targetReplicas;
+public class NoRetryException extends RuntimeException {
+    private final Throwable cause;
 
-    public NewPartitionReassignment(List<Integer> targetReplicas) {
-        this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
+    public NoRetryException(Throwable cause) {
+        this.cause = cause;
     }
 
-    public List<Integer> targetReplicas() {
-        return targetReplicas;
+    @Override
+    public Throwable getCause() {
+        return this.cause;
     }
 }
