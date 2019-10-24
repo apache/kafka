@@ -31,7 +31,7 @@ public class NewPartitionReassignment {
     private final List<Integer> targetReplicas;
 
     public static Optional<NewPartitionReassignment> of(Integer... brokers) {
-      return Optional.of(new NewPartitionReassignment(Arrays.asList(brokers)));
+        return Optional.of(new NewPartitionReassignment(Arrays.asList(brokers)));
     }
 
     public NewPartitionReassignment(List<Integer> targetReplicas) {
