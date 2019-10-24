@@ -568,7 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     final Metrics metrics;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
-    private final Logger log;
+    private Logger log;
     private final String clientId;
     private String groupId;
     private final ConsumerCoordinator coordinator;
@@ -814,6 +814,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
+            log = log == null ? new LogContext().logger(getClass()) : log;
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             close(0, true);
             // now propagate the exception
