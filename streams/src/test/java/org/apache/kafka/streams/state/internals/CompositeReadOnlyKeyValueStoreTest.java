@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StateStoreProviderStub;
@@ -74,7 +74,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
                 Serdes.String())
                 .build();
 
-        store.init(new InternalMockProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName), Serdes.String(), Serdes.String()),
+        store.init(new MockInternalProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName), Serdes.String(), Serdes.String()),
                                                     new NoOpRecordCollector()),
                 store);
 

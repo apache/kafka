@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -57,7 +57,7 @@ import static org.junit.Assert.fail;
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private final int maxCacheSizeBytes = 150;
-    private InternalMockProcessorContext context;
+    private MockInternalProcessorContext context;
     private CachingKeyValueStore store;
     private InMemoryKeyValueStore underlyingStore;
     private ThreadCache cache;
@@ -72,7 +72,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store = new CachingKeyValueStore(underlyingStore);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
-        context = new InternalMockProcessorContext(null, null, null, null, cache);
+        context = new MockInternalProcessorContext(null, null, null, null, cache);
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
         store.init(context, null);
@@ -124,7 +124,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldCloseAfterErrorWithFlush() {
         try {
             cache = EasyMock.niceMock(ThreadCache.class);
-            context = new InternalMockProcessorContext(null, null, null, null, cache);
+            context = new MockInternalProcessorContext(null, null, null, null, cache);
             context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
             store.init(context, null);
             cache.flush("0_0-store");

@@ -30,7 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -56,7 +56,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
-    private InternalMockProcessorContext context;
+    private MockInternalProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
@@ -78,7 +78,7 @@ public class MeteredWindowStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
 
-        context = new InternalMockProcessorContext(
+        context = new MockInternalProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),

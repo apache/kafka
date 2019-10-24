@@ -16,32 +16,42 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
@@ -55,25 +65,21 @@ import java.util.Properties;
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
-public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
+public class MockProcessorContext extends AbstractProcessorContext implements ProcessorContext,
+        RecordCollector.Supplier {
     // Immutable fields ================================================
-    private final StreamsMetricsImpl metrics;
-    private final TaskId taskId;
-    private final StreamsConfig config;
     private final File stateDir;
-
-    // settable record metadata ================================================
-    private String topic;
-    private Integer partition;
-    private Long offset;
-    private Headers headers;
-    private Long timestamp;
+    private static final int DEFAULT_PARTITION = -1;
+    private static final long DEFAULT_OFFSET = -1L;
+    private static final long DEFAULT_TIMESTAMP = -1L;
 
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
+    private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final List<CapturedForward> capturedForwards = new LinkedList<>();
     private boolean committed = false;
+    private final ToInternal toInternal = new ToInternal();
 
     /**
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
@@ -90,17 +96,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             this.punctuator = punctuator;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public long getIntervalMs() {
             return intervalMs;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public PunctuationType getType() {
             return type;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public Punctuator getPunctuator() {
             return punctuator;
         }
@@ -110,7 +113,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             cancelled = true;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public boolean cancelled() {
             return cancelled;
         }
@@ -137,7 +139,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return The child name, or {@code null} if it was broadcast.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public String childName() {
             return childName;
         }
@@ -147,7 +148,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A timestamp, or {@code -1} if none was forwarded.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public long timestamp() {
             return timestamp;
         }
@@ -157,7 +157,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A key/value pair. Not null.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
         public KeyValue keyValue() {
             return keyValue;
         }
@@ -180,18 +179,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * and most unit tests should be able to get by with the
      * {@link InMemoryKeyValueStore}, so the stateDir won't matter.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext() {
         //noinspection DoubleBraceInitialization
-        this(
-            new Properties() {
+        this(new Properties() {
                 {
                     put(StreamsConfig.APPLICATION_ID_CONFIG, "");
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
                 }
-            },
-            new TaskId(0, 0),
-            null);
+            });
     }
 
     /**
@@ -202,9 +197,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param config a Properties object, used to configure the context and the processor.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
-        this(config, new TaskId(0, 0), null);
+        this(config, createTaskId(), null);
     }
 
     /**
@@ -212,66 +206,56 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param config   a {@link Properties} object, used to configure the context and the processor.
      * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskId()}.
-     * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
+     * @param stateDir a {@link File}, which the context makes available via {@link MockProcessorContext#stateDir()}.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
-        final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
-        this.taskId = taskId;
-        this.config = streamsConfig;
+        this(
+                taskId,
+                stateDir,
+                createStreamsMetrics(createStreamsConfig(config)),
+                createStreamsConfig(config),
+                null
+        );
+    }
+
+    public MockProcessorContext(final TaskId taskId,
+                                final File stateDir,
+                                final StreamsMetricsImpl metrics,
+                                final StreamsConfig config,
+                                final ThreadCache cache) {
+        super(taskId, config, metrics, null, cache);
         this.stateDir = stateDir;
+        setRecordContext(createDefaultProcessorRecordedContext());
+        ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics());
+    }
+
+    protected static TaskId createTaskId() {
+        return new TaskId(0, 0);
+    }
+
+    private static StreamsMetricsImpl createStreamsMetrics(final StreamsConfig streamsConfig) {
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
-        this.metrics = new StreamsMetricsImpl(
-            new Metrics(metricConfig),
-            threadId,
-            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
-        );
-        ThreadMetrics.skipRecordSensor(threadId, metrics);
+        return new StreamsMetricsImpl(new Metrics(metricConfig), threadId,
+                streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
     }
 
-    @Override
-    public String applicationId() {
-        return config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+    private static StreamsConfig createStreamsConfig(final Properties config) {
+        return new QuietStreamsConfig(config);
     }
 
-    @Override
-    public TaskId taskId() {
-        return taskId;
-    }
-
-    @Override
-    public Map<String, Object> appConfigs() {
-        final Map<String, Object> combined = new HashMap<>();
-        combined.putAll(config.originals());
-        combined.putAll(config.values());
-        return combined;
-    }
-
-    @Override
-    public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-        return config.originalsWithPrefix(prefix);
-    }
-
-    @Override
-    public Serde<?> keySerde() {
-        return config.defaultKeySerde();
-    }
-
-    @Override
-    public Serde<?> valueSerde() {
-        return config.defaultValueSerde();
+    private static ProcessorRecordContext createDefaultProcessorRecordedContext() {
+        return new ProcessorRecordContext(DEFAULT_TIMESTAMP, DEFAULT_OFFSET,
+                DEFAULT_PARTITION, null, new RecordHeaders());
     }
 
     @Override
     public File stateDir() {
+        if (stateDir == null) {
+            throw new UnsupportedOperationException("State directory not specified");
+        }
         return stateDir;
-    }
-
-    @Override
-    public StreamsMetrics metrics() {
-        return metrics;
     }
 
     // settable record metadata ================================================
@@ -285,17 +269,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setRecordMetadata(final String topic,
                                   final int partition,
                                   final long offset,
                                   final Headers headers,
                                   final long timestamp) {
-        this.topic = topic;
-        this.partition = partition;
-        this.offset = offset;
-        this.headers = headers;
-        this.timestamp = timestamp;
+        setRecordContext(new ProcessorRecordContext(timestamp, offset, partition, topic, headers));
     }
 
     /**
@@ -304,9 +283,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param topic A topic name
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTopic(final String topic) {
-        this.topic = topic;
+        setRecordMetadata(
+                topic,
+                this.recordContext.partition(),
+                this.recordContext.offset(),
+                this.recordContext.headers(),
+                this.recordContext.timestamp()
+        );
     }
 
     /**
@@ -315,9 +299,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param partition A partition number
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setPartition(final int partition) {
-        this.partition = partition;
+        setRecordMetadata(
+                this.recordContext.topic(),
+                partition,
+                this.recordContext.offset(),
+                this.recordContext.headers(),
+                this.recordContext.timestamp()
+        );
     }
 
     /**
@@ -326,9 +315,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param offset A record offset
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setOffset(final long offset) {
-        this.offset = offset;
+        setRecordMetadata(
+                this.recordContext.topic(),
+                this.recordContext.partition(),
+                offset,
+                this.recordContext.headers(),
+                this.recordContext.timestamp()
+        );
     }
 
     /**
@@ -337,9 +331,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param headers Record headers
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setHeaders(final Headers headers) {
-        this.headers = headers;
+        setRecordMetadata(
+                this.recordContext.topic(),
+                this.recordContext.partition(),
+                this.recordContext.offset(),
+                headers,
+                this.recordContext.timestamp()
+        );
     }
 
     /**
@@ -348,46 +347,51 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTimestamp(final long timestamp) {
-        this.timestamp = timestamp;
+        setRecordMetadata(
+                this.recordContext.topic(),
+                this.recordContext.partition(),
+                this.recordContext.offset(),
+                this.recordContext.headers(),
+                timestamp
+        );
     }
 
     @Override
     public String topic() {
-        if (topic == null) {
+        if (recordContext().topic() == null) {
             throw new IllegalStateException("Topic must be set before use via setRecordMetadata() or setTopic().");
         }
-        return topic;
+        return recordContext.topic();
     }
 
     @Override
     public int partition() {
-        if (partition == null) {
+        if (recordContext().partition() == DEFAULT_PARTITION) {
             throw new IllegalStateException("Partition must be set before use via setRecordMetadata() or setPartition().");
         }
-        return partition;
+        return recordContext().partition();
     }
 
     @Override
     public long offset() {
-        if (offset == null) {
+        if (recordContext().offset() == DEFAULT_OFFSET) {
             throw new IllegalStateException("Offset must be set before use via setRecordMetadata() or setOffset().");
         }
-        return offset;
+        return recordContext().offset();
     }
 
     @Override
     public Headers headers() {
-        return headers;
+        return recordContext().headers();
     }
 
     @Override
     public long timestamp() {
-        if (timestamp == null) {
+        if (recordContext().timestamp() == DEFAULT_TIMESTAMP) {
             throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
         }
-        return timestamp;
+        return recordContext().timestamp();
     }
 
     // mocks ================================================
@@ -396,6 +400,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
+        restoreFuncs.put(store.name(), stateRestoreCallbackIsIgnoredInMock);
     }
 
     @Override
@@ -428,12 +433,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of captured punctuators.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedPunctuator> scheduledPunctuators() {
         return new LinkedList<>(punctuators);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
         forward(key, value, To.all());
@@ -442,9 +445,27 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            setTimestamp(toInternal.timestamp());
+        }
+        final ProcessorNode thisNode = currentNode;
+        try {
+            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
+                    currentNode = childNode;
+                    childNode.process(key, value);
+                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
+                }
+            }
+        } finally {
+            currentNode = thisNode;
+        }
+
         capturedForwards.add(
             new CapturedForward(
-                to.timestamp == -1 ? to.withTimestamp(timestamp == null ? -1 : timestamp) : to,
+                to.timestamp == -1 ?
+                        to.withTimestamp(recordContext().timestamp()) : to,
                 new KeyValue(key, value)
             )
         );
@@ -487,7 +508,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param childName The child name to retrieve forwards for
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedForward> forwarded(final String childName) {
         final LinkedList<CapturedForward> result = new LinkedList<>();
         for (final CapturedForward capture : capturedForwards) {
@@ -501,7 +521,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Clear the captured forwarded data.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetForwards() {
         capturedForwards.clear();
     }
@@ -516,7 +535,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return {@code true} iff {@link ProcessorContext#commit()} has been called in this context since construction or reset.
      */
-    @SuppressWarnings("WeakerAccess")
     public boolean committed() {
         return committed;
     }
@@ -524,7 +542,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Reset the commit capture to {@code false} (whether or not it was previously {@code true}).
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetCommit() {
         committed = false;
     }
@@ -540,4 +557,33 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration."
         );
     }
+
+    public StateRestoreListener getRestoreListener(final String storeName) {
+        return getStateRestoreListener(restoreFuncs.get(storeName));
+    }
+
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
+        final StateRestoreListener restoreListener = getRestoreListener(storeName);
+
+        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
+
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
+            records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
+        }
+
+        restoreCallback.restoreBatch(records);
+
+        restoreListener.onRestoreEnd(null, storeName, 0L);
+    }
+
+    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
+        if (restoreCallback instanceof StateRestoreListener) {
+            return (StateRestoreListener) restoreCallback;
+        }
+
+        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
+    }
+
 }

@@ -32,7 +32,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -73,7 +73,7 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> {
 
     private final long windowSizeForTimeWindow = 500;
-    private InternalMockProcessorContext context;
+    private MockInternalProcessorContext context;
     private AbstractRocksDBSegmentedBytesStore<S> bytesStore;
     private File stateDir;
     private final Window[] windows = new Window[4];
@@ -119,7 +119,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
 
         stateDir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new MockInternalProcessorContext(
             stateDir,
             Serdes.String(),
             Serdes.Long(),

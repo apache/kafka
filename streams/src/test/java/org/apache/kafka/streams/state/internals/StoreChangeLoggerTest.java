@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -44,7 +44,7 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, ValueAndTimestamp<String>> logged = new HashMap<>();
     private final Map<Integer, Headers> loggedHeaders = new HashMap<>();
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    private final MockInternalProcessorContext context = new MockInternalProcessorContext(
         StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
         new RecordCollectorImpl(
             "StoreChangeLoggerTest",
@@ -84,9 +84,9 @@ public class StoreChangeLoggerTest {
 
     @Test
     public void testAddRemove() {
-        context.setTime(1);
+        context.setTimestamp(1);
         changeLogger.logChange(0, "zero");
-        context.setTime(5);
+        context.setTimestamp(5);
         changeLogger.logChange(1, "one");
         changeLogger.logChange(2, "two");
         changeLogger.logChange(3, "three", 42L);

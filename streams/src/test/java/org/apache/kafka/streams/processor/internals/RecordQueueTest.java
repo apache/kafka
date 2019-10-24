@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
@@ -59,7 +59,7 @@ public class RecordQueueTest {
 
     private final Optional<Sensor> skippedRecordsSensor = Optional.of(new Metrics().sensor("skipped-records"));
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    final MockInternalProcessorContext context = new MockInternalProcessorContext(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
             null,
@@ -286,7 +286,7 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new FailOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+            new MockInternalProcessorContext(),
             new LogContext());
 
         queue.addRawRecords(records);
@@ -302,7 +302,7 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new LogAndSkipOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+            new MockInternalProcessorContext(),
             new LogContext());
         queue.addRawRecords(records);
 

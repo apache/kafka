@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -65,13 +65,13 @@ public class ChangeLoggingKeyValueBytesStoreTest {
                 sent.put(key, value);
             }
         };
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             collector,
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        context.setTime(0);
+        context.setTimestamp(0);
         store.init(context, store);
     }
 

@@ -20,18 +20,21 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -43,7 +46,10 @@ import java.util.Properties;
 import static java.util.Collections.unmodifiableList;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+
     public static final class MockRecordCollector implements RecordCollector {
+
+
         private final List<ProducerRecord<byte[], byte[]>> collected = new LinkedList<>();
 
         @Override
@@ -98,60 +104,114 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
         public List<ProducerRecord<byte[], byte[]>> collected() {
             return unmodifiableList(collected);
         }
+
     }
 
     private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
-    private ProcessorNode currentNode;
     private RecordCollector recordCollector;
+    private Serde<?> keySerde;
+    private Serde<?> valueSerde;
 
     public MockInternalProcessorContext() {
+        this(null, null, null, createStreamsConfig());
     }
 
     public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         super(config, taskId, stateDir);
     }
 
-    @Override
-    public StreamsMetricsImpl metrics() {
-        return (StreamsMetricsImpl) super.metrics();
-    }
-
-    @Override
-    public ProcessorRecordContext recordContext() {
-        return new ProcessorRecordContext(timestamp(), offset(), partition(), topic(), headers());
-    }
-
-    @Override
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
-        setRecordMetadata(
-            recordContext.topic(),
-            recordContext.partition(),
-            recordContext.offset(),
-            recordContext.headers(),
-            recordContext.timestamp()
+    public MockInternalProcessorContext(final File stateDir,
+                                        final StreamsConfig config) {
+        this(
+                stateDir,
+                null,
+                null,
+                config
         );
     }
 
-    @Override
-    public void setCurrentNode(final ProcessorNode currentNode) {
-        this.currentNode = currentNode;
+    public MockInternalProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsConfig config) {
+        this(
+                stateDir,
+                keySerde,
+                valueSerde,
+                createStreamsMetrics(),
+                config,
+                null,
+                null
+        );
     }
 
-    @Override
-    public ProcessorNode currentNode() {
-        return currentNode;
+    public MockInternalProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector) {
+        this(serdes, collector, createMetrics());
     }
 
-    @Override
-    public ThreadCache getCache() {
-        return null;
+    public MockInternalProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector,
+                                        final Metrics metrics) {
+        this(
+                null,
+                serdes.keySerde(),
+                serdes.valueSerde(),
+                createStreamsMetrics(metrics),
+                createStreamsConfig(),
+                () -> collector,
+                null
+        );
     }
 
-    @Override
-    public void initialize() {}
+    public MockInternalProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache) {
+        this(
+                stateDir,
+                keySerde,
+                valueSerde,
+                createStreamsMetrics(),
+                createStreamsConfig(),
+                () -> collector,
+                cache
+        );
+    }
 
-    @Override
-    public void uninitialize() {}
+    public MockInternalProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsMetricsImpl metrics,
+                                        final StreamsConfig config,
+                                        final RecordCollector.Supplier collectorSupplier,
+                                        final ThreadCache cache) {
+        super(createTaskId(), stateDir, metrics, config, cache);
+        setKeySerde(keySerde);
+        setValueSerde(valueSerde);
+        if(collectorSupplier != null) {
+            setRecordCollector(collectorSupplier.recordCollector());
+        }
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
+    }
+
+
+    private static StreamsMetricsImpl createStreamsMetrics() {
+        return createStreamsMetrics(createMetrics());
+    }
+
+    private static StreamsMetricsImpl createStreamsMetrics(final Metrics metrics) {
+        return new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST);
+    }
+
+    private static Metrics createMetrics() {
+        return new Metrics();
+    }
+
+    private static StreamsConfig createStreamsConfig() {
+        return new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+    }
 
     @Override
     public RecordCollector recordCollector() {
@@ -164,11 +224,29 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-        restoreCallbacks.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
     }
 
     public StateRestoreCallback stateRestoreCallback(final String storeName) {
         return restoreCallbacks.get(storeName);
+    }
+
+    public void setKeySerde(final Serde<?> keySerde) {
+        this.keySerde = keySerde;
+    }
+
+    public void setValueSerde(final Serde<?> valueSerde) {
+        this.valueSerde = valueSerde;
+    }
+
+    @Override
+    public Serde<?> keySerde() {
+        return keySerde;
+    }
+
+    @Override
+    public Serde<?> valueSerde() {
+        return valueSerde;
     }
 }

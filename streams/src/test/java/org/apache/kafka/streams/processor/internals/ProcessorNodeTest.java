@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Arrays;
-import java.util.Properties;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -33,7 +31,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -41,6 +39,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -104,7 +103,7 @@ public class ProcessorNodeTest {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
         final Metrics metrics = new Metrics();
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(
             anyStateSerde,
             new RecordCollectorImpl(
                 null,
@@ -164,9 +163,7 @@ public class ProcessorNodeTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-            .flatMapValues(value -> {
-                return Arrays.asList("");
-            });
+            .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
 
         final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
@@ -187,7 +184,9 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastExceptionDirect() {
-        final ProcessorNode<Object, Object> node = new ProcessorNode<Object, Object>("name", new ClassCastProcessor(), Collections.<String>emptySet());
+        final ProcessorNode<Object, Object> node =
+                new ProcessorNode<>("name", new ClassCastProcessor(),
+                        Collections.<String>emptySet());
         final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));

@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,7 +46,7 @@ public class SinkNodeTest {
         Optional.of(new Metrics().sensor("skipped-records"))
     );
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    private final MockInternalProcessorContext context = new MockInternalProcessorContext(
         anyStateSerde,
         recordCollector
     );
@@ -69,7 +69,7 @@ public class SinkNodeTest {
         final Bytes anyValue = new Bytes("any value".getBytes());
 
         // When/Then
-        context.setTime(-1); // ensures a negative timestamp is set for the record we send next
+        context.setTimestamp(-1); // ensures a negative timestamp is set for the record we send next
         try {
             illTypedSink.process(anyKey, anyValue);
             fail("Should have thrown StreamsException");
@@ -84,7 +84,7 @@ public class SinkNodeTest {
         final String valueOfDifferentTypeThanSerializer = "value with different type";
 
         // When/Then
-        context.setTime(0);
+        context.setTimestamp(0);
         try {
             illTypedSink.process(keyOfDifferentTypeThanSerializer, valueOfDifferentTypeThanSerializer);
             fail("Should have thrown StreamsException");
@@ -98,7 +98,7 @@ public class SinkNodeTest {
         final String invalidValueToTriggerSerializerMismatch = "";
 
         // When/Then
-        context.setTime(1);
+        context.setTimestamp(1);
         try {
             illTypedSink.process(null, invalidValueToTriggerSerializerMismatch);
             fail("Should have thrown StreamsException");
@@ -113,7 +113,7 @@ public class SinkNodeTest {
         final String invalidKeyToTriggerSerializerMismatch = "";
 
         // When/Then
-        context.setTime(1);
+        context.setTimestamp(1);
         try {
             illTypedSink.process(invalidKeyToTriggerSerializerMismatch, null);
             fail("Should have thrown StreamsException");

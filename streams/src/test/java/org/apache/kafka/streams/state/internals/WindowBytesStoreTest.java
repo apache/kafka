@@ -16,29 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.time.Instant.ofEpochMilli;
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Metric;
@@ -63,12 +40,35 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static java.time.Instant.ofEpochMilli;
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public abstract class WindowBytesStoreTest {
 
@@ -77,7 +77,7 @@ public abstract class WindowBytesStoreTest {
     static final long RETENTION_PERIOD = 2 * SEGMENT_INTERVAL;
 
     WindowStore<Integer, String> windowStore;
-    InternalMockProcessorContext context;
+    MockInternalProcessorContext context;
     final File baseDir = TestUtils.tempDirectory("test");
 
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
@@ -128,7 +128,7 @@ public abstract class WindowBytesStoreTest {
         final RecordCollector recordCollector = createRecordCollector(windowStore.name());
         recordCollector.init(producer);
 
-        context = new InternalMockProcessorContext(
+        context = new MockInternalProcessorContext(
             baseDir,
             Serdes.String(),
             Serdes.Integer(),
@@ -1031,7 +1031,7 @@ public abstract class WindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+        final MockInternalProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero");
         context.setRecordContext(createRecordContext(startTime + 1L));
@@ -1047,7 +1047,7 @@ public abstract class WindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+        final MockInternalProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime + 3L));
         store.put(2, "two+1");
         context.setRecordContext(createRecordContext(startTime + 4L));

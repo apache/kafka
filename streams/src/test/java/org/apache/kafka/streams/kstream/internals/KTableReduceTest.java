@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -36,7 +36,7 @@ public class KTableReduceTest {
 
     @Test
     public void shouldAddAndSubtract() {
-        final InternalMockProcessorContext context = new InternalMockProcessorContext();
+        final MockInternalProcessorContext context = new MockInternalProcessorContext();
 
         final Processor<String, Change<Set<String>>> reduceProcessor =
             new KTableReduce<String, Set<String>>(
@@ -52,13 +52,13 @@ public class KTableReduceTest {
         reduceProcessor.init(context);
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
 
-        context.setTime(10L);
+        context.setTimestamp(10L);
         reduceProcessor.process("A", new Change<>(singleton("a"), null));
         assertEquals(ValueAndTimestamp.make(singleton("a"), 10L), myStore.get("A"));
-        context.setTime(15L);
+        context.setTimestamp(15L);
         reduceProcessor.process("A", new Change<>(singleton("b"), singleton("a")));
         assertEquals(ValueAndTimestamp.make(singleton("b"), 15L), myStore.get("A"));
-        context.setTime(12L);
+        context.setTimestamp(12L);
         reduceProcessor.process("A", new Change<>(null, singleton("b")));
         assertEquals(ValueAndTimestamp.make(emptySet(), 15L), myStore.get("A"));
     }
