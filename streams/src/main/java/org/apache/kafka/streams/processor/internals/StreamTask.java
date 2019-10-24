@@ -776,6 +776,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final boolean isZombie) {
         log.debug("Closing");
 
+        flushState();
+
         RuntimeException firstException = null;
         try {
             suspend(clean, isZombie);
