@@ -125,7 +125,32 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val expectedLogDir = getRandomLogDirAssignment(101)
     createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
 
-    //When we move the replica on 100 to broker 101
+    // 1. Test invalid replicas to ensure they are validated and do not break the state
+    val nonExistentReplicas = Seq(102)
+    val (parsedPartitionAssignment, replicaAssignment) = parsePartitionReassignmentData(executeAssignmentJson(Seq(
+      PartitionAssignmentJson(tp0, replicas = nonExistentReplicas, logDirectories = None)
+    )))
+    // Skip command validation by directly writing to ZK
+    new ReassignPartitionsCommand(zkClient, Some(adminClient), parsedPartitionAssignment.toMap, replicaAssignment, adminZkClient)
+      .reassignPartitions(NoThrottle, 60000)
+    waitForZkReassignmentToComplete()
+    var partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(tp0.partition())
+    // should still be on 100
+    assertMoveForPartitionOccurred(Seq(100), partitionAssignment)
+
+    // 2. Test invalid empty replicas to ensure they are validated and do not break the state
+    val (parsedPartitionAssignment2, replicaAssignment2) = parsePartitionReassignmentData(executeAssignmentJson(Seq(
+      PartitionAssignmentJson(tp0, replicas = Seq(), logDirectories = Some(Seq()))
+    )))
+    // Skip command validation by directly writing to ZK
+    new ReassignPartitionsCommand(zkClient, Some(adminClient), parsedPartitionAssignment2.toMap, replicaAssignment2, adminZkClient)
+      .reassignPartitions(NoThrottle, 60000)
+    waitForZkReassignmentToComplete()
+    partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(tp0.partition())
+    // should still be on 100
+    assertMoveForPartitionOccurred(Seq(100), partitionAssignment)
+
+    // 3. Test proper move from 100 to broker 101
     val topicJson = executeAssignmentJson(Seq(
       PartitionAssignmentJson(tp0, replicas = Seq(101), logDirectories = Some(Seq(expectedLogDir)))
     ))
@@ -133,7 +158,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForZkReassignmentToComplete()
 
     //Then the replica should be on 101
-    val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(tp0.partition())
+    partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(tp0.partition())
     assertMoveForPartitionOccurred(Seq(101), partitionAssignment)
     // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
