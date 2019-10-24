@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
+import org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
 
@@ -259,8 +260,8 @@ public class StreamsUpgradeTest {
                         new Subscription(
                             subscription.topics(),
                             new SubscriptionInfo(
-                                SubscriptionInfo.LATEST_SUPPORTED_VERSION,
-                                SubscriptionInfo.LATEST_SUPPORTED_VERSION,
+                                LATEST_SUPPORTED_VERSION,
+                                LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.prevTasks(),
                                 info.standbyTasks(),

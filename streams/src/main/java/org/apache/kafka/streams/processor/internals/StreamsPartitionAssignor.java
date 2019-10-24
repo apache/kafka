@@ -237,7 +237,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             rebalanceProtocol);
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
-            SubscriptionInfo.LATEST_SUPPORTED_VERSION,
+            LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             activeTasks,
             standbyTasks,

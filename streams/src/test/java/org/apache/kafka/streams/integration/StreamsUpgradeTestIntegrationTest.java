@@ -20,10 +20,9 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+import org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions;
 import org.apache.kafka.streams.tests.StreamsUpgradeTest;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -37,6 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -74,23 +74,23 @@ public class StreamsUpgradeTestIntegrationTest {
         final AtomicInteger usedVersion4 = new AtomicInteger();
         final KafkaStreams kafkaStreams4 = buildFutureStreams(usedVersion4);
         startSync(kafkaStreams4);
-        assertThat(usedVersion4.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION));
+        assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION));
 
         // second roll
         kafkaStreams2.close();
         final AtomicInteger usedVersion5 = new AtomicInteger();
         final KafkaStreams kafkaStreams5 = buildFutureStreams(usedVersion5);
         startSync(kafkaStreams5);
-        assertThat(usedVersion5.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION));
+        assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION));
 
         // third roll, upgrade complete
         kafkaStreams3.close();
         final AtomicInteger usedVersion6 = new AtomicInteger();
         final KafkaStreams kafkaStreams6 = buildFutureStreams(usedVersion6);
         startSync(kafkaStreams6);
-        assertThat(usedVersion6.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
-        assertThat(usedVersion5.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
-        assertThat(usedVersion4.get(), is(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
+        assertThat(usedVersion6.get(), is(LATEST_SUPPORTED_VERSION + 1));
+        assertThat(usedVersion5.get(), is(LATEST_SUPPORTED_VERSION + 1));
+        assertThat(usedVersion4.get(), is(LATEST_SUPPORTED_VERSION + 1));
 
         kafkaStreams4.close(Duration.ZERO);
         kafkaStreams5.close(Duration.ZERO);

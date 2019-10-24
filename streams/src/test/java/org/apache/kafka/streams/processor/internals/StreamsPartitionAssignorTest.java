@@ -218,18 +218,18 @@ public class StreamsPartitionAssignorTest {
                                             final Set<TaskId> prevTasks,
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
-        return new SubscriptionInfo(version, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        return new SubscriptionInfo(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
     }
 
     private static SubscriptionInfo getInfo(final UUID processId,
                                             final Set<TaskId> prevTasks,
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
-        return new SubscriptionInfo(SubscriptionInfo.LATEST_SUPPORTED_VERSION, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        return new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
     }
 
     private SubscriptionInfo getInfo(final UUID processId, final Set<TaskId> prevTasks, final Set<TaskId> standbyTasks) {
-        return new SubscriptionInfo(SubscriptionInfo.LATEST_SUPPORTED_VERSION, SubscriptionInfo.LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        return new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
     }
 
     @Test

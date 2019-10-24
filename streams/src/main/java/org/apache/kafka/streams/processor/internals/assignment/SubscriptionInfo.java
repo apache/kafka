@@ -29,14 +29,26 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+
 public class SubscriptionInfo {
 
-    public static final int LATEST_SUPPORTED_VERSION = SubscriptionInfoData.SCHEMAS.length - 1;
     static final int UNKNOWN = -1;
 
     private final SubscriptionInfoData data;
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
+
+    static {
+        // Just statically check to make sure that the generated code always stays in sync with the overall protocol
+        final int subscriptionInfoLatestVersion = SubscriptionInfoData.SCHEMAS.length - 1;
+        if (subscriptionInfoLatestVersion != LATEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException(
+                "streams/src/main/resources/common/message/SubscriptionInfo.json needs to be updated to match the " +
+                    "latest assignment protocol version. SubscriptionInfo only supports up to  ["
+                    + subscriptionInfoLatestVersion + "] but needs to support up to [" + LATEST_SUPPORTED_VERSION + "].");
+        }
+    }
 
     private static void validateVersions(final int version, final int latestSupportedVersion) {
         if (latestSupportedVersion == UNKNOWN && (version < 1 || version > 2)) {
@@ -117,10 +129,10 @@ public class SubscriptionInfo {
     public Set<TaskId> standbyTasks() {
         if (standbyTasksCache == null) {
             standbyTasksCache = Collections.unmodifiableSet(
-            data.standbyTasks()
-                .stream()
-                .map(t -> new TaskId(t.topicGroupId(), t.partition()))
-                .collect(Collectors.toSet())
+                data.standbyTasks()
+                    .stream()
+                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                    .collect(Collectors.toSet())
             );
         }
         return standbyTasksCache;

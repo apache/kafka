@@ -25,7 +25,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
