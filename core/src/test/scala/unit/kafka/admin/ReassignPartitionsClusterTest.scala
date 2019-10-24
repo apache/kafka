@@ -1182,7 +1182,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     }.mkString(",")
 
   def reassignmentEntry(tp: TopicPartition, replicas: Seq[Int]): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
-    tp -> java.util.Optional.of(new NewPartitionReassignment(replicas.map(_.asInstanceOf[Integer]).asJava))
+    tp -> NewPartitionReassignment.of(replicas.map(_.asInstanceOf[Integer]).asJava)
 
   def cancelReassignmentEntry(tp: TopicPartition): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
     tp -> java.util.Optional.empty()
