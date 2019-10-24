@@ -552,7 +552,6 @@ class KafkaController(val config: KafkaConfig,
    * 4. Whenever a new broker comes up which is part of an ongoing reassignment
    * 5. On controller startup/failover
    *
-   *
    * Reassigning replicas for a partition goes through a few steps listed in the code.
    * RS = current assigned replica set
    * ORS = Original replica set for partition
@@ -561,34 +560,26 @@ class KafkaController(val config: KafkaConfig,
    * RR = The replicas we are removing as part of this reassignment
    *
    * A reassignment may have up to three phases, each with its own steps:
+
+   * Phase U (Assignment update): Regardless of the trigger, the first step is in the reassignment process
+   * is to update the existing assignment state. We always update the state in Zookeeper before
+   * we update memory so that it can be resumed upon controller fail-over.
    *
+   *   U1. Update ZK with RS = ORS + TRS, AR = TRS - ORS, RR = ORS - TRS.
+   *   U2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
+   *   U3. If we are cancelling or replacing an existing reassignment, send StopReplica to all members
+   *       of AR in the original reassignment if they are not in TRS from the new assignment
    *
-   * Cleanup Phase: In the cases where this reassignment has to override or cancel an ongoing reassignment.
-   *   . The ongoing reassignment is in phase A
-   *   . ORS denotes the original replica set, prior to the ongoing reassignment
-   *   . URS denotes the unnecessary replicas, ones which are currently part of the AR of the ongoing
-   *     reassignment but will not be part of the new one
-   *   . OVRS denotes the overlapping replica set - replicas which are part of the AR of the ongoing
-   *     reassignment and will be part of the overriding reassignment (it is essentially (RS - ORS) - URS)
+   * To complete the reassignment, we need to bring the new replicas into sync, so depending on the state
+   * of the ISR, we will execute one of the following steps.
    *
-   *   1 Set RS = ORS + OVRS, AR = OVRS, RR = [] in zk
-   *   2 Set RS = ORS + OVRS, AR = OVRS, RR = [] in memory
-   *   3 Send LeaderAndIsr request with RS = ORS + OVRS, AR = OVRS, RR = [] to all brokers in ORS + OVRS
-   *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS
-   *      unless a preferred leader election was triggered while the reassignment was happening)
-   *   4 Replicas in URS -> Offline (force those replicas out of ISR)
-   *   5 Replicas in URS -> NonExistentReplica (force those replicas to be deleted)
+   * Phase A (when TRS != ISR): The reassignment is not yet complete
    *
-   * Phase A: Initial trigger (when TRS != ISR)
-   *   A1. Update ZK with RS = ORS + TRS,
-   *                      AR = TRS - ORS and
-   *                      RR = ORS - TRS.
-   *   A2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
-   *   A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
-   *       We do this by forcing an update of the leader epoch in zookeeper.
-   *   A4. Start new replicas AR by moving replicas in AR to NewReplica state.
+   *   A1. Bump the leader epoch for the partition and send LeaderAndIsr updates to RS.
+   *   A2. Start new replicas AR by moving replicas in AR to NewReplica state.
    *
-   * Phase B: All of TRS have caught up with the leaders and are in ISR
+   * Phase B (when TRS = ISR): The reassignment is complete
+   *
    *   B1. Move all replicas in AR to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
    *   B3. Send a LeaderAndIsr request with RS = TRS. This will prevent the leader from adding any replica in TRS - ORS back in the isr.
@@ -625,17 +616,15 @@ class KafkaController(val config: KafkaConfig,
     // While a reassignment is in progress, deletion is not allowed
     topicDeletionManager.markTopicIneligibleForDeletion(Set(topicPartition.topic), reason = "topic reassignment in progress")
 
-    // A1. Update ZK with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS.
-    // A2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
     updateCurrentReassignment(topicPartition, reassignment)
 
     val addingReplicas = reassignment.addingReplicas
     val removingReplicas = reassignment.removingReplicas
 
     if (!isReassignmentComplete(topicPartition, reassignment)) {
-      // A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
+      // A1. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
       updateLeaderEpochAndSendRequest(topicPartition, reassignment)
-      // A4. replicas in AR -> NewReplica
+      // A2. replicas in AR -> NewReplica
       startNewReplicasForReassignedPartition(topicPartition, addingReplicas)
     } else {
       // B1. replicas in AR -> OnlineReplica
@@ -673,7 +662,7 @@ class KafkaController(val config: KafkaConfig,
    * is cancelled, there is no way to restore the original order.
    *
    * @param topicPartition The reassigning partition
-   * @param reassignment The new reassignment context
+   * @param reassignment The new reassignment
    *
    * @return The updated assignment state
    */
@@ -683,8 +672,9 @@ class KafkaController(val config: KafkaConfig,
     if (currentAssignment != reassignment) {
       debug(s"Updating assignment of partition $topicPartition from $currentAssignment to $reassignment")
 
-      // A1 and A2: Update zk and cached state
+      // U1. Update assignment state in zookeeper
       updateReplicaAssignmentForPartition(topicPartition, reassignment)
+      // U2. Update assignment state in memory
       controllerContext.updatePartitionFullReplicaAssignment(topicPartition, reassignment)
 
       // If there is a reassignment already in progress, then some of the currently adding replicas
