@@ -38,33 +38,37 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * KGroupedStream#cogroup(Aggregator) cogroup(...)}.
  *
  * @param <K> Type of keys
- * @param <Vout> Type of values after agg
+ * @param <VOut> Type of values after agg
  */
-public interface CogroupedKStream<K, Vout> {
+public interface CogroupedKStream<K, VOut> {
 
     /**
+     * Add an already {@link KGroupedStream grouped KStream} to this {@code CoGroupedKStream}.
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
      * {@link KeyValue} pairs.
      * It is an intermediate representation of one or more {@link KStream}s
      * in order to apply one or more aggregation operations on the original {@link KStream}
      * records.
      * <p>
+     * The specified {@link Aggregator} is applied for each input record and computes
+     * a new aggregate using the current aggregate (or for the very first record using the
+     * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
+     * <p>
+     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
+     * aggregate functions like count.
      * It is an intermediate representation after a grouping of {@link KStream}s, before the
      * aggregations are applied to the new partitions resulting in a {@link KTable}.
-     * <p>
      * @param groupedStream a group stream object
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
-     * @param <Vin> Type of input values
-     * @return a KCogroupedStream with the new grouopStream and aggregator linked
+     * @param <VIn> Type of input values
+     * @return a {@code CogroupedKStream}
      */
-    <Vin> CogroupedKStream<K, Vout> cogroup(final KGroupedStream<K, Vin> groupedStream,
-                                            final Aggregator<? super K, ? super Vin, Vout> aggregator);
+    <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,
+                                            final Aggregator<? super K, ? super VIn, VOut> aggregator);
+
     /**
      * Aggregate the values of records in these streams by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of Reducing combining via
-     * reduce(...)} as it, for example, allows the result to have a different type than the input
-     * values.
      * The result is written into a local {@link KeyValueStore} (which is basically an
      * ever-updating materialized view) that can be queried by the given store name in {@code
      * materialized}.
@@ -89,7 +93,7 @@ public interface CogroupedKStream<K, Vout> {
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via {@link
      * KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * <pre>{@code
+     * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
@@ -99,7 +103,6 @@ public interface CogroupedKStream<K, Vout> {
      * For non-local keys, a custom RPC mechanism must be implemented using {@link
      * KafkaStreams#allMetadata()} to query the value of the key on a parallel running instance of
      * your Kafka Streams application.
-     *
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be
      * created in Kafka.
@@ -120,8 +123,9 @@ public interface CogroupedKStream<K, Vout> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, Vout> aggregate(final Initializer<Vout> initializer,
-                              final Materialized<K, Vout, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+
     /**
      * Aggregate the values of records in these streams by the grouped key.
      * Records with {@code null}
@@ -182,6 +186,6 @@ public interface CogroupedKStream<K, Vout> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, Vout> aggregate(final Initializer<Vout> initializer);
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer);
 
 }
