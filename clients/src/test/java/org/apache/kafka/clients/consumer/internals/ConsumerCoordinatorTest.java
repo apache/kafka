@@ -469,7 +469,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testUnsubscribeWithInValidGeneration() {
+    public void testUnsubscribeWithInvalidGeneration() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 

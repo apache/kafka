@@ -1071,8 +1071,7 @@ public class KafkaConsumerTest {
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        // initial subscription
-        initializeSubscription(consumer, getConsumerRebalanceListener(consumer));
+        initializeSubscriptionWithSingleTopic(consumer, getConsumerRebalanceListener(consumer));
 
         // mock rebalance responses
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -1113,7 +1112,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testUnsubscribeWillTriggerPartitionsRevokeWithValidGeneration() {
+    public void testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1122,31 +1121,23 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        initializeSubscription(consumer, getExceptionConsumerRebalanceListener());
+        initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
 
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        try {
-            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-            consumer.poll(Duration.ZERO);
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionAssigned + singleTopicPartition, e.getCause().getMessage());
-        }
+        RuntimeException assignmentException = assertThrows(RuntimeException.class,
+            () -> consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertEquals(partitionAssigned + singleTopicPartition, assignmentException.getCause().getMessage());
 
-        try {
-            consumer.unsubscribe();
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionRevoked + singleTopicPartition, e.getCause().getMessage());
-        }
+        RuntimeException unsubscribeException = assertThrows(RuntimeException.class, consumer::unsubscribe);
+        assertEquals(partitionRevoked + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
 
     @Test
-    public void testUnsubscribeWillTriggerPartitionsLostWithNoGeneration() throws InterruptedException {
+    public void testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration() throws Exception {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1155,19 +1146,15 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        ConsumerPartitionAssignor assignor = new RangeAssignor();
+        CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
 
-        initializeSubscription(consumer, getExceptionConsumerRebalanceListener());
+        initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        try {
-            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-            consumer.poll(Duration.ZERO);
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionAssigned + singleTopicPartition, e.getCause().getMessage());
-        }
+        RuntimeException assignException = assertThrows(RuntimeException.class,
+            () -> consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertEquals(partitionAssigned + singleTopicPartition, assignException.getCause().getMessage());
 
         AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator, Errors.UNKNOWN_MEMBER_ID);
 
@@ -1177,16 +1164,12 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         assertTrue(heartbeatReceived.get());
 
-        try {
-            consumer.unsubscribe();
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionLost + singleTopicPartition, e.getCause().getMessage());
-        }
+        RuntimeException unsubscribeException = assertThrows(RuntimeException.class, consumer::unsubscribe);
+        assertEquals(partitionLost + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
 
-    private void initializeSubscription(KafkaConsumer<String, String> consumer,
-                                        ConsumerRebalanceListener consumerRebalanceListener) {
+    private void initializeSubscriptionWithSingleTopic(KafkaConsumer<String, String> consumer,
+                                                       ConsumerRebalanceListener consumerRebalanceListener) {
         consumer.subscribe(singleton(topic), consumerRebalanceListener);
         // verify that subscription has changed but assignment is still unchanged
         assertEquals(singleton(topic), consumer.subscription());

@@ -213,8 +213,8 @@ class StreamsBrokerBounceTest(Test):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
         Record if records are delivered.
-        We also add a single thread stream client to verify whether an reassignment after partition lost
-        is still good to proceed.
+        We also add a single thread stream client to make sure we could get all partitions reassigned in
+        next generation so to verify the partition lost is correctly triggered.
         """
         self.setup_system(num_threads=num_threads)
 
