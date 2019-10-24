@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +29,16 @@ import java.util.Optional;
 public class NewPartitionReassignment {
     private final List<Integer> targetReplicas;
 
-    public static Optional<NewPartitionReassignment> of(Integer... brokers) {
-        return Optional.of(new NewPartitionReassignment(Arrays.asList(brokers)));
+    /**
+     * @throws IllegalArgumentException if no replicas are supplied
+     */
+    public static Optional<NewPartitionReassignment> of(List<Integer> replicas) {
+        if (replicas == null || replicas.size() == 0)
+            throw new IllegalArgumentException("Cannot create a new partition reassignment without any replicas");
+        return Optional.of(new NewPartitionReassignment(replicas));
     }
 
-    public NewPartitionReassignment(List<Integer> targetReplicas) {
+    private NewPartitionReassignment(List<Integer> targetReplicas) {
         this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }
 

@@ -2018,37 +2018,36 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val tp1 = new TopicPartition(topic, 0)
     val tp2 = new TopicPartition(topic, 1)
     val tp3 = new TopicPartition(topic, 2)
-    val tp4 = new TopicPartition(topic, 3)
     createTopic(topic, numPartitions = 4)
 
-    val validAssignment = new NewPartitionReassignment((0 until brokerCount).map(_.asInstanceOf[Integer]).asJava)
+
+    val validAssignment = NewPartitionReassignment.of(
+      (0 until brokerCount).map(_.asInstanceOf[Integer]).asJava
+    )
 
     val nonExistentTp1 = new TopicPartition("topicA", 0)
     val nonExistentTp2 = new TopicPartition(topic, 4)
     val nonExistentPartitionsResult = client.alterPartitionReassignments(Map(
-      tp1 -> java.util.Optional.of(validAssignment),
-      tp2 -> java.util.Optional.of(validAssignment),
-      tp3 -> java.util.Optional.of(validAssignment),
-      nonExistentTp1 -> java.util.Optional.of(validAssignment),
-      nonExistentTp2 -> java.util.Optional.of(validAssignment)
+      tp1 -> validAssignment,
+      tp2 -> validAssignment,
+      tp3 -> validAssignment,
+      nonExistentTp1 -> validAssignment,
+      nonExistentTp2 -> validAssignment
     ).asJava).values()
     assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
     assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
 
-    val extraNonExistentReplica = new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
-    val negativeIdReplica = new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
-    val duplicateReplica = new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
-    val noReplicas = new NewPartitionReassignment(Seq().map(_.asInstanceOf[Integer]).asJava)
+    val extraNonExistentReplica = NewPartitionReassignment.of((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
+    val negativeIdReplica = NewPartitionReassignment.of(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
+    val duplicateReplica = NewPartitionReassignment.of(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
     val invalidReplicaResult = client.alterPartitionReassignments(Map(
-      tp1 -> java.util.Optional.of(extraNonExistentReplica),
-      tp2 -> java.util.Optional.of(negativeIdReplica),
-      tp3 -> java.util.Optional.of(duplicateReplica),
-      tp4 -> java.util.Optional.of(noReplicas)
+      tp1 -> extraNonExistentReplica,
+      tp2 -> negativeIdReplica,
+      tp3 -> duplicateReplica
     ).asJava).values()
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
-    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp4), classOf[InvalidReplicaAssignmentException])
   }
 
   @Test
