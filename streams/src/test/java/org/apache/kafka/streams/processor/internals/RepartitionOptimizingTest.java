@@ -218,7 +218,6 @@ public class RepartitionOptimizingTest {
         if (optimizationConfig.equals(StreamsConfig.OPTIMIZE)) {
             assertEquals(EXPECTED_OPTIMIZED_TOPOLOGY, topologyString);
         } else {
-            System.out.println(topologyString);
             assertEquals(EXPECTED_UNOPTIMIZED_TOPOLOGY, topologyString);
         }
 

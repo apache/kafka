@@ -68,7 +68,6 @@ public class RepartitionTopicNamingTest {
         // the first named repartition topic
         assertTrue(optimizedTopology.contains(firstRepartitionTopicName + "-repartition"));
 
-        System.out.println(unOptimizedTopology);
         assertThat(unOptimizedTopology, is(EXPECTED_UNOPTIMIZED_TOPOLOGY));
         // now 4 repartition topic
         assertThat(4, is(getCountOfRepartitionTopicsFound(unOptimizedTopology, repartitionTopicPattern)));
