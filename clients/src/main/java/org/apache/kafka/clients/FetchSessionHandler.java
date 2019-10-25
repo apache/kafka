@@ -219,7 +219,10 @@ public class FetchSessionHandler {
          * Mark that we want to exclude this partition in the upcoming fetch.
          */
         public void remove(TopicPartition topicPartition) {
-            removed.add(topicPartition);
+            if (sessionPartitions.containsKey(topicPartition)) {
+                removed.add(topicPartition);
+            }
+
             next.remove(topicPartition);
             sessionPartitions.remove(topicPartition);
         }
