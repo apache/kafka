@@ -436,7 +436,7 @@ abstract class AbstractFetcherThread(name: String,
     */
   private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]): Unit = {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStateMap.asScala
-      .map { case(topicPartition, currentFetchState) =>
+      .map { case (topicPartition, currentFetchState) =>
         val maybeTruncationComplete = fetchOffsets.get(topicPartition) match {
           case Some(offsetTruncationState) =>
             val state = if (offsetTruncationState.truncationCompleted) Fetching else Truncating
