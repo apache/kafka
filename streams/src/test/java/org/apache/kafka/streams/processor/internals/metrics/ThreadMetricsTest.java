@@ -33,14 +33,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
 import static org.powermock.api.easymock.PowerMock.createMock;
 import static org.powermock.api.easymock.PowerMock.mockStatic;
 import static org.powermock.api.easymock.PowerMock.replay;
@@ -262,37 +260,35 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldGetSkipRecordSensor() {
+        final String operation = "skipped-records";
+        final String totalDescription = "The total number of skipped records";
+        final String rateDescription = "The average per-second number of skipped records";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO))
+            .andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.FROM_100_TO_24) {
-            final String operation = "skipped-records";
-            final String totalDescription = "The total number of skipped records";
-            final String rateDescription = "The average per-second number of skipped records";
-            expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).andReturn(expectedSensor);
             expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
             StreamsMetricsImpl.addInvocationRateAndCountToSensor(
                 expectedSensor,
                 threadLevelGroup,
                 tagMap,
                 operation,
-                rateDescription, totalDescription
+                rateDescription,
+                totalDescription
             );
         }
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
-        final Optional<Sensor> sensor = ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics);
+        final Sensor sensor = ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
-
-        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
-            assertThat(sensor.orElse(null), is(expectedSensor));
-        } else {
-            assertFalse(sensor.isPresent());
-        }
+        assertThat(sensor, is(expectedSensor));
     }
 
     @Test
     public void shouldGetCommitOverTasksSensor() {
+        final String operation = "commit";
+        expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.FROM_100_TO_24) {
-            final String operation = "commit";
             final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
             final String totalDescription =
                 "The total number of calls to commit over all tasks assigned to one stream thread";
@@ -302,14 +298,14 @@ public class ThreadMetricsTest {
                 "The average commit latency over all tasks assigned to one stream thread";
             final String maxLatencyDescription =
                 "The maximum commit latency over all tasks assigned to one stream thread";
-            expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG))
-                .andReturn(expectedSensor);
             expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
             StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                expectedSensor, TASK_LEVEL_GROUP,
+                expectedSensor,
+                TASK_LEVEL_GROUP,
                 tagMap,
                 operation,
-                rateDescription, totalDescription
+                rateDescription,
+                totalDescription
             );
             StreamsMetricsImpl.addAvgAndMaxToSensor(
                 expectedSensor,
@@ -322,13 +318,9 @@ public class ThreadMetricsTest {
         }
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
-        final Optional<Sensor> sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
+        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
-        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
-            assertThat(sensor.orElse(null), is(expectedSensor));
-        } else {
-            assertFalse(sensor.isPresent());
-        }
+        assertThat(sensor, is(expectedSensor));
     }
 }

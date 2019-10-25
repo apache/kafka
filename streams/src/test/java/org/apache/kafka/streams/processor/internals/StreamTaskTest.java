@@ -75,7 +75,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -404,7 +403,6 @@ public class StreamTaskTest {
         assertEquals(3, source2.numReceived);
     }
 
-
     @Test
     public void testMetricsWithBuiltInMetricsVersion0100To24() {
         testMetrics(StreamsConfig.METRICS_0100_TO_24);
@@ -419,62 +417,60 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false), builtInMetricsVersion);
 
         assertNotNull(getMetric(
+            "commit",
             "%s-latency-avg",
-            "The average latency of %s operation.",
             task.id().toString(),
             builtInMetricsVersion
         ));
         assertNotNull(getMetric(
+            "commit",
             "%s-latency-max",
-            "The max latency of %s operation.",
             task.id().toString(),
             builtInMetricsVersion
         ));
         assertNotNull(getMetric(
+            "commit",
             "%s-rate",
-            "The average number of occurrence of %s operation per second.",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+        assertNotNull(getMetric(
+            "commit",
+            "%s-total",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "enforced-processing",
+            "%s-rate",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+        assertNotNull(getMetric(
+            "enforced-processing",
+            "%s-total",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+
+        assertNotNull(getMetric(
+            "record-lateness",
+            "%s-avg",
+            task.id().toString(),
+            builtInMetricsVersion
+        ));
+        assertNotNull(getMetric(
+            "record-lateness",
+            "%s-max",
             task.id().toString(),
             builtInMetricsVersion
         ));
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            assertNotNull(getMetric(
-                "%s-latency-avg",
-                "The average latency of %s operation.",
-                "all",
-                builtInMetricsVersion
-            ));
-            assertNotNull(getMetric(
-                "%s-latency-max",
-                "The max latency of %s operation.",
-                "all",
-                builtInMetricsVersion
-            ));
-            assertNotNull(getMetric(
-                "%s-rate",
-                "The average number of occurrence of %s operation per second.",
-                "all",
-                builtInMetricsVersion
-            ));
+            testMetricsForBuiltInMetricsVersion0100To24();
         } else {
-            assertNull(getMetric(
-                "%s-latency-avg",
-                "The average latency of %s operation.",
-                "all",
-                builtInMetricsVersion
-            ));
-            assertNull(getMetric(
-                "%s-latency-max",
-                "The max latency of %s operation.",
-                "all",
-                builtInMetricsVersion
-            ));
-            assertNull(getMetric(
-                "%s-rate",
-                "The average number of occurrence of %s operation per second.",
-                "all",
-                builtInMetricsVersion
-            ));
+            testMetricsForBuiltInMetricsVersionLatest();
         }
 
         final String threadId = Thread.currentThread().getName();
@@ -497,14 +493,46 @@ public class StreamTaskTest {
         }
     }
 
-    private KafkaMetric getMetric(final String nameFormat,
-                                  final String descriptionFormat,
+    private void testMetricsForBuiltInMetricsVersionLatest() {
+        final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
+        assertNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
+        assertNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
+        assertNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
+        assertNull(getMetric("commit", "%s-total", "all", builtInMetricsVersion));
+
+        assertNotNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+
+        assertNotNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("punctuate", "%s-rate", task.id().toString(), builtInMetricsVersion));
+        assertNotNull(getMetric("punctuate", "%s-total", task.id().toString(), builtInMetricsVersion));
+    }
+
+    private void testMetricsForBuiltInMetricsVersion0100To24() {
+        final String builtInMetricsVersion = StreamsConfig.METRICS_0100_TO_24;
+        assertNotNull(getMetric("commit", "%s-latency-avg", "all", builtInMetricsVersion));
+        assertNotNull(getMetric("commit", "%s-latency-max", "all", builtInMetricsVersion));
+        assertNotNull(getMetric("commit", "%s-rate", "all", builtInMetricsVersion));
+
+        assertNull(getMetric("process", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNull(getMetric("process", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+
+        assertNull(getMetric("punctuate", "%s-latency-avg", task.id().toString(), builtInMetricsVersion));
+        assertNull(getMetric("punctuate", "%s-latency-max", task.id().toString(), builtInMetricsVersion));
+        assertNull(getMetric("punctuate", "%s-rate", task.id().toString(), builtInMetricsVersion));
+        assertNull(getMetric("punctuate", "%s-total", task.id().toString(), builtInMetricsVersion));
+    }
+
+    private KafkaMetric getMetric(final String operation,
+                                  final String nameFormat,
                                   final String taskId,
                                   final String builtInMetricsVersion) {
+        final String descriptionIsNotVerified = "";
         return metrics.metrics().get(metrics.metricName(
-            String.format(nameFormat, "commit"),
+            String.format(nameFormat, operation),
             "stream-task-metrics",
-            String.format(descriptionFormat, "commit"),
+            descriptionIsNotVerified,
             mkMap(
                 mkEntry("task-id", taskId),
                 mkEntry(
@@ -1690,7 +1718,7 @@ public class StreamTaskTest {
             "StreamTask",
             new LogContext("StreamTaskTest "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         recordCollector.init(producer);
 

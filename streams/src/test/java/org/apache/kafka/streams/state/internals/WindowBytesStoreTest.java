@@ -37,7 +37,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -102,7 +101,7 @@ public abstract class WindowBytesStoreTest {
         return new RecordCollectorImpl(name,
             new LogContext(name),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         ) {
             @Override
             public <K1, V1> void send(final String topic,
