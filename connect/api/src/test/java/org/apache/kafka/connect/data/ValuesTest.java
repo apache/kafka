@@ -38,6 +38,8 @@ import static org.junit.Assert.fail;
 
 public class ValuesTest {
 
+    private static final String WHITESPACE = "\n \t \t\n";
+
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
     private static final Map<String, String> STRING_MAP = new LinkedHashMap<>();
@@ -113,6 +115,26 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldParseTrueAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "true" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(true, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseFalseAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "false" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(false, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNullAsNullIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "null" + WHITESPACE);
+        assertNull(schemaAndValue);
+    }
+
+    @Test
     public void shouldParseBooleanLiteralsEmbeddedInArray() {
         SchemaAndValue schemaAndValue = Values.parseString("[true, false]");
         assertEquals(Type.ARRAY, schemaAndValue.schema().type());
@@ -130,6 +152,13 @@ public class ValuesTest {
         expectedValue.put(true, false);
         expectedValue.put(false, true);
         assertEquals(expectedValue, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsMapWithoutCommas() {
+        SchemaAndValue schemaAndValue = Values.parseString("{6:9 4:20}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{6:9 4:20}", schemaAndValue.value());
     }
 
     @Test
