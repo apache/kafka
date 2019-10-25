@@ -205,26 +205,24 @@ public class FetchSessionHandler {
          * Mark that we want data from this partition in the upcoming fetch.
          */
         public void add(TopicPartition topicPartition, PartitionData data) {
-            if (sessionPartitions.containsKey(topicPartition)) {
+            if (sessionPartitions.put(topicPartition, data) != null) {
                 altered.add(topicPartition);
             } else {
                 added.add(topicPartition);
             }
 
             next.put(topicPartition, data);
-            sessionPartitions.put(topicPartition, data);
         }
 
         /**
          * Mark that we want to exclude this partition in the upcoming fetch.
          */
         public void remove(TopicPartition topicPartition) {
-            if (sessionPartitions.containsKey(topicPartition)) {
+            if (sessionPartitions.remove(topicPartition) != null) {
                 removed.add(topicPartition);
             }
 
             next.remove(topicPartition);
-            sessionPartitions.remove(topicPartition);
         }
 
         public FetchRequestData build() {
