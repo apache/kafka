@@ -639,7 +639,7 @@ public class StreamsMetricsImplTest {
         expect(time.nanoseconds()).andReturn(endTime);
         replay(sensor, time);
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> null, time, sensor);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
         verify(sensor, time);
     }
@@ -651,7 +651,7 @@ public class StreamsMetricsImplTest {
         final Time time = mock(Time.class);
         replay(sensor);
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> null, time, sensor);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
         verify(sensor);
     }

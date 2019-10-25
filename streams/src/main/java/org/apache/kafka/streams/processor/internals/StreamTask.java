@@ -372,7 +372,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             StreamsMetricsImpl.maybeMeasureLatency(
                 () -> {
                     currNode.process(record.key(), record.value());
-                    return null;
                 },
                 time,
                 processLatencySensor
@@ -441,7 +440,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             StreamsMetricsImpl.maybeMeasureLatency(
                 () -> {
                     node.punctuate(timestamp, punctuator);
-                    return null;
                 },
                 time,
                 punctuateLatencySensor

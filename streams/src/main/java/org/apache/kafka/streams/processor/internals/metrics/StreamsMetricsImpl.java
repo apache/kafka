@@ -46,7 +46,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -763,18 +762,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static <R> R maybeMeasureLatency(final Supplier<R> action,
-                                            final Time time,
-                                            final Sensor sensor) {
+    public static void maybeMeasureLatency(final Runnable actionToMeasure,
+                                           final Time time,
+                                           final Sensor sensor) {
         if (sensor.shouldRecord()) {
             final long startNs = time.nanoseconds();
             try {
-                return action.get();
+                actionToMeasure.run();
             } finally {
                 sensor.record(time.nanoseconds() - startNs);
             }
         } else {
-            return action.get();
+            actionToMeasure.run();
         }
     }
 
