@@ -48,7 +48,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.Future;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -86,7 +85,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -124,7 +123,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestStreamPartitioner",
             new LogContext("RecordCollectorTest-TestStreamPartitioner "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -158,7 +157,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -181,7 +180,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -200,7 +199,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -225,7 +224,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -244,7 +243,7 @@ public class RecordCollectorTest {
     @Test
     public void shouldRecordSkippedMetricAndLogWarningIfSendFailsWithContinueExceptionHandler() {
         final Metrics metrics = new Metrics();
-        final Sensor sensor = metrics.sensor("skipped-records");
+        final Sensor sensor = metrics.sensor("dropped-records");
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
         sensor.add(metricName, new WindowedSum());
@@ -252,7 +251,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            Optional.of(sensor)
+            metrics.sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -274,7 +273,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -299,7 +298,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -321,7 +320,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -346,7 +345,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -368,7 +367,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -387,7 +386,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
@@ -409,7 +408,7 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
         final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(cluster, true, new DefaultPartitioner(),
                 byteArraySerializer, byteArraySerializer);
@@ -432,7 +431,7 @@ public class RecordCollectorTest {
             "NoNPE",
             logContext,
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         );
 
         collector.close();

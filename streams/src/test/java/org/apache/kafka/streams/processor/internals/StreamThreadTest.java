@@ -1852,6 +1852,7 @@ public class StreamThreadTest {
         adminClient.setMockMetrics(testMetricName, testMetric);
         final Map<MetricName, Metric> adminClientMetrics = thread.adminClientMetrics();
         assertEquals(testMetricName, adminClientMetrics.get(testMetricName).metricName());
+
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> mockConsumer,
