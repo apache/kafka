@@ -197,7 +197,7 @@ public abstract class AbstractTask implements Task {
         log.trace("Initializing state stores");
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("Initializing store {}", store.name());
+            log.debug("Initializing store {}", store.name());
             processorContext.uninitialize();
             store.init(processorContext, store);
         }
