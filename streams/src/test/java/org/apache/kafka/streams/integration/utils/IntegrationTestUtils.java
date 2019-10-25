@@ -743,10 +743,13 @@ public class IntegrationTestUtils {
     /**
      * Starts the given {@link KafkaStreams} instances and waits for all of them to reach the
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
-     * that this method returns and the calling function executes its next statement.
+     * that this method returns and the calling function executes its next statement.<p>
+     *
+     * When the application is already started use {@link #waitForApplicationState(List, Duration)}
+     * to wait for instances to reach {@link State#RUNNING} state.
      *
      * @param streamsList the list of streams instances to run.
-     * @param timeout the time to wait for the streams to all be in @{link State#RUNNING} state.
+     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
      */
     public static void startApplicationAndWaitUntilRunning(final List<KafkaStreams> streamsList,
                                                            final Duration timeout) throws InterruptedException {
@@ -809,6 +812,33 @@ public class IntegrationTestUtils {
         }
     }
 
+    /**
+     * Waits for the given {@link KafkaStreams} instances to all be in a  {@link State#RUNNING}
+     * state. Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
+     * because this method uses polling, which can be more error prone and slightly slower.
+     *
+     * @param streamsList the list of streams instances to run.
+     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
+     */
+    public static void waitForApplicationState(final List<KafkaStreams> streamsList,
+                                               final State state,
+                                               final Duration timeout) throws InterruptedException {
+        retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
+            final Map<KafkaStreams, State> streamsToStates = streamsList
+                .stream()
+                .collect(Collectors.toMap(stream -> stream, KafkaStreams::state));
+
+            final Map<KafkaStreams, State> wrongStateMap = streamsToStates.entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != state)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+            final String reason = String.format("Expected all streams instances in %s to be %s within %d ms, but the following were not: %s",
+                streamsList, state, timeout.toMillis(), wrongStateMap);
+            assertThat(reason, wrongStateMap.isEmpty());
+        });
+    }
+
     private static StateListener getStateListener(final KafkaStreams streams) {
         try {
             final Field field = streams.getClass().getDeclaredField("stateListener");
@@ -818,7 +848,6 @@ public class IntegrationTestUtils {
             throw new RuntimeException("Failed to get StateListener through reflection", e);
         }
     }
-
 
     public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
                                                        final String topic,

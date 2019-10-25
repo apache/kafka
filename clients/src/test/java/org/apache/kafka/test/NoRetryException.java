@@ -17,11 +17,19 @@
 package org.apache.kafka.test;
 
 /**
- * Interface to wrap actions that are required to wait until a condition is met
- * for testing purposes.  Note that this is not intended to do any assertions.
+ * This class can be used in the callback given to {@link TestUtils#retryOnExceptionWithTimeout(long, long, ValuelessCallable)}
+ * to indicate that a particular exception should not be retried. Instead the retry operation will
+ * be aborted immediately and the exception will be rethrown.
  */
-@FunctionalInterface
-public interface TestCondition {
+public class NoRetryException extends RuntimeException {
+    private final Throwable cause;
 
-    boolean conditionMet() throws Exception;
+    public NoRetryException(Throwable cause) {
+        this.cause = cause;
+    }
+
+    @Override
+    public Throwable getCause() {
+        return this.cause;
+    }
 }

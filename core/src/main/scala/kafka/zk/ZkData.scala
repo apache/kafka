@@ -25,7 +25,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, PartitionReplicaAssignment}
+import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.auth.Resource.Separator
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
@@ -240,7 +240,7 @@ object TopicsZNode {
 
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, PartitionReplicaAssignment]): Array[Byte] = {
+  def encode(assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
     val removingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -260,7 +260,7 @@ object TopicZNode {
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
     ).asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, PartitionReplicaAssignment] = {
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, ReplicaAssignment] = {
     def getReplicas(replicasJsonOpt: Option[JsonObject], partition: String): Seq[Int] = {
       replicasJsonOpt match {
         case Some(replicasJson) => replicasJson.get(partition) match {
@@ -278,7 +278,7 @@ object TopicZNode {
       val removingReplicasJsonOpt = assignmentJson.get("removing_replicas").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
-          new TopicPartition(topic, partition.toInt) -> PartitionReplicaAssignment(
+          new TopicPartition(topic, partition.toInt) -> ReplicaAssignment(
             replicas.to[Seq[Int]],
             getReplicas(addingReplicasJsonOpt, partition),
             getReplicas(removingReplicasJsonOpt, partition)
