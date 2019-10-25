@@ -92,7 +92,7 @@
         the validation due to various causes (mismatch magic bytes, crc checksum errors, null key for log compacted topics, etc), the whole batch would be rejected
         with the same and misleading <code>CORRUPT_MESSAGE</code>, and the caller of the producer client would see the corresponding exception from either
         the future object of <code>RecordMetadata</code> returned from the <code>send</code> call as well as in the <code>Callback#onCompletion(RecordMetadata metadata, Exception exception)</code>
-        Now with the new error code and improved error messages of the exception, producer callers would be better notified about the root cause why their sent records were failed.
+        Now with the new error code and improved error messages of the exception, producer callers would be better informed about the root cause why their sent records were failed.
     </li>
     <li>We are introducing incremental cooperative rebalancing to the clients' group protocol, which allows consumers to keep all of their assigned partitions during a rebalance
         and at the end revoke only those which must be migrated to another consumer for overall cluster balance. The <code>ConsumerCoordinator</code> will choose the latest <code>RebalanceProtocol</code>
