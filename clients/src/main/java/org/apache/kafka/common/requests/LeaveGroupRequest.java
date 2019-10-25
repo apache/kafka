@@ -36,7 +36,11 @@ public class LeaveGroupRequest extends AbstractRequest {
         private final List<MemberIdentity> members;
 
         public Builder(String groupId, List<MemberIdentity> members) {
-            super(ApiKeys.LEAVE_GROUP);
+            this(groupId, members, ApiKeys.LEAVE_GROUP.oldestVersion(), ApiKeys.LEAVE_GROUP.latestVersion());
+        }
+
+        Builder(String groupId, List<MemberIdentity> members, short oldestVersion, short latestVersion) {
+            super(ApiKeys.LEAVE_GROUP, oldestVersion, latestVersion);
             this.groupId = groupId;
             this.members = members;
             if (members.isEmpty()) {

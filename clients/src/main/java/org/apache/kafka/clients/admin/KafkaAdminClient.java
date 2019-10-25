@@ -83,6 +83,8 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -149,6 +151,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
@@ -2686,7 +2689,7 @@ public class KafkaAdminClient extends AdminClient {
             ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, futures.get(groupId));
             Call findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> KafkaAdminClient.this.getDescribeConsumerGroupsCall(context));
+                () -> getDescribeConsumerGroupsCall(context));
             runnable.call(findCoordinatorCall, startFindCoordinatorMs);
         }
 
@@ -2973,7 +2976,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, groupOffsetListingFuture);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> KafkaAdminClient.this.getListConsumerGroupOffsetsCall(context));
+            () -> getListConsumerGroupOffsetsCall(context));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
         return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
@@ -3045,7 +3048,7 @@ public class KafkaAdminClient extends AdminClient {
             ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
             Call findCoordinatorCall = getFindCoordinatorCall(context,
-                () -> KafkaAdminClient.this.getDeleteConsumerGroupsCall(context));
+                () -> getDeleteConsumerGroupsCall(context));
             runnable.call(findCoordinatorCall, startFindCoordinatorMs);
         }
 
@@ -3097,7 +3100,7 @@ public class KafkaAdminClient extends AdminClient {
         if (groupIdIsUnrepresentable(groupId)) {
             future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
                 groupId + "' cannot be represented in a request."));
-            return new DeleteConsumerGroupOffsetsResult(future);
+            return new DeleteConsumerGroupOffsetsResult(future, partitions);
         }
 
         final long startFindCoordinatorMs = time.milliseconds();
@@ -3106,10 +3109,10 @@ public class KafkaAdminClient extends AdminClient {
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> KafkaAdminClient.this.getDeleteConsumerGroupOffsetsCall(context, partitions));
+            () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
-        return new DeleteConsumerGroupOffsetsResult(future);
+        return new DeleteConsumerGroupOffsetsResult(future, partitions);
     }
 
     private Call getDeleteConsumerGroupOffsetsCall(
@@ -3155,13 +3158,10 @@ public class KafkaAdminClient extends AdminClient {
                     return;
 
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
-                response.data.topics().forEach(topic -> {
-                    topic.partitions().forEach(partition -> {
-                        partitions.put(
-                            new TopicPartition(topic.name(), partition.partitionIndex()),
-                            Errors.forCode(partition.errorCode()));
-                    });
-                });
+                response.data.topics().forEach(topic -> topic.partitions().forEach(partition -> partitions.put(
+                    new TopicPartition(topic.name(), partition.partitionIndex()),
+                    Errors.forCode(partition.errorCode())))
+                );
 
                 context.getFuture().complete(partitions);
             }
@@ -3461,33 +3461,32 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId,
-                                                                RemoveMemberFromConsumerGroupOptions options) {
+    public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
+                                                                               RemoveMembersFromConsumerGroupOptions options) {
         final long startFindCoordinatorMs = time.milliseconds();
         final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
-        KafkaFutureImpl<RemoveMemberFromGroupResult> future = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Map<MemberIdentity, Errors>> future = new KafkaFutureImpl<>();
 
-        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context =
+        ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context =
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
-            () -> KafkaAdminClient.this.getRemoveMembersFromGroupCall(context));
+            () -> getRemoveMembersFromGroupCall(context));
         runnable.call(findCoordinatorCall, startFindCoordinatorMs);
 
-        return new MembershipChangeResult(future);
+        return new RemoveMembersFromConsumerGroupResult(future, options.members());
     }
 
-
-    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext
-                                                   <RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context) {
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext<Map<MemberIdentity, Errors>, RemoveMembersFromConsumerGroupOptions> context) {
         return new Call("leaveGroup",
                         context.getDeadline(),
                         new ConstantNodeIdProvider(context.getNode().get().id())) {
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.getGroupId(),
-                                                     context.getOptions().getMembers());
+                                                     context.getOptions().members().stream().map(
+                                                         MemberToRemove::toMemberIdentity).collect(Collectors.toList()));
             }
 
             @Override
@@ -3500,16 +3499,19 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                // If error is transient coordinator error, retry
-                Errors error = response.error();
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                    throw error.exception();
+                if (handleGroupRequestError(response.topLevelError(), context.getFuture()))
+                    return;
+
+                final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
+                for (MemberResponse memberResponse : response.memberResponses()) {
+                    // We set member.id to empty here explicitly, so that the lookup will succeed as user doesn't
+                    // know the exact member.id.
+                    memberErrors.put(new MemberIdentity()
+                                         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                                         .setGroupInstanceId(memberResponse.groupInstanceId()),
+                                     Errors.forCode(memberResponse.errorCode()));
                 }
-
-                final RemoveMemberFromGroupResult membershipChangeResult =
-                    new RemoveMemberFromGroupResult(response, context.getOptions().getMembers());
-
-                context.getFuture().complete(membershipChangeResult);
+                context.getFuture().complete(memberErrors);
             }
 
             @Override
@@ -3518,4 +3520,17 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
     }
+
+    /**
+     * Get a sub level error when the request is in batch. If given key was not found,
+     * return an {@link IllegalArgumentException}.
+     */
+    static <K> Throwable getSubLevelError(Map<K, Errors> subLevelErrors, K subKey, String keyNotFoundMsg) {
+        if (!subLevelErrors.containsKey(subKey)) {
+            return new IllegalArgumentException(keyNotFoundMsg);
+        } else {
+            return subLevelErrors.get(subKey).exception();
+        }
+    }
+
 }
