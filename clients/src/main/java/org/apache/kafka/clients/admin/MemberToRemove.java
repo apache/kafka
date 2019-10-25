@@ -51,4 +51,8 @@ public class MemberToRemove {
                    .setGroupInstanceId(groupInstanceId)
                    .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
     }
+
+    public String groupInstanceId() {
+        return groupInstanceId;
+    }
 }
