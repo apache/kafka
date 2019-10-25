@@ -430,11 +430,11 @@ public class SslTransportLayer implements TransportLayer {
                         session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
                 if (sslInformation == null) {
                     String cipherSuiteName = session.getCipherSuite();
-                    if ((cipherSuiteName == null) || cipherSuiteName.isEmpty()) {
+                    if (cipherSuiteName == null || cipherSuiteName.isEmpty()) {
                         cipherSuiteName = "unknown";
                     }
                     String protocolName = session.getProtocol();
-                    if ((protocolName == null) || protocolName.isEmpty()) {
+                    if (protocolName == null || protocolName.isEmpty()) {
                         protocolName = "unknown";
                     }
                     sslInformation = new SslInformation(cipherSuiteName, protocolName);

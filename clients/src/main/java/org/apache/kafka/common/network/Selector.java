@@ -1190,7 +1190,7 @@ public class Selector implements Selectable, AutoCloseable {
             this.ioTime.add(metricName, new Avg());
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
-            this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics, Selector.this,
+            this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
                 sslInformation -> {
                     Map<String, String> tags = new LinkedHashMap<>();
                     tags.put("cipher", sslInformation.cipher());
