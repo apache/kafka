@@ -512,7 +512,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     @Override
     public void shutdown(final boolean clean) {
-        log.debug("Shutting down all active tasks in {} mode" + "\n" +
+        log.debug("Shutting down all active tasks in clean = {} mode" + "\n" +
                       "Created: {}" + "\n" +
                       "Restoring: {}" + "\n" +
                       "Running: {}" + "\n" +

@@ -32,7 +32,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
 
     @Override
     public void shutdown(final boolean clean) {
-        log.debug("Shutting down all standby tasks in {} mode" + "\n" +
+        log.debug("Shutting down all standby tasks in clean = {} mode" + "\n" +
                       "Created: {}" + "\n" +
                       "Running: {}",
             clean, created.keySet(), running.keySet());
