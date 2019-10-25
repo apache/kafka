@@ -1131,15 +1131,15 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       tp0 -> Seq(100, 101),
       tp1 -> Seq(100, 101)
     ))
-    // setup reassignment for topicName partitions
-    val move = Map(
-      tp0 -> Seq(101),
-      tp1 -> Seq(101)
-    )
-    zkClient.setOrCreatePartitionReassignment(move, ZkVersion.MatchAnyVersion)
+
+    // Alter `topicName` partition reassignment
+    adminClient.alterPartitionReassignments(
+      Map(reassignmentEntry(tp0, Seq(101)),
+        reassignmentEntry(tp1, Seq(101))).asJava
+    ).all().get()
     waitUntilTrue(() => {
       !adminClient.listPartitionReassignments().reassignments().get().isEmpty
-    }, "Controller should have picked up on znode creation", 1000)
+    }, "Controller should have picked up reassignment", 1000)
 
     def testCreatePartitions(topicName: String, isTopicBeingReassigned: Boolean): Unit = {
       if (isTopicBeingReassigned)
@@ -1157,7 +1157,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     // complete reassignment
     TestUtils.resetBrokersThrottle(adminClient, brokerIds)
-    waitForZkReassignmentToComplete()
+    waitForAllReassignmentsToComplete()
 
     // Test case: createPartitions is successful for Topics with partitions after reassignment has completed.
     testCreatePartitions(topicName, false)
