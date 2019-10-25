@@ -1071,6 +1071,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void flush(Duration timeout) {
+        log.trace("Flushing accumulated records in producer.");
         long timeoutMs = timeout.toMillis();
         try {
             this.accumulator.beginFlush();

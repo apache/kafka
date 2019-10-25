@@ -716,15 +716,19 @@ public final class RecordAccumulator {
     public void awaitFlushCompletion(long timeoutMs) throws InterruptedException {
         try {
             Long expireMs = System.currentTimeMillis() + timeoutMs;
+            int numBatchesFlushed = 0;
             for (ProducerBatch batch : this.incomplete.copyAll()) {
                 Long currentMs = System.currentTimeMillis();
                 if (currentMs > expireMs) {
-                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                    throw new TimeoutException(String.format("Failed to flush accumulated records within %d milliseconds,"
+                        + " successfully completed %d batches.", timeoutMs, numBatchesFlushed));
                 }
                 boolean completed = batch.produceFuture.await(Math.max(expireMs - currentMs, 0), TimeUnit.MILLISECONDS);
                 if (!completed) {
-                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                    throw new TimeoutException(String.format("Failed to flush accumulated records within %d milliseconds,"
+                        + " successfully completed %d batches.", timeoutMs, numBatchesFlushed));
                 }
+                numBatchesFlushed ++;
             }
         } finally {
             this.flushesInProgress.decrementAndGet();
