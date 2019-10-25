@@ -274,7 +274,6 @@ public class ProcessorNode<K, V> {
             addAvgAndMaxLatencyToSensor(sensor, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
             addInvocationRateAndCountToSensor(sensor, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
 
-
             return sensor;
         }
     }
