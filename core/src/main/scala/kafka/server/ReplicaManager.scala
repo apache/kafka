@@ -58,7 +58,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Seq, Set, mutable}
+import scala.collection.{mutable, Map, Seq, Set}
 import scala.compat.java8.OptionConverters._
 
 /*
@@ -121,7 +121,8 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
                               preferredReadReplica: Option[Int],
-                              isReassignmentFetch: Boolean)
+                              isReassignmentFetch: Boolean,
+                              messageOffset: Long)
 
 
 /**
@@ -274,6 +275,16 @@ class ReplicaManager(val config: KafkaConfig,
     new Gauge[Int] {
       def value = reassigningPartitionsCount
     }
+  )
+  val reassignmentMaxLag = newGauge(
+    "ReassignmentMaxLag",
+    new Gauge[Long] {
+      def value: Long = allPartitions.values.flatMap {
+        case Online(partition) => Some(partition)
+        case _ => None
+      }.filter(_.isReassigning).maxBy(_.replicasMaxReassignmentLag).replicasMaxReassignmentLag
+    },
+    Map("clientId" -> "Leader")
   )
 
   def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
@@ -907,11 +918,21 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    // Wrap the given callback function with another function that will update the HW for the remote follower
-    def maybeUpdateHwAndSendResponse(fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+    // Wrap the given callback function with another function that will update the HW and partition reassignment lag
+    // for the remote follower
+    def updateReplicaAndSendResponse(fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       if (isFromFollower) {
         fetchPartitionData.foreach {
-          case (tp, partitionData) => updateFollowerHighWatermark(tp, replicaId, partitionData.highWatermark)
+          case (tp, partitionData) =>
+            val replicaOpt = nonOfflinePartition(tp).flatMap(_.getReplica(replicaId))
+            replicaOpt match {
+              case Some(replica) =>
+                replica.updateLastSentHighWatermark(partitionData.highWatermark)
+                replica.updateReassignmentLag(partitionData.messageOffset, isAddingReplica(tp, replicaId))
+              case None =>
+                warn(s"While updating the HW for follower $replicaId for partition $tp, " +
+                  s"the replica could not be found.")
+            }
         }
       }
       responseCallback(fetchPartitionData)
@@ -925,9 +946,10 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica,
+          isFromFollower && isAddingReplica(tp, replicaId), result.info.fetchOffsetMetadata.messageOffset)
       }
-      maybeUpdateHwAndSendResponse(fetchPartitionData)
+      updateReplicaAndSendResponse(fetchPartitionData)
     } else {
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
@@ -940,7 +962,7 @@ class ReplicaManager(val config: KafkaConfig,
       val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
-        maybeUpdateHwAndSendResponse)
+        updateReplicaAndSendResponse)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
@@ -1592,15 +1614,6 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
       topicPartition -> updatedReadResult
-    }
-  }
-
-  private def updateFollowerHighWatermark(topicPartition: TopicPartition, followerId: Int, highWatermark: Long): Unit = {
-    nonOfflinePartition(topicPartition).flatMap(_.getReplica(followerId)) match {
-      case Some(replica) => replica.updateLastSentHighWatermark(highWatermark)
-      case None =>
-        warn(s"While updating the HW for follower $followerId for partition $topicPartition, " +
-          s"the replica could not be found.")
     }
   }
 

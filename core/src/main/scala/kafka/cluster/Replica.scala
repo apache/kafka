@@ -46,6 +46,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   // used to determine the maximum HW this follower knows about. See KIP-392
   @volatile private[this] var _lastSentHighWatermark = 0L
 
+  @volatile private[this] var _lastReassignmentLag: Long = 0L
+
   def logStartOffset: Long = _logStartOffset
 
   def logEndOffsetMetadata: LogOffsetMetadata = _logEndOffsetMetadata
@@ -55,6 +57,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
   def lastSentHighWatermark: Long = _lastSentHighWatermark
+
+  def lastReassignmentLag: Long = _lastReassignmentLag
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -71,7 +75,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
                        followerStartOffset: Long,
                        followerFetchTimeMs: Long,
-                       leaderEndOffset: Long): Unit = {
+                       leaderEndOffset: Long,
+                       isAddingReplica: Boolean): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -95,6 +100,13 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def updateLastSentHighWatermark(highWatermark: Long): Unit = {
     _lastSentHighWatermark = highWatermark
     trace(s"Updated HW of replica to $highWatermark")
+  }
+
+  def updateReassignmentLag(messageOffset: Long, isAddingReplica: Boolean): Unit = {
+    if (isAddingReplica)
+      _lastReassignmentLag = Math.max(0, _lastSentHighWatermark - messageOffset)
+    else
+      _lastReassignmentLag = 0L
   }
 
   def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
