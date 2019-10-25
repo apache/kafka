@@ -510,6 +510,17 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         suspended.clear();
     }
 
+    @Override
+    public void shutdown(final boolean clean) {
+        log.debug("Shutting down all active tasks in {} mode" + "\n" +
+                      "Created: {}" + "\n" +
+                      "Restoring: {}" + "\n" +
+                      "Running: {}" + "\n" +
+                      "Suspended: {}",
+            clean, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
+        super.shutdown(clean);
+    }
+
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append(super.toString(indent));
