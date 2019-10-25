@@ -53,7 +53,7 @@ class ReplicaFetcherThread(name: String,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
-                                if (replicaMgr == null) new BrokerTopicStats else replicaMgr.brokerTopicStats) {
+                                replicaMgr.brokerTopicStats) {
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
