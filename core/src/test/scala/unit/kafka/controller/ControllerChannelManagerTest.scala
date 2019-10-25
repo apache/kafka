@@ -673,7 +673,7 @@ class ControllerChannelManagerTest {
     KafkaConfig.fromProps(props)
   }
 
-  private def replicaAssignment(replicas: Seq[Int]): PartitionReplicaAssignment = PartitionReplicaAssignment(replicas, Seq(), Seq())
+  private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())
 
   private def initContext(brokers: Seq[Int],
                           topics: Set[String],
