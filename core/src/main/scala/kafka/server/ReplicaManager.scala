@@ -1550,7 +1550,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // Shrink ISRs for non offline partitions
     allPartitions.keys.foreach { topicPartition =>
-      nonOfflinePartition(topicPartition).foreach(_.maybeShrinkIsr(config.replicaLagTimeMaxMs))
+      nonOfflinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
 

@@ -946,7 +946,7 @@ class PartitionTest extends AbstractPartitionTest {
       // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
       executor.submit(CoreUtils.runnable {
         while (!done.get) {
-          partitions.foreach(_.maybeShrinkIsr(10000))
+          partitions.foreach(_.maybeShrinkIsr())
         }
       })
       // Append records to partitions, one partition-per-thread
@@ -1240,11 +1240,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // On initialization, the replica is considered caught up and should not be removed
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
 
     // If enough time passes without a fetch update, the ISR should shrink
-    time.sleep(10001)
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
     val updatedLeaderAndIsr = LeaderAndIsr(
       leader = brokerId,
       leaderEpoch = leaderEpoch,
@@ -1252,7 +1252,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(Some(2))
 
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(10L, partition.localLogOrException.highWatermark)
   }
@@ -1325,7 +1325,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
@@ -1383,7 +1383,7 @@ class PartitionTest extends AbstractPartitionTest {
     time.sleep(10001)
 
     // The ISR should not be shrunk because the follower is caught up to the leader's log end
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
@@ -1434,7 +1434,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(None)
 
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }
