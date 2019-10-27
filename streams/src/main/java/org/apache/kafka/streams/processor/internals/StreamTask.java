@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -519,6 +520,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         } catch (final CommitFailedException | ProducerFencedException error) {
             throw new TaskMigratedException(this, error);
+        } catch (final RetriableCommitFailedException error) {
+            // commitSync throws this error and can be ignored (since EOS is not enabled, even if the task crashed
+            // immediately after this commit, we would just reprocess those records again)
+            log.info("Committing failed with a non-fatal error, we can ignore this since commit may succeed still");
         }
 
         commitNeeded = false;
