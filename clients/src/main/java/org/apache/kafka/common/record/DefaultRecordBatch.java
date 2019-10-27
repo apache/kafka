@@ -128,6 +128,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
     private static final int CONTROL_FLAG_MASK = 0x20;
+    private static final byte DELETE_HORIZON_FLAG_MASK = 0x40;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     private static final int MAX_SKIP_BUFFER_SIZE = 2048;
@@ -243,6 +244,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public boolean isTransactional() {
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
+    }
+
+    @Override
+    public boolean isBaseTimestampDeleteHorizon() {
+        return (attributes() & DELETE_HORIZON_FLAG_MASK) > 0;
     }
 
     @Override
