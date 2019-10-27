@@ -63,6 +63,7 @@ abstract class AbstractFetcherThread(name: String,
   type FetchData = FetchResponse.PartitionData[Records]
   type EpochData = OffsetsForLeaderEpochRequest.PartitionData
 
+  val removedPartitions = mutable.ListBuffer.empty[TopicPartition]
   private val partitionStates = new PartitionStates[PartitionFetchState]
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
@@ -660,6 +661,7 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       topicPartitions.foreach { topicPartition =>
+        removedPartitions += topicPartition
         partitionStates.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition)
       }

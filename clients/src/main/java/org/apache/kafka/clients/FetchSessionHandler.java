@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -222,7 +223,24 @@ public class FetchSessionHandler {
                 removed.add(topicPartition);
             }
 
-            next.remove(topicPartition);
+            // we do not need to call next.remove assuming the caller would not add and then remove
+            // the same element within the same iteration (which is true in both Fetcher and ReplicaFetcherThread),
+            // so saving the search here.
+        }
+
+        /**
+         * Mark all partitions that are not included in the given set as removed in the upcoming fetch
+         */
+        public void removeAllIfNotContained(Collection<TopicPartition> topicPartitions) {
+            for (Iterator<Map.Entry<TopicPartition, PartitionData>> iter =
+                 sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
+                Map.Entry<TopicPartition, PartitionData> entry = iter.next();
+                TopicPartition topicPartition = entry.getKey();
+                if (!topicPartitions.contains(topicPartition)) {
+                    iter.remove();
+                    removed.add(topicPartition);
+                }
+            }
         }
 
         public FetchRequestData build() {

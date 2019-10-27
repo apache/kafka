@@ -1102,7 +1102,8 @@ public class Fetcher<K, V> implements Closeable {
 
         long currentTimeMs = time.milliseconds();
 
-        for (TopicPartition partition : fetchablePartitions()) {
+        final List<TopicPartition> fetchablePartitions = fetchablePartitions();
+        for (TopicPartition partition : fetchablePartitions) {
             // Use the preferred read replica if set, or the position's leader
             SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
             Node node = selectReadReplica(partition, position.currentLeader.leader, currentTimeMs);
@@ -1132,8 +1133,11 @@ public class Fetcher<K, V> implements Closeable {
                     fetchable.put(node, builder);
                 }
 
-                builder.add(partition, new FetchRequest.PartitionData(position.offset,
+                if (position.updated) {
+                    builder.add(partition, new FetchRequest.PartitionData(position.offset,
                         FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, position.currentLeader.epoch));
+                    position.updated = false;
+                }
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, node);
@@ -1142,7 +1146,9 @@ public class Fetcher<K, V> implements Closeable {
 
         Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
         for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
+            final FetchSessionHandler.Builder builder = entry.getValue();
+            builder.removeAllIfNotContained(fetchablePartitions);
+            reqs.put(entry.getKey(), builder.build());
         }
         return reqs;
     }

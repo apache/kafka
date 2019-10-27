@@ -984,8 +984,10 @@ public class SubscriptionState {
      */
     public static class FetchPosition {
         public final long offset;
+        public boolean updated;
         final Optional<Integer> offsetEpoch;
         final Metadata.LeaderAndEpoch currentLeader;
+
 
         FetchPosition(long offset) {
             this(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty()));
@@ -995,6 +997,7 @@ public class SubscriptionState {
             this.offset = offset;
             this.offsetEpoch = Objects.requireNonNull(offsetEpoch);
             this.currentLeader = Objects.requireNonNull(currentLeader);
+            this.updated = true;
         }
 
         @Override

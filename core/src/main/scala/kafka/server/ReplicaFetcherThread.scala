@@ -282,6 +282,9 @@ class ReplicaFetcherThread(name: String,
       }
     }
 
+    removedPartitions.foreach { topicPartition => builder.remove(topicPartition) }
+    removedPartitions.clear()
+
     val fetchData = builder.build()
     val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
       None
