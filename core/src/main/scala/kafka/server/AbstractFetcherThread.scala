@@ -647,7 +647,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private[server] def partitionsAndOffsets: Map[TopicPartition, InitialFetchState] = inLock(partitionMapLock) {
-    partitionStates.partitionStateMap.asScala.map { case(topicPartition, currentFetchState) =>
+    partitionStates.partitionStateMap.asScala.map { case (topicPartition, currentFetchState) =>
       val initialFetchState = InitialFetchState(sourceBroker,
         currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
         initOffset = currentFetchState.fetchOffset)
