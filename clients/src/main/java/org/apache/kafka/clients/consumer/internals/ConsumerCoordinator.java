@@ -1044,11 +1044,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             generation = generationIfStable();
             // if the generation is null, we are not part of an active group (and we expect to be).
             // the only thing we can do is fail the commit and let the user rejoin the group in poll();
-            // we use RebalanceInProgressException to indicate this may not be a fatal error, and leave
+            // we use RetriableCommitFailedException to indicate this may not be a fatal error, and leave
             // it to users whether they want to handle differently than CommitFailed
             if (generation == null) {
                 log.info("Failing OffsetCommit request since the consumer is not part of an active group");
-                return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                return RequestFuture.failure(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
                     "consumer group is not part of an active group yet. You can try completing the rebalance " +
                     "by calling poll() and then retry the operation"));
             }
@@ -1126,15 +1126,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                            /* Consumer never tries to commit offset in between join-group and sync-group,
+                            /* Consumer should not try to commit offset in between join-group and sync-group,
                              * and hence on broker-side it is not expected to see a commit offset request
                              * during CompletingRebalance phase; if it ever happens then broker would return
-                             * this error. In this case we would just throw a RebalanceInProgressException
-                             * and request re-join, but we do not need to reset generations.
-                             * If the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                             * this error to indicate that we are still in the middle of a rebalance.
+                             * In this case we would throw a RetriableCommitFailedException,
+                             * request re-join but do not reset generations. If the callers decide to retry they
+                             * can go ahead and call poll to finish up the rebalance first, and then try commit again.
                              */
                             requestRejoin();
-                            future.raise(new RebalanceInProgressException());
+                            future.raise(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
+                                "consumer group undergoing a rebalance at the moment. You can try completing the rebalance " +
+                                "by calling poll() and then retry commit again"));
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID ||
                                    error == Errors.ILLEGAL_GENERATION) {
