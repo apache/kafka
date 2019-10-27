@@ -1742,7 +1742,7 @@ public class RequestResponseTest {
         Map<String, ApiError> results = new HashMap<>();
         results.put("my_topic", ApiError.fromThrowable(
                 new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));
-        results.put("my_topic", ApiError.NONE);
+        results.put("my_other_topic", ApiError.NONE);
         return new CreatePartitionsResponse(42, results);
     }
 
