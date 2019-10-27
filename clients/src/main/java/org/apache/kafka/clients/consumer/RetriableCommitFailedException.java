@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.ApiException;
 
-public class RetriableCommitFailedException extends RetriableException {
+public class RetriableCommitFailedException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
     public RetriableCommitFailedException(Throwable t) {
-        super("Offset commit failed with a retriable exception. You should retry committing " +
-                "the latest consumed offsets.", t);
+        super("Offset commit failed with a retriable exception. This is usually because the consumer is no longer " +
+            "part of a group or is participating a rebalance right now. You should first call poll to complete " +
+            "the rebalance and then commit the latest consumed offsets.", t);
     }
 
     public RetriableCommitFailedException(String message) {

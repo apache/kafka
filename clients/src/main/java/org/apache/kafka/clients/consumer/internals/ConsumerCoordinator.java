@@ -36,7 +36,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -960,7 +959,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
-                if (exception instanceof RetriableException) {
+                if (exception instanceof RetriableCommitFailedException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
                         exception);
                     nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
