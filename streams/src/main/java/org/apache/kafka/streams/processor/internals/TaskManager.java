@@ -269,8 +269,8 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!assignedActiveTasks.isEmpty()) {
-            throw new IllegalStateException("TaskManager had leftover tasks after removing all zombies");
+        } else if (!(active.isEmpty() && assignedActiveTasks.isEmpty() && changelogReader.isEmpty())) {
+            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
         }
 
         return zombieTasks;
