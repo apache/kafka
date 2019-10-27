@@ -510,7 +510,7 @@ class SocketServerTest {
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -525,7 +525,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted after sending out the response.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -537,7 +537,7 @@ class SocketServerTest {
 
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -550,7 +550,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test

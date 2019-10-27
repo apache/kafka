@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Properties
-import java.util.concurrent.ExecutionException
 
 import kafka.server.Defaults
 import kafka.utils.TestUtils
@@ -51,14 +50,9 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     val group = "missing.group"
     val topic = "foo:1"
     val service = getConsumerGroupService(getArgs(group, topic))
-    try {
-      service.deleteOffsets(group, List(topic))
-      fail("GroupIdNotFoundException should have been raised")
-    } catch {
-      case e: ExecutionException =>
-        if (e.getCause != Errors.GROUP_ID_NOT_FOUND.exception())
-          throw e
-    }
+
+    val (error, _) = service.deleteOffsets(group, List(topic))
+    assertEquals(Errors.GROUP_ID_NOT_FOUND, error)
   }
 
   @Test
@@ -134,8 +128,12 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     withConsumerGroup {
       val topic = if (inputPartition >= 0) inputTopic + ":" + inputPartition else inputTopic
       val service = getConsumerGroupService(getArgs(group, topic))
-      val partitions = service.deleteOffsets(group, List(topic))
+      val (topLevelError, partitions) = service.deleteOffsets(group, List(topic))
       val tp = new TopicPartition(inputTopic, expectedPartition)
+      // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
+      if (inputPartition >= 0) {
+        assertEquals(expectedError, topLevelError)
+      }
       if (expectedError == Errors.NONE)
         assertNull(partitions(tp))
       else

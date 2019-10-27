@@ -41,6 +41,7 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -158,6 +159,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1709,10 +1711,10 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient().deleteConsumerGroupOffsets(
                 groupId, Stream.of(tp1, tp2).collect(Collectors.toSet()));
 
-            assertNull(errorResult.all().get());
             assertNull(errorResult.partitionResult(tp1).get());
+            TestUtils.assertFutureError(errorResult.all(), GroupSubscribedToTopicException.class);
             TestUtils.assertFutureError(errorResult.partitionResult(tp2), GroupSubscribedToTopicException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp3), IllegalArgumentException.class);
+            assertThrows(IllegalArgumentException.class, () -> errorResult.partitionResult(tp3));
         }
     }
 
@@ -1785,13 +1787,13 @@ public class KafkaAdminClientTest {
 
         final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
-        final List<Errors> retriableErrors = Arrays.asList(
+        final List<Errors> nonRetriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            for (Errors error : retriableErrors) {
+            for (Errors error : nonRetriableErrors) {
                 env.kafkaClient().prepareResponse(
                     prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
@@ -1939,16 +1941,6 @@ public class KafkaAdminClientTest {
             final String instanceTwo = "instance-2";
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            MemberResponse responseOne = new MemberResponse()
-                                             .setGroupInstanceId(instanceOne)
-                                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
-
-            MemberResponse responseTwo = new MemberResponse()
-                                             .setGroupInstanceId(instanceTwo)
-                                             .setErrorCode(Errors.NONE.code());
-
-            List<MemberResponse> memberResponses = Arrays.asList(responseOne, responseTwo);
-
             // Retriable FindCoordinatorResponse errors should be retried
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
@@ -1966,79 +1958,76 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
             String groupId = "groupId";
-            List<String> membersToRemove = Arrays.asList(instanceOne, instanceTwo);
-            final MembershipChangeResult unknownErrorResult = env.adminClient().removeMemberFromConsumerGroup(
+            Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
+                                                                       new MemberToRemove(instanceTwo));
+            final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
+                new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            RemoveMemberFromGroupResult result = unknownErrorResult.all();
-            assertTrue(result.hasError());
-            assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.topLevelError());
+            MemberToRemove memberOne = new MemberToRemove(instanceOne);
+            MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
 
-            Map<MemberIdentity, KafkaFuture<Void>> memberFutures = result.memberFutures();
-            assertEquals(2, memberFutures.size());
-            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
-                KafkaFuture<Void> memberFuture = entry.getValue();
-                assertTrue(memberFuture.isCompletedExceptionally());
-                try {
-                    memberFuture.get();
-                    fail("get() should throw exception");
-                } catch (ExecutionException | InterruptedException e0) {
-                    assertTrue(e0.getCause() instanceof UnknownServerException);
-                }
-            }
+            TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
+            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
+            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberTwo), UnknownServerException.class);
+
+            MemberResponse responseOne = new MemberResponse()
+                                             .setGroupInstanceId(instanceOne)
+                                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+
+            MemberResponse responseTwo = new MemberResponse()
+                                             .setGroupInstanceId(instanceTwo)
+                                             .setErrorCode(Errors.NONE.code());
 
             // Inject one member level error.
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.NONE.code())
-                                                                         .setMembers(memberResponses)));
+                                                                         .setMembers(Arrays.asList(responseOne, responseTwo))));
 
-            final MembershipChangeResult memberLevelErrorResult = env.adminClient().removeMemberFromConsumerGroup(
+            final RemoveMembersFromConsumerGroupResult memberLevelErrorResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
+                new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
 
-            result = memberLevelErrorResult.all();
-            assertTrue(result.hasError());
-            assertEquals(Errors.NONE, result.topLevelError());
+            TestUtils.assertFutureError(memberLevelErrorResult.all(), UnknownMemberIdException.class);
+            TestUtils.assertFutureError(memberLevelErrorResult.memberResult(memberOne), UnknownMemberIdException.class);
+            assertNull(memberLevelErrorResult.memberResult(memberTwo).get());
 
-            memberFutures = result.memberFutures();
-            assertEquals(2, memberFutures.size());
-            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
-                KafkaFuture<Void> memberFuture = entry.getValue();
-                if (entry.getKey().groupInstanceId().equals(instanceOne)) {
-                    try {
-                        memberFuture.get();
-                        fail("get() should throw ExecutionException");
-                    } catch (ExecutionException | InterruptedException e0) {
-                        assertTrue(e0.getCause() instanceof UnknownMemberIdException);
-                    }
-                } else {
-                    assertFalse(memberFuture.isCompletedExceptionally());
-                }
-            }
-
-            // Return success.
+            // Return with missing member.
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.NONE.code())
                                                                          .setMembers(Collections.singletonList(responseTwo))));
 
-            final MembershipChangeResult noErrorResult = env.adminClient().removeMemberFromConsumerGroup(
+            final RemoveMembersFromConsumerGroupResult missingMemberResult = env.adminClient().removeMembersFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
+                new RemoveMembersFromConsumerGroupOptions(membersToRemove)
             );
-            result = noErrorResult.all();
-            assertFalse(result.hasError());
-            assertEquals(Errors.NONE, result.topLevelError());
 
-            memberFutures = result.memberFutures();
-            assertEquals(1, memberFutures.size());
-            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
-                assertFalse(entry.getValue().isCompletedExceptionally());
-            }
+            TestUtils.assertFutureError(missingMemberResult.all(), IllegalArgumentException.class);
+            // The memberOne was not included in the response.
+            TestUtils.assertFutureError(missingMemberResult.memberResult(memberOne), IllegalArgumentException.class);
+            assertNull(missingMemberResult.memberResult(memberTwo).get());
+
+
+            // Return with success.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                        Arrays.asList(responseTwo,
+                                      new MemberResponse().setGroupInstanceId(instanceOne).setErrorCode(Errors.NONE.code())
+                        ))
+            ));
+
+            final RemoveMembersFromConsumerGroupResult noErrorResult = env.adminClient().removeMembersFromConsumerGroup(
+                groupId,
+                new RemoveMembersFromConsumerGroupOptions(membersToRemove)
+            );
+            assertNull(noErrorResult.all().get());
+            assertNull(noErrorResult.memberResult(memberOne).get());
+            assertNull(noErrorResult.memberResult(memberTwo).get());
         }
     }
 
@@ -2051,7 +2040,7 @@ public class KafkaAdminClientTest {
             TopicPartition tp2 = new TopicPartition("B", 0);
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
             reassignments.put(tp1, Optional.empty());
-            reassignments.put(tp2, NewPartitionReassignment.of(1, 2, 3));
+            reassignments.put(tp2, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
 
             // 1. server returns less responses than number of partitions we sent
             AlterPartitionReassignmentsResponseData responseData1 = new AlterPartitionReassignmentsResponseData();
@@ -2142,9 +2131,9 @@ public class KafkaAdminClientTest {
             TopicPartition invalidTopicTP = new TopicPartition("", 0);
             TopicPartition invalidPartitionTP = new TopicPartition("ABC", -1);
             Map<TopicPartition, Optional<NewPartitionReassignment>> invalidTopicReassignments = new HashMap<>();
-            invalidTopicReassignments.put(invalidPartitionTP, NewPartitionReassignment.of(1, 2, 3));
-            invalidTopicReassignments.put(invalidTopicTP, NewPartitionReassignment.of(1, 2, 3));
-            invalidTopicReassignments.put(tp1, NewPartitionReassignment.of(1, 2, 3));
+            invalidTopicReassignments.put(invalidPartitionTP, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
+            invalidTopicReassignments.put(invalidTopicTP, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
+            invalidTopicReassignments.put(tp1, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
 
             AlterPartitionReassignmentsResponseData singlePartResponseData =
                     new AlterPartitionReassignmentsResponseData()
@@ -2706,6 +2695,21 @@ public class KafkaAdminClientTest {
 
             TestUtils.assertFutureError(result.all(), TopicAuthorizationException.class);
         }
+    }
+
+    @Test
+    public void testGetSubLevelError() {
+        List<MemberIdentity> memberIdentities = Arrays.asList(
+            new MemberIdentity().setGroupInstanceId("instance-0"),
+            new MemberIdentity().setGroupInstanceId("instance-1"));
+        Map<MemberIdentity, Errors> errorsMap = new HashMap<>();
+        errorsMap.put(memberIdentities.get(0), Errors.NONE);
+        errorsMap.put(memberIdentities.get(1), Errors.FENCED_INSTANCE_ID);
+        assertEquals(IllegalArgumentException.class, KafkaAdminClient.getSubLevelError(errorsMap,
+                                                                                       new MemberIdentity().setGroupInstanceId("non-exist-id"), "For unit test").getClass());
+        assertNull(KafkaAdminClient.getSubLevelError(errorsMap, memberIdentities.get(0), "For unit test"));
+        assertEquals(FencedInstanceIdException.class, KafkaAdminClient.getSubLevelError(
+            errorsMap, memberIdentities.get(1), "For unit test").getClass());
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.memory.MemoryPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ScatteringByteChannel;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A size delimited Receive that consists of a 4 byte network-ordered size N followed by N bytes of content
@@ -144,6 +145,12 @@ public class NetworkReceive implements Receive {
 
     public ByteBuffer payload() {
         return this.buffer;
+    }
+
+    public int bytesRead() {
+        if (buffer == null)
+            return size.position();
+        return buffer.position() + size.position();
     }
 
     /**

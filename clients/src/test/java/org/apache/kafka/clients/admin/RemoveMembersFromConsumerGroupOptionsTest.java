@@ -16,23 +16,20 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class RemoveMemberFromConsumerGroupOptionsTest {
+public class RemoveMembersFromConsumerGroupOptionsTest {
 
     @Test
     public void testConstructor() {
-        List<String> groupInstanceIds = Collections.singletonList("instance-1");
+        RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(new MemberToRemove("instance-1")));
 
-        RemoveMemberFromConsumerGroupOptions options = new RemoveMemberFromConsumerGroupOptions(groupInstanceIds);
-
-        assertEquals(Collections.singletonList(
-            new MemberIdentity().setGroupInstanceId("instance-1")), options.getMembers());
+        assertEquals(Collections.singleton(
+            new MemberToRemove("instance-1")), options.members());
     }
 }

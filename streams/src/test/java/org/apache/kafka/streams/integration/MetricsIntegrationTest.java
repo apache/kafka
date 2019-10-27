@@ -150,6 +150,8 @@ public class MetricsIntegrationTest {
     private static final String POLL_LATENCY_MAX = "poll-latency-max";
     private static final String COMMIT_RATE = "commit-rate";
     private static final String COMMIT_TOTAL = "commit-total";
+    private static final String ENFORCED_PROCESSING_RATE = "enforced-processing-rate";
+    private static final String ENFORCED_PROCESSING_TOTAL = "enforced-processing-total";
     private static final String POLL_RATE = "poll-rate";
     private static final String POLL_TOTAL = "poll-total";
     private static final String TASK_CREATED_RATE = "task-created-rate";
@@ -522,8 +524,24 @@ public class MetricsIntegrationTest {
             COMMIT_TOTAL,
             StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
         );
+        checkMetricByName(listMetricTask, ENFORCED_PROCESSING_RATE, 4);
+        checkMetricByName(listMetricTask, ENFORCED_PROCESSING_TOTAL, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
+        checkTaskLevelMetricsForBuiltInMetricsVersionLatest(
+            listMetricTask,
+            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 0
+        );
+    }
+
+    private void checkTaskLevelMetricsForBuiltInMetricsVersionLatest(final List<Metric> metrics,
+                                                                     final int count) {
+        checkMetricByName(metrics, PROCESS_LATENCY_AVG, count);
+        checkMetricByName(metrics, PROCESS_LATENCY_MAX, count);
+        checkMetricByName(metrics, PUNCTUATE_LATENCY_AVG, count);
+        checkMetricByName(metrics, PUNCTUATE_LATENCY_MAX, count);
+        checkMetricByName(metrics, PUNCTUATE_RATE, count);
+        checkMetricByName(metrics, PUNCTUATE_TOTAL, count);
     }
 
     private void checkProcessorLevelMetrics() {

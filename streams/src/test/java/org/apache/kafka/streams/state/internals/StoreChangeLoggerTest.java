@@ -32,7 +32,6 @@ import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -50,7 +49,7 @@ public class StoreChangeLoggerTest {
             "StoreChangeLoggerTest",
             new LogContext("StoreChangeLoggerTest "),
             new DefaultProductionExceptionHandler(),
-            Optional.of(new Metrics().sensor("skipped-records"))
+            new Metrics().sensor("dropped-records")
         ) {
             @Override
             public <K1, V1> void send(final String topic,
