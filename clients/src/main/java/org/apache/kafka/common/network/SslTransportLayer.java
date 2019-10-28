@@ -184,8 +184,10 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = null;
             netWriteBuffer = null;
             appReadBuffer = null;
-            ByteBufferUnmapper.unmap("fileChannelBuffer", fileChannelBuffer);
-            fileChannelBuffer = null;
+            if (fileChannelBuffer != null) {
+                ByteBufferUnmapper.unmap("fileChannelBuffer", fileChannelBuffer);
+                fileChannelBuffer = null;
+            }
         }
     }
 
