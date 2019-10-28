@@ -38,6 +38,7 @@ import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.Utils;
@@ -60,7 +61,6 @@ public class SslTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Logger log;
-    private final ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -98,7 +98,7 @@ public class SslTransportLayer implements TransportLayer {
         this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
         netWriteBuffer.limit(0);
         netReadBuffer.limit(0);
-        
+
         state = State.HANDSHAKE;
         //initiate handshake
         sslEngine.beginHandshake();
@@ -167,7 +167,7 @@ public class SslTransportLayer implements TransportLayer {
                 //prep the buffer for the close message
                 netWriteBuffer.clear();
                 //perform the close, since we called sslEngine.closeOutbound
-                SSLEngineResult wrapResult = sslEngine.wrap(emptyBuf, netWriteBuffer);
+                SSLEngineResult wrapResult = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
                 //we should be in a close state
                 if (wrapResult.getStatus() != SSLEngineResult.Status.CLOSED) {
                     throw new IOException("Unexpected status returned by SSLEngine.wrap, expected CLOSED, received " +
@@ -446,7 +446,7 @@ public class SslTransportLayer implements TransportLayer {
         //this should never be called with a network buffer that contains data
         //so we can clear it here.
         netWriteBuffer.clear();
-        SSLEngineResult result = sslEngine.wrap(emptyBuf, netWriteBuffer);
+        SSLEngineResult result = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
         //prepare the results to be written
         netWriteBuffer.flip();
         handshakeStatus = result.getHandshakeStatus();
