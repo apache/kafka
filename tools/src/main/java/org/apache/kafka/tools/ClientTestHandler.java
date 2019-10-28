@@ -30,7 +30,7 @@ public interface ClientTestHandler<K, V> {
 
     void flush();
 
-    void txnCommit();
+    void commitTransaction();
 
     void close();
 }

@@ -89,7 +89,7 @@ class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
     }
 
     @Override
-    public void txnCommit() {
+    public void commitTransaction() {
         producer.commitTransaction();
     }
 
