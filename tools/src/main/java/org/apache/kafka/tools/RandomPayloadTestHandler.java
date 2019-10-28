@@ -84,12 +84,12 @@ class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
     }
 
     @Override
-    public void onFlush() {
+    public void flush() {
         producer.flush();
     }
 
     @Override
-    public void onTxnCommit() {
+    public void txnCommit() {
         producer.commitTransaction();
     }
 

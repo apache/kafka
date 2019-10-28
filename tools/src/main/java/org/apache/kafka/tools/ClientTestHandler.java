@@ -18,6 +18,9 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 
+/**
+ * An object used by {@link KafkaClientPerformance} to test the performance of Kafka clients.
+ */
 public interface ClientTestHandler<K, V> {
 
     /**
@@ -25,9 +28,9 @@ public interface ClientTestHandler<K, V> {
      */
     ProducerRecord<K, V> getRecord();
 
-    void onFlush();
+    void flush();
 
-    void onTxnCommit();
+    void txnCommit();
 
     void close();
 }

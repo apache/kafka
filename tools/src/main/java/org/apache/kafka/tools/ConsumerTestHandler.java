@@ -49,11 +49,12 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     private final Consumer<K, V> consumer;
     private final String consumerGroupId;
-    private Deque<ProducerRecord<K, V>> recordsToBeSent;
+    private final Deque<ProducerRecord<K, V>> recordsToBeSent;
     private final long pollTimeout;
     private final String inputTopic;
     private final String outputTopic;
     private final Producer<K, V> producer;
+    private final int pollRetries;
 
     ConsumerTestHandler(Namespace res,
                         String consumerGroupId,
@@ -75,28 +76,37 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
         this.producer = producer;
         recordsToBeSent = new ArrayDeque<>();
+        this.pollRetries = 10;
     }
 
     @Override
     public ProducerRecord<K, V> getRecord() {
         System.out.println("Consumer polls new data with timeout " + pollTimeout);
-        while (recordsToBeSent.isEmpty()) {
+
+        int numPolls = 0;
+        while (recordsToBeSent.isEmpty() && numPolls < pollRetries) {
             ConsumerRecords<K, V> consumedRecords = consumer.poll(Duration.ofMillis(pollTimeout));
             for (ConsumerRecord<K, V> consumerRecord : consumedRecords) {
                 recordsToBeSent.add(new ProducerRecord<>(outputTopic, consumerRecord.value()));
             }
+            numPolls += 1;
+        }
+        // No records are being fetched, fail the application.
+        if (recordsToBeSent.isEmpty()) {
+            throw new IllegalStateException("Fetch fails after " + numPolls + " polls. " +
+                "There could be some network error or not enough records within the input topic");
         }
         return recordsToBeSent.remove();
     }
 
     @Override
-    public void onFlush() {
+    public void flush() {
         producer.flush();
         consumer.commitSync();
     }
 
     @Override
-    public void onTxnCommit() {
+    public void txnCommit() {
         producer.sendOffsetsToTransaction(offsets(consumer), consumerGroupId);
         producer.commitTransaction();
     }

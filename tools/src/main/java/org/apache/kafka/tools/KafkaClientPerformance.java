@@ -119,12 +119,12 @@ public class KafkaClientPerformance {
 
                 currentTransactionSize++;
                 if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
-                    clientTestHandler.onTxnCommit();
+                    clientTestHandler.txnCommit();
                     currentTransactionSize = 0;
                 }
 
                 if (flushEnabled && flushDurationMs <= (sendStartMs - lastFlushTime)) {
-                    clientTestHandler.onFlush();
+                    clientTestHandler.flush();
                     lastFlushTime = System.currentTimeMillis();
                 }
 
