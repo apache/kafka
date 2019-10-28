@@ -59,6 +59,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Logger log;
+    private final ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -67,8 +68,8 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer netReadBuffer;
     private ByteBuffer netWriteBuffer;
     private ByteBuffer appReadBuffer;
+    private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
-    private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         return new SslTransportLayer(channelId, key, sslEngine);
@@ -642,14 +643,13 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public int write(ByteBuffer src) throws IOException {
-        int written = 0;
         if (state == State.CLOSING)
             throw closingException();
         if (state != State.READY)
-            return written;
+            return 0;
 
         if (!flush(netWriteBuffer))
-            return written;
+            return 0;
 
         netWriteBuffer.clear();
         SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
@@ -660,8 +660,9 @@ public class SslTransportLayer implements TransportLayer {
             throw renegotiationException();
 
         if (wrapResult.getStatus() == Status.OK) {
-            written = wrapResult.bytesConsumed();
+            int written = wrapResult.bytesConsumed();
             flush(netWriteBuffer);
+            return written;
         } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
             int currentNetWriteBufferSize = netWriteBufferSize();
             netWriteBuffer.compact();
@@ -674,7 +675,7 @@ public class SslTransportLayer implements TransportLayer {
         } else if (wrapResult.getStatus() == Status.CLOSED) {
             throw new EOFException();
         }
-        return written;
+        return 0;
     }
 
     /**
@@ -903,6 +904,54 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
-        return fileChannel.transferTo(position, count, this);
+        if (state == State.CLOSING)
+            throw closingException();
+        if (state != State.READY)
+            return 0;
+
+        if (!flush(netWriteBuffer))
+            return 0;
+
+        long channelSize = fileChannel.size();
+        if (position > channelSize)
+            return 0;
+        int bytesToWrite = (int) Math.min(Math.min(count, channelSize - position), Integer.MAX_VALUE);
+
+        if (fileChannelBuffer == null) {
+            // same size as `netWriteBuffer`
+            int transferSize = 16384;
+            // Allocate a direct buffer to avoid one heap to heap buffer copy. SSLEngine copies the source
+            // buffer (fileChannelBuffer) to the destination buffer (netWriteBuffer) and then encrypts in-place.
+            // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not
+            // useful here.
+            fileChannelBuffer = ByteBuffer.allocateDirect(transferSize);
+        } else {
+            fileChannelBuffer.clear();
+        }
+
+        int bytesWritten = 0;
+        long pos = position;
+        try {
+            while (bytesWritten < bytesToWrite) {
+                int bytesRemaining = bytesToWrite - bytesWritten;
+                if (bytesRemaining < fileChannelBuffer.limit())
+                    fileChannelBuffer.limit(bytesRemaining);
+                int bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                if (bytesRead <= 0)
+                    break;
+                fileChannelBuffer.flip();
+                int networkBytesWritten = write(fileChannelBuffer);
+                bytesWritten += networkBytesWritten;
+                if (networkBytesWritten != bytesRead)
+                    break;
+                pos += networkBytesWritten;
+                fileChannelBuffer.clear();
+            }
+            return bytesWritten;
+        } catch (IOException x) {
+            if (bytesWritten > 0)
+                return bytesWritten;
+            throw x;
+        }
     }
 }
