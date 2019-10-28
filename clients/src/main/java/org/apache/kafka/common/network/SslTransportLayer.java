@@ -650,34 +650,32 @@ public class SslTransportLayer implements TransportLayer {
         if (state != State.READY)
             return 0;
 
-        if (!flush(netWriteBuffer))
-            return 0;
-
-        netWriteBuffer.clear();
-        SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
-        netWriteBuffer.flip();
-
-        //handle ssl renegotiation
-        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
-            throw renegotiationException();
-
-        if (wrapResult.getStatus() == Status.OK) {
-            int written = wrapResult.bytesConsumed();
-            flush(netWriteBuffer);
-            return written;
-        } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
-            int currentNetWriteBufferSize = netWriteBufferSize();
-            netWriteBuffer.compact();
-            netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+        int written = 0;
+        while (flush(netWriteBuffer) && src.hasRemaining()) {
+            netWriteBuffer.clear();
+            SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
             netWriteBuffer.flip();
-            if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
-                throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
-        } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-            throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
-        } else if (wrapResult.getStatus() == Status.CLOSED) {
-            throw new EOFException();
+
+            //handle ssl renegotiation
+            if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
+                throw renegotiationException();
+
+            if (wrapResult.getStatus() == Status.OK) {
+                written += wrapResult.bytesConsumed();
+            } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
+                int currentNetWriteBufferSize = netWriteBufferSize();
+                netWriteBuffer.compact();
+                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+                netWriteBuffer.flip();
+                if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
+                    throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
+            } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+                throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
+            } else if (wrapResult.getStatus() == Status.CLOSED) {
+                throw new EOFException();
+            }
         }
-        return 0;
+        return written;
     }
 
     /**
