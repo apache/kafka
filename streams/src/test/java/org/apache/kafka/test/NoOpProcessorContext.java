@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -39,7 +39,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map<Object, Object> forwardedValues = new HashMap<>();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
+        super(
+            new TaskId(1, 1),
+            streamsConfig(),
+            new StreamsMetricsImpl(new Metrics(), "test", StreamsConfig.METRICS_LATEST),
+            null,
+            null);
     }
 
     private static StreamsConfig streamsConfig() {

@@ -150,7 +150,8 @@ public class StreamTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
     private StateDirectory stateDirectory;
@@ -1065,7 +1066,6 @@ public class StreamTaskTest {
     @Test
     public void shouldFlushRecordCollectorOnFlushState() {
         final AtomicBoolean flushed = new AtomicBoolean(false);
-        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(
             taskId00,
             partitions,
