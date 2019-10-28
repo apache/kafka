@@ -395,17 +395,14 @@ public class StateStoreMetrics {
             EXPIRED_WINDOW_RECORD_DROP,
             RecordingLevel.INFO
         );
-        final Version version = streamsMetrics.version();
-        if (version == Version.FROM_0100_TO_24) {
-            addInvocationRateAndCountToSensor(
-                sensor,
-                "stream-" + storeType + "-metrics",
-                streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName),
-                EXPIRED_WINDOW_RECORD_DROP,
-                EXPIRED_WINDOW_RECORD_DROP_RATE_DESCRIPTION,
-                EXPIRED_WINDOW_RECORD_DROP_TOTAL_DESCRIPTION
-            );
-        }
+        addInvocationRateAndCountToSensor(
+            sensor,
+            "stream-" + storeType + "-metrics",
+            streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName),
+            EXPIRED_WINDOW_RECORD_DROP,
+            EXPIRED_WINDOW_RECORD_DROP_RATE_DESCRIPTION,
+            EXPIRED_WINDOW_RECORD_DROP_TOTAL_DESCRIPTION
+        );
         return sensor;
     }
 

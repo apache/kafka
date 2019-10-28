@@ -465,12 +465,13 @@ public abstract class SessionBytesStoreTest {
 
         LogCaptureAppender.unregister(appender);
 
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+        final String metricScope = getMetricsScope();
+        final String threadId = Thread.currentThread().getName();
+        final Metric dropTotal;
+        final Metric dropRate;
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
-            final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-            final String metricScope = getMetricsScope();
-            final String threadId = Thread.currentThread().getName();
-
-            final Metric dropTotal = metrics.get(new MetricName(
+            dropTotal = metrics.get(new MetricName(
                 "expired-window-record-drop-total",
                 "stream-" + metricScope + "-metrics",
                 "The total number of dropped records due to an expired window",
@@ -481,7 +482,7 @@ public abstract class SessionBytesStoreTest {
                 )
             ));
 
-            final Metric dropRate = metrics.get(new MetricName(
+            dropRate = metrics.get(new MetricName(
                 "expired-window-record-drop-rate",
                 "stream-" + metricScope + "-metrics",
                 "The average number of dropped records due to an expired window per second",
@@ -491,10 +492,29 @@ public abstract class SessionBytesStoreTest {
                     mkEntry(metricScope + "-state-id", sessionStore.name())
                 )
             ));
+        } else {
+            dropTotal = metrics.get(new MetricName(
+                "dropped-records-total",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
 
-            assertEquals(1.0, dropTotal.metricValue());
-            assertNotEquals(0.0, dropRate.metricValue());
+            dropRate = metrics.get(new MetricName(
+                "dropped-records-rate",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
         }
+        assertEquals(1.0, dropTotal.metricValue());
+        assertNotEquals(0.0, dropRate.metricValue());
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Skipping record for expired segment."));
     }

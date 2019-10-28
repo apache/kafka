@@ -35,9 +35,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,8 +75,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor =
-            StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskName, metricScope, name, metrics);
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+            threadId,
+            taskName,
+            metricScope,
+            name,
+            metrics
+        );
 
         if (root != null) {
             context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));

@@ -309,17 +309,15 @@ public class StateStoreMetricsTest {
         final String descriptionOfCount = "The total number of dropped records due to an expired window";
         expect(streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, metricName, RecordingLevel.INFO))
             .andReturn(expectedSensor);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
-            StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                expectedSensor,
-                "stream-" + STORE_TYPE + "-metrics",
-                storeTagMap,
-                metricName,
-                descriptionOfRate,
-                descriptionOfCount
-            );
-        }
+        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            "stream-" + STORE_TYPE + "-metrics",
+            storeTagMap,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor =
