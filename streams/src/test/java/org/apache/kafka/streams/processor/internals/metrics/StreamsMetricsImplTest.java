@@ -44,7 +44,9 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.easymock.EasyMock.anyObject;
@@ -156,7 +158,6 @@ public class StreamsMetricsImplTest {
         return null;
     }
 
-
     private void addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         expect(metrics.sensor(anyString(), anyObject(RecordingLevel.class), anyObject(Sensor[].class)))
             .andStubReturn(sensor);
@@ -218,6 +219,12 @@ public class StreamsMetricsImplTest {
         streamsMetrics.addClientLevelMutableMetric(METRIC_NAME1, description1, recordingLevel, valueProvider);
 
         verify(metrics);
+    }
+
+    @Test
+    public void shouldProvideCorrectStrings() {
+        assertThat(LATENCY_SUFFIX, is("-latency"));
+        assertThat(ROLLUP_VALUE, is("all"));
     }
 
     @Test
@@ -436,6 +443,7 @@ public class StreamsMetricsImplTest {
         assertThat(tagMap.get(StreamsMetricsImpl.CLIENT_ID_TAG), equalTo(CLIENT_ID));
     }
 
+    @Test
     public void shouldGetStoreLevelTagMapForBuiltInMetricsLatestVersion() {
         shouldGetStoreLevelTagMap(StreamsConfig.METRICS_LATEST);
     }

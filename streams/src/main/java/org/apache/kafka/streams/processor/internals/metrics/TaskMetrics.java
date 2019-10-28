@@ -197,6 +197,16 @@ public class TaskMetrics {
         return droppedRecordsSensor(threadId, taskId, streamsMetrics);
     }
 
+    public static Sensor droppedRecordsSensorOrLateRecordDropSensor(final String threadId,
+                                                                    final String taskId,
+                                                                    final String processorNodeId,
+                                                                    final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return ProcessorNodeMetrics.lateRecordDropSensor(threadId, taskId, processorNodeId, streamsMetrics);
+        }
+        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
+    }
+
     private static Sensor invocationRateAndCountSensor(final String threadId,
                                                        final String taskId,
                                                        final String metricName,

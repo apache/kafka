@@ -124,7 +124,6 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private InternalProcessorContext internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-        private String threadId;
 
         private KTableSuppressProcessor(final SuppressedInternal<K> suppress, final String storeName) {
             this.storeName = storeName;
@@ -141,7 +140,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         @Override
         public void init(final ProcessorContext context) {
             internalProcessorContext = (InternalProcessorContext) context;
-            threadId = Thread.currentThread().getName();
+            final String threadId = Thread.currentThread().getName();
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
                 threadId,
                 context.taskId().toString(),
@@ -216,11 +215,6 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         @Override
         public void close() {
-            internalProcessorContext.metrics().removeAllNodeLevelSensors(
-                threadId,
-                internalProcessorContext.taskId().toString(),
-                storeName
-            );
         }
     }
 }

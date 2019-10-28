@@ -18,18 +18,27 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 
 import java.util.Map;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class ProcessorNodeMetrics {
     private ProcessorNodeMetrics() {}
 
+    private static final String AVG_DESCRIPTION_PREFIX = "The average ";
+    private static final String MAX_DESCRIPTION_PREFIX = "The maximum ";
     private static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     private static final String RATE_DESCRIPTION_SUFFIX = " per second";
+    private static final String LATENCY_DESCRIPTION = "latency of ";
+    private static final String AVG_LATENCY_DESCRIPTION_PREFIX = AVG_DESCRIPTION_PREFIX + LATENCY_DESCRIPTION;
+    private static final String MAX_LATENCY_DESCRIPTION_PREFIX = MAX_DESCRIPTION_PREFIX + LATENCY_DESCRIPTION;
 
     private static final String SUPPRESSION_EMIT = "suppression-emit";
     private static final String SUPPRESSION_EMIT_DESCRIPTION = "emitted records from the suppression buffer";
@@ -37,21 +46,344 @@ public class ProcessorNodeMetrics {
     private static final String SUPPRESSION_EMIT_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + SUPPRESSION_EMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
+    private static final String PROCESS = "process";
+    private static final String PROCESS_DESCRIPTION = "calls to process";
+    private static final String PROCESS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PROCESS_DESCRIPTION;
+    private static final String PROCESS_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION;
+    private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION;
+
+    private static final String PUNCTUATE = "punctuate";
+    private static final String PUNCTUATE_DESCRIPTION = "calls to punctuate";
+    private static final String PUNCTUATE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PUNCTUATE_DESCRIPTION;
+    private static final String PUNCTUATE_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + PUNCTUATE_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + PUNCTUATE_DESCRIPTION;
+    private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + PUNCTUATE_DESCRIPTION;
+
+    private static final String CREATE = "create";
+    private static final String CREATE_DESCRIPTION1 = "processor nodes created";
+    private static final String CREATE_DESCRIPTION2 = "creations of processor nodes";
+    private static final String CREATE_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + CREATE_DESCRIPTION1;
+    private static final String CREATE_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + CREATE_DESCRIPTION1 + RATE_DESCRIPTION_SUFFIX;
+    private static final String CREATE_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + CREATE_DESCRIPTION2;
+    private static final String CREATE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + CREATE_DESCRIPTION2;
+
+    private static final String DESTROY = "destroy";
+    private static final String DESTROY_DESCRIPTION1 = "processor nodes destroyed";
+    private static final String DESTROY_DESCRIPTION2 = "destructions of processor nodes";
+    private static final String DESTROY_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + DESTROY_DESCRIPTION1;
+    private static final String DESTROY_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION1 + RATE_DESCRIPTION_SUFFIX;
+    private static final String DESTROY_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION2;
+    private static final String DESTROY_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION2;
+
+    private static final String FORWARD = "forward";
+    private static final String FORWARD_DESCRIPTION = "calls to forward";
+    private static final String FORWARD_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FORWARD_DESCRIPTION;
+    private static final String FORWARD_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String FORWARD_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION;
+    private static final String FORWARD_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION;
+
+    private static final String LATE_RECORD_DROP = "late-record-drop";
+    private static final String LATE_RECORD_DROP_DESCRIPTION = "dropped late records";
+    private static final String LATE_RECORD_DROP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + LATE_RECORD_DROP_DESCRIPTION;
+    private static final String LATE_RECORD_DROP_RATE_DESCRIPTION =
+        RATE_DESCRIPTION_PREFIX + LATE_RECORD_DROP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+
     public static Sensor suppressionEmitSensor(final String threadId,
                                                final String taskId,
                                                final String processorNodeId,
                                                final StreamsMetricsImpl streamsMetrics) {
+        return throughputSensor(
+            threadId,
+            taskId,
+            processorNodeId,
+            SUPPRESSION_EMIT,
+            SUPPRESSION_EMIT_RATE_DESCRIPTION,
+            SUPPRESSION_EMIT_TOTAL_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
+    }
+
+    public static Sensor processSensor(final String threadId,
+                                       final String taskId,
+                                       final String processorNodeId,
+                                       final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor;
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            final Sensor parentSensor = parentSensor(
+                threadId,
+                taskId,
+                PROCESS,
+                PROCESS_RATE_DESCRIPTION,
+                PROCESS_TOTAL_DESCRIPTION,
+                PROCESS_AVG_LATENCY_DESCRIPTION,
+                PROCESS_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics
+            );
+            sensor = streamsMetrics.nodeLevelSensor(
+                threadId,
+                taskId,
+                processorNodeId,
+                PROCESS,
+                RecordingLevel.DEBUG,
+                parentSensor
+            );
+            addAvgAndMaxToSensor(
+                sensor,
+                PROCESSOR_NODE_LEVEL_GROUP,
+                tagMap,
+                PROCESS + LATENCY_SUFFIX,
+                PROCESS_AVG_LATENCY_DESCRIPTION,
+                PROCESS_MAX_LATENCY_DESCRIPTION
+            );
+        } else {
+            sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, PROCESS, RecordingLevel.DEBUG);
+        }
+        addInvocationRateAndCountToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            PROCESS,
+            PROCESS_RATE_DESCRIPTION,
+            PROCESS_TOTAL_DESCRIPTION
+        );
+        return sensor;
+    }
+
+    public static Sensor punctuateSensor(final String threadId,
+                                         final String taskId,
+                                         final String processorNodeId,
+                                         final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return throughputAndLatencySensorWithParent(
+                threadId,
+                taskId,
+                processorNodeId,
+                PUNCTUATE,
+                PUNCTUATE_RATE_DESCRIPTION,
+                PUNCTUATE_TOTAL_DESCRIPTION,
+                PUNCTUATE_AVG_LATENCY_DESCRIPTION,
+                PUNCTUATE_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics
+            );
+        }
+        return emptySensor(threadId, taskId, processorNodeId, PUNCTUATE, RecordingLevel.DEBUG, streamsMetrics);
+    }
+
+    public static Sensor createSensor(final String threadId,
+                                      final String taskId,
+                                      final String processorNodeId,
+                                      final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return throughputAndLatencySensorWithParent(
+                threadId,
+                taskId,
+                processorNodeId,
+                CREATE,
+                CREATE_RATE_DESCRIPTION,
+                CREATE_TOTAL_DESCRIPTION,
+                CREATE_AVG_LATENCY_DESCRIPTION,
+                CREATE_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics);
+        }
+        return emptySensor(threadId, taskId, processorNodeId, CREATE, RecordingLevel.DEBUG, streamsMetrics);
+    }
+
+    public static Sensor destroySensor(final String threadId,
+                                       final String taskId,
+                                       final String processorNodeId,
+                                       final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return throughputAndLatencySensorWithParent(
+                threadId,
+                taskId,
+                processorNodeId,
+                DESTROY,
+                DESTROY_RATE_DESCRIPTION,
+                DESTROY_TOTAL_DESCRIPTION,
+                DESTROY_AVG_LATENCY_DESCRIPTION,
+                DESTROY_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics);
+        }
+        return emptySensor(threadId, taskId, processorNodeId, DESTROY, RecordingLevel.DEBUG, streamsMetrics);
+    }
+
+    public static Sensor forwardSensor(final String threadId,
+                                       final String taskId,
+                                       final String processorNodeId,
+                                       final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return throughputAndLatencySensorWithParent(
+                threadId,
+                taskId,
+                processorNodeId,
+                FORWARD,
+                FORWARD_RATE_DESCRIPTION,
+                FORWARD_TOTAL_DESCRIPTION,
+                FORWARD_AVG_LATENCY_DESCRIPTION,
+                FORWARD_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics);
+        }
+        return emptySensor(threadId, taskId, processorNodeId, FORWARD, RecordingLevel.DEBUG, streamsMetrics);
+    }
+
+    public static Sensor lateRecordDropSensor(final String threadId,
+                                              final String taskId,
+                                              final String processorNodeId,
+                                              final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return throughputSensor(
+                threadId,
+                taskId,
+                processorNodeId,
+                LATE_RECORD_DROP,
+                LATE_RECORD_DROP_RATE_DESCRIPTION,
+                LATE_RECORD_DROP_TOTAL_DESCRIPTION,
+                RecordingLevel.INFO,
+                streamsMetrics);
+        }
+        return emptySensor(threadId, taskId, processorNodeId, LATE_RECORD_DROP, RecordingLevel.INFO, streamsMetrics);
+    }
+
+    private static Sensor throughputAndLatencySensorWithParent(final String threadId,
+                                                               final String taskId,
+                                                               final String processorNodeId,
+                                                               final String metricName,
+                                                               final String descriptionOfRate,
+                                                               final String descriptionOfCount,
+                                                               final String descriptionOfAvgLatency,
+                                                               final String descriptionOfMaxLatency,
+                                                               final RecordingLevel recordingLevel,
+                                                               final StreamsMetricsImpl streamsMetrics) {
+        final Sensor parentSensor = parentSensor(
+            threadId,
+            taskId,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount,
+            descriptionOfAvgLatency,
+            descriptionOfMaxLatency,
+            RecordingLevel.DEBUG,
+            streamsMetrics
+        );
+        return throughputAndLatencySensor(
+            threadId,
+            taskId,
+            processorNodeId,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount,
+            descriptionOfAvgLatency,
+            descriptionOfMaxLatency,
+            RecordingLevel.DEBUG,
+            streamsMetrics,
+            parentSensor
+        );
+    }
+
+    private static Sensor parentSensor(final String threadId,
+                                       final String taskId,
+                                       final String metricName,
+                                       final String descriptionOfRate,
+                                       final String descriptionOfCount,
+                                       final String descriptionOfAvgLatency,
+                                       final String descriptionOfMaxLatency,
+                                       final RecordingLevel recordingLevel,
+                                       final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, metricName, recordingLevel);
+        final Map<String, String> parentTagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, ROLLUP_VALUE);
+        addAvgAndMaxToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            parentTagMap,
+            metricName + LATENCY_SUFFIX,
+            descriptionOfAvgLatency,
+            descriptionOfMaxLatency
+        );
+        addInvocationRateAndCountToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            parentTagMap,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount
+        );
+        return sensor;
+    }
+
+    private static Sensor throughputSensor(final String threadId,
+                                           final String taskId,
+                                           final String processorNodeId,
+                                           final String metricName,
+                                           final String descriptionOfRate,
+                                           final String descriptionOfCount,
+                                           final RecordingLevel recordingLevel,
+                                           final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
-            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, SUPPRESSION_EMIT, RecordingLevel.DEBUG);
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, metricName, recordingLevel);
         final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addInvocationRateAndCountToSensor(
             sensor,
             PROCESSOR_NODE_LEVEL_GROUP,
             tagMap,
-            SUPPRESSION_EMIT,
-            SUPPRESSION_EMIT_RATE_DESCRIPTION,
-            SUPPRESSION_EMIT_TOTAL_DESCRIPTION
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount
         );
         return sensor;
+    }
+
+    private static Sensor throughputAndLatencySensor(final String threadId,
+                                                     final String taskId,
+                                                     final String processorNodeId,
+                                                     final String metricName,
+                                                     final String descriptionOfRate,
+                                                     final String descriptionOfCount,
+                                                     final String descriptionOfAvg,
+                                                     final String descriptionOfMax,
+                                                     final RecordingLevel recordingLevel,
+                                                     final StreamsMetricsImpl streamsMetrics,
+                                                     final Sensor... parentSensors) {
+        final Sensor sensor =
+            streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, metricName, recordingLevel, parentSensors);
+        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        addAvgAndMaxToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            metricName + LATENCY_SUFFIX,
+            descriptionOfAvg,
+            descriptionOfMax
+        );
+        addInvocationRateAndCountToSensor(
+            sensor,
+            PROCESSOR_NODE_LEVEL_GROUP,
+            tagMap,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount
+        );
+        return sensor;
+    }
+
+    private static Sensor emptySensor(final String threadId,
+                                      final String taskId,
+                                      final String processorNodeId,
+                                      final String metricName,
+                                      final RecordingLevel recordingLevel,
+                                      final StreamsMetricsImpl streamsMetrics) {
+        return streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, metricName, recordingLevel);
     }
 }

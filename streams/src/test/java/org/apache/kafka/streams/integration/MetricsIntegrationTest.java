@@ -259,6 +259,7 @@ public class MetricsIntegrationTest {
         final Topology topology = builder.build();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
+        System.out.println(topology.describe().toString());
         verifyStateMetric(State.CREATED);
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric(APPLICATION_ID_VALUE);
@@ -376,7 +377,7 @@ public class MetricsIntegrationTest {
         checkClientLevelMetrics();
         checkThreadLevelMetrics(builtInMetricsVersion);
         checkTaskLevelMetrics(builtInMetricsVersion);
-        checkProcessorLevelMetrics();
+        checkProcessorNodeLevelMetrics(builtInMetricsVersion);
         checkKeyValueStoreMetrics(
             STATE_STORE_LEVEL_GROUP_IN_MEMORY_KVSTORE_0100_TO_24,
             IN_MEMORY_KVSTORE_TAG_KEY,
@@ -637,27 +638,29 @@ public class MetricsIntegrationTest {
         checkMetricByName(metrics, PUNCTUATE_TOTAL, count);
     }
 
-    private void checkProcessorLevelMetrics() {
+    private void checkProcessorNodeLevelMetrics(final String builtInMetricsVersion) {
         final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS))
             .collect(Collectors.toList());
-        checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, 18);
-        checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, 18);
-        checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, 18);
-        checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_MAX, 18);
-        checkMetricByName(listMetricProcessor, CREATE_LATENCY_AVG, 18);
-        checkMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, 18);
-        checkMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, 18);
-        checkMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, 18);
-        checkMetricByName(listMetricProcessor, PROCESS_RATE, 18);
-        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, 18);
-        checkMetricByName(listMetricProcessor, PUNCTUATE_RATE, 18);
-        checkMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, 18);
-        checkMetricByName(listMetricProcessor, CREATE_RATE, 18);
-        checkMetricByName(listMetricProcessor, CREATE_TOTAL, 18);
-        checkMetricByName(listMetricProcessor, DESTROY_RATE, 18);
-        checkMetricByName(listMetricProcessor, DESTROY_TOTAL, 18);
-        checkMetricByName(listMetricProcessor, FORWARD_TOTAL, 18);
+        final int numberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 0;
+        final int numberOfMetricsWithoutRemovedParents = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 14;
+        checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_MAX, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, CREATE_LATENCY_AVG, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, PROCESS_RATE, numberOfMetricsWithoutRemovedParents);
+        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, numberOfMetricsWithoutRemovedParents);
+        checkMetricByName(listMetricProcessor, PUNCTUATE_RATE, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, CREATE_RATE, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, CREATE_TOTAL, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, DESTROY_RATE, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfRemovedMetrics);
     }
 
     private void checkRocksDBMetricsByTag(final String tag, final RecordingLevel recordingLevel) {

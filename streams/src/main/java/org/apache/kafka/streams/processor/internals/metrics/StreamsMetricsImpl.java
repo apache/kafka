@@ -148,8 +148,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_DESCRIPTION = "The total number of ";
     public static final String RATE_DESCRIPTION = "The average per-second number of ";
 
-    public static final String LATE_RECORD_DROP = "late-record-drop";
-
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
