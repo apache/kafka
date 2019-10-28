@@ -30,7 +30,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.Searching._
@@ -107,7 +107,16 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   @volatile private var closed = false
 
   private def createRemoteStorageManager(): RemoteStorageManager = {
-    val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
+    val classPath = rlmConfig.remoteLogStorageManagerClassPath
+    val rsmClassLoader = {
+      if (classPath != null && !classPath.trim.isEmpty) {
+        new ChildFirstClassLoader(rlmConfig.remoteLogStorageManagerClassPath, RemoteLogManager.getClass.getClassLoader) //TODO: YING
+      } else {
+        RemoteLogManager.getClass.getClassLoader
+      }
+    }
+
+    val rsm = rsmClassLoader.loadClass(rlmConfig.remoteLogStorageManagerClass)
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
 
     val rsmProps = new util.HashMap[String, Any]()
@@ -420,6 +429,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 }
 
 case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStorageManagerClass: String,
+                                  remoteLogStorageManagerClassPath: String,
                                   remoteLogRetentionBytes: Long, remoteLogRetentionMillis: Long,
                                   remoteLogReaderThreads: Int,
                                   remoteLogReaderMaxPendingTasks: Int,
@@ -429,7 +439,7 @@ case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStor
 object RemoteLogManager {
   def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
 
-  def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
+  def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null, null,
     Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes),
     Defaults.RemoteLogReaderThreads, Defaults.RemoteLogReaderMaxPendingTasks, Map.empty,
     Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
@@ -446,6 +456,7 @@ object RemoteLogManager {
       }
     })
     RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
+      config.remoteLogStorageManagerClassPath,
       config.remoteLogRetentionBytes, config.remoteLogRetentionMillis,
       config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
       config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs)
