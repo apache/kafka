@@ -39,6 +39,7 @@ import javax.net.ssl.SSLSession;
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -183,6 +184,8 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = null;
             netWriteBuffer = null;
             appReadBuffer = null;
+            ByteBufferUnmapper.unmap("fileChannelBuffer", fileChannelBuffer);
+            fileChannelBuffer = null;
         }
     }
 
