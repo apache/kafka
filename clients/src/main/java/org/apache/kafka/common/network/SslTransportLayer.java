@@ -95,12 +95,9 @@ public class SslTransportLayer implements TransportLayer {
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
         this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
         this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
-
-        //clear & set netRead & netWrite buffers
-        netWriteBuffer.position(0);
         netWriteBuffer.limit(0);
-        netReadBuffer.position(0);
         netReadBuffer.limit(0);
+        
         state = State.HANDSHAKE;
         //initiate handshake
         sslEngine.beginHandshake();
