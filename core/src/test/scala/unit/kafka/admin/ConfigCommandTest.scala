@@ -445,6 +445,27 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     new ConfigCommandOptions(optsList.toArray).checkArgs()
   }
 
+  def testDescribeAllBrokerConfig(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
+    val optsList = List("--zookeeper", zkConnect,
+      "--entity-type", ConfigType.Broker,
+      "--entity-name", "1",
+      "--describe",
+      "--all")
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
   @Test(expected = classOf[IllegalArgumentException])
   def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
