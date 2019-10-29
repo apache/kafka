@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -63,8 +64,22 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
+        return aggregate(initializer, named, materialized);
+    }
+
+    @Override
+    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer, Named named) {
+        return aggregate(initializer, named, Materialized.with(keySerde, null));
+    }
+
+    @Override
+    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                     final Named named,
+                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(named, "named can't be null");
+        final NamedInternal namedInternal = new NamedInternal(named);
         return doAggregate(initializer,
-                named,
+                namedInternal,
                 new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME));
     }
 
@@ -72,7 +87,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     public KTable<K, VOut> aggregate(final Initializer<VOut> initializer) {
         return aggregate(initializer, Materialized.with(keySerde, null));
     }
-
 
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
                                         final NamedInternal named,

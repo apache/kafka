@@ -71,7 +71,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
                     kGroupedStream.getValue(),
                     initializer,
-                    named,
+                    named.withName(AGGREGATE_NAME + kGroupedStream.getKey().name + named.name()),
                     stateCreated,
                     storeBuilder,
                     windows,
