@@ -334,6 +334,7 @@ public class ConnectorConfig extends AbstractConfig {
             transformation = transformationCls.asSubclass(Transformation.class).newInstance();
         } catch (Exception e) {
             String exDetail = e.getMessage() == null ? e.toString() : e.getMessage();
+            
             throw new ConfigException(
                 key, 
                 String.valueOf(transformationCls), 
