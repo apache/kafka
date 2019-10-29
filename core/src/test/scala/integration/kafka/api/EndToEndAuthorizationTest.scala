@@ -351,13 +351,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val e2 = intercept[ExecutionException] { adminClient.describeTopics(Set(topic).asJava).all().get() }
     assertTrue("Unexpected exception " + e2.getCause, e2.getCause.isInstanceOf[TopicAuthorizationException])
 
-    // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume from
-    // the unauthorized topic and throw
+    // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume from either
     consumer.assign(List(tp, tp2).asJava)
     sendRecords(producer, numRecords, tp2)
     def verifyNoRecords(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
-      assertEquals("Consumed records with unexpected partitions: " + records, Collections.singleton(tp2), records.partitions())
-      false
+      assertTrue("Consumed records: " + records, records.isEmpty)
+      !records.isEmpty
     }
     assertThrows[TopicAuthorizationException] {
       TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout")
@@ -365,8 +364,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)
+    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = numRecords, topic2)
     sendRecords(producer, numRecords, tp)
-    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 0, topic)
+    consumeRecords(consumer, numRecords, topic = topic)
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
