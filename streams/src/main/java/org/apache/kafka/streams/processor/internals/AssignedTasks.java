@@ -218,7 +218,7 @@ abstract class AssignedTasks<T extends Task> {
         return committed;
     }
 
-    void close(final boolean clean) {
+    void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         for (final T task: allTasks()) {

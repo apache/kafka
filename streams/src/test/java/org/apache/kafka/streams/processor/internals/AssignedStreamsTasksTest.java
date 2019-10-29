@@ -546,7 +546,7 @@ public class AssignedStreamsTasksTest {
         assignedTasks.initializeNewTasks();
         assertNull(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs));
 
-        assignedTasks.close(true);
+        assignedTasks.shutdown(true);
     }
 
     private void addAndInitTask() {
