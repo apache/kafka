@@ -20,7 +20,6 @@ package kafka.api
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
