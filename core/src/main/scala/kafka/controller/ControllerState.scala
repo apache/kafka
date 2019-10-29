@@ -61,7 +61,7 @@ object ControllerState {
   case object AlterPartitionReassignment extends ControllerState {
     def value = 5
 
-    override def rateAndTimeMetricName: Option[String] = Some("PartitionReassignment")
+    override def rateAndTimeMetricName: Option[String] = Some("PartitionReassignmentRateAndTimeMs")
   }
 
   case object AutoLeaderBalance extends ControllerState {
