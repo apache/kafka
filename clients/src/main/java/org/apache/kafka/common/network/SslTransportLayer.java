@@ -930,7 +930,7 @@ public class SslTransportLayer implements TransportLayer {
         }
 
         int totalBytesWritten = 0;
-        long pos = position;
+        long pos = position + fileChannelBuffer.remaining();
         try {
             while (totalBytesWritten < totalBytesToWrite) {
                 int bytesToWrite = fileChannelBuffer.remaining();
