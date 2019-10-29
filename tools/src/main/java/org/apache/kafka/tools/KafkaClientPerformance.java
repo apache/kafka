@@ -76,12 +76,13 @@ public class KafkaClientPerformance {
 
             /* initialize test suite */
             String testSuiteName = res.getString("testSuiteName");
+            String outputTopic = res.getString("outputTopic");
             switch (testSuiteName) {
                 case "ProducerPerformance":
-                    clientTestHandler = new RandomPayloadTestHandler(res, producer);
+                    clientTestHandler = new RandomPayloadTestHandler(res, producer, outputTopic);
                     break;
                 case "EosPerformance":
-                    clientTestHandler = new ConsumerTestHandler<>(res, consumerGroupId, producer);
+                    clientTestHandler = new ConsumerTestHandler<>(res, consumerGroupId, producer, outputTopic);
                     break;
                 default:
                     throw new IllegalArgumentException("Unknown test suite name: " + testSuiteName);
@@ -194,13 +195,6 @@ public class KafkaClientPerformance {
                 .dest("testSuiteName")
                 .help("the name of this test suite");
 
-        parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("produce messages to this topic");
-
         parser.addArgument("--input-topic")
                 .action(store())
                 .required(true)
@@ -208,6 +202,14 @@ public class KafkaClientPerformance {
                 .metavar("INPUT-TOPIC")
                 .dest("inputTopic")
                 .help("consume messages from this topic");
+
+        parser.addArgument("--output-topic")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("OUTPUT-TOPIC")
+                .dest("outputTopic")
+                .help("produce messages to this topic");
 
         parser.addArgument("--num-records")
                 .action(store())

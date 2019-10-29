@@ -41,7 +41,7 @@ class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
     private final Random random;
     private final Producer<byte[], byte[]> producer;
 
-    RandomPayloadTestHandler(Namespace res, Producer<byte[], byte[]> producer) throws IOException {
+    RandomPayloadTestHandler(Namespace res, Producer<byte[], byte[]> producer, String outputTopic) throws IOException {
         Integer recordSize = res.getInt("recordSize");
         random = new Random(0);
         if (recordSize != null) {
@@ -54,7 +54,7 @@ class RandomPayloadTestHandler implements ClientTestHandler<byte[], byte[]> {
 
         // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
         String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
-        outputTopic = res.getString("topic");
+        this.outputTopic = outputTopic;
 
         payloadByteList = new ArrayList<>();
         if (payloadFilePath != null) {

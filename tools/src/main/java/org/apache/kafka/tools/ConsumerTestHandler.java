@@ -59,13 +59,14 @@ class ConsumerTestHandler<K, V> implements ClientTestHandler<K, V> {
 
     ConsumerTestHandler(Namespace res,
                         String consumerGroupId,
-                        Producer<K, V> producer) throws IOException {
+                        Producer<K, V> producer,
+                        String outputTopic) throws IOException {
         this.consumerGroupId = consumerGroupId;
         List<String> consumerProps = res.getList("consumerConfig");
         String consumerConfigFile = res.getString("consumerConfigFile");
-        pollTimeout = res.getLong("pollTimeout");
-        inputTopic = res.getString("inputTopic");
-        outputTopic = res.getString("topic");
+        this.pollTimeout = res.getLong("pollTimeout");
+        this.inputTopic = res.getString("inputTopic");
+        this.outputTopic = outputTopic;
 
         Properties consumerProperties = KafkaClientPerformance.generateProps(consumerProps, consumerConfigFile);
         consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
