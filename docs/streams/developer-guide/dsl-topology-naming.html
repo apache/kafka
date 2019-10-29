@@ -1,0 +1,267 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="../../js/templateData.js" --></script>
+
+<script id="content-template" type="text/x-handlebars-template">
+    <!-- h1>Developer Guide for Kafka Streams</h1 -->
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <!-- div style="height:35px">
+              <a href="/{{version}}/documentation/streams/">Introduction</a>
+              <a class="active-menu-item" href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+              <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+              <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+              <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+            </div -->
+        </div>
+    </div>
+
+    <div class="section" id="naming">
+        <span id="streams-developer-guide-dsl-topology-naming"></span>
+        <h1>Naming Kafka Streams DSL Appliations<a class="headerlink" href="#naming" title="Permalink to this headline"></a></h1>
+
+
+		With the 2.4 release, you now can give names to processors when using the Kafka 
+		Streams DSL.  Unlike the PAPI, where you are required to give a name for the processor, in the 
+		DSL, the names are generated for you.  The name generation strategy is 
+		<code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number suffix is a 
+		globally incrementing number that represents the operator's order in the topology.  
+		The number prefixed with a varying number of "0"s to create a suffix that is consistently 10 
+		characters long.   While the internal naming makes creating a topology with the DSL much more straightforward, 
+		there are a couple of trade-offs.  The first trade-off is what we could consider cognitive, and the other 
+		more severe trade-off is the shifting of repartition topic, 
+		changelog topic, and state store names.
+
+
+		<h2>Cognitive Issues</h2>
+
+		By saying there is a cognitive trade-off, we are referring to viewing a description of the topology. 
+		When you render the string description of your topology via the <code>Topology#desribe()</code> 
+		method, you can see what the processor is, but you don't have any context for their business purpose.  
+		For example, consider the following simple topology:
+
+		<code>
+		   builder.&gt;String,String&lt;stream("input")
+		          .filter((k,v) -> !v.equals("invalid_txn"))
+		          .mapValues((v) -> v.substring(0,5))
+		          .to("output")
+		</code>
+
+		When running <code>Topology#describe()</code> yields this string:
+
+		<code>
+		Topologies:
+		   Sub-topology: 0
+		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+		      --> KSTREAM-FILTER-0000000001
+		    Processor: KSTREAM-FILTER-0000000001 (stores: [])
+		      --> KSTREAM-MAPVALUES-0000000002
+		      <-- KSTREAM-SOURCE-0000000000
+		    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])
+		      --> KSTREAM-SINK-0000000003
+		      <-- KSTREAM-FILTER-0000000001
+		    Sink: KSTREAM-SINK-0000000003 (topic: output)
+		      <-- KSTREAM-MAPVALUES-0000000002
+		 </code>
+
+		 From this report, we can see what the different operators are, but what is the broader context here?  
+		 For example, consider <code>KSTREAM-FILTER-0000000001</code>, we can see it's a 
+		 filter operation meaning records are dropped that don't match the given predicate.  But what is 
+		 the meaning of the predicate?  Additionally, we can see the topic names of the source and sink nodes, 
+		 but what if the topics aren't named in a meaningful way?  Then we're left to guess the 
+		 business purpose behind these topics.
+
+		 You'll also notice the numbering here; the source node is suffixed with <code>0000000000</code> 
+		 indicating it's the first processor in the topology.  
+		 The filter is suffixed with <code>0000000001</code> indicating it's the second processor in 
+		 the topology.   In the 2.4 release of Kafka Streams, there are now overloaded methods for 
+		 both <code>KStream</code> and <code>KTable</code> accepting 
+		 a new parameter <code>Named</code>.  By using the <code>Named</code> class DSL users can 
+		 now provide meaningful names to the processors in their topology.  
+
+		 Now let's take a look at your topology with naming all the processors:
+		 <code>
+		     builder.&gt;String,String&lt;stream("input", Consumed.as("Customer_transactions_input_topic"))
+		           .filter((k,v) -> !v.equals("invalid_txn"), Named.as("filter_out_invalid_txns"))
+		           .mapValues((v) -> v.substring(0,5), Named.as("Map_values_to_first_6_characters"))
+		           .to("output", Produced.as("Mapped_transactions_output_topic"));
+		 </code>
+
+		 <code>
+		 Topologies:
+		   Sub-topology: 0
+		    Source: Customer_transactions_input_topic (topics: [input])
+		      --> filter_out_invalid_txns
+		    Processor: filter_out_invalid_txns (stores: [])
+		      --> Map_values_to_first_6_characters
+		      <-- Customer_transactions_input_topic
+		    Processor: Map_values_to_first_6_characters (stores: [])
+		      --> Mapped_transactions_output_topic
+		      <-- filter_out_invalid_txns
+		    Sink: Mapped_transactions_output_topic (topic: output)
+		      <-- Map_values_to_first_6_characters
+		 </code>
+
+		Now you can look at the topology description and can easily understand what role each processor 
+		plays in the topology.  But there's another reason for naming your processor nodes when you 
+		have stateful operators that remain between restarts of your Kafka Streams applications, 
+		state stores, changelog topics, and repartition topics.
+
+		 <h2>Changing Names</h2>
+
+		 We've seen that the generated names are numbered where they are built in the topology.  
+		 This means that if you add/remove or shift the order of operations, the position of the 
+		 processor shifts, hence shifting the name of the processor.  Since <strong>most</strong> processors exist 
+		 in memory only this name shifting on topology changes presents no issue.  But the name 
+		 shifting does have implications for topologies with stateful operators or repartition topics. 
+
+		 Let's look at a different topology with some state:
+		 <code>
+		  builder.&gt;String,String&lt;stream("input").groupByKey().count().toStream().to("output");
+		 </code>
+
+		 This topology description yields the following:
+		 <code>
+		     Topologies:
+		   Sub-topology: 0
+		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+		      --> KSTREAM-AGGREGATE-0000000002
+		    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])
+		      --> KTABLE-TOSTREAM-0000000003
+		      <-- KSTREAM-SOURCE-0000000000
+		    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])
+		      --> KSTREAM-SINK-0000000004
+		      <-- KSTREAM-AGGREGATE-0000000002
+		    Sink: KSTREAM-SINK-0000000004 (topic: output)
+		      <-- KTABLE-TOSTREAM-0000000003
+
+		  </code>
+		  
+		  We can see from the topology description above the state store is named 
+		  <code>KSTREAM-AGGREGATE-STATE-STORE-0000000002</code>.  But let's see what happens when we 
+		  add a filter to keep some of the records out of the aggregation:
+		  <code>
+		    builder.&gt;String, String&lt;stream("input")
+		        .filter((k,v)-> v !=null && v.length() >= 6 )
+		        .groupByKey()
+		        .count()
+		        .toStream()
+		        .to("output"); 
+		  </code>  
+
+		  And the corresponding topology:
+		  <code>
+		  Topologies:
+		   Sub-topology: 0
+		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+		      --> KSTREAM-FILTER-0000000001
+		    Processor: KSTREAM-FILTER-0000000001 (stores: [])
+		      --> KSTREAM-AGGREGATE-0000000003
+		      <-- KSTREAM-SOURCE-0000000000
+		    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])
+		      --> KTABLE-TOSTREAM-0000000004
+		      <-- KSTREAM-FILTER-0000000001
+		    Processor: KTABLE-TOSTREAM-0000000004 (stores: [])
+		      --> KSTREAM-SINK-0000000005
+		      <-- KSTREAM-AGGREGATE-0000000003
+		    Sink: KSTREAM-SINK-0000000005 (topic: output)
+		      <-- KTABLE-TOSTREAM-0000000004
+		  </code>
+
+		  Notice that since we've added an operation before the <code>count</code> operation, the state 
+		  store (hence the changelog topic as well) names have changed.  This name change means you can't 
+		  do a rolling re-deployment of your updated topology.  Additionally you'll have to use the  
+		  <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool">Streams Reset Tool</a> 
+		  to re-calculate the aggregations as since the changelog topic has changed on start-up the 
+		  new changelog topic contains no data.
+
+		  Fortunately, there is an easy solution to remedy this situation.  If we give a user-defined name 
+		  to the state store instead of relying on the generated one, we don't have to worry about topology 
+		  changes shifting the name of the state store.  
+
+		  You've had the ability to name reparition topics with the <code>Joined</code>, 
+		  (also now with <code>StreamJoined</code>)
+		  <code>Grouped</code> classes and state store (and changelog topics) with <code>Materialized</code>.  
+		  But it's worth reiterating the importance of naming these DSL topology operations again.
+
+		  Here's how your DSL code looks now giving a specific name to your state store:
+		  <code>
+		    builder.&gt;String, String&lt;stream("input")
+		            .filter((k, v) -> v != null && v.length() >= 6)
+		            .groupByKey()
+		            .count(Materialized.as("Purchase_count_store"))
+		            .toStream()
+		            .to("output");
+		  </code>
+
+		  And here's the topology 
+
+		  <code>
+		  Topologies:
+		   Sub-topology: 0
+		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+		      --> KSTREAM-FILTER-0000000001
+		    Processor: KSTREAM-FILTER-0000000001 (stores: [])
+		      --> KSTREAM-AGGREGATE-0000000002
+		      <-- KSTREAM-SOURCE-0000000000
+		    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [Purchase_count_store])
+		      --> KTABLE-TOSTREAM-0000000003
+		      <-- KSTREAM-FILTER-0000000001
+		    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])
+		      --> KSTREAM-SINK-0000000004
+		      <-- KSTREAM-AGGREGATE-0000000002
+		    Sink: KSTREAM-SINK-0000000004 (topic: output)
+		      <-- KTABLE-TOSTREAM-0000000003
+		  </code>
+
+		  So now, even though you've added processors before your state store, the store name and its changelog 
+		  topic names don't change!  This makes your topology more robust and resilient to changes made by 
+		  adding or removing processors.
+
+		  So to summarize, it's a good practice to name your processing nodes when using the DSL, and it's even 
+		  more important to do so when you have processing that remains when re-start your application - repartition 
+		  topics and state stores (and the accompanying changelog topics).  
+		  Here's a table giving you a quick reference on how you can name the critical parts of 
+		  your Kafka Streams application to prevent topology name changes from breaking your application
+
+		  <table>
+		      <tr>
+		          <th>Operation</th><th>Naming Class</th>
+		      </tr>
+		      <tr>
+		          <td>Aggregation repartition topics</td><td>Grouped</td>
+		      </tr>
+		      <tr>
+		          <td>KStream-KStream Join repartition topics</td><td>StreamJoined</td>
+		      </tr>
+		      <tr>
+		          <td>KStream-KStream Join state stores</td><td>StreamJoined</td>
+		      </tr>
+		      <tr>
+		          <td>State Stores</td><td>Materialized</td>
+		      </tr>
+		      <tr>
+		          <td>Stream/Table non-stateful operations</td><td>Named</td>
+		      </tr>
+		  </table>
+
+</div>
+
+
+
+
