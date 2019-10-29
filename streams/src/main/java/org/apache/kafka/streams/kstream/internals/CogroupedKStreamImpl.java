@@ -68,7 +68,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     @Override
-    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer, Named named) {
+    public KTable<K, VOut> aggregate(final Initializer<VOut> initializer, final Named named) {
         return aggregate(initializer, named, Materialized.with(keySerde, null));
     }
 
