@@ -271,7 +271,9 @@ public class StreamTaskTest {
             assertTimeoutErrorLog(appender);
 
             // make sure we report the correct message
-            assertThat(expected.getMessage(), is("stream-thread [main] task [0_0] Failed to initialize task 0_0 due to timeout."));
+            assertThat(
+                expected.getMessage(),
+                is("stream-thread [" + Thread.currentThread().getName() +"] task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);
@@ -330,7 +332,9 @@ public class StreamTaskTest {
             assertTimeoutErrorLog(appender);
 
             // make sure we report the correct message
-            assertThat(expected.getMessage(), is("stream-thread [main] task [0_0] Failed to initialize task 0_0 due to timeout."));
+            assertThat(
+                expected.getMessage(),
+                is("stream-thread [" + Thread.currentThread().getName() +"] task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);
@@ -1889,4 +1893,5 @@ public class StreamTaskTest {
             recordValue
         );
     }
+
 }
