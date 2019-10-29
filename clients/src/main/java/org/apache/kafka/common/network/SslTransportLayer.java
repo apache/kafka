@@ -640,7 +640,7 @@ public class SslTransportLayer implements TransportLayer {
     * Writes a sequence of bytes to this channel from the given buffer.
     *
     * @param src The buffer from which bytes are to be retrieved
-    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @return The number of bytes read from src, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
     @Override
