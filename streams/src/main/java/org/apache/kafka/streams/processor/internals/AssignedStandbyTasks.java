@@ -31,6 +31,16 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
     }
 
     @Override
+    public void shutdown(final boolean clean) {
+        final String shutdownType = clean ? "Clean" : "Unclean";
+        log.debug(shutdownType + " shutdown of all standby tasks" + "\n" +
+                      "created tasks to close: {}" + "\n" +
+                      "running tasks to close: {}",
+            clean, created.keySet(), running.keySet());
+        super.shutdown(clean);
+    }
+
+    @Override
     int commit() {
         final int committed = super.commit();
         // TODO: this contortion would not be necessary if we got rid of the two-step

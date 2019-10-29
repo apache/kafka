@@ -1640,8 +1640,8 @@ public class StreamThreadTest {
     private void verifyLogMessagesSkippedRecordsForDeserializationException(final LogCaptureAppender appender) {
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();
-        assertTrue(strings.contains("task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
-        assertTrue(strings.contains("task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
+        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
     }
 
     @Test
@@ -1736,33 +1736,35 @@ public class StreamThreadTest {
     private void verifyLogMessagesForSkippedRecordsForInvalidTimestamps(final LogCaptureAppender appender) {
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();
+
+        final String threadTaskPrefix = "stream-thread [" + Thread.currentThread().getName() + "] task [0_1] ";
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[0] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[1] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[2] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[3] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[4] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[5] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
