@@ -32,6 +32,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
     implements WindowStore<K, V> {
@@ -80,16 +82,7 @@ public class MeteredWindowStore<K, V>
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
-        final long startNs = time.nanoseconds();
-        try {
-            super.init(context, root);
-        } finally {
-            streamsMetrics.recordLatency(
-                restoreSensor,
-                startNs,
-                time.nanoseconds()
-            );
-        }
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     @SuppressWarnings("unchecked")
@@ -129,30 +122,32 @@ public class MeteredWindowStore<K, V>
     public void put(final K key,
                     final V value,
                     final long windowStartTimestamp) {
-        final long startNs = time.nanoseconds();
         try {
-            wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
+            maybeMeasureLatency(
+                () -> wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp),
+                time,
+                putSensor
+            );
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
-        } finally {
-            streamsMetrics.recordLatency(putSensor, startNs, time.nanoseconds());
         }
     }
 
     @Override
     public V fetch(final K key,
                    final long timestamp) {
-        final long startNs = time.nanoseconds();
-        try {
-            final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
-            if (result == null) {
-                return null;
-            }
-            return serdes.valueFrom(result);
-        } finally {
-            streamsMetrics.recordLatency(fetchSensor, startNs, time.nanoseconds());
-        }
+        return maybeMeasureLatency(
+            () -> {
+                final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
+                if (result == null) {
+                    return null;
+                }
+                return serdes.valueFrom(result);
+            },
+            time,
+            fetchSensor
+        );
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
@@ -202,12 +197,7 @@ public class MeteredWindowStore<K, V>
 
     @Override
     public void flush() {
-        final long startNs = time.nanoseconds();
-        try {
-            super.flush();
-        } finally {
-            streamsMetrics.recordLatency(flushSensor, startNs, time.nanoseconds());
-        }
+        maybeMeasureLatency(super::flush, time, flushSensor);
     }
 
     @Override

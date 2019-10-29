@@ -33,6 +33,8 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Objects;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V> {
@@ -83,16 +85,7 @@ public class MeteredSessionStore<K, V>
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
-        final long startNs = time.nanoseconds();
-        try {
-            super.init(context, root);
-        } finally {
-            streamsMetrics.recordLatency(
-                restoreSensor,
-                startNs,
-                time.nanoseconds()
-            );
-        }
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     @SuppressWarnings("unchecked")
@@ -117,47 +110,54 @@ public class MeteredSessionStore<K, V>
     public void put(final Windowed<K> sessionKey,
                     final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
         try {
-            final Bytes key = keyBytes(sessionKey.key());
-            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            maybeMeasureLatency(
+                () -> {
+                    final Bytes key = keyBytes(sessionKey.key());
+                    wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+                },
+                time,
+                putSensor
+            );
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
-        } finally {
-            streamsMetrics.recordLatency(putSensor, startNs, time.nanoseconds());
         }
     }
 
     @Override
     public void remove(final Windowed<K> sessionKey) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
         try {
-            final Bytes key = keyBytes(sessionKey.key());
-            wrapped().remove(new Windowed<>(key, sessionKey.window()));
+            maybeMeasureLatency(
+                () -> {
+                    final Bytes key = keyBytes(sessionKey.key());
+                    wrapped().remove(new Windowed<>(key, sessionKey.window()));
+                },
+                time,
+                removeSensor
+            );
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
-        } finally {
-            streamsMetrics.recordLatency(removeSensor, startNs, time.nanoseconds());
         }
     }
 
     @Override
     public V fetchSession(final K key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Bytes bytesKey = keyBytes(key);
-        final long startNs = time.nanoseconds();
-        try {
-            final byte[] result = wrapped().fetchSession(bytesKey, startTime, endTime);
-            if (result == null) {
-                return null;
-            }
-            return serdes.valueFrom(result);
-        } finally {
-            streamsMetrics.recordLatency(flushSensor, startNs, time.nanoseconds());
-        }
+        return maybeMeasureLatency(
+            () -> {
+                final Bytes bytesKey = keyBytes(key);
+                final byte[] result = wrapped().fetchSession(bytesKey, startTime, endTime);
+                if (result == null) {
+                    return null;
+                }
+                return serdes.valueFrom(result);
+            },
+            time,
+            fetchSensor
+        );
     }
 
     @Override
@@ -224,12 +224,7 @@ public class MeteredSessionStore<K, V>
 
     @Override
     public void flush() {
-        final long startNs = time.nanoseconds();
-        try {
-            super.flush();
-        } finally {
-            streamsMetrics.recordLatency(flushSensor, startNs, time.nanoseconds());
-        }
+        maybeMeasureLatency(super::flush, time, flushSensor);
     }
 
     @Override

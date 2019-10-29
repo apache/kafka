@@ -34,6 +34,8 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
@@ -96,16 +98,7 @@ public class MeteredKeyValueStore<K, V>
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
-        if (restoreSensor.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    super.init(context, root);
-                    return null;
-                },
-                restoreSensor);
-        } else {
-            super.init(context, root);
-        }
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     @SuppressWarnings("unchecked")
@@ -137,11 +130,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V get(final K key) {
         try {
-            if (getSensor.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrapped().get(keyBytes(key))), getSensor);
-            } else {
-                return outerValue(wrapped().get(keyBytes(key)));
-            }
+            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -152,14 +141,7 @@ public class MeteredKeyValueStore<K, V>
     public void put(final K key,
                     final V value) {
         try {
-            if (putSensor.shouldRecord()) {
-                measureLatency(() -> {
-                    wrapped().put(keyBytes(key), serdes.rawValue(value));
-                    return null;
-                }, putSensor);
-            } else {
-                wrapped().put(keyBytes(key), serdes.rawValue(value));
-            }
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -169,39 +151,22 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        if (putIfAbsentSensor.shouldRecord()) {
-            return measureLatency(
-                () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
-                putIfAbsentSensor
-            );
-        } else {
-            return outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value)));
-        }
+        return maybeMeasureLatency(
+            () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+            time,
+            putIfAbsentSensor
+        );
     }
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        if (putAllSensor.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    wrapped().putAll(innerEntries(entries));
-                    return null;
-                },
-                putAllSensor
-            );
-        } else {
-            wrapped().putAll(innerEntries(entries));
-        }
+        maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
     }
 
     @Override
     public V delete(final K key) {
         try {
-            if (deleteSensor.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), deleteSensor);
-            } else {
-                return outerValue(wrapped().delete(keyBytes(key)));
-            }
+            return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), time, deleteSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -224,17 +189,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void flush() {
-        if (flushSensor.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    super.flush();
-                    return null;
-                },
-                flushSensor
-            );
-        } else {
-            super.flush();
-        }
+        maybeMeasureLatency(super::flush, time, flushSensor);
     }
 
     @Override
@@ -246,20 +201,6 @@ public class MeteredKeyValueStore<K, V>
     public void close() {
         super.close();
         streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
-    }
-
-    private interface Action<V> {
-        V execute();
-    }
-
-    private V measureLatency(final Action<V> action,
-                             final Sensor sensor) {
-        final long startNs = time.nanoseconds();
-        try {
-            return action.execute();
-        } finally {
-            streamsMetrics.recordLatency(sensor, startNs, time.nanoseconds());
-        }
     }
 
     private V outerValue(final byte[] value) {
