@@ -172,7 +172,7 @@ public class AssignedStreamsTasksTest {
         t1.initializeMetadata();
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).times(2);
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).times(2);
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).times(3);
         t1.closeStateManager(true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
