@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
@@ -102,12 +103,39 @@ public class CogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterMaterializedOnAggregate() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, null);
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes,byte[]>>) null);
     }
     
 
     @Test
-    public void shouldCoGroupAndAggregateSingleKStreams() {
+    public void useNamed(){
+
+        final KStream<String, String> test = builder.stream("one", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = test.groupByKey();
+
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER, NamedInternal.empty());
+
+        customers.toStream().to(OUTPUT);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "B", 0);
+            testInputTopic.pipeInput("k2", "B", 0);
+            testInputTopic.pipeInput("k1", "A", 0);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+        }
+    }
+
+    @Test
+    public void shouldCogroupAndAggregateSingleKStreams() {
 
         final KStream<String, String> test = builder.stream("one", stringConsumed);
 
@@ -123,6 +151,34 @@ public class CogroupedKStreamImplTest {
             final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "B", 0);
+            testInputTopic.pipeInput("k2", "B", 0);
+            testInputTopic.pipeInput("k1", "A", 0);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+        }
+    }
+
+    @Test
+    public void testCogroupHandleNullValues() {
+
+        final KStream<String, String> test = builder.stream("one", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = test.groupByKey();
+
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER);
+
+        customers.toStream().to(OUTPUT);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "B", 0);
+            testInputTopic.pipeInput("k2", null, 0);
             testInputTopic.pipeInput("k2", "B", 0);
             testInputTopic.pipeInput("k1", "A", 0);
 
