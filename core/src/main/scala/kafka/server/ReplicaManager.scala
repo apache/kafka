@@ -16,11 +16,6 @@
  */
 package kafka.server
 
-import java.io.File
-import java.util.Optional
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
@@ -28,25 +23,23 @@ import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ConfigRepository
-import kafka.utils._
+import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.utils.Implicits._
+import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.{LeaderAndIsrPartitionError, LeaderAndIsrTopicError}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -59,10 +52,16 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common._
 
-import scala.jdk.CollectionConverters._
+import java.io.File
+import java.util.Optional
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.Lock
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -192,6 +191,9 @@ object HostedPartition {
   final object Offline extends HostedPartition
 }
 
+case class FollowerPendingFetchAvailabilityConfig(enable: Boolean,
+                                                  replicaLagTimeMaxMs: Long)
+
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 }
@@ -262,6 +264,9 @@ class ReplicaManager(val config: KafkaConfig,
   protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
   private var logDirFailureHandler: LogDirFailureHandler = null
+
+  val followerFetchAvailabilityConfig = FollowerPendingFetchAvailabilityConfig(config.followerFetchReadsInSyncEnable,
+    config.replicaLagTimeMaxMs)
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork(): Unit = {
@@ -1008,6 +1013,42 @@ class ReplicaManager(val config: KafkaConfig,
     partition.legacyFetchOffsetsForTimestamp(timestamp, maxNumOffsets, isFromConsumer, fetchOnlyFromLeader)
   }
 
+  private def updateFollowerFetchRequestPreRead(replicaId: Int, fetchInfos: Seq[(TopicPartition, PartitionData)]): Unit = {
+    fetchInfos.foreach { case (topicPartition, partitionData) =>
+      onlinePartition(topicPartition) match {
+        case Some(partition) =>
+          partition.getReplica(replicaId) match {
+            case Some(replica) =>
+              replica.updateFetchStatePreRead(partitionData.fetchOffset)
+            case None =>
+              warn(s"While setting follower fetch request state before read, Replica $replicaId is not available " +
+                s"for topic partition $topicPartition and message offset ${partitionData.fetchOffset} ")
+          }
+        case None =>
+          warn(s"While setting follower fetch request state before read, the partition $topicPartition " +
+            s"hasn't been created.")
+      }
+    }
+  }
+
+  private def updateFollowerFetchRequestPostRead(replicaId: Int, fetchInfos: Seq[(TopicPartition, PartitionData)]): Unit = {
+    fetchInfos.foreach { case (topicPartition, partitionData) =>
+      onlinePartition(topicPartition) match {
+        case Some(partition) =>
+          partition.getReplica(replicaId) match {
+            case Some(replica) =>
+              replica.updatePendingFetchMessageOffsetAsProcessed(partitionData.fetchOffset)
+            case None =>
+              warn(s"While setting follower fetch request state after read, Replica $replicaId is not available " +
+                s"for topic partition $topicPartition and message offset ${partitionData.fetchOffset} ")
+          }
+        case None =>
+          warn(s"While setting follower fetch request state after read, the partition $topicPartition " +
+            s"hasn't been created.")
+      }
+    }
+  }
+
   /**
    * Fetch messages from a replica, and wait until enough data can be fetched and return;
    * the callback function will be triggered either when timeout or required fetch info is satisfied.
@@ -1035,17 +1076,29 @@ class ReplicaManager(val config: KafkaConfig,
     // Restrict fetching to leader if request is from follower or from a client with older version (no ClientMetadata)
     val fetchOnlyFromLeader = isFromFollower || (isFromConsumer && clientMetadata.isEmpty)
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
-      val result = readFromLocalLog(
-        replicaId = replicaId,
-        fetchOnlyFromLeader = fetchOnlyFromLeader,
-        fetchIsolation = fetchIsolation,
-        fetchMaxBytes = fetchMaxBytes,
-        hardMaxBytesLimit = hardMaxBytesLimit,
-        readPartitionInfo = fetchInfos,
-        quota = quota,
-        clientMetadata = clientMetadata)
-      if (isFromFollower) updateFollowerFetchState(replicaId, result)
-      else result
+      try {
+        // Update pending requests information before reading from the log.
+        // It is done here instead of Partition#readRecords because if it takes longer in reading any of the
+        // partition reads then we do not want any of the replicas of this fetch request go out of sync.
+        if (isFromFollower && followerFetchAvailabilityConfig.enable) updateFollowerFetchRequestPreRead(replicaId,
+          fetchInfos)
+        val result = readFromLocalLog(
+          replicaId = replicaId,
+          fetchOnlyFromLeader = fetchOnlyFromLeader,
+          fetchIsolation = fetchIsolation,
+          fetchMaxBytes = fetchMaxBytes,
+          hardMaxBytesLimit = hardMaxBytesLimit,
+          readPartitionInfo = fetchInfos,
+          quota = quota,
+          clientMetadata = clientMetadata)
+
+        if (isFromFollower) updateFollowerFetchState(replicaId, result)
+        else result
+      } finally {
+        // always clear pending request of the respective fetch offsets
+        if (isFromFollower && followerFetchAvailabilityConfig.enable) updateFollowerFetchRequestPostRead(replicaId,
+          fetchInfos)
+      }
     }
 
     val logReadResults = readFromLog()
