@@ -918,39 +918,43 @@ public class SslTransportLayer implements TransportLayer {
         if (fileChannelBuffer == null) {
             // Pick a size that allows for reasonably efficient disk reads, keeps the memory overhead per connection
             // manageable and can typically be drained in a single `write` call. The `netWriteBuffer` is typically 16k
-            // and the socket buffer is typically 64k, so 32k seems like a good number given the mentioned trade-offs.
+            // and the socket send buffer is 100k by default, so 32k is a good number given the mentioned trade-offs.
             int transferSize = 32768;
             // Allocate a direct buffer to avoid one heap to heap buffer copy. SSLEngine copies the source
             // buffer (fileChannelBuffer) to the destination buffer (netWriteBuffer) and then encrypts in-place.
             // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not
             // useful here.
             fileChannelBuffer = ByteBuffer.allocateDirect(transferSize);
-        } else {
-            fileChannelBuffer.clear();
+            // The loop below drains any remaining bytes from the buffer before reading from disk, so we ensure there
+            // are no remaining bytes in the empty buffer
+            fileChannelBuffer.position(fileChannelBuffer.limit());
         }
 
         int bytesWritten = 0;
         long pos = position;
         try {
             while (bytesWritten < bytesToWrite) {
-                int bytesRemaining = bytesToWrite - bytesWritten;
-                if (bytesRemaining < fileChannelBuffer.limit())
-                    fileChannelBuffer.limit(bytesRemaining);
-                int bytesRead = fileChannel.read(fileChannelBuffer, pos);
-                if (bytesRead <= 0)
-                    break;
-                fileChannelBuffer.flip();
+                int bytesRead = fileChannelBuffer.remaining();
+                if (!fileChannelBuffer.hasRemaining()) {
+                    fileChannelBuffer.clear();
+                    int bytesRemaining = bytesToWrite - bytesWritten;
+                    if (bytesRemaining < fileChannelBuffer.limit())
+                        fileChannelBuffer.limit(bytesRemaining);
+                    bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                    if (bytesRead <= 0)
+                        break;
+                    fileChannelBuffer.flip();
+                }
                 int networkBytesWritten = write(fileChannelBuffer);
                 bytesWritten += networkBytesWritten;
                 if (networkBytesWritten < bytesRead) {
-                    log.debug("Unable to write all bytes read from file channel to network write buffer. Read {} bytes " +
-                        "from disk, wrote {} bytes to network buffer, fileChannelBuffer capacity is {}, netWriteBuffer " +
-                        "capacity is {}.", bytesRead, networkBytesWritten, fileChannelBuffer.capacity(),
-                        netWriteBuffer.capacity());
+                    // Handle partial write by moving the remaining bytes to the start of the buffer so that we write
+                    // them first in the next transferFrom call
+                    fileChannelBuffer.compact();
+                    fileChannelBuffer.flip();
                     break;
                 }
                 pos += networkBytesWritten;
-                fileChannelBuffer.clear();
             }
             return bytesWritten;
         } catch (IOException x) {
