@@ -336,15 +336,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def start_node(self, node):
-
-        # prevent linux from throwing IOExceptions at scale
-        try:
-            node.account.ssh("sudo sysctl -w vm.max_map_count=10000000")
-            node.account.ssh("sudo sysctl -w fs.file-max=10000000")
-        except:
-            self.logger.warn("Could not change vm.max_map_count or fs.file-max. " \
-                             "This could mean your OS does not support this.")
-
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
