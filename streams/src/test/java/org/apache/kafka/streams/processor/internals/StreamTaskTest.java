@@ -273,7 +273,7 @@ public class StreamTaskTest {
             // make sure we report the correct message
             assertThat(
                 expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() +"] task [0_0] Failed to initialize task 0_0 due to timeout."));
+                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);
@@ -334,7 +334,7 @@ public class StreamTaskTest {
             // make sure we report the correct message
             assertThat(
                 expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() +"] task [0_0] Failed to initialize task 0_0 due to timeout."));
+                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);

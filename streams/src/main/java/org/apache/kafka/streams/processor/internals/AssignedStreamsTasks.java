@@ -410,9 +410,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 it.remove();
                 throw e;
             } catch (final RuntimeException t) {
-                log.error("Failed to commit stream task {} due to the following error:",
-                        task.id(),
-                        t);
+                log.error("Failed to commit stream task {} due to the following error:", task.id(), t);
                 if (firstException == null) {
                     firstException = t;
                 }
