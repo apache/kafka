@@ -21,6 +21,8 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class SubscriptionInfo {
+    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
     static final int UNKNOWN = -1;
 
@@ -149,13 +152,10 @@ public class SubscriptionInfo {
      */
     public ByteBuffer encode() {
         if (data.version() > LATEST_SUPPORTED_VERSION) {
-            // in this special case, we only rely on the version and latest version,
-            final ByteBuffer buffer =
-                ByteBuffer.allocate(8)
-                          .putInt(data.version())
-                          .putInt(data.latestSupportedVersion());
-            buffer.rewind();
-            return buffer;
+            throw new IllegalStateException(
+                "Should never try to encode a SubscriptionInfo with version [" +
+                    data.version() + "] > LATEST_SUPPORTED_VERSION [" + LATEST_SUPPORTED_VERSION + "]"
+            );
         } else {
             final ObjectSerializationCache cache = new ObjectSerializationCache();
             final ByteBuffer buffer = ByteBuffer.allocate(data.size(cache, (short) data.version()));
@@ -180,6 +180,8 @@ public class SubscriptionInfo {
             final SubscriptionInfoData subscriptionInfoData = new SubscriptionInfoData();
             subscriptionInfoData.setVersion(version);
             subscriptionInfoData.setLatestSupportedVersion(latestSupportedVersion);
+            LOG.info("Unable to decode subscription data: used version: {}; latest supported version: {}",
+                     version, latestSupportedVersion);
             return new SubscriptionInfo(subscriptionInfoData);
         } else {
             data.rewind();
