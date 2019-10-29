@@ -665,8 +665,7 @@ public class SslTransportLayer implements TransportLayer {
             } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
                 // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again
                 netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, netWriteBufferSize());
-                netWriteBuffer.position(0);
-                netWriteBuffer.limit(0);
+                netWriteBuffer.position(netWriteBuffer.limit());
             } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                 throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
             } else if (wrapResult.getStatus() == Status.CLOSED) {
@@ -957,10 +956,10 @@ public class SslTransportLayer implements TransportLayer {
                 pos += networkBytesWritten;
             }
             return bytesWritten;
-        } catch (IOException x) {
+        } catch (IOException e) {
             if (bytesWritten > 0)
                 return bytesWritten;
-            throw x;
+            throw e;
         }
     }
 }
