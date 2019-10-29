@@ -696,7 +696,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
-            final Exception e = invokePartitionsRevoked(droppedPartitions);
+            final Exception e;
+            if (generation() != Generation.NO_GENERATION) {
+                e = invokePartitionsRevoked(droppedPartitions);
+            } else {
+                e = invokePartitionsLost(droppedPartitions);
+            }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
 

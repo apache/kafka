@@ -454,6 +454,34 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testUnsubscribeWithValidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+        coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
+    public void testUnsubscribeWithInvalidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
     public void testUnknownMemberId() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2300,7 +2328,7 @@ public class ConsumerCoordinatorTest {
 
             MockTime time = new MockTime(1);
 
-            //onJoinPrepare will be executed and onJoinComplete will not.
+            // onJoinPrepare will be executed and onJoinComplete will not.
             boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
 
             assertFalse(res);
