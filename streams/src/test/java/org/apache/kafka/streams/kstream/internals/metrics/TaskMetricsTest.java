@@ -285,7 +285,7 @@ public class TaskMetricsTest {
                 streamsMetrics
             );
 
-            verify(ThreadMetrics.class);
+            verify(StateStoreMetrics.class);
             assertThat(sensor, is(expectedSensor));
         } else {
             shouldGetDroppedRecordsSensor();
