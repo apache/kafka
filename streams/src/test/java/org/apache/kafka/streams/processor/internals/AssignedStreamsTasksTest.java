@@ -539,7 +539,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall();
     }
 
-    private void verifyTaskMigratedExceptionDoesNotCloseTask(ThrowingRunnable action) {
+    private void verifyTaskMigratedExceptionDoesNotCloseTask(final ThrowingRunnable action) {
         final Set<TaskId> expectedRunningTaskIds = Collections.singleton(taskId1);
 
         // This action is expected to throw a TaskMigratedException

@@ -503,7 +503,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         super.shutdown(clean);
     }
 
-        @Override
+    @Override
     public boolean isEmpty() {
         return super.isEmpty()
             && restoring.isEmpty()
