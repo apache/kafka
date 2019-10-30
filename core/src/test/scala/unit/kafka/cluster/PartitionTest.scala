@@ -1646,6 +1646,34 @@ class PartitionTest extends AbstractPartitionTest {
     verify(stateStore, times(2)).fetchTopicConfig()
   }
 
+  @Test
+  def testMaxReassignmentLagOnLeader(): Unit = {
+    val replicas = List[Integer](0, 1, 2, 3, 4, 5)
+    val isr = List[Integer](0, 1, 2, 3)
+    val adding = List[Integer](4, 5)
+
+    val leaderState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(0)
+      .setLeader(brokerId)
+      .setLeaderEpoch(6)
+      .setIsr(isr.asJava)
+      .setZkVersion(1)
+      .setReplicas(replicas.asJava)
+      .setAddingReplicas(adding.asJava)
+      .setIsNew(false)
+    partition.makeLeader(0, leaderState, 0, offsetCheckpoints)
+
+    val offsetMetadata1 = new LogOffsetMetadata(10)
+    val offsetMetadata2 = new LogOffsetMetadata(15)
+    partition.getReplica(4).get.updateLastSentHighWatermark(20)
+    partition.getReplica(4).get.updateFetchState(
+      offsetMetadata1, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L, isAddingReplica = true)
+    partition.getReplica(5).get.updateLastSentHighWatermark(20)
+    partition.getReplica(5).get.updateFetchState(
+      offsetMetadata2, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L, isAddingReplica = true)
+    assertEquals(10, partition.replicasMaxReassignmentLag)
+  }
+
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {
     for (i <- 0 until numRecords) {
       val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
