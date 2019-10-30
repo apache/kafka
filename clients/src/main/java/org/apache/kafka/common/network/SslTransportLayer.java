@@ -930,9 +930,7 @@ public class SslTransportLayer implements TransportLayer {
         }
 
         int totalBytesWritten = 0;
-        // We return the written bytes to the caller so we must adjust the file position to take into account
-        // previously read bytes that are still in the buffer
-        long pos = position + fileChannelBuffer.remaining();
+        long pos = position;
         try {
             while (totalBytesWritten < totalBytesToWrite) {
                 int bytesToWrite = fileChannelBuffer.remaining();
@@ -950,7 +948,10 @@ public class SslTransportLayer implements TransportLayer {
                 totalBytesWritten += networkBytesWritten;
                 if (networkBytesWritten < bytesToWrite) {
                     // Handle partial write by moving the remaining bytes to the start of the buffer so that we write
-                    // them first in the next transferFrom call
+                    // them first in the next `transferFrom` call. We return the written bytes to the caller so the
+                    // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+                    // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+                    // we invoke `fileChannel.read`.
                     fileChannelBuffer.compact();
                     fileChannelBuffer.flip();
                     break;
