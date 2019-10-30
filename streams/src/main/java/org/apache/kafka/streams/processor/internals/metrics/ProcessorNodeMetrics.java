@@ -85,8 +85,6 @@ public class ProcessorNodeMetrics {
     private static final String FORWARD_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FORWARD_DESCRIPTION;
     private static final String FORWARD_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
-    private static final String FORWARD_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION;
-    private static final String FORWARD_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION;
 
     private static final String LATE_RECORD_DROP = "late-record-drop";
     private static final String LATE_RECORD_DROP_DESCRIPTION = "dropped late records";
