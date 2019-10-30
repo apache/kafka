@@ -292,7 +292,7 @@ public class KTableSuppressProcessorMetricsTest {
                 verifyMetric(metrics, bufferSizeCurrentMetric, is(39.0));
                 verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
             }
-         }
+        }
     }
 
     @SuppressWarnings("unchecked")
