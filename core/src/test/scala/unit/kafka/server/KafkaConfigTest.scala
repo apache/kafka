@@ -780,7 +780,9 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
 
     // Test dynamic log config values can be correctly passed through via KafkaConfig to LogConfig
-    // Every log config prop must be explicitly accounted for here
+    // Every log config prop must be explicitly accounted for here.
+    // A value other than the default value for this config should be set to ensure that we can check whether
+    // the value is dynamically updatable.
     LogConfig.configNames.foreach {
       case LogConfig.CleanupPolicyProp =>
         props.put(KafkaConfig.LogCleanupPolicyProp, Defaults.Compact)
@@ -901,7 +903,7 @@ class KafkaConfigTest {
       case LogConfig.LeaderReplicationThrottledReplicasProp =>
       // topic only config
       case prop =>
-        fail(prop + " must be explicitly checked for dynamic updatability")
+        fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
     }
   }
 
