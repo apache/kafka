@@ -663,8 +663,6 @@ class KafkaController(val config: KafkaConfig,
    *
    * @param topicPartition The reassigning partition
    * @param reassignment The new reassignment
-   *
-   * @return The updated assignment state
    */
   private def updateCurrentReassignment(topicPartition: TopicPartition, reassignment: ReplicaAssignment): Unit = {
     val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
