@@ -103,19 +103,19 @@ public class CogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterMaterializedOnAggregate() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes,byte[]>>) null);
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
     }
     
 
     @Test
-    public void useNamed(){
+    public void useNamed() {
 
         final KStream<String, String> test = builder.stream("one", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = test.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER, NamedInternal.empty());
+                .aggregate(STRING_INITIALIZER, Named.as("test"));
 
         customers.toStream().to(OUTPUT);
 
