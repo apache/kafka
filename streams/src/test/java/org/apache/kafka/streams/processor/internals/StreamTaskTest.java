@@ -1429,7 +1429,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionInSuspendWhenCommitting() {
+    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionInSuspendWhenCommitting() {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
         producer.fenceProducer();
 
