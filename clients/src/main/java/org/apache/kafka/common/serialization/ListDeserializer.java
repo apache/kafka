@@ -43,7 +43,7 @@ public class ListDeserializer<L extends List<T>, T> implements Deserializer<L> {
             mkEntry(FloatDeserializer.class, 4),
             mkEntry(LongDeserializer.class, 8),
             mkEntry(DoubleDeserializer.class, 8),
-            mkEntry(UUIDDeserializer.class, 16)
+            mkEntry(UUIDDeserializer.class, 36)
     );
 
     public ListDeserializer() {}
