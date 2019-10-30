@@ -642,7 +642,7 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS))
             .collect(Collectors.toList());
         final int numberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 0;
-        final int numberOfMetricsWithoutRemovedParents = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 14;
+        final int numberOfMetricsWithRemovedParents = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 14;
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, numberOfRemovedMetrics);
@@ -651,8 +651,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, numberOfRemovedMetrics);
-        checkMetricByName(listMetricProcessor, PROCESS_RATE, numberOfMetricsWithoutRemovedParents);
-        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, numberOfMetricsWithoutRemovedParents);
+        checkMetricByName(listMetricProcessor, PROCESS_RATE, numberOfMetricsWithRemovedParents);
+        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, numberOfMetricsWithRemovedParents);
         checkMetricByName(listMetricProcessor, PUNCTUATE_RATE, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, CREATE_RATE, numberOfRemovedMetrics);
