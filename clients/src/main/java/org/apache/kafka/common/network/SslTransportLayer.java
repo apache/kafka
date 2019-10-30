@@ -930,6 +930,8 @@ public class SslTransportLayer implements TransportLayer {
         }
 
         int totalBytesWritten = 0;
+        // We return the written bytes to the caller so we must adjust the file position to take into account
+        // previously read bytes that are still in the buffer
         long pos = position + fileChannelBuffer.remaining();
         try {
             while (totalBytesWritten < totalBytesToWrite) {
