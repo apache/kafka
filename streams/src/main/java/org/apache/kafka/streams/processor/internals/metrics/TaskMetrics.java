@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 
@@ -179,8 +180,19 @@ public class TaskMetrics {
     public static Sensor droppedRecordsSensorOrSkippedRecordsSensor(final String threadId,
                                                                     final String taskId,
                                                                     final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_100_TO_24) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
             return ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
+        }
+        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
+    }
+
+    public static Sensor droppedRecordsSensorOrExpiredWindowRecordDropSensor(final String threadId,
+                                                                             final String taskId,
+                                                                             final String storeType,
+                                                                             final String storeName,
+                                                                             final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskId, storeType, storeName, streamsMetrics);
         }
         return droppedRecordsSensor(threadId, taskId, streamsMetrics);
     }

@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -48,6 +49,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -58,6 +60,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -427,9 +430,30 @@ public abstract class SessionBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
         setClassLoggerToDebug();
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
+        final RecordCollector recordCollector = createRecordCollector(sessionStore.name());
+        recordCollector.init(producer);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            new StreamsConfig(streamsConfig),
+            recordCollector
+        );
+        sessionStore.init(context, sessionStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
         // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
@@ -442,32 +466,53 @@ public abstract class SessionBytesStoreTest {
         LogCaptureAppender.unregister(appender);
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-
         final String metricScope = getMetricsScope();
         final String threadId = Thread.currentThread().getName();
+        final Metric dropTotal;
+        final Metric dropRate;
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            dropTotal = metrics.get(new MetricName(
+                "expired-window-record-drop-total",
+                "stream-" + metricScope + "-metrics",
+                "The total number of dropped records due to an expired window",
+                mkMap(
+                    mkEntry("client-id", threadId),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry(metricScope + "-state-id", sessionStore.name())
+                )
+            ));
 
-        final Metric dropTotal = metrics.get(new MetricName(
-            "expired-window-record-drop-total",
-            "stream-" + metricScope + "-metrics",
-            "The total number of occurrence of expired-window-record-drop operations.",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-state-id", sessionStore.name())
-            )
-        ));
+            dropRate = metrics.get(new MetricName(
+                "expired-window-record-drop-rate",
+                "stream-" + metricScope + "-metrics",
+                "The average number of dropped records due to an expired window per second",
+                mkMap(
+                    mkEntry("client-id", threadId),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry(metricScope + "-state-id", sessionStore.name())
+                )
+            ));
+        } else {
+            dropTotal = metrics.get(new MetricName(
+                "dropped-records-total",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
 
-        final Metric dropRate = metrics.get(new MetricName(
-            "expired-window-record-drop-rate",
-            "stream-" + metricScope + "-metrics",
-            "The average number of occurrence of expired-window-record-drop operation per second.",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-state-id", sessionStore.name())
-            )
-        ));
-
+            dropRate = metrics.get(new MetricName(
+                "dropped-records-rate",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
+        }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
         final List<String> messages = appender.getMessages();
