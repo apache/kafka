@@ -29,6 +29,10 @@ import java.util.NoSuchElementException;
  * class loader.
  */
 public class ChildFirstClassLoader extends URLClassLoader {
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
     /**
      * @param classPath Class path string
      * @param parent    The parent classloader. If the required class / resource cannot be found in the given classPath,
@@ -40,7 +44,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
 
     static private URL[] classpath2URLs(String classPath) {
         ArrayList<URL> urls = new ArrayList<>();
-        for (String path : classPath.split(";")) {
+        for (String path : classPath.split(File.pathSeparator)) {
             if (path == null || path.trim().isEmpty())
                 continue;
             File f = new File(path);
@@ -79,7 +83,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
                     c = findClass(name);
                 } catch (ClassNotFoundException e) {
                     // try parent
-                    c = super.loadClass(name, resolve);
+                    c = super.loadClass(name, false);
                 }
             }
 
