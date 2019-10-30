@@ -17,10 +17,12 @@
 
 package kafka.server
 
+import java.util.Collections
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
+import kafka.log.LogConfig
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
@@ -764,6 +766,143 @@ class KafkaConfigTest {
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
+  }
+
+  @Test
+  def testDynamicLogConfigs(): Unit = {
+    def getBaseProperties(): Properties = {
+      val validRequiredProperties = new Properties()
+      validRequiredProperties.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+      validRequiredProperties
+    }
+
+    val props = getBaseProperties()
+    val config = KafkaConfig.fromProps(props)
+
+    // Test dynamic log config values can be correctly passed through via KafkaConfig to LogConfig
+    // Every log config prop must be explicitly accounted for here
+    LogConfig.configNames.foreach {
+      case LogConfig.CleanupPolicyProp =>
+        props.put(KafkaConfig.LogCleanupPolicyProp, Defaults.Compact)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(Collections.singletonList(Defaults.Compact), config.logCleanupPolicy)
+      case LogConfig.CompressionTypeProp =>
+        val update = "lz4"
+        props.put(KafkaConfig.CompressionTypeProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.compressionType)
+      case LogConfig.SegmentBytesProp =>
+        val update = 10000
+        props.put(KafkaConfig.LogSegmentBytesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logSegmentBytes)
+      case LogConfig.SegmentMsProp =>
+        val update = 10001L
+        props.put(KafkaConfig.LogRollTimeMillisProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logRollTimeMillis)
+      case LogConfig.DeleteRetentionMsProp =>
+        val update = 10002L
+        props.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logCleanerDeleteRetentionMs)
+      case LogConfig.FileDeleteDelayMsProp =>
+        val update = 10003L
+        props.put(KafkaConfig.LogDeleteDelayMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logDeleteDelayMs)
+      case LogConfig.FlushMessagesProp =>
+        val update = 10004L
+        props.put(KafkaConfig.LogFlushIntervalMessagesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logFlushIntervalMessages)
+      case LogConfig.FlushMsProp =>
+        val update = 10005L
+        props.put(KafkaConfig.LogFlushIntervalMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logFlushIntervalMs)
+      case LogConfig.MaxCompactionLagMsProp =>
+        val update = 10006L
+        props.put(KafkaConfig.LogCleanerMaxCompactionLagMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logCleanerMaxCompactionLagMs)
+      case LogConfig.IndexIntervalBytesProp =>
+        val update = 10007
+        props.put(KafkaConfig.LogIndexIntervalBytesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logIndexIntervalBytes)
+      case LogConfig.MaxMessageBytesProp =>
+        val update = 10008
+        props.put(KafkaConfig.MessageMaxBytesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.messageMaxBytes)
+      case LogConfig.MessageDownConversionEnableProp =>
+        props.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(false, config.logMessageDownConversionEnable)
+      case LogConfig.MessageTimestampDifferenceMaxMsProp =>
+        val update = 10009
+        props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logMessageTimestampDifferenceMaxMs)
+      case LogConfig.MessageTimestampTypeProp =>
+        props.put(KafkaConfig.LogMessageTimestampTypeProp, "LogAppendTime")
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals("LogAppendTime", config.logMessageTimestampType.name)
+      case LogConfig.MinCleanableDirtyRatioProp =>
+        val update = 0.01
+        props.put(KafkaConfig.LogCleanerMinCleanRatioProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logCleanerMinCleanRatio)
+      case LogConfig.MinCompactionLagMsProp =>
+        val update = 10010L
+        props.put(KafkaConfig.LogCleanerMinCompactionLagMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logCleanerMinCompactionLagMs)
+      case LogConfig.MinInSyncReplicasProp =>
+        val update = 4
+        props.put(KafkaConfig.MinInSyncReplicasProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.minInSyncReplicas)
+      case LogConfig.PreAllocateEnableProp =>
+        val update = true
+        props.put(KafkaConfig.LogPreAllocateProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logPreAllocateEnable)
+      case LogConfig.RetentionBytesProp =>
+        val update = 10011L
+        props.put(KafkaConfig.LogRetentionBytesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logRetentionBytes)
+      case LogConfig.RetentionMsProp =>
+        val update = 10012L
+        props.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logCleanerDeleteRetentionMs)
+      case LogConfig.SegmentIndexBytesProp =>
+        val update = 10013
+        props.put(KafkaConfig.LogIndexIntervalBytesProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logIndexIntervalBytes)
+      case LogConfig.SegmentJitterMsProp =>
+        val update = 10014L
+        props.put(KafkaConfig.LogRollTimeJitterMillisProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.logRollTimeJitterMillis)
+      case LogConfig.UncleanLeaderElectionEnableProp =>
+        val update = true
+        props.put(KafkaConfig.UncleanLeaderElectionEnableProp, update)
+        config.updateCurrentConfig(new KafkaConfig(props))
+        assertEquals(update, config.uncleanLeaderElectionEnable)
+      case LogConfig.MessageFormatVersionProp =>
+      // not dynamically updatable
+      case LogConfig.FollowerReplicationThrottledReplicasProp =>
+      // topic only config
+      case LogConfig.LeaderReplicationThrottledReplicasProp =>
+      // topic only config
+      case prop =>
+        fail(prop + " must be explicitly checked for dynamic updatability")
+    }
   }
 
   @Test
