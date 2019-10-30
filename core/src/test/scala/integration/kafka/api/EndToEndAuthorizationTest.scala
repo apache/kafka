@@ -182,6 +182,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
+  this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1500")
 
   /**
     * Starts MiniKDC and only then sets up the parent trait.
