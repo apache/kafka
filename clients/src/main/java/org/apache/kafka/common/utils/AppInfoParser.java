@@ -72,7 +72,6 @@ public class AppInfoParser {
     public static synchronized void unregisterAppInfo(String prefix, String id, Metrics metrics) {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
-            id = id == null ? "" : id;
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             if (server.isRegistered(name))
                 server.unregisterMBean(name);

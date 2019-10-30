@@ -568,7 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     final Metrics metrics;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
-    private final Logger log;
+    private Logger log;
     private final String clientId;
     private String groupId;
     private final ConsumerCoordinator coordinator;
@@ -670,24 +670,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("unchecked")
     private KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
-            GroupRebalanceConfig groupRebalanceConfig = null;
-            LogContext logContext;
-            Optional<InvalidConfigurationException> exceptionOption = Optional.empty();
+            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
+                    GroupRebalanceConfig.ProtocolType.CONSUMER);
 
-            try {
-                groupRebalanceConfig = new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONSUMER);
-                this.groupId = groupRebalanceConfig.groupId;
-            } catch (InvalidConfigurationException e) {
-                this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
-                exceptionOption = Optional.of(e);
-            }
+            this.groupId = groupRebalanceConfig.groupId;
             this.clientId = buildClientId(config.getString(CommonClientConfigs.CLIENT_ID_CONFIG), groupRebalanceConfig);
-            logContext = newLogContext(groupRebalanceConfig);
-            this.log = logContext.logger(getClass());
-            if (exceptionOption.isPresent()) {
-                throw exceptionOption.get();
+
+            LogContext logContext;
+
+            // If group.instance.id is set, we will append it to the log context.
+            if (groupRebalanceConfig.groupInstanceId.isPresent()) {
+                logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
+                        ", clientId=" + clientId + ", groupId=" + groupId + "] ");
+            } else {
+                logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             }
 
+            this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             if (groupId == null) { // overwrite in case of default group id where the config is not explicitly provided
                 if (!config.originals().containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
@@ -816,7 +815,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
-            close(0, true);
+            // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
+            if (this.log != null) {
+                close(0, true);
+            }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -864,21 +866,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!configuredClientId.isEmpty())
             return configuredClientId;
 
-        if (rebalanceConfig != null && rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
+        if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
             return "consumer-" + rebalanceConfig.groupId + "-" + rebalanceConfig.groupInstanceId.orElseGet(() ->
                     CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "");
 
         return "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-    }
-
-    private LogContext newLogContext(GroupRebalanceConfig groupRebalanceConfig) {
-        // If group.instance.id is set, we will append it to the log context.
-        if (groupRebalanceConfig != null && groupRebalanceConfig.groupInstanceId.isPresent()) {
-            return new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
-                    ", clientId=" + clientId + ", groupId=" + groupId + "] ");
-        } else {
-            return new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
-        }
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
