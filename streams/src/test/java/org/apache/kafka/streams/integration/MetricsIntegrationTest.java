@@ -160,6 +160,7 @@ public class MetricsIntegrationTest {
     private static final String DESTROY_RATE = "destroy-rate";
     private static final String DESTROY_TOTAL = "destroy-total";
     private static final String FORWARD_TOTAL = "forward-total";
+    private static final String FORWARD_RATE = "forward-rate";
     private static final String STREAM_STRING = "stream";
     private static final String COMMIT_LATENCY_AVG = "commit-latency-avg";
     private static final String COMMIT_LATENCY_MAX = "commit-latency-max";
@@ -660,6 +661,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, DESTROY_RATE, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfRemovedMetrics);
     }
 
     private void checkRocksDBMetricsByTag(final String tag, final RecordingLevel recordingLevel) {

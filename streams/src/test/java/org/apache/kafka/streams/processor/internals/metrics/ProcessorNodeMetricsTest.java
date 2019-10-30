@@ -114,7 +114,7 @@ public class ProcessorNodeMetricsTest {
             descriptionOfCount
         );
         if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            setUpParentThroughputAndLatencySensor(
+            setUpThroughputAndLatencyParentSensor(
                 metricName,
                 descriptionOfRate,
                 descriptionOfCount,
@@ -206,16 +206,30 @@ public class ProcessorNodeMetricsTest {
         final String metricName = "forward";
         final String descriptionOfCount = "The total number of calls to forward";
         final String descriptionOfRate = "The average number of calls to forward per second";
-        final String descriptionOfAvgLatency = "The average latency of calls to forward";
-        final String descriptionOfMaxLatency = "The maximum latency of calls to forward";
-        shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
-            metricName,
-            descriptionOfRate,
-            descriptionOfCount,
-            descriptionOfAvgLatency,
-            descriptionOfMaxLatency,
-            () -> ProcessorNodeMetrics.forwardSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics)
-        );
+        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
+            setUpThroughputParentSensor(
+                metricName,
+                descriptionOfRate,
+                descriptionOfCount
+            );
+            setUpThroughputSensor(
+                metricName,
+                descriptionOfRate,
+                descriptionOfCount,
+                RecordingLevel.DEBUG,
+                expectedParentSensor
+            );
+        } else {
+            expect(streamsMetrics.nodeLevelSensor(
+                THREAD_ID,
+                TASK_ID,
+                PROCESSOR_NODE_ID,
+                metricName,
+                RecordingLevel.DEBUG
+            )).andReturn(expectedSensor);
+        }
+
+        verifySensor(() -> ProcessorNodeMetrics.forwardSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }
 
     @Test
@@ -275,7 +289,7 @@ public class ProcessorNodeMetricsTest {
                                                            final String descriptionOfCount,
                                                            final String descriptionOfAvgLatency,
                                                            final String descriptionOfMaxLatency) {
-        setUpParentThroughputAndLatencySensor(
+        setUpThroughputAndLatencyParentSensor(
             metricName,
             descriptionOfRate,
             descriptionOfCount,
@@ -292,7 +306,7 @@ public class ProcessorNodeMetricsTest {
         );
     }
 
-    private void setUpParentThroughputAndLatencySensor(final String metricName,
+    private void setUpThroughputAndLatencyParentSensor(final String metricName,
                                                        final String descriptionOfRate,
                                                        final String descriptionOfCount,
                                                        final String descriptionOfAvg,
@@ -316,6 +330,23 @@ public class ProcessorNodeMetricsTest {
             metricName + StreamsMetricsImpl.LATENCY_SUFFIX,
             descriptionOfAvg,
             descriptionOfMax
+        );
+    }
+
+    private void setUpThroughputParentSensor(final String metricName,
+                                             final String descriptionOfRate,
+                                             final String descriptionOfCount) {
+        expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, metricName, RecordingLevel.DEBUG))
+            .andReturn(expectedParentSensor);
+        expect(streamsMetrics.nodeLevelTagMap(THREAD_ID, TASK_ID, StreamsMetricsImpl.ROLLUP_VALUE))
+            .andReturn(parentTagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedParentSensor,
+            StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP,
+            parentTagMap,
+            metricName,
+            descriptionOfRate,
+            descriptionOfCount
         );
     }
 
