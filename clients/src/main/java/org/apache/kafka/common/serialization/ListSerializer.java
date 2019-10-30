@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-@SuppressWarnings(value = "unchecked")
 public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
 
     private Serializer<T> inner;
@@ -41,14 +40,14 @@ public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
             DoubleSerializer.class,
             UUIDSerializer.class);
 
-    public ListSerializer() {
-    }
+    public ListSerializer() {}
 
     public ListSerializer(Serializer<T> serializer) {
         this.inner = serializer;
         this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
     }
 
+    @SuppressWarnings(value = "unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
