@@ -119,23 +119,6 @@ public class SerializationTest {
     }
 
     @Test
-    public void listSerdeShouldRoundtripPrimitiveInput() {
-        List<Integer> testData = Arrays.asList(1, 2, 3);
-        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
-        assertEquals("Should get the original collection of primitive integers"
-                        + " after serialization and deserialization", testData,
-                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
-    }
-
-    @Test
-    public void listSerdeShouldRountripNonPrimitiveInput() {
-        List<String> testData = Arrays.asList("A", "B", "C");
-        Serde<List<String>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.String());
-        assertEquals("Should get the original collection after serialization and deserialization on an empty list", testData,
-                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
-    }
-
-    @Test
     public void listSerdeShouldReturnEmptyCollection() {
         List<Integer> testData = Arrays.asList();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
@@ -152,12 +135,115 @@ public class SerializationTest {
     }
 
     @Test
-    public void listSerdeSerializerShouldReturnByteArrayOfSize() {
-        List<Integer> testData = Arrays.asList(1, 2, 3);
-        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
-        assertEquals("Should get length of 16 bytes (integer size of the list + 3 integer entries) after serialization", 16,
+    public void listSerdeShouldRoundtripShortPrimitiveInput() {
+        List<Short> testData = Arrays.asList((short) 1, (short) 2, (short) 3);
+        Serde<List<Short>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Short());
+        assertEquals("Should get the original collection of short primitives"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForShortPrimitiveInput() {
+        List<Short> testData = Arrays.asList((short) 1, (short) 2, (short) 3);
+        Serde<List<Short>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Short());
+        assertEquals("Should get length of 10 bytes (size of the list + 3 short entries) after serialization", 10,
                 listSerde.serializer().serialize(topic, testData).length);
     }
+
+    @Test
+    public void listSerdeShouldRoundtripIntPrimitiveInput() {
+        List<Integer> testData = Arrays.asList(1, 2, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
+        assertEquals("Should get the original collection of integer primitives"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForIntPrimitiveInput() {
+        List<Integer> testData = Arrays.asList(1, 2, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
+        assertEquals("Should get length of 16 bytes (size of the list + 3 integer entries) after serialization", 16,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldRoundtripFloatPrimitiveInput() {
+        List<Float> testData = Arrays.asList((float) 1, (float) 2, (float) 3);
+        Serde<List<Float>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Float());
+        assertEquals("Should get the original collection of float primitives"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForFloatPrimitiveInput() {
+        List<Float> testData = Arrays.asList((float) 1, (float) 2, (float) 3);
+        Serde<List<Float>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Float());
+        assertEquals("Should get length of 16 bytes (size of the list + 3 float entries) after serialization", 16,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldRoundtripLongPrimitiveInput() {
+        List<Long> testData = Arrays.asList((long) 1, (long) 2, (long) 3);
+        Serde<List<Long>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Long());
+        assertEquals("Should get the original collection of long primitives"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForLongPrimitiveInput() {
+        List<Long> testData = Arrays.asList((long) 1, (long) 2, (long) 3);
+        Serde<List<Long>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Long());
+        assertEquals("Should get length of 24 bytes (size of the list + 3 long entries) after serialization", 28,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldRoundtripDoublePrimitiveInput() {
+        List<Double> testData = Arrays.asList((double) 1, (double) 2, (double) 3);
+        Serde<List<Double>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Double());
+        assertEquals("Should get the original collection of double primitives"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForDoublePrimitiveInput() {
+        List<Double> testData = Arrays.asList((double) 1, (double) 2, (double) 3);
+        Serde<List<Double>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Double());
+        assertEquals("Should get length of 24 bytes (size of the list + 3 double entries) after serialization", 28,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldRoundtripUUIDInput() {
+        List<UUID> testData = Arrays.asList(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        Serde<List<UUID>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.UUID());
+        assertEquals("Should get the original collection of UUID"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfFixedSizeForUUIDInput() {
+        List<UUID> testData = Arrays.asList(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+        Serde<List<UUID>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.UUID());
+        assertEquals("Should get length of 52 bytes (size of the list + 3 UUID entries) after serialization", 112,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldRountripNonPrimitiveInput() {
+        List<String> testData = Arrays.asList("A", "B", "C");
+        Serde<List<String>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.String());
+        assertEquals("Should get the original collection after serialization and deserialization on an empty list", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
 
     @Test
     public void listSerdeShouldReturnLinkedList() {
