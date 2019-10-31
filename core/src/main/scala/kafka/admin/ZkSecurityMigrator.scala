@@ -62,7 +62,7 @@ object ZkSecurityMigrator extends Logging {
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
 
-  def run(args: Array[String]): Unit = {
+  def run(args: Array[String], checkPathExists: Boolean = true): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
@@ -97,7 +97,7 @@ object ZkSecurityMigrator extends Logging {
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
       Int.MaxValue, Time.SYSTEM)
     val migrator = new ZkSecurityMigrator(zkClient)
-    migrator.run()
+    migrator.run(checkPathExists)
   }
 
   def main(args: Array[String]): Unit = {
@@ -219,10 +219,11 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
-  private def run(): Unit = {
+  private def run(checkPathExists: Boolean): Unit = {
     try {
       setAclIndividually("/")
-      checkPathsExistAndAskToProceed()
+      if (checkPathExists)
+        checkPathsExistAndAskToProceed()
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
         zkClient.makeSurePersistentPathExists(path)

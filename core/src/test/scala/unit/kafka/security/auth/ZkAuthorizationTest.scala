@@ -174,7 +174,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testDelete(): Unit = {
     info(s"zkConnect string: $zkConnect")
-    ZkSecurityMigrator.run(Array("--zookeeper.acl=secure", s"--zookeeper.connect=$zkConnect"))
+    ZkSecurityMigrator.run(Array("--zookeeper.acl=secure", s"--zookeeper.connect=$zkConnect"), false)
     deleteAllUnsecure()
   }
 
@@ -236,7 +236,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
         secondZk.createRecursive(ConsumerPathZNode.path)
         "unsecure"
       }
-    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
+    ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"), false)
     info("Done with migration")
     for (path <- ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths) {
       val sensitive = ZkData.sensitivePath(path)
