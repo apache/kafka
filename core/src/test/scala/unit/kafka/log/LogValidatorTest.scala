@@ -90,6 +90,7 @@ class LogValidatorTest {
 
   private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
     LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       new LongRef(0L),
       time,
@@ -117,6 +118,7 @@ class LogValidatorTest {
     // The timestamps should be overwritten
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.NONE)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time= time,
@@ -157,6 +159,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -201,6 +204,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -261,6 +265,7 @@ class LogValidatorTest {
     records.buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -305,6 +310,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -374,6 +380,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -427,6 +434,7 @@ class LogValidatorTest {
   private def checkCreateTimeUpConversionFromV0(toMagic: Byte): Unit = {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -471,6 +479,7 @@ class LogValidatorTest {
     val timestamp = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, codec = CompressionType.GZIP, timestamp = timestamp)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -528,6 +537,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -581,6 +591,7 @@ class LogValidatorTest {
       codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -604,6 +615,7 @@ class LogValidatorTest {
       codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -627,6 +639,7 @@ class LogValidatorTest {
       codec = CompressionType.GZIP)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -650,6 +663,7 @@ class LogValidatorTest {
       codec = CompressionType.GZIP)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
@@ -672,6 +686,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -694,6 +709,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -717,6 +733,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -741,6 +758,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -766,6 +784,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -791,6 +810,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -814,6 +834,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -839,6 +860,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -864,6 +886,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -889,6 +912,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -914,6 +938,7 @@ class LogValidatorTest {
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -936,6 +961,7 @@ class LogValidatorTest {
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -963,6 +989,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V1, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -986,6 +1013,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V1, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1008,6 +1036,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1030,6 +1059,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1053,6 +1083,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1076,6 +1107,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1101,6 +1133,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1126,6 +1159,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1149,6 +1183,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1172,6 +1207,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1194,6 +1230,7 @@ class LogValidatorTest {
     records.batches().asScala.head.setLastOffset(2)
     assertThrows[InvalidRecordException] {
       LogValidator.validateMessagesAndAssignOffsets(records,
+        RecordVersion.V2,
         topicPartition,
         offsetCounter = new LongRef(0L),
         time = time,
@@ -1224,6 +1261,7 @@ class LogValidatorTest {
     // The timestamps should be overwritten
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(0),
       time= time,
@@ -1258,6 +1296,7 @@ class LogValidatorTest {
     val e = intercept[RecordValidationException] {
       LogValidator.validateMessagesAndAssignOffsets(
         records,
+        RecordVersion.V2,
         topicPartition,
         offsetCounter = new LongRef(0),
         time = time,
@@ -1307,6 +1346,7 @@ class LogValidatorTest {
     buffer.flip()
     val records = MemoryRecords.readableRecords(buffer)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      RecordVersion.V2,
       topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
