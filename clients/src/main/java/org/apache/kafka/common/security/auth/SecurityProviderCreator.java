@@ -14,36 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.concurrent.ExecutionException;
+import java.security.Provider;
+import java.util.Map;
 
 /**
- * The result of the {@link KafkaAdminClient#removeMemberFromConsumerGroup(String, RemoveMemberFromConsumerGroupOptions)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * An interface for generating security providers.
  */
 @InterfaceStability.Evolving
-public class MembershipChangeResult {
+public interface SecurityProviderCreator extends Configurable {
 
-    private KafkaFuture<RemoveMemberFromGroupResult> future;
+    /**
+     * Configure method is used to configure the generator to create the Security Provider
+     * @param config configuration parameters for initialising security provider
+     */
+    default void configure(Map<String, ?> config) {
 
-    MembershipChangeResult(KafkaFuture<RemoveMemberFromGroupResult> future) {
-        this.future = future;
     }
 
     /**
-     * Return a future which contains the member removal results.
+     * Generate the security provider configured
      */
-    public RemoveMemberFromGroupResult all() throws ExecutionException, InterruptedException {
-        return future.get();
-    }
-
-    // Visible for testing
-    public KafkaFuture<RemoveMemberFromGroupResult> future() {
-        return future;
-    }
+    Provider getProvider();
 }

@@ -17,34 +17,27 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 
 import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Options for {@link AdminClient#removeMemberFromConsumerGroup(String, RemoveMemberFromConsumerGroupOptions)}.
+ * Options for {@link AdminClient#removeMembersFromConsumerGroup(String, RemoveMembersFromConsumerGroupOptions)}.
  * It carries the members to be removed from the consumer group.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class RemoveMemberFromConsumerGroupOptions extends AbstractOptions<RemoveMemberFromConsumerGroupOptions> {
+public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private List<MemberIdentity> members;
+    private Set<MemberToRemove> members;
 
-    public RemoveMemberFromConsumerGroupOptions(Collection<String> groupInstanceIds) {
-        members = groupInstanceIds.stream().map(
-            instanceId -> new MemberIdentity()
-                              .setGroupInstanceId(instanceId)
-                              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-        ).collect(Collectors.toList());
+    public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
+        this.members = new HashSet<>(members);
     }
 
-    public List<MemberIdentity> getMembers() {
+    public Set<MemberToRemove> members() {
         return members;
     }
 }
-

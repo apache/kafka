@@ -55,6 +55,8 @@ public final class MessageGenerator {
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
+    static final String OBJECTS_CLASS = "java.util.Objects";
+
     static final String LIST_CLASS = "java.util.List";
 
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";

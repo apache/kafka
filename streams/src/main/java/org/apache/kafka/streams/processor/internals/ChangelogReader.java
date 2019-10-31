@@ -56,4 +56,8 @@ public interface ChangelogReader {
      */
     void clear();
 
+    /**
+     * @return whether the changelog reader has just been cleared or is uninitialized.
+     */
+    boolean isEmpty();
 }

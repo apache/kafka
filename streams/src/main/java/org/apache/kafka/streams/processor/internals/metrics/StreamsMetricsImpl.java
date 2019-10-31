@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
@@ -45,12 +46,13 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
     public enum Version {
         LATEST,
-        FROM_100_TO_23
+        FROM_0100_TO_24
     }
 
     static class ImmutableMetricValue<T> implements Gauge<T> {
@@ -109,8 +111,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String CLIENT_ID_TAG = "client-id";
     public static final String THREAD_ID_TAG = "thread-id";
-    public static final String THREAD_ID_TAG_0100_TO_23 = "client-id";
+    public static final String THREAD_ID_TAG_0100_TO_24 = "client-id";
     public static final String TASK_ID_TAG = "task-id";
+    public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
     public static final String STORE_ID_TAG = "state-id";
     public static final String BUFFER_ID_TAG = "buffer-id";
     public static final String RECORD_CACHE_ID_TAG = "record-cache-id";
@@ -133,17 +136,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
     public static final String GROUP_SUFFIX = "-metrics";
-    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
     public static final String CLIENT_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
-    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + "thread" + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
-    public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
+    public static final String PROCESSOR_NODE_LEVEL_GROUP = GROUP_PREFIX + "processor-node" + GROUP_SUFFIX;
+    public static final String STATE_STORE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
+    public static final String BUFFER_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX + "buffer" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
-    public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
-    public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
+    public static final String TOTAL_DESCRIPTION = "The total number of ";
+    public static final String RATE_DESCRIPTION = "The average per-second number of ";
 
-    public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
     public static final String LATE_RECORD_DROP = "late-record-drop";
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
@@ -160,7 +164,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
             return Version.LATEST;
         } else {
-            return Version.FROM_100_TO_23;
+            return Version.FROM_0100_TO_24;
         }
     }
 
@@ -226,11 +230,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_23, threadId);
+        tagMap.put(version == Version.LATEST ? THREAD_ID_TAG : THREAD_ID_TAG_0100_TO_24, threadId);
         return tagMap;
     }
 
-    public Map<String, String> threadLevelTagMap(final String threadId, final String... tags) {
+    private Map<String, String> threadLevelTagMap(final String threadId, final String... tags) {
         final Map<String, String> tagMap = threadLevelTagMap(threadId);
         return addTags(tagMap, tags);
     }
@@ -258,7 +262,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         tagMap.put(TASK_ID_TAG, taskId);
         return tagMap;
     }
-
 
     public Map<String, String> nodeLevelTagMap(final String threadId,
                                                final String taskName,
@@ -396,8 +399,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String taskId,
                                                 final String storeName) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        if (version == Version.FROM_100_TO_23) {
-            tagMap.put(THREAD_ID_TAG_0100_TO_23, threadId);
+        if (version == Version.FROM_0100_TO_24) {
+            tagMap.put(THREAD_ID_TAG_0100_TO_24, threadId);
         } else {
             tagMap.put(THREAD_ID_TAG, threadId);
         }
@@ -576,12 +579,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return SENSOR_EXTERNAL_LABEL + SENSOR_PREFIX_DELIMITER + threadId + SENSOR_NAME_DELIMITER + operationName;
     }
 
-    private static void addAvgAndMaxToSensor(final Sensor sensor,
-                                             final String group,
-                                             final Map<String, String> tags,
-                                             final String operation,
-                                             final String descriptionOfAvg,
-                                             final String descriptionOfMax) {
+    public static void addAvgAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String descriptionOfAvg,
+                                            final String descriptionOfMax) {
         sensor.add(
             new MetricName(
                 operation + AVG_SUFFIX,
@@ -658,17 +661,25 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                          final String group,
                                                          final Map<String, String> tags,
                                                          final String operation,
-                                                         final String descriptionOfInvocation,
-                                                         final String descriptionOfRate) {
+                                                         final String descriptionOfRate,
+                                                         final String descriptionOfCount) {
+        addInvocationRateToSensor(sensor, group, tags, operation, descriptionOfRate);
         sensor.add(
             new MetricName(
                 operation + TOTAL_SUFFIX,
                 group,
-                descriptionOfInvocation,
+                descriptionOfCount,
                 tags
             ),
             new CumulativeCount()
         );
+    }
+
+    public static void addInvocationRateToSensor(final Sensor sensor,
+                                                 final String group,
+                                                 final Map<String, String> tags,
+                                                 final String operation,
+                                                 final String descriptionOfRate) {
         sensor.add(
             new MetricName(
                 operation + RATE_SUFFIX,
@@ -689,8 +700,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             group,
             tags,
             operation,
-            "The total number of " + operation,
-            "The average per-second number of " + operation
+            RATE_DESCRIPTION + operation,
+            TOTAL_DESCRIPTION + operation
         );
     }
 
@@ -757,6 +768,36 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             new MetricName(metricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags),
             new CumulativeSum()
         );
+    }
+
+    public static void maybeMeasureLatency(final Runnable actionToMeasure,
+                                           final Time time,
+                                           final Sensor sensor) {
+        if (sensor.shouldRecord()) {
+            final long startNs = time.nanoseconds();
+            try {
+                actionToMeasure.run();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            actionToMeasure.run();
+        }
+    }
+
+    public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
+                                            final Time time,
+                                            final Sensor sensor) {
+        if (sensor.shouldRecord()) {
+            final long startNs = time.nanoseconds();
+            try {
+                return actionToMeasure.get();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            return actionToMeasure.get();
+        }
     }
 
     /**

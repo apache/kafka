@@ -269,8 +269,8 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!assignedActiveTasks.isEmpty()) {
-            throw new IllegalStateException("TaskManager had leftover tasks after removing all zombies");
+        } else if (!(active.isEmpty() && assignedActiveTasks.isEmpty() && changelogReader.isEmpty())) {
+            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
         }
 
         return zombieTasks;
@@ -279,15 +279,12 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        log.debug("Shutting down all active tasks {}, standby tasks {}, and suspended tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
-                  active.suspendedTaskIds());
-
         try {
-            active.close(clean);
+            active.shutdown(clean);
         } catch (final RuntimeException fatalException) {
             firstException.compareAndSet(null, fatalException);
         }
-        standby.close(clean);
+        standby.shutdown(clean);
 
         // remove the changelog partitions from restore consumer
         try {
@@ -469,6 +466,20 @@ public class TaskManager {
             }
         }
 
+        log.debug("Assigning metadata with: " +
+                      "\tactiveTasks: {},\n" +
+                      "\tstandbyTasks: {}\n" +
+                      "The updated active task states are: \n" +
+                      "\tassignedActiveTasks {},\n" +
+                      "\tassignedStandbyTasks {},\n" +
+                      "\taddedActiveTasks {},\n" +
+                      "\taddedStandbyTasks {},\n" +
+                      "\trevokedActiveTasks {},\n" +
+                      "\trevokedStandbyTasks {}",
+                  activeTasks, standbyTasks,
+                  assignedActiveTasks, assignedStandbyTasks,
+                  addedActiveTasks, addedStandbyTasks,
+                  revokedActiveTasks, revokedStandbyTasks);
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }

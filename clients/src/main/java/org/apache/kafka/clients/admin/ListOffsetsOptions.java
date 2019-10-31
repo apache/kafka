@@ -16,23 +16,28 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-import org.junit.Test;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collections;
-import java.util.List;
+/**
+ * Options for {@link AdminClient#listOffsets(Map)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
+public class ListOffsetsOptions extends AbstractOptions<ListOffsetsOptions> {
 
-import static org.junit.Assert.assertEquals;
+    private final IsolationLevel isolationLevel;
 
-public class RemoveMemberFromConsumerGroupOptionsTest {
+    public ListOffsetsOptions() {
+        this(IsolationLevel.READ_UNCOMMITTED);
+    }
 
-    @Test
-    public void testConstructor() {
-        List<String> groupInstanceIds = Collections.singletonList("instance-1");
+    public ListOffsetsOptions(IsolationLevel isolationLevel) {
+        this.isolationLevel = isolationLevel;
+    }
 
-        RemoveMemberFromConsumerGroupOptions options = new RemoveMemberFromConsumerGroupOptions(groupInstanceIds);
-
-        assertEquals(Collections.singletonList(
-            new MemberIdentity().setGroupInstanceId("instance-1")), options.getMembers());
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
     }
 }

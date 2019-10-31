@@ -14,28 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Configurable;
+import org.junit.Test;
 
-import java.security.Provider;
-import java.util.Map;
+import java.util.Collections;
 
-/**
- * An interface for generating security providers.
- */
-public interface SecurityProviderCreator extends Configurable {
+import static org.junit.Assert.assertEquals;
 
-    /**
-     * Configure method is used to configure the generator to create the Security Provider
-     * @param config configuration parameters for initialising security provider
-     */
-    default void configure(Map<String, ?> config) {
+public class RemoveMembersFromConsumerGroupOptionsTest {
 
+    @Test
+    public void testConstructor() {
+        RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(
+            Collections.singleton(new MemberToRemove("instance-1")));
+
+        assertEquals(Collections.singleton(
+            new MemberToRemove("instance-1")), options.members());
     }
-
-    /**
-     * Generate the security provider configured
-     */
-    Provider getProvider();
 }

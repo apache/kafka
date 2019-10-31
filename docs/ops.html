@@ -453,7 +453,7 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
   <pre class="brush: bash;">
   The throttle limit was set to 50000000 B/s
@@ -526,8 +526,8 @@
   <p>Some care should be taken when using throttled replication. In particular:</p>
 
   <p><i>(1) Throttle Removal:</i></p>
-  The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions
-  —verify).
+  The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions.sh
+  --verify).
 
   <p><i>(2) Ensuring Progress:</i></p>
   <p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
@@ -858,6 +858,26 @@
       <tr>
         <td>Byte out rate to other brokers</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to no key specified for compacted topic</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to invalid magic number</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to incorrect crc checksum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
         <td></td>
       </tr>
       <tr>
@@ -1490,8 +1510,78 @@
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>rebalance-latency-avg</td>
+        <td>The average time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-max</td>
+        <td>The max time taken for a group rebalance</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-latency-total</td>
+        <td>The total time taken for group rebalances so far</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-total</td>
+        <td>The total number of group rebalances participated</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>rebalance-rate-per-hour</td>
+        <td>The number of group rebalance participated per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-total</td>
+        <td>The total number of failed group rebalances</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-rebalance-rate-per-hour</td>
+        <td>The number of failed group rebalance event per hour</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>last-rebalance-seconds-ago</td>
+        <td>The number of seconds since the last rebalance event</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>last-heartbeat-seconds-ago</td>
         <td>The number of seconds since the last controller heartbeat</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-avg</td>
+        <td>The average time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-revoked-latency-max</td>
+        <td>The max time taken by the on-partitions-revoked rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-avg</td>
+        <td>The average time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-assigned-latency-max</td>
+        <td>The max time taken by the on-partitions-assigned rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-avg</td>
+        <td>The average time taken by the on-partitions-lost rebalance listener callback</td>
+        <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>partitions-lost-latency-max</td>
+        <td>The max time taken by the on-partitions-lost rebalance listener callback</td>
         <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>

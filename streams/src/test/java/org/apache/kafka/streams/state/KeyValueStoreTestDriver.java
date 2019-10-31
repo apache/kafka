@@ -193,7 +193,7 @@ public class KeyValueStoreTestDriver<K, V> {
             "KeyValueStoreTestDriver",
             new LogContext("KeyValueStoreTestDriver "),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         ) {
             @Override
             public <K1, V1> void send(final String topic,

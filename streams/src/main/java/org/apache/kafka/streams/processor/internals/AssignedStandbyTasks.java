@@ -31,6 +31,16 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
     }
 
     @Override
+    public void shutdown(final boolean clean) {
+        final String shutdownType = clean ? "Clean" : "Unclean";
+        log.debug(shutdownType + " shutdown of all standby tasks" + "\n" +
+                      "non-initialized standby tasks to close: {}" + "\n" +
+                      "running standby tasks to close: {}",
+            clean, created.keySet(), running.keySet());
+        super.shutdown(clean);
+    }
+
+    @Override
     int commit() {
         final int committed = super.commit();
         // TODO: this contortion would not be necessary if we got rid of the two-step
@@ -53,7 +63,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : revokedTasks.entrySet()) {
             final TaskId taskId = entry.getKey();
-            final Task task;
+            final StandbyTask task;
 
             if (running.containsKey(taskId)) {
                 task = running.get(taskId);
@@ -67,9 +77,9 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             try {
                 task.close(true, false);
             } catch (final RuntimeException e) {
-                log.error("Closing the {} {} failed due to the following error:", taskTypeName, task.id(), e);
+                log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {
-                running.remove(taskId);
+                removeTaskFromRunning(task);
                 revokedChangelogs.addAll(task.changelogPartitions());
             }
         }

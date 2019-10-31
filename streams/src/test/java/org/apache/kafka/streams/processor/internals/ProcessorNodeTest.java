@@ -109,7 +109,7 @@ public class ProcessorNodeTest {
                 null,
                 new LogContext("processnode-test "),
                 new DefaultProductionExceptionHandler(),
-                metrics.sensor("skipped-records")
+                metrics.sensor("dropped-records")
             ),
             metrics
         );
