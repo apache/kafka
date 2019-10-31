@@ -96,10 +96,13 @@ class ProduceRequestTest extends BaseRequestTest {
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
-    assertEquals(1, partitionResponse.recordErrors.size())
+    // there are 3 records with InvalidTimestampException created from inner function createRecords
+    assertEquals(3, partitionResponse.recordErrors.size())
     assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
-    assertNull(partitionResponse.recordErrors.get(0).message)
-    assertNotNull(partitionResponse.errorMessage)
+    assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
+    assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
+    partitionResponse.recordErrors.forEach(re => assertNotNull(re.message))
+    assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
   }
 
   @Test
