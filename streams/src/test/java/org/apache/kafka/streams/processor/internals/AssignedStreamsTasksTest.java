@@ -41,6 +41,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.function.ThrowingRunnable;
@@ -49,6 +50,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
@@ -65,6 +67,10 @@ public class AssignedStreamsTasksTest {
     private final TopicPartition changeLog2 = new TopicPartition("cl2", 0);
     private final TaskId taskId1 = new TaskId(0, 0);
     private final TaskId taskId2 = new TaskId(1, 0);
+
+    private TaskId clearingTaskId = new TaskId(0, 0);
+    private List<TopicPartition> clearingPartitions = Collections.singletonList(new TopicPartition("topic", 0));
+
     private AssignedStreamsTasks assignedTasks;
 
     private final List<TopicPartition> revokedChangelogs = new ArrayList<>();
@@ -515,6 +521,145 @@ public class AssignedStreamsTasksTest {
         assertNull(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs));
 
         assignedTasks.shutdown(true);
+    }
+
+    @Test
+    public void shouldClearZombieCreatedTasks() {
+
+        createTaskAndClear(new TaskTestSuite() {
+            @Override
+            public void additionalSetup(final StreamTask task) {
+                task.close(false, true);
+            }
+
+            @Override
+            public void action(final StreamTask task) {
+                assignedTasks.addNewTask(task);
+            }
+
+            @Override
+            public Set<TaskId> taskIds() {
+                return assignedTasks.created.keySet();
+            }
+
+            @Override
+            public List<TopicPartition> expectedLostChangelogs() {
+                return clearingPartitions;
+            }
+        });
+    }
+
+    @Test
+    public void shouldClearZombieRestoringTasks() {
+        createTaskAndClear(new TaskTestSuite() {
+            @Override
+            public void additionalSetup(final StreamTask task) {
+                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
+                task.closeStateManager(false);
+            }
+
+            @Override
+            public void action(final StreamTask task) {
+                assignedTasks.addTaskToRestoring(task);
+            }
+
+            @Override
+            public Set<TaskId> taskIds() {
+                return assignedTasks.restoringTaskIds();
+            }
+
+            @Override
+            public List<TopicPartition> expectedLostChangelogs() {
+                return clearingPartitions;
+            }
+        });
+    }
+
+    @Test
+    public void shouldClearZombieRunningTasks() {
+        createTaskAndClear(new TaskTestSuite() {
+            @Override
+            public void additionalSetup(final StreamTask task) {
+                task.initializeTopology();
+                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
+                task.close(false, true);
+            }
+
+            @Override
+            public void action(final StreamTask task) {
+                assignedTasks.transitionToRunning(task);
+            }
+
+            @Override
+            public Set<TaskId> taskIds() {
+                return assignedTasks.runningTaskIds();
+            }
+
+            @Override
+            public List<TopicPartition> expectedLostChangelogs() {
+                return clearingPartitions;
+            }
+        });
+    }
+
+    @Test
+    public void shouldClearZombieSuspendedTasks() {
+        createTaskAndClear(new TaskTestSuite() {
+            @Override
+            public void additionalSetup(final StreamTask task) {
+                task.initializeTopology();
+                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
+                task.suspend();
+                task.closeSuspended(false, null);
+            }
+
+            @Override
+            public void action(final StreamTask task) {
+                assignedTasks.transitionToRunning(task);
+                final List<TopicPartition> revokedChangelogs = new ArrayList<>();
+                final List<TaskId> ids = Collections.singletonList(task.id());
+                assignedTasks.suspendOrCloseTasks(new HashSet<>(ids), revokedChangelogs);
+                assertEquals(clearingPartitions, revokedChangelogs);
+            }
+
+            @Override
+            public Set<TaskId> taskIds() {
+                return assignedTasks.suspendedTaskIds();
+            }
+
+            @Override
+            public List<TopicPartition> expectedLostChangelogs() {
+                return Collections.emptyList();
+            }
+        });
+    }
+
+    private void createTaskAndClear(final TaskTestSuite taskTestSuite) {
+        final StreamTask task = EasyMock.createMock(StreamTask.class);
+        EasyMock.expect(task.id()).andReturn(clearingTaskId).anyTimes();
+        EasyMock.expect(task.changelogPartitions()).andReturn(clearingPartitions).anyTimes();
+        taskTestSuite.additionalSetup(task);
+        EasyMock.replay(task);
+
+        taskTestSuite.action(task);
+        final List<TopicPartition> changelogs = new ArrayList<>();
+        final Set<TaskId> ids = new HashSet<>(Collections.singleton(task.id()));
+        assertEquals(ids, taskTestSuite.taskIds());
+
+        assignedTasks.closeZombieTasks(ids, changelogs);
+        assertEquals(Collections.emptySet(), taskTestSuite.taskIds());
+        assertEquals(taskTestSuite.expectedLostChangelogs(), changelogs);
+    }
+
+    interface TaskTestSuite {
+
+        void additionalSetup(final StreamTask task);
+
+        void action(final StreamTask task);
+
+        Set<TaskId> taskIds();
+
+        List<TopicPartition> expectedLostChangelogs();
     }
 
     private void addAndInitTask() {
