@@ -466,7 +466,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KStream#join`
-   * @deprecated since 2.4. Use [[KStream#koin(KStream, ValueJoiner, JoinWindows, StreamJoined)]] instead.
+   * @deprecated since 2.4. Use [[KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)]] instead.
    */
   @deprecated
   def join[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
