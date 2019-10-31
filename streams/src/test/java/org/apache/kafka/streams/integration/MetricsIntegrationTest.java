@@ -598,44 +598,24 @@ public class MetricsIntegrationTest {
         final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS))
             .collect(Collectors.toList());
-        checkMetricByName(
-            listMetricTask,
-            COMMIT_LATENCY_AVG,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
-        );
-        checkMetricByName(
-            listMetricTask,
-            COMMIT_LATENCY_MAX,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
-        );
-        checkMetricByName(
-            listMetricTask,
-            COMMIT_RATE,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
-        );
-        checkMetricByName(
-            listMetricTask,
-            COMMIT_TOTAL,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 5
-        );
+        final int numberOfAddedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 0 : 4;
+        final int numberOfMetricsWithRemovedParent = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 5 : 4;
+        checkMetricByName(listMetricTask, COMMIT_LATENCY_AVG, numberOfMetricsWithRemovedParent);
+        checkMetricByName(listMetricTask, COMMIT_LATENCY_MAX, numberOfMetricsWithRemovedParent);
+        checkMetricByName(listMetricTask, COMMIT_RATE, numberOfMetricsWithRemovedParent);
+        checkMetricByName(listMetricTask, COMMIT_TOTAL, numberOfMetricsWithRemovedParent);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_RATE, 4);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_TOTAL, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
-        checkTaskLevelMetricsForBuiltInMetricsVersionLatest(
-            listMetricTask,
-            StreamsConfig.METRICS_LATEST.equals(builtInMetricsVersion) ? 4 : 0
-        );
-    }
-
-    private void checkTaskLevelMetricsForBuiltInMetricsVersionLatest(final List<Metric> metrics,
-                                                                     final int count) {
-        checkMetricByName(metrics, PROCESS_LATENCY_AVG, count);
-        checkMetricByName(metrics, PROCESS_LATENCY_MAX, count);
-        checkMetricByName(metrics, PUNCTUATE_LATENCY_AVG, count);
-        checkMetricByName(metrics, PUNCTUATE_LATENCY_MAX, count);
-        checkMetricByName(metrics, PUNCTUATE_RATE, count);
-        checkMetricByName(metrics, PUNCTUATE_TOTAL, count);
+        checkMetricByName(listMetricTask, PROCESS_LATENCY_AVG, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PROCESS_LATENCY_MAX, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PUNCTUATE_LATENCY_AVG, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PUNCTUATE_LATENCY_MAX, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PUNCTUATE_RATE, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PUNCTUATE_TOTAL, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PROCESS_RATE, numberOfAddedMetrics);
+        checkMetricByName(listMetricTask, PROCESS_TOTAL, numberOfAddedMetrics);
     }
 
     private void checkProcessorNodeLevelMetrics(final String builtInMetricsVersion) {
@@ -643,7 +623,8 @@ public class MetricsIntegrationTest {
             .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS))
             .collect(Collectors.toList());
         final int numberOfRemovedMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 0;
-        final int numberOfMetricsWithRemovedParents = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 14;
+        final int numberOfModifiedProcessMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 18 : 4;
+        final int numberOfModifiedForwardMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 8 : 0;
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, numberOfRemovedMetrics);
@@ -652,16 +633,16 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, numberOfRemovedMetrics);
-        checkMetricByName(listMetricProcessor, PROCESS_RATE, numberOfMetricsWithRemovedParents);
-        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, numberOfMetricsWithRemovedParents);
+        checkMetricByName(listMetricProcessor, PROCESS_RATE, numberOfModifiedProcessMetrics);
+        checkMetricByName(listMetricProcessor, PROCESS_TOTAL, numberOfModifiedProcessMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_RATE, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, CREATE_RATE, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, CREATE_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_RATE, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
-        checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfRemovedMetrics);
-        checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfRemovedMetrics);
+        checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfModifiedForwardMetrics);
+        checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
     }
 
     private void checkRocksDBMetricsByTag(final String tag, final RecordingLevel recordingLevel) {

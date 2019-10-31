@@ -75,7 +75,7 @@ public class TaskMetrics {
 
     private static final String PROCESS = "process";
     private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
-    private static final String PROCESS_DESCRIPTION = "processing";
+    private static final String PROCESS_DESCRIPTION = "calls to process";
     private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
 

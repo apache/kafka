@@ -114,7 +114,6 @@ public class ProcessorNodeTest {
 
         final String threadId = Thread.currentThread().getName();
         final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        final String throughputOperation = "forward";
         final String groupName = "stream-processor-node-metrics";
         final Map<String, String> metricTags = new LinkedHashMap<>();
         final String threadIdTagKey =
@@ -130,7 +129,6 @@ public class ProcessorNodeTest {
                 assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
                 assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
             }
-            assertTrue(StreamsTestUtils.containsMetric(metrics, throughputOperation + "-rate", groupName, metricTags));
 
             // test parent sensors
             metricTags.put("processor-node-id", ROLLUP_VALUE);
@@ -140,43 +138,23 @@ public class ProcessorNodeTest {
                 assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
                 assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
             }
-            assertTrue(StreamsTestUtils.containsMetric(metrics, throughputOperation + "-rate", groupName, metricTags));
-
         } else {
             for (final String opName : latencyOperations) {
-                if ("process".equals(opName)) {
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                    assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                    assertTrue(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
-                } else {
-                    assertFalse(
-                        StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                    assertFalse(
-                        StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
+                if (!"process".equals(opName)) {
                     assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
                     assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
                 }
             }
-            assertFalse(StreamsTestUtils.containsMetric(metrics, throughputOperation + "-rate", groupName, metricTags));
 
             // test parent sensors
             metricTags.put("processor-node-id", ROLLUP_VALUE);
             for (final String opName : latencyOperations) {
-                if ("process".equals(opName)) {
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
-                } else {
-                    assertFalse(
-                        StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
-                    assertFalse(
-                        StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
-                }
-                assertFalse(StreamsTestUtils.containsMetric(metrics, throughputOperation + "-rate ", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
             }
         }
     }

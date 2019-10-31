@@ -83,8 +83,8 @@ public class TaskMetricsTest {
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.LATEST) {
-            final String avgLatencyDescription = "The average latency of processing";
-            final String maxLatencyDescription = "The maximum latency of processing";
+            final String avgLatencyDescription = "The average latency of calls to process";
+            final String maxLatencyDescription = "The maximum latency of calls to process";
             expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
             StreamsMetricsImpl.addAvgAndMaxToSensor(
                 expectedSensor,
