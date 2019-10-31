@@ -233,9 +233,32 @@
 		  topic names don't change!  This makes your topology more robust and resilient to changes made by 
 		  adding or removing processors.
 
-		  So to summarize, it's a good practice to name your processing nodes when using the DSL, and it's even 
-		  more important to do so when you have processing that remains when re-start your application - repartition 
-		  topics and state stores (and the accompanying changelog topics).  
+		<h2>Conclusion</h2>
+
+		 So to summarize, it's a good practice to name your processing nodes when using the DSL, and it's even
+		 more important to do so when you have processing that remains when re-start your application - repartition
+		 topics and state stores (and the accompanying changelog topics).
+
+		 A couple of points we should go over again regarding naming your DSL topology:
+		<ol>
+			<li>
+				If you have an <em>existing topology</em> and you've <em>haven't</em> named your
+				state stores (hence chagelog topics) and repartition topics it's recommended that you
+				do so.  But this will be a topology breaking change, so you'll need to shut down all
+				application instances, make the changes then run the
+				<a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool">Streams Reset Tool</a>.
+				Although this may be inconvenient at first, it's worth the effort to protect your application from
+				unexpected errors due to topology changes.
+			</li>
+			<li>
+				If you have a <em>new topology</em> make sure you name the persistent parts of your topology
+				: state stores (changelog topics) and repartition topics.  That way once you deploy your
+				application you are protected from topology changes breaking your Kafka Streams application.
+				Even if you don't want to add names to transient processors at first, that's fine as you can
+				always go back and add the names later.
+			</li>
+		</ol>
+
 		  Here's a table giving you a quick reference on how you can name the critical parts of 
 		  your Kafka Streams application to prevent topology name changes from breaking your application
 
