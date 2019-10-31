@@ -27,6 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -101,7 +102,9 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
     assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
     assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
-    partitionResponse.recordErrors.forEach(re => assertNotNull(re.message))
+    for (recordError <- partitionResponse.recordErrors.asScala) {
+      assertNotNull(recordError.message)
+    }
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
   }
 
