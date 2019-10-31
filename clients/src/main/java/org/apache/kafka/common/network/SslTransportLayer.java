@@ -933,29 +933,24 @@ public class SslTransportLayer implements TransportLayer {
         long pos = position;
         try {
             while (totalBytesWritten < totalBytesToWrite) {
-                int bytesToWrite = fileChannelBuffer.remaining();
                 if (!fileChannelBuffer.hasRemaining()) {
                     fileChannelBuffer.clear();
                     int bytesRemaining = totalBytesToWrite - totalBytesWritten;
                     if (bytesRemaining < fileChannelBuffer.limit())
                         fileChannelBuffer.limit(bytesRemaining);
-                    bytesToWrite = fileChannel.read(fileChannelBuffer, pos);
-                    if (bytesToWrite <= 0)
+                    int bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                    if (bytesRead <= 0)
                         break;
                     fileChannelBuffer.flip();
                 }
                 int networkBytesWritten = write(fileChannelBuffer);
                 totalBytesWritten += networkBytesWritten;
-                if (networkBytesWritten < bytesToWrite) {
-                    // Handle partial write by moving the remaining bytes to the start of the buffer so that we write
-                    // them first in the next `transferFrom` call. We return the written bytes to the caller so the
-                    // `position` passed in the next `transferFrom` call won't include the bytes remaining in
-                    // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
-                    // we invoke `fileChannel.read`.
-                    fileChannelBuffer.compact();
-                    fileChannelBuffer.flip();
+                // In the case of a partial write we only return the written bytes to the caller. As a result, the
+                // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+                // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+                // we invoke `fileChannel.read`.
+                if (fileChannelBuffer.hasRemaining())
                     break;
-                }
                 pos += networkBytesWritten;
             }
             return totalBytesWritten;
