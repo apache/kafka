@@ -71,6 +71,9 @@ trait KafkaMetricsGroup extends Logging {
   def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty) =
     Metrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit)
 
+  def newCounter(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
+    Metrics.defaultRegistry().newCounter(metricName(name, tags))
+
   def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty) =
     Metrics.defaultRegistry().newHistogram(metricName(name, tags), biased)
 
