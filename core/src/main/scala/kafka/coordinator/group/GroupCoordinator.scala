@@ -545,7 +545,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition]): (Errors, Map[TopicPartition, Errors]) = {
     var groupError: Errors = Errors.NONE
     var partitionErrors: Map[TopicPartition, Errors] = Map()
-    var partitionEligibleForDeletion: Seq[TopicPartition] = Seq()
+    var partitionsEligibleForDeletion: Seq[TopicPartition] = Seq()
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_DELETE) match {
       case Some(error) =>
@@ -565,13 +565,13 @@ class GroupCoordinator(val brokerId: Int,
                     Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR
 
                 case Empty =>
-                  partitionEligibleForDeletion = partitions
+                  partitionsEligibleForDeletion = partitions
 
                 case PreparingRebalance | CompletingRebalance | Stable if group.isConsumerGroup =>
                   val (consumed, notConsumed) =
                     partitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
 
-                  partitionEligibleForDeletion = notConsumed
+                  partitionsEligibleForDeletion = notConsumed
                   partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap
 
                 case _ =>
@@ -579,16 +579,16 @@ class GroupCoordinator(val brokerId: Int,
               }
             }
 
-            if (partitionEligibleForDeletion.nonEmpty) {
+            if (partitionsEligibleForDeletion.nonEmpty) {
               val offsetsRemoved = groupManager.cleanupGroupMetadata(Seq(group), group => {
-                group.removeOffsets(partitionEligibleForDeletion)
+                group.removeOffsets(partitionsEligibleForDeletion)
               })
 
-              partitionErrors ++= partitionEligibleForDeletion.map(_ -> Errors.NONE).toMap
+              partitionErrors ++= partitionsEligibleForDeletion.map(_ -> Errors.NONE).toMap
 
               offsetDeletionSensor.record(offsetsRemoved)
 
-              info(s"The following offsets of the group $groupId were deleted: ${partitionEligibleForDeletion.mkString(", ")}. " +
+              info(s"The following offsets of the group $groupId were deleted: ${partitionsEligibleForDeletion.mkString(", ")}. " +
                 s"A total of $offsetsRemoved offsets were removed.")
             }
         }
