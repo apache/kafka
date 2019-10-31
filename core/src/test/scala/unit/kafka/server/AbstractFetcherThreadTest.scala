@@ -84,8 +84,7 @@ class AbstractFetcherThreadTest {
     fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
 
     fetcher.start()
-
-    val brokerTopicStatsMetrics = fetcher.brokerTopicStats.allTopicsStats.metricMap.keySet
+    val brokerTopicStatsMetrics = fetcher.brokerTopicStats.allTopicsStats.metricMap.keySet ++ fetcher.brokerTopicStats.allTopicsStats.counterMetricMap.keySet
     val fetcherMetrics = Set(FetcherMetrics.BytesPerSec, FetcherMetrics.RequestsPerSec, FetcherMetrics.ConsumerLag,
                              FetcherMetrics.RequestFailuresPerSec)
 

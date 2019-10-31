@@ -132,7 +132,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
     // The broker metrics for all topics should be greedily registered
     assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
-    assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size +
+      servers.head.brokerTopicStats.allTopicsStats.counterMetricMap.size, topicMetrics(None).size)
     // topic metrics should be lazily registered
     assertTrue(topicMetricGroups(topic).isEmpty, "Topic metrics aren't lazily registered")
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)

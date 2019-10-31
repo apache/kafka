@@ -70,6 +70,9 @@ trait KafkaMetricsGroup extends Logging {
   def newMeter(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty): Meter =
     KafkaYammerMetrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit)
 
+  def newCounter(name: String, tags: scala.collection.Map[String, String] = Map.empty) =
+    KafkaYammerMetrics.defaultRegistry().newCounter(metricName(name, tags))
+
   def newHistogram(name: String, biased: Boolean = true, tags: scala.collection.Map[String, String] = Map.empty): Histogram =
     KafkaYammerMetrics.defaultRegistry().newHistogram(metricName(name, tags), biased)
 
