@@ -67,10 +67,6 @@ public class AssignedStreamsTasksTest {
     private final TopicPartition changeLog2 = new TopicPartition("cl2", 0);
     private final TaskId taskId1 = new TaskId(0, 0);
     private final TaskId taskId2 = new TaskId(1, 0);
-
-    private TaskId clearingTaskId = new TaskId(0, 0);
-    private List<TopicPartition> clearingPartitions = Collections.singletonList(new TopicPartition("topic", 0));
-
     private AssignedStreamsTasks assignedTasks;
 
     private final List<TopicPartition> revokedChangelogs = new ArrayList<>();
@@ -525,8 +521,7 @@ public class AssignedStreamsTasksTest {
 
     @Test
     public void shouldClearZombieCreatedTasks() {
-
-        createTaskAndClear(new TaskTestSuite() {
+        new TaskTestSuite() {
             @Override
             public void additionalSetup(final StreamTask task) {
                 task.close(false, true);
@@ -546,12 +541,12 @@ public class AssignedStreamsTasksTest {
             public List<TopicPartition> expectedLostChangelogs() {
                 return clearingPartitions;
             }
-        });
+        }.createTaskAndClear();
     }
 
     @Test
     public void shouldClearZombieRestoringTasks() {
-        createTaskAndClear(new TaskTestSuite() {
+        new TaskTestSuite() {
             @Override
             public void additionalSetup(final StreamTask task) {
                 EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
@@ -572,12 +567,12 @@ public class AssignedStreamsTasksTest {
             public List<TopicPartition> expectedLostChangelogs() {
                 return clearingPartitions;
             }
-        });
+        }.createTaskAndClear();
     }
 
     @Test
     public void shouldClearZombieRunningTasks() {
-        createTaskAndClear(new TaskTestSuite() {
+        new TaskTestSuite() {
             @Override
             public void additionalSetup(final StreamTask task) {
                 task.initializeTopology();
@@ -599,12 +594,12 @@ public class AssignedStreamsTasksTest {
             public List<TopicPartition> expectedLostChangelogs() {
                 return clearingPartitions;
             }
-        });
+        }.createTaskAndClear();
     }
 
     @Test
     public void shouldClearZombieSuspendedTasks() {
-        createTaskAndClear(new TaskTestSuite() {
+        new TaskTestSuite() {
             @Override
             public void additionalSetup(final StreamTask task) {
                 task.initializeTopology();
@@ -631,35 +626,38 @@ public class AssignedStreamsTasksTest {
             public List<TopicPartition> expectedLostChangelogs() {
                 return Collections.emptyList();
             }
-        });
+        }.createTaskAndClear();
     }
 
-    private void createTaskAndClear(final TaskTestSuite taskTestSuite) {
-        final StreamTask task = EasyMock.createMock(StreamTask.class);
-        EasyMock.expect(task.id()).andReturn(clearingTaskId).anyTimes();
-        EasyMock.expect(task.changelogPartitions()).andReturn(clearingPartitions).anyTimes();
-        taskTestSuite.additionalSetup(task);
-        EasyMock.replay(task);
+    abstract class TaskTestSuite {
 
-        taskTestSuite.action(task);
-        final List<TopicPartition> changelogs = new ArrayList<>();
-        final Set<TaskId> ids = new HashSet<>(Collections.singleton(task.id()));
-        assertEquals(ids, taskTestSuite.taskIds());
+        TaskId clearingTaskId = new TaskId(0, 0);
+        List<TopicPartition> clearingPartitions = Collections.singletonList(new TopicPartition("topic", 0));
 
-        assignedTasks.closeZombieTasks(ids, changelogs);
-        assertEquals(Collections.emptySet(), taskTestSuite.taskIds());
-        assertEquals(taskTestSuite.expectedLostChangelogs(), changelogs);
-    }
+        abstract void additionalSetup(final StreamTask task);
 
-    interface TaskTestSuite {
+        abstract void action(final StreamTask task);
 
-        void additionalSetup(final StreamTask task);
+        abstract Set<TaskId> taskIds();
 
-        void action(final StreamTask task);
+        abstract List<TopicPartition> expectedLostChangelogs();
 
-        Set<TaskId> taskIds();
+        void createTaskAndClear() {
+            final StreamTask task = EasyMock.createMock(StreamTask.class);
+            EasyMock.expect(task.id()).andReturn(clearingTaskId).anyTimes();
+            EasyMock.expect(task.changelogPartitions()).andReturn(clearingPartitions).anyTimes();
+            additionalSetup(task);
+            EasyMock.replay(task);
 
-        List<TopicPartition> expectedLostChangelogs();
+            action(task);
+            final List<TopicPartition> changelogs = new ArrayList<>();
+            final Set<TaskId> ids = new HashSet<>(Collections.singleton(task.id()));
+            assertEquals(ids, taskIds());
+
+            assignedTasks.closeZombieTasks(ids, changelogs);
+            assertEquals(Collections.emptySet(), taskIds());
+            assertEquals(expectedLostChangelogs(), changelogs);
+        }
     }
 
     private void addAndInitTask() {
