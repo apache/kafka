@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
 import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -31,6 +31,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
+import scala.io.StdIn
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 
@@ -221,6 +222,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   private def run(): Unit = {
     try {
       setAclIndividually("/")
+      checkPathsExistAndAskToProceed()
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
         zkClient.makeSurePersistentPathExists(path)
@@ -244,6 +246,19 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
 
     } finally {
       zkClient.close
+    }
+  }
+
+  private def checkPathsExistAndAskToProceed(): Unit = {
+    val nonExistingSecureRootPaths = ZkData.SecureRootPaths.filterNot(zkClient.pathExists)
+    if (nonExistingSecureRootPaths.nonEmpty) {
+      println(s"Following secure root paths do not exist on ZooKeeper: ${nonExistingSecureRootPaths.mkString(",")}")
+      println("That might be due to an incorrect chroot is specified when executing the command.")
+      println("Are you sure you want to continue? [y/n]")
+      if (!StdIn.readLine().equalsIgnoreCase("y")) {
+        println("Exit the command.")
+        Exit.exit(0)
+      }
     }
   }
 }
