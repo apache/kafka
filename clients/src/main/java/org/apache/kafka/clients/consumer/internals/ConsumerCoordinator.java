@@ -692,6 +692,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void onLeavePrepare() {
+        log.debug("Executing onLeavePrepare with generation {} and memberId {}", generation(), memberId());
+
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
