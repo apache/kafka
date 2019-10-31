@@ -126,6 +126,7 @@ object Defaults {
   val MessageDownConversionEnable = true
   val RemoteLogStorageEnable = false
   val RemoteStorageManager = ""
+  val RemoteStorageManagerClassPath = ""
   val RemoteLogRetentionMinutes = 7 * 24 * 60L
   val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
   val RemoteLogManagerThreadPoolSize = 10
@@ -363,6 +364,7 @@ object KafkaConfig {
   // Remote log storage config //
   val RemoteLogStorageEnableProp = "remote.log.storage.enable"
   val RemoteLogStorageManagerProp = "remote.log.storage.manager.class.name"
+  val RemoteLogStorageManagerClassPathProp = "remote.log.storage.manager.class.path"
   val RemoteLogRetentionMillisProp = "remote.log.retention.ms"
   val RemoteLogRetentionMinutesProp = "remote.log.retention.minutes"
   val RemoteLogRetentionBytesProp = "remote.log.retention.bytes"
@@ -689,6 +691,10 @@ object KafkaConfig {
   val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
   val RemoteLogStorageEnableDoc = "Whether to enable remote log storage or not."
   val RemoteStorageManagerDoc = "Fully qualified classname of RemoteLogStorageManager implementation."
+  val RemoteStorageManagerClassPathDoc = "Class path of the RemoteLogStorageManager implementation." +
+    "If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded by a dedicated" +
+    "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same" +
+    "with the standard Java class path string."
   val RemoteLogRetentionMillisDoc = "Remote log retention in milli seconds, after which remote log segment is deleted."
   val RemoteLogRetentionMinutesDoc = "Remote log retention in minutes, after which remote log segment is deleted."
   val RemoteLogRetentionBytesDoc = "Remote log size retention in bytes, after which remote log segment is deleted."
@@ -980,6 +986,7 @@ object KafkaConfig {
       .define(LogMessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW, LogMessageDownConversionEnableDoc)
       .define(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, LOW, RemoteLogStorageEnableDoc)
       .define(RemoteLogStorageManagerProp, STRING, Defaults.RemoteStorageManager, LOW, RemoteStorageManagerDoc)
+      .define(RemoteLogStorageManagerClassPathProp, STRING, Defaults.RemoteStorageManagerClassPath, LOW, RemoteStorageManagerClassPathDoc)
       .define(RemoteLogRetentionMillisProp, LONG, null, LOW, RemoteLogRetentionMillisDoc)
       .define(RemoteLogRetentionMinutesProp, LONG, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
       .define(RemoteLogRetentionBytesProp, LONG, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
@@ -1292,6 +1299,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   /** Remote log storage config **/
   def remoteLogStorageEnable: Boolean = getBoolean(KafkaConfig.RemoteLogStorageEnableProp)
   def remoteLogStorageManager: String = getString(KafkaConfig.RemoteLogStorageManagerProp)
+  def remoteLogStorageManagerClassPath: String = getString(KafkaConfig.RemoteLogStorageManagerClassPathProp)
   def remoteLogRetentionBytes: Long = getLong(KafkaConfig.RemoteLogRetentionBytesProp)
   def remoteLogRetentionMillis: Long = {
     val millisInMinute = 60L * 1000L

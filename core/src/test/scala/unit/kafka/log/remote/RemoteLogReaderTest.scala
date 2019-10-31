@@ -154,7 +154,7 @@ object MockRemoteLogManager {
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
 
   def rlmConfig(threads: Int, taskQueueSize: Int): RemoteLogManagerConfig = {
-    RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager",
+    RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", "",
       1024, 60000, threads, taskQueueSize, rsmConfig, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
   }
 }
