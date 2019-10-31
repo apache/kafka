@@ -590,11 +590,11 @@ public class Selector implements Selectable, AutoCloseable {
                         && !channel.maybeBeginClientReauthentication(() -> nowNanos)) {
                     try {
                         long bytesSent = channel.write();
-                        if (bytesSent > 0) {
+                        Send send = channel.maybeCompleteSend();
+                        if (bytesSent > 0 || send != null) {
                             long currentTimeMs = time.milliseconds();
-                            this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
-
-                            Send send = channel.maybeCompleteSend();
+                            if (bytesSent > 0)
+                                this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
                             if (send != null) {
                                 this.completedSends.add(send);
                                 this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
