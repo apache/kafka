@@ -300,8 +300,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public boolean isEmpty() {
-        return partitionInfo.isEmpty()
-            && stateRestorers.isEmpty()
+        return stateRestorers.isEmpty()
             && needsRestoring.isEmpty()
             && restoreToOffsets.isEmpty()
             && needsInitializing.isEmpty()
