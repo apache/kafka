@@ -183,9 +183,15 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     boolean isEmpty() {
-        return runningByPartition.isEmpty()
-                   && running.isEmpty()
-                   && created.isEmpty();
+        if (running.isEmpty() && !runningByPartition.isEmpty()) {
+            log.error("Assigned stream tasks in an inconsistent state: the set of running tasks is empty but the " +
+                          "running by partitions map contained {}", runningByPartition);
+            return false;
+        } else {
+            return runningByPartition.isEmpty()
+                       && running.isEmpty()
+                       && created.isEmpty();
+        }
     }
 
     /**
