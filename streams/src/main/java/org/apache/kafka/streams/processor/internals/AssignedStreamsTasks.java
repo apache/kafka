@@ -281,7 +281,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, created.get(id), lostTaskChangelogs));
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), lostTaskChangelogs));
             } else if (running.containsKey(id)) {
                 log.debug("Closing the zombie running stream task {}.", id);
                 firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
