@@ -17,8 +17,11 @@
 package kafka.admin
 
 import joptsimple.OptionException
+import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
+import org.apache.kafka.common.ConsumerGroupState
+import org.apache.kafka.clients.admin.ConsumerGroupListing
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -34,7 +37,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedGroups = Set(group, simpleGroup)
     var foundGroups = Set.empty[String]
     TestUtils.waitUntilTrue(() => {
-      foundGroups = service.listGroups().toSet
+      foundGroups = service.listConsumerGroups().toSet
       expectedGroups == foundGroups
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
@@ -44,4 +47,52 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
     getConsumerGroupService(cgcArgs)
   }
+
+  @Test
+  def testListConsumerGroupsWithStates(): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
+
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    val service = getConsumerGroupService(cgcArgs)
+
+    val expectedListing = Set(
+        new ConsumerGroupListing(simpleGroup, true, ConsumerGroupState.EMPTY),
+        new ConsumerGroupListing(group, false, ConsumerGroupState.STABLE))
+
+    var foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithState(ConsumerGroupState.values.toList).toSet
+      expectedListing == foundListing
+    }, s"Expected to show groups $expectedListing, but found $foundListing")
+
+    val expectedListingStable = Set(
+        new ConsumerGroupListing(group, false, ConsumerGroupState.STABLE))
+
+    foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithState(List(ConsumerGroupState.STABLE)).toSet
+      expectedListingStable == foundListing
+    }, s"Expected to show groups expectedListingStable, but found $foundListing")
+  }
+
+  @Test
+  def testConsumerGroupStatesFromString(): Unit = {
+    var result = ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong")
+    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("  bad, ")
+    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("  bad, stable")
+    assertEquals(List(ConsumerGroupState.UNKNOWN, ConsumerGroupState.STABLE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("STABLE, stable, Stable, eMpTy")
+    assertEquals(List(ConsumerGroupState.STABLE, ConsumerGroupState.EMPTY), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,")
+    assertEquals(List(ConsumerGroupState.UNKNOWN), result)
+  }
+
 }

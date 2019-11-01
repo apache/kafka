@@ -20,8 +20,14 @@
   // Version 1 and 2 are the same as version 0.
   //
   // Version 3 is the first flexible version.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds the States flexible field (KIP-518).
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
+    { "name": "States", "type": "[]string", "versions": "4+", "tag": 0, "taggedVersions": "4+",
+      "about": "The states of the groups we want to list", "fields": [
+      { "name": "Name", "type": "string", "versions": "3+", "about": "The group state" }
+    ]}
   ]
 }

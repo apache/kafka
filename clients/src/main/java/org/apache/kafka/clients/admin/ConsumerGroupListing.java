@@ -17,22 +17,29 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Objects;
+
+import org.apache.kafka.common.ConsumerGroupState;
+
 /**
  * A listing of a consumer group in the cluster.
  */
 public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
+    private final ConsumerGroupState state;
 
     /**
      * Create an instance with the specified parameters.
      *
      * @param groupId Group Id
      * @param isSimpleConsumerGroup If consumer group is simple or not.
+     * @param state The state of the consumer group
      */
-    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
+    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, ConsumerGroupState state) {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
+        this.state = state;
     }
 
     /**
@@ -49,11 +56,42 @@ public class ConsumerGroupListing {
         return isSimpleConsumerGroup;
     }
 
+    /**
+     * Consumer Group state
+     */
+    public ConsumerGroupState state() {
+        return state;
+    }
+
     @Override
     public String toString() {
         return "(" +
             "groupId='" + groupId + '\'' +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
+            ", state=" + state +
             ')';
     }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(groupId, isSimpleConsumerGroup, state);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final ConsumerGroupListing that = (ConsumerGroupListing) o;
+        if (groupId == null) {
+            if (that.groupId != null)
+                return false;
+        } else if (!groupId.equals(that.groupId))
+            return false;
+        if (isSimpleConsumerGroup != that.isSimpleConsumerGroup)
+            return false;
+        if (state != that.state)
+            return false;
+        return true;
+    }
+
 }

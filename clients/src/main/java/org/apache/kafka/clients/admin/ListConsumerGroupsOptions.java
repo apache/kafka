@@ -17,6 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.EnumSet;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -26,4 +31,34 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
+
+    private Optional<Set<ConsumerGroupState>> states = Optional.empty();
+
+    /**
+     * Only groups in these states will be returned by listConsumerGroups()
+     * If not set, all groups are returned without their states
+     * throw IllegalArgumentException if states is empty
+     */
+    public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
+        if (states == null || states.isEmpty()) {
+            throw new IllegalArgumentException("states should not be null or empty");
+        }
+        this.states = Optional.of(states);
+        return this;
+    }
+ 
+    /**
+     * All groups with their states will be returned by listConsumerGroups()
+     */
+    public ListConsumerGroupsOptions inAnyState() {
+        this.states = Optional.of(EnumSet.allOf(ConsumerGroupState.class));
+        return this;
+    }
+ 
+    /**
+     * Returns the list of States that are requested
+     */
+    public Optional<Set<ConsumerGroupState>> states() {
+        return states;
+    }
 }

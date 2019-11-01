@@ -18,7 +18,6 @@ package kafka.admin
 
 import java.util.Properties
 
-import joptsimple.OptionException
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
@@ -50,13 +49,6 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       assertTrue(s"Expected error was not detected for describe option '${describeType.mkString(" ")}'",
           output.contains(s"Consumer group '$missingGroup' does not exist."))
     }
-  }
-
-  @Test(expected = classOf[OptionException])
-  def testDescribeWithMultipleSubActions(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
-    getConsumerGroupService(cgcArgs)
   }
 
   @Test

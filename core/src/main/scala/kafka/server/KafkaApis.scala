@@ -1397,16 +1397,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
-    val (error, groups) = groupCoordinator.handleListGroups()
+    val listGroupsRequest = request.body[ListGroupsRequest]
+    val states = listGroupsRequest.data.states.asScala.toList
+    val (error, groups) = groupCoordinator.handleListGroups(states)
     if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
       // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new ListGroupsResponse(new ListGroupsResponseData()
             .setErrorCode(error.code)
-            .setGroups(groups.map { group => new ListGroupsResponseData.ListedGroup()
-              .setGroupId(group.groupId)
-              .setProtocolType(group.protocolType)}.asJava
-            )
+            .setGroups(groups.map { group =>
+                val listedGroup = new ListGroupsResponseData.ListedGroup()
+                  .setGroupId(group.groupId)
+                  .setProtocolType(group.protocolType)
+                if (!states.isEmpty)
+                  listedGroup.setGroupState(group.state.toString)
+                listedGroup
+            }.asJava)
             .setThrottleTimeMs(requestThrottleMs)
         ))
     else {
@@ -1414,10 +1420,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new ListGroupsResponse(new ListGroupsResponseData()
           .setErrorCode(error.code)
-          .setGroups(filteredGroups.map { group => new ListGroupsResponseData.ListedGroup()
-            .setGroupId(group.groupId)
-            .setProtocolType(group.protocolType)}.asJava
-          )
+          .setGroups(filteredGroups.map { group =>
+              val listedGroup = new ListGroupsResponseData.ListedGroup()
+                .setGroupId(group.groupId)
+                .setProtocolType(group.protocolType)
+              if (!states.isEmpty)
+                listedGroup.setGroupState(group.state.toString)
+              listedGroup
+            }.asJava)
           .setThrottleTimeMs(requestThrottleMs)
         ))
     }

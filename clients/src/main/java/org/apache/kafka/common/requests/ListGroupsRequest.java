@@ -66,6 +66,10 @@ public class ListGroupsRequest extends AbstractRequest {
         this.data = new ListGroupsRequestData(struct, version);
     }
 
+    public ListGroupsRequestData data() {
+        return data;
+    }
+
     @Override
     public ListGroupsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ListGroupsResponseData listGroupsResponseData = new ListGroupsResponseData().
