@@ -499,7 +499,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                       "restoring tasks to close: {}" + "\n" +
                       "running stream tasks to close: {}" + "\n" +
                       "suspended stream tasks to close: {}",
-            clean, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
+            shutdownType, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
         super.shutdown(clean);
     }
 

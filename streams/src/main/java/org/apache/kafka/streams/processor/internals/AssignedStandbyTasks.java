@@ -36,7 +36,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         log.debug("{} shutdown of all standby tasks" + "\n" +
                       "non-initialized standby tasks to close: {}" + "\n" +
                       "running standby tasks to close: {}",
-            clean, created.keySet(), running.keySet());
+            shutdownType, created.keySet(), running.keySet());
         super.shutdown(clean);
     }
 
