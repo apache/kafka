@@ -346,6 +346,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
+                restoringByPartition.keySet().removeAll(task.partitions());
+                restoringByPartition.keySet().removeAll(task.changelogPartitions());
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());

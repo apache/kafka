@@ -269,10 +269,16 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!(active.isEmpty() && assignedActiveTasks.isEmpty() && changelogReader.isEmpty())) {
+        } else if (!(active.isEmpty())) {
+            log.error("The set of active tasks was non-empty: {}", active);
+            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
+        } else if (!(assignedActiveTasks.isEmpty())) {
+            log.error("The set assignedActive tasks was non-empty: {}", assignedActiveTasks);
+            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
+        } else if (!(changelogReader.isEmpty())) {
+            log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
             throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
         }
-
         return zombieTasks;
     }
 
