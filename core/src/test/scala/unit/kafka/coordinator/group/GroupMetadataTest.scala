@@ -48,7 +48,7 @@ class GroupMetadataTest {
   def setUp(): Unit = {
     group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
     member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+      protocolType, Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
   }
 
   @Test
@@ -201,14 +201,14 @@ class GroupMetadataTest {
   def testSelectProtocol(): Unit = {
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+      protocolType, Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     group.add(member)
     assertEquals("range", group.selectProtocol)
 
     val otherMemberId = "otherMemberId"
     val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+      sessionTimeoutMs, protocolType, Map(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
     group.add(otherMember)
     // now could be either range or robin since there is no majority preference
@@ -216,7 +216,7 @@ class GroupMetadataTest {
 
     val lastMemberId = "lastMemberId"
     val lastMember = new MemberMetadata(lastMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
+      sessionTimeoutMs, protocolType, Map(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
     group.add(lastMember)
     // now we should prefer 'roundrobin'
@@ -233,11 +233,11 @@ class GroupMetadataTest {
   def testSelectProtocolChoosesCompatibleProtocol(): Unit = {
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+      protocolType, Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     val otherMemberId = "otherMemberId"
     val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+      sessionTimeoutMs, protocolType, Map(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
     group.add(member)
     group.add(otherMember)
@@ -257,7 +257,7 @@ class GroupMetadataTest {
 
     val otherMemberId = "otherMemberId"
     val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
+      sessionTimeoutMs, protocolType, Map(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
     group.add(otherMember)
 
@@ -273,7 +273,7 @@ class GroupMetadataTest {
 
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
+      sessionTimeoutMs, protocolType, Map(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
 
     group.transitionTo(PreparingRebalance)
     group.add(member)
@@ -290,7 +290,7 @@ class GroupMetadataTest {
     assertEquals(Some(Set.empty), group.getSubscribedTopics)
 
     val memberWithFaultyProtocol  = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+      sessionTimeoutMs, protocolType, Map(("range", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
     group.add(memberWithFaultyProtocol)
@@ -307,7 +307,7 @@ class GroupMetadataTest {
 
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, "My Protocol", List(("range", Array.empty[Byte])))
+      sessionTimeoutMs, "My Protocol", Map(("range", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
     group.add(member)
@@ -319,7 +319,7 @@ class GroupMetadataTest {
 
   @Test
   def testInitNextGeneration(): Unit = {
-    member.supportedProtocols = List(("roundrobin", Array.empty[Byte]))
+    member.supportedProtocols = Map(("roundrobin", Array.empty[Byte]))
 
     group.transitionTo(PreparingRebalance)
     group.add(member, _ => ())

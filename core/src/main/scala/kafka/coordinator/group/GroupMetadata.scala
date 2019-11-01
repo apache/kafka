@@ -236,7 +236,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
-    assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
+    assert(supportsProtocols(member.protocolType, member.supportedProtocols.keySet))
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
@@ -487,7 +487,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                    callback: JoinCallback) = {
     member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
     protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
-    member.supportedProtocols = protocols
+    member.supportedProtocols = immutable.Map[String, Array[Byte]]() ++ protocols
 
     if (callback != null && !member.isAwaitingJoin) {
       numMembersAwaitingJoin += 1

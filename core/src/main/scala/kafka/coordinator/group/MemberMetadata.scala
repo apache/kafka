@@ -28,10 +28,6 @@ case class MemberSummary(memberId: String,
                          metadata: Array[Byte],
                          assignment: Array[Byte])
 
-private object MemberMetadata {
-  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
-}
-
 /**
  * Member metadata contains the following metadata:
  *
@@ -61,7 +57,7 @@ private[group] class MemberMetadata(var memberId: String,
                                     val rebalanceTimeoutMs: Int,
                                     val sessionTimeoutMs: Int,
                                     val protocolType: String,
-                                    var supportedProtocols: List[(String, Array[Byte])]) {
+                                    var supportedProtocols: Map[String, Array[Byte]]) {
 
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
@@ -95,15 +91,19 @@ private[group] class MemberMetadata(var memberId: String,
   /**
    * Check if the provided protocol metadata matches the currently stored metadata.
    */
-  def matches(protocols: List[(String, Array[Byte])]): Boolean = {
+  def matches(protocols: Traversable[(String, Array[Byte])]): Boolean = {
     if (protocols.size != this.supportedProtocols.size)
       return false
 
-    for (i <- protocols.indices) {
-      val p1 = protocols(i)
-      val p2 = supportedProtocols(i)
-      if (p1._1 != p2._1 || !util.Arrays.equals(p1._2, p2._2))
-        return false
+    protocols.foreach {
+      case (name, value) => {
+        supportedProtocols.get(name) match {
+          case None => return false
+          case Some(curValue) => {
+            if (!util.Arrays.equals(curValue, value)) return false
+          }
+        }
+      }
     }
     true
   }
@@ -130,13 +130,13 @@ private[group] class MemberMetadata(var memberId: String,
 
   override def toString: String = {
     "MemberMetadata(" +
-      s"memberId=$memberId, " +
-      s"groupInstanceId=$groupInstanceId, " +
-      s"clientId=$clientId, " +
-      s"clientHost=$clientHost, " +
-      s"sessionTimeoutMs=$sessionTimeoutMs, " +
-      s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
-      s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
-      ")"
+    s"memberId=$memberId, " +
+    s"groupInstanceId=$groupInstanceId, " +
+    s"clientId=$clientId, " +
+    s"clientHost=$clientHost, " +
+    s"sessionTimeoutMs=$sessionTimeoutMs, " +
+    s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
+    s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
+    ")"
   }
 }

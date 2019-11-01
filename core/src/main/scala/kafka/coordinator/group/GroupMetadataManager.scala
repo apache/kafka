@@ -1413,7 +1413,7 @@ object GroupMetadataManager {
           val subscription = Utils.toArray(memberMetadata.get(SUBSCRIPTION_KEY).asInstanceOf[ByteBuffer])
 
           val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
-            protocolType, List((protocol, subscription)))
+            protocolType, immutable.Map((protocol, subscription)))
           member.assignment = Utils.toArray(memberMetadata.get(ASSIGNMENT_KEY).asInstanceOf[ByteBuffer])
           member
         }

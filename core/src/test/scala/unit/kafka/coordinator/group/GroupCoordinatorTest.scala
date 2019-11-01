@@ -1252,7 +1252,7 @@ class GroupCoordinatorTest {
     val group = new GroupMetadata(groupId, Empty, new MockTime())
     val member = new MemberMetadata(memberId, groupId, groupInstanceId,
       ClientId, ClientHost, DefaultRebalanceTimeout, DefaultSessionTimeout,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+      protocolType, Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     group.add(member)
     groupCoordinator.groupManager.addGroup(group)

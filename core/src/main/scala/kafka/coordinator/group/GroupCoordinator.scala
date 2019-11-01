@@ -197,7 +197,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.COORDINATOR_NOT_AVAILABLE))
-      } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
+      } else if (!group.supportsProtocols(protocolType, protocols.map(_._1).toSet)) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
         val newMemberId = group.generateMemberId(clientId, groupInstanceId)
@@ -272,7 +272,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
         responseCallback(joinError(memberId, Errors.COORDINATOR_NOT_AVAILABLE))
-      } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
+      } else if (!group.supportsProtocols(protocolType, protocols.map(_._1).toSet)) {
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted. Note that pending member will never be a static member.
@@ -939,7 +939,7 @@ class GroupCoordinator(val brokerId: Int,
                                     callback: JoinCallback): Unit = {
     val member = new MemberMetadata(memberId, group.groupId, groupInstanceId,
       clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, protocols)
+      sessionTimeoutMs, protocolType, immutable.Map[String, Array[Byte]]() ++ protocols)
 
     member.isNew = true
 

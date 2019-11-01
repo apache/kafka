@@ -786,10 +786,10 @@ class GroupMetadataManagerTest {
     val dynamicMemberId = "dynamicMemberId"
 
     val staticMember = new MemberMetadata(staticMemberId, groupId, groupInstanceId, "", "", rebalanceTimeout, sessionTimeout,
-      protocolType, List(("protocol", Array[Byte]())))
+      protocolType, immutable.Map(("protocol", Array[Byte]())))
 
     val dynamicMember = new MemberMetadata(dynamicMemberId, groupId, None, "", "", rebalanceTimeout, sessionTimeout,
-      protocolType, List(("protocol", Array[Byte]())))
+      protocolType, immutable.Map(("protocol", Array[Byte]())))
 
     val members = Seq(staticMember, dynamicMember)
 
@@ -812,7 +812,7 @@ class GroupMetadataManagerTest {
     val memberId = "member1"
     val topic = "foo"
 
-    val subscriptions = List(
+    val subscriptions = immutable.Map(
       ("protocol", ConsumerProtocol.serializeSubscription(new Subscription(List(topic).asJava)).array())
     )
 
@@ -854,7 +854,7 @@ class GroupMetadataManagerTest {
     val protocol = "protocol"
     val memberId = "member1"
 
-    val subscriptions = List(("protocol", Array[Byte]()))
+    val subscriptions = immutable.Map(("protocol", Array[Byte]()))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
       sessionTimeout, protocolType, subscriptions)
@@ -995,7 +995,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
-      protocolType, List(("protocol", Array[Byte]())))
+      protocolType, immutable.Map(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -1024,7 +1024,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
-      protocolType, List(("protocol", Array[Byte]())))
+      protocolType, immutable.Map(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -1523,7 +1523,7 @@ class GroupMetadataManagerTest {
 
     val subscription = new Subscription(List(topic).asJava)
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
-      protocolType, List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
+      protocolType, immutable.Map(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -1774,7 +1774,7 @@ class GroupMetadataManagerTest {
       rebalanceTimeout,
       sessionTimeout,
       ConsumerProtocol.PROTOCOL_TYPE,
-      List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1AndTopic2).array()))
+      immutable.Map(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1AndTopic2).array()))
     )
 
     group.add(member, _ => ())
@@ -2151,7 +2151,7 @@ class GroupMetadataManagerTest {
                                                memberId: String,
                                                assignmentSize: Int = 0,
                                                apiVersion: ApiVersion = ApiVersion.latestVersion): SimpleRecord = {
-    val memberProtocols = List((protocol, Array.emptyByteArray))
+    val memberProtocols = immutable.Map((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)

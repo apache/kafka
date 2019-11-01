@@ -34,7 +34,7 @@ class MemberMetadataTest {
 
   @Test
   def testMatchesSupportedProtocols(): Unit = {
-    val protocols = List(("range", Array.empty[Byte]))
+    val protocols = Map(("range", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
@@ -45,8 +45,30 @@ class MemberMetadataTest {
   }
 
   @Test
+  def testMatchesMultipleSupportedProtocols(): Unit = {
+    val protocols = Map(("foo", Array.empty[Byte]),
+      ("bar", Array[Byte](1.toByte, 2.toByte)),
+      ("baz", Array[Byte](3.toByte)))
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, protocols)
+    assertTrue(member.matches(protocols))
+    assertFalse(member.matches(List(("foo", Array.empty[Byte]))))
+    assertFalse(member.matches(List(("foo", Array.empty[Byte]),
+      ("bar", Array[Byte](1.toByte, 2.toByte)))))
+    assertTrue(member.matches(List(("foo", Array.empty[Byte]),
+      ("bar", Array[Byte](1.toByte, 2.toByte)),
+      ("baz", Array[Byte](3.toByte)))))
+    assertTrue(member.matches(List(("baz", Array[Byte](3.toByte)),
+      ("foo", Array.empty[Byte]),
+      ("bar", Array[Byte](1.toByte, 2.toByte)))))
+    assertFalse(member.matches(List(("foo", Array.empty[Byte]),
+      ("bar", Array[Byte](1.toByte, 2.toByte)),
+      ("baz", Array[Byte](4.toByte)))))
+  }
+
+  @Test
   def testVoteForPreferredProtocol(): Unit = {
-    val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    val protocols = Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
@@ -56,7 +78,7 @@ class MemberMetadataTest {
 
   @Test
   def testMetadata(): Unit = {
-    val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
+    val protocols = Map(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
@@ -66,7 +88,7 @@ class MemberMetadataTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testMetadataRaisesOnUnsupportedProtocol(): Unit = {
-    val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    val protocols = Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
@@ -76,7 +98,7 @@ class MemberMetadataTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testVoteRaisesOnNoSupportedProtocols(): Unit = {
-    val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
+    val protocols = Map(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
@@ -86,7 +108,7 @@ class MemberMetadataTest {
 
   @Test
   def testHasValidGroupInstanceId(): Unit = {
-    val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
+    val protocols = Map(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
