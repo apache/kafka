@@ -494,12 +494,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     public void shutdown(final boolean clean) {
         final String shutdownType = clean ? "Clean" : "Unclean";
-        log.debug(shutdownType + " shutdown of all active tasks" + "\n" +
+        log.debug("{} shutdown of all active tasks" + "\n" +
                       "non-initialized stream tasks to close: {}" + "\n" +
                       "restoring tasks to close: {}" + "\n" +
                       "running stream tasks to close: {}" + "\n" +
                       "suspended stream tasks to close: {}",
-            clean, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
+            shutdownType, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
         super.shutdown(clean);
     }
 
