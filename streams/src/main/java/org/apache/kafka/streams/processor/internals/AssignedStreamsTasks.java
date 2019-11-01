@@ -363,6 +363,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
         if (allTasksRunning()) {
             restoredPartitions.clear();
+            restoringByPartition.clear();
+            restoring.clear();
         }
     }
 
