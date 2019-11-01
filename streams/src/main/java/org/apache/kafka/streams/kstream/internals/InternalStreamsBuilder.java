@@ -422,11 +422,13 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                              final Serde valueSerde) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        final boolean userProvidedName = !repartitionTopicName.contains("KSTREAM-");
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
-                                              repartitionNodeBuilder);
+                                              repartitionNodeBuilder,
+                                              userProvidedName);
 
         // ensures setting the repartition topic to the name of the
         // first repartition topic to get merged

@@ -784,16 +784,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
+        final boolean hasUserProvidedName = name.name() != null;
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
-            joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), hasUserProvidedName);
         }
 
         if (joinOther.repartitionRequired) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
-            joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde(), hasUserProvidedName);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -812,7 +813,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
      */
     private KStreamImpl<K, V> repartitionForJoin(final String repartitionName,
                                                  final Serde<K> keySerdeOverride,
-                                                 final Serde<V> valueSerdeOverride) {
+                                                 final Serde<V> valueSerdeOverride,
+                                                 final boolean hasUserProvidedTopicName) {
         final Serde<K> repartitionKeySerde = keySerdeOverride != null ? keySerdeOverride : keySerde;
         final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valSerde;
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
@@ -821,7 +823,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                                          repartitionKeySerde,
                                                                          repartitionValueSerde,
                                                                          repartitionName,
-                                                                         optimizableRepartitionNodeBuilder);
+                                                                         optimizableRepartitionNodeBuilder,
+                                                                         hasUserProvidedTopicName);
 
         final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
@@ -833,7 +836,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final Serde<K1> keySerde,
                                                      final Serde<V1> valSerde,
                                                      final String repartitionTopicNamePrefix,
-                                                     final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
+                                                     final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder,
+                                                     final boolean hasUserProvidedTopicName) {
 
 
         final String repartitionTopicName = repartitionTopicNamePrefix.endsWith(REPARTITION_TOPIC_SUFFIX) ?
@@ -848,7 +852,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String sourceName;
         final String nullKeyFilterProcessorName;
 
-        if (repartitionTopicNamePrefix.matches("KSTREAM.*-[0-9]{10}")) {
+        if (!hasUserProvidedTopicName) {
             sinkName = genSinkName;
             sourceName = genSourceName;
             nullKeyFilterProcessorName = genNullKeyFilterProcessorName;
@@ -933,8 +937,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                 name != null ? name : this.name,
                 joined.keySerde(),
-                joined.valueSerde()
-            );
+                joined.valueSerde(),
+                name != null);
             return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, false);
         } else {
             return doStreamTableJoin(other, joiner, joined, false);
@@ -959,9 +963,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                 internalName != null ? internalName : name,
                 joined.keySerde(),
-                joined.valueSerde()
-            );
-            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, true);
+                joined.valueSerde(),
+                internalName != null);
+            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, joined, internalName != null);
         } else {
             return doStreamTableJoin(other, joiner, joined, true);
         }
