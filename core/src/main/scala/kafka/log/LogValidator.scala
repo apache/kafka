@@ -24,7 +24,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec
 import kafka.server.BrokerTopicStats
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, RecordVersion, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
@@ -51,7 +51,6 @@ private[kafka] object LogValidator extends Logging {
    * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
    */
   private[kafka] def validateMessagesAndAssignOffsets(records: MemoryRecords,
-                                                      recordVersion: RecordVersion,
                                                       topicPartition: TopicPartition,
                                                       offsetCounter: LongRef,
                                                       time: Time,
@@ -73,7 +72,7 @@ private[kafka] object LogValidator extends Logging {
           timestampDiffMaxMs, magic, partitionLeaderEpoch, isFromClient, brokerTopicStats)
       else
         // Do in-place validation, offset assignment and maybe set timestamp
-        assignOffsetsNonCompressed(records, recordVersion, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
+        assignOffsetsNonCompressed(records, topicPartition, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch, isFromClient, magic, brokerTopicStats)
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
@@ -226,7 +225,6 @@ private[kafka] object LogValidator extends Logging {
   }
 
   private def assignOffsetsNonCompressed(records: MemoryRecords,
-                                         recordVersion: RecordVersion,
                                          topicPartition: TopicPartition,
                                          offsetCounter: LongRef,
                                          now: Long,
@@ -253,16 +251,14 @@ private[kafka] object LogValidator extends Logging {
       for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
         validateRecord(batch, topicPartition, record, batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic, brokerTopicStats)
 
-        if (!recordVersion.precedes(RecordVersion.V2)) {
-          val expectedOffset = expectedInnerOffset.getAndIncrement()
+        val expectedOffset = expectedInnerOffset.getAndIncrement()
 
-          // inner records offset should always be continuous
-          if (record.offset != expectedOffset) {
-            brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
-            throw new RecordValidationException(
-              new InvalidRecordException(s"Inner record $record inside the non-compressed record batch does not have incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition."),
-              List(new RecordError(batchIndex)))
-          }
+        // inner records offset should always be continuous
+        if (record.offset != expectedOffset) {
+          brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
+          throw new RecordValidationException(
+            new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset in topic partition $topicPartition."),
+            List(new RecordError(batchIndex)))
         }
 
         val offset = offsetCounter.getAndIncrement()

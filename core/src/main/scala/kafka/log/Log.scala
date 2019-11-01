@@ -1049,7 +1049,6 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
-              recordVersion,
               topicPartition,
               offset,
               time,
