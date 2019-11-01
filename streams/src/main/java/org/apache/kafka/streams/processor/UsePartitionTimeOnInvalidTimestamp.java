@@ -20,8 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.StreamsException;
 
 /**
- * @deprecated UsePreviousTimeOnInvalidTimestamp will be deprecated in the future, please use
- * {@link UsePartitionTimeOnInvalidTimestamp} instead
  * Retrieves embedded metadata timestamps from Kafka messages.
  * If a record has a negative (invalid) timestamp, a new timestamp will be inferred from the current stream-time.
  * <p></p>
@@ -44,9 +42,8 @@ import org.apache.kafka.streams.errors.StreamsException;
  * @see LogAndSkipOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
-@Deprecated
-public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
 
+public class UsePartitionTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
     /**
      * Returns the current stream-time as new timestamp for the record.
      *
@@ -67,6 +64,4 @@ public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTime
         }
         return partitionTime;
     }
-
-
 }
