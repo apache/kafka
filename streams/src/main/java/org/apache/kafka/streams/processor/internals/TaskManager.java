@@ -273,20 +273,40 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!(active.isEmpty() && assignedActiveTasks.isEmpty() && changelogReader.isEmpty())) {
-            if (!(active.isEmpty())) {
-                log.error("The set of active tasks was non-empty: {}", active);
-            }
-            if (!(assignedActiveTasks.isEmpty())) {
-                log.error("The set assignedActiveTasks was non-empty: {}", assignedActiveTasks);
-            }
-            if (!(changelogReader.isEmpty())) {
-                log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
-            }
-            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
         }
 
+        verifyActiveTaskStateIsEmpty();
+
         return zombieTasks;
+    }
+
+    private void verifyActiveTaskStateIsEmpty() throws RuntimeException {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        // Verify active has no remaining state, and catch if active.isEmpty throws so we can log any non-empty state
+        try {
+            if (!(active.isEmpty())) {
+                log.error("The set of active tasks was non-empty: {}", active);
+                firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover active task state after closing all zombies"));
+            }
+        } catch (final IllegalStateException e) {
+            firstException.compareAndSet(null, e);
+        }
+
+        if (!(assignedActiveTasks.isEmpty())) {
+            log.error("The set assignedActiveTasks was non-empty: {}", assignedActiveTasks);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover assignedActiveTasks after closing all zombies"));
+        }
+
+        if (!(changelogReader.isEmpty())) {
+            log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover changelog reader state after closing all zombies"));
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     void shutdown(final boolean clean) {

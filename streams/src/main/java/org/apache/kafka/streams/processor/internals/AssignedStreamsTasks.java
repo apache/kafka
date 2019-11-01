@@ -506,11 +506,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     @Override
-    public boolean isEmpty() {
+    public boolean isEmpty() throws IllegalStateException {
         if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
             log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
                       "restoring by partitions map contained {}", restoringByPartition);
-            return false;
+            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
         } else {
             return super.isEmpty()
                        && restoring.isEmpty()
