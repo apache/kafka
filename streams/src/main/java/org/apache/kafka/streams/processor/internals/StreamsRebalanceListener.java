@@ -64,15 +64,13 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         final long start = time.milliseconds();
         List<TopicPartition> revokedStandbyPartitions = null;
 
-        final int assignmentErrorCode = streamThread.getAssignmentErrorCode();
         try {
             if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                 log.debug(
                     "Skipping task creation in rebalance because we are already in {} state.",
                     streamThread.state()
                 );
-            } else if (assignmentErrorCode != AssignorError.NONE.code()
-                    && assignmentErrorCode != AssignorError.VERSION_PROBING.code()) {
+            } else if (streamThread.getAssignmentErrorCode() != AssignorError.NONE.code()) {
                 log.debug(
                     "Encountered assignment error during partition assignment: {}. Skipping task initialization and "
                         + "pausing any partitions we may have been assigned.",
