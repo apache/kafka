@@ -300,12 +300,20 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public boolean isEmpty() {
-        return partitionInfo.isEmpty()
-            && stateRestorers.isEmpty()
+        return stateRestorers.isEmpty()
             && needsRestoring.isEmpty()
             && restoreToOffsets.isEmpty()
             && needsInitializing.isEmpty()
             && completedRestorers.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        return "RestoreToOffset: " + restoreToOffsets + "\n" +
+               "StateRestorers: " + stateRestorers + "\n" +
+               "NeedsRestoring: " + needsRestoring + "\n" +
+               "NeedsInitializing: " + needsInitializing + "\n" +
+               "CompletedRestorers: " + completedRestorers + "\n";
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
