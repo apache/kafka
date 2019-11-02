@@ -290,6 +290,78 @@ class FetchSessionTest {
   }
 
   @Test
+  def testFetchManagerCacheUsage(): Unit = {
+    val time = new MockTime()
+    // set maximum entries to 2 to allow for eviction later
+    val cache = new FetchSessionCache(2, 1000)
+    val fetchManager = new FetchManager(time, cache)
+
+    // Create a new fetch session, session 1
+    val session1req = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    session1req.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    session1req.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
+    val session1context1 = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, false)
+    assertEquals(classOf[FullFetchContext], session1context1.getClass)
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    respData1.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
+      Errors.NONE, 100, 100, 100, null, null))
+    respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
+      Errors.NONE, 10, 10, 10, null, null))
+    val session1resp = session1context1.updateAndGenerateResponseData(respData1)
+    assertEquals(Errors.NONE, session1resp.error())
+    assertTrue(session1resp.sessionId() != INVALID_SESSION_ID)
+    assertEquals(2, session1resp.responseData().size())
+
+    // check session entered into case
+    assertTrue(cache.get(session1resp.sessionId()).isDefined)
+    time.sleep(500)
+
+    // Create a second new fetch session
+    val session2req = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    session2req.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    session2req.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
+    val session2context = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, false)
+    assertEquals(classOf[FullFetchContext], session2context.getClass)
+    val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    session2RespData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
+      Errors.NONE, 100, 100, 100, null, null))
+    session2RespData.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
+      Errors.NONE, 10, 10, 10, null, null))
+    val session2resp = session2context.updateAndGenerateResponseData(respData1)
+    assertEquals(Errors.NONE, session2resp.error())
+    assertTrue(session2resp.sessionId() != INVALID_SESSION_ID)
+    assertEquals(2, session2resp.responseData().size())
+
+    // both newly created entries are present in cache
+    assertTrue(cache.get(session1resp.sessionId()).isDefined)
+    assertTrue(cache.get(session2resp.sessionId()).isDefined)
+    time.sleep(500)
+
+    // Create an incremental fetch request for session 1
+    val context1v2 = fetchManager.newContext(
+      new JFetchMetadata(session1resp.sessionId(), 1),
+      new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
+      new util.ArrayList[TopicPartition], false)
+    assertEquals(classOf[IncrementalFetchContext], context1v2.getClass)
+
+    // total sleep time will now be large enough that fetch session 1 will be evicted if not correctly touched
+    time.sleep(501)
+
+    // create one final session directly in cache to test that the least recently used entry is evicted
+    // the second session should be evicted because the first session was incrementally fetched more recently than
+    // the second session was created
+    val latestSessionId = cache.maybeCreateSession(time.milliseconds(), false, 40, () => dummyCreate(40))
+    assertTrue(cache.get(session1resp.sessionId()).isDefined)
+    assertFalse("session 2 should have been evicted by latest session, as session 1 was used more recently",
+      cache.get(session2resp.sessionId()).isDefined)
+    assertTrue(cache.get(latestSessionId).isDefined)
+  }
+
+  @Test
   def testZeroSizeFetchSession(): Unit = {
     val time = new MockTime()
     val cache = new FetchSessionCache(10, 1000)
