@@ -188,8 +188,8 @@ class OffsetIndexTest {
   def forceUnmapTest(): Unit = {
     val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
     idx.forceUnmap()
-    // mmap should be null after unmap causing lookup to throw a NPE
-    intercept[NullPointerException](idx.lookup(1))
+    // mmap should be null after unmap, but mmap() remaps it, so this should not throw any exception
+    idx.lookup(1)
   }
 
   @Test
