@@ -71,11 +71,12 @@
 <p><b>Additional Upgrade Notes:</b></p>
 
 <ol>
-    <li>ZooKeeper has been upgraded to 3.5.6. If the ZooKeeper upgrade from 3.4.X to 3.5.6 is failing
-        with "java.io.IOException: No snapshot found, but there are log entries" error, then we may need to add
-        <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_advancedConfiguration">snapshot.trust.empty=true</a>
-        config to the <code>config/zookeeper.properties</code>. For more details about the issue please refer to
-        <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+    <li>ZooKeeper has been upgraded to 3.5.6. ZooKeeper upgrade from 3.4.X to 3.5.6 can fail
+        with <code>java.io.IOException: No snapshot found, but there are log entries</code> error, if there are no snapshot files.
+        It is suggested to set <code>snapshot.trust.empty=true</code> config to the <code>config/zookeeper.properties</code> to allow ZooKeeper servers recover without snapshot files.
+        If the config is set during upgrade, It is recommended to set the value back to false after upgrading and restart ZooKeeper process.
+        For more details about the issue and config, please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>
+        and <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_advancedConfiguration">ZooKeeper advanced configuration</a>.
     </li>
 </ol>
 
