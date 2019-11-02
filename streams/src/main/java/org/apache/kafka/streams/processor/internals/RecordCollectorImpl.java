@@ -62,7 +62,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (timestamp %d) to topic %s due to %s";
     private final static String PARAMETER_HINT = "\nYou can increase the producer configs `delivery.timeout.ms` and/or " +
         "`retries` to avoid this error. Note that `retries` is set to infinite by default.";
-    private final static String TIMEOUT_HINT_TEMPLATE = "\nTimeout exception caught when sending record to topic %s. " +
+    private final static String TIMEOUT_HINT_TEMPLATE = "%nTimeout exception caught when sending record to topic %s. " +
             "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
             "its internal buffer fills up. " +
             "This can also happen if the broker is slow to respond, if the network connection to " +

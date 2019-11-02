@@ -80,7 +80,7 @@ public class RecordCollectorTest {
         return Integer.parseInt(key) % numPartitions;
     };
 
-    private final String TOPIC1_TIMEOUT_HINT = "Timeout exception caught when sending record to topic topic1." +
+    private final String topic1TimeoutHint = "Timeout exception caught when sending record to topic topic1." +
             " This might happen if the producer cannot send data to the Kafka cluster and thus, its internal buffer fills up." +
             " This can also happen if the broker is slow to respond, if the network connection to the broker was interrupted, or if similar circumstances arise." +
             " You can increase producer parameter `max.block.ms` to increase this timeout.";
@@ -341,7 +341,7 @@ public class RecordCollectorTest {
             fail("Should have thrown StreamsException");
         } catch (final StreamsException expected) {
             assertTrue(expected.getCause() instanceof TimeoutException);
-            assertTrue(expected.getMessage().endsWith(TOPIC1_TIMEOUT_HINT));
+            assertTrue(expected.getMessage().endsWith(topic1TimeoutHint));
         }
     }
 
