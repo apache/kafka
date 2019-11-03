@@ -568,7 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     final Metrics metrics;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
-    private final Logger log;
+    private Logger log;
     private final String clientId;
     private String groupId;
     private final ConsumerCoordinator coordinator;
@@ -815,7 +815,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
-            close(0, true);
+            // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
+            if (this.log != null) {
+                close(0, true);
+            }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -1069,11 +1072,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
-            this.subscriptions.unsubscribe();
             if (this.coordinator != null) {
                 this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
             }
+            this.subscriptions.unsubscribe();
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();

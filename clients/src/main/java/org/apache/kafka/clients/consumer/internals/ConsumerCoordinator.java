@@ -692,11 +692,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void onLeavePrepare() {
+        // Save the current Generation and use that to get the memberId, as the hb thread can change it at any time
+        final Generation currentGeneration = generation();
+        final String memberId = currentGeneration.memberId;
+
+        log.debug("Executing onLeavePrepare with generation {} and memberId {}", currentGeneration, memberId);
+
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
-            final Exception e = invokePartitionsRevoked(droppedPartitions);
+            final Exception e;
+            if (generation() != Generation.NO_GENERATION) {
+                e = invokePartitionsRevoked(droppedPartitions);
+            } else {
+                e = invokePartitionsLost(droppedPartitions);
+            }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
 

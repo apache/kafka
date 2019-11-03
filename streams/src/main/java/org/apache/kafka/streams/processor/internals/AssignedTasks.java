@@ -71,7 +71,7 @@ abstract class AssignedTasks<T extends Task> {
                 task.initializeMetadata();
                 if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    ((AssignedStreamsTasks) this).addToRestoring((StreamTask) task);
+                    ((AssignedStreamsTasks) this).addTaskToRestoring((StreamTask) task);
                 } else {
                     transitionToRunning(task);
                 }
@@ -119,6 +119,12 @@ abstract class AssignedTasks<T extends Task> {
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
         }
+    }
+
+    void removeTaskFromRunning(final T task) {
+        running.remove(task.id());
+        runningByPartition.keySet().removeAll(task.partitions());
+        runningByPartition.keySet().removeAll(task.changelogPartitions());
     }
 
     T runningTaskFor(final TopicPartition partition) {
@@ -176,6 +182,12 @@ abstract class AssignedTasks<T extends Task> {
         created.clear();
     }
 
+    boolean isEmpty() {
+        return runningByPartition.isEmpty()
+                   && running.isEmpty()
+                   && created.isEmpty();
+    }
+
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
@@ -184,8 +196,7 @@ abstract class AssignedTasks<T extends Task> {
         int committed = 0;
         RuntimeException firstException = null;
 
-        for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
-            final T task = it.next();
+        for (final T task : running.values()) {
             try {
                 if (task.commitNeeded()) {
                     task.commit();
@@ -193,12 +204,7 @@ abstract class AssignedTasks<T extends Task> {
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
+                        "Will trigger a new rebalance and close all tasks as zombies together.", taskTypeName, task.id());
                 throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to commit {} {} due to the following error:",
@@ -218,7 +224,7 @@ abstract class AssignedTasks<T extends Task> {
         return committed;
     }
 
-    void close(final boolean clean) {
+    void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         for (final T task: allTasks()) {

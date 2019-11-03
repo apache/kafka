@@ -69,6 +69,8 @@ public class StoreChangelogReader implements ChangelogReader {
             stateRestorers.put(restorer.partition(), restorer);
 
             log.trace("Added restorer for changelog {}", restorer.partition());
+        } else {
+            log.debug("Skip re-adding restorer for changelog {}", restorer.partition());
         }
 
         needsInitializing.add(restorer.partition());
@@ -204,6 +206,8 @@ public class StoreChangelogReader implements ChangelogReader {
                         restorer.checkpoint(),
                         restoreToOffsets.get(partition));
                 restorer.setStartingOffset(restoreConsumer.position(partition));
+
+                log.debug("Calling restorer for partition {} of task {}", partition, active.restoringTaskFor(partition));
                 restorer.restoreStarted();
             } else {
                 log.trace("Did not find checkpoint from changelog {} for store {}, rewinding to beginning.", partition, restorer.storeName());
@@ -292,6 +296,16 @@ public class StoreChangelogReader implements ChangelogReader {
         restoreToOffsets.clear();
         needsInitializing.clear();
         completedRestorers.clear();
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return partitionInfo.isEmpty()
+            && stateRestorers.isEmpty()
+            && needsRestoring.isEmpty()
+            && restoreToOffsets.isEmpty()
+            && needsInitializing.isEmpty()
+            && completedRestorers.isEmpty();
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,

@@ -10,11 +10,11 @@
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
-              files="(SchemaGenerator|MessageDataGenerator).java"/>
+              files="(SchemaGenerator|MessageDataGenerator|FieldSpec).java"/>
     <suppress checks="NPathComplexity"
               files="(FieldSpec).java"/>
     <suppress checks="JavaNCSS"
-              files="(ApiMessageType).java"/>
+              files="(ApiMessageType).java|MessageDataGenerator.java"/>
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
@@ -34,7 +34,7 @@
               files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java|KafkaConsumer.java"/>
 
     <suppress checks="ParameterNumber"
-              files="NetworkClient.java"/>
+              files="NetworkClient.java|FieldSpec.java"/>
     <suppress checks="ParameterNumber"
               files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
@@ -183,6 +183,11 @@
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
+
+    <!-- generated code -->
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
+              files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"

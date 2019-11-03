@@ -1082,7 +1082,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to carry removing members' information.
      * @return The MembershipChangeResult.
      */
-    MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
+    RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options);
 
     /**
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.

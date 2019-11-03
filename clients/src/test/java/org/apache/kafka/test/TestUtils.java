@@ -416,6 +416,8 @@ public class TestUtils {
             try {
                 runnable.call();
                 return;
+            } catch (final NoRetryException e) {
+                throw e;
             } catch (final AssertionError t) {
                 if (expectedEnd <= System.currentTimeMillis()) {
                     throw t;
