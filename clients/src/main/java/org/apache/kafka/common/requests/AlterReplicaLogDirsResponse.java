@@ -132,7 +132,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(responses);
+        return errorCounts(responses.values());
     }
 
     public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {

@@ -18,18 +18,19 @@ package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
+
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
-import org.apache.kafka.common.security.ssl.mock.TestProvider;
+import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -41,7 +42,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -93,8 +93,8 @@ public class SslSelectorTest extends SelectorTest {
 
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
-        Provider provider = new TestProvider();
-        Security.addProvider(provider);
+
+        TestProviderCreator testProviderCreator = new TestProviderCreator();
 
         int requestSize = 100 * 1024;
         final String node = "0";
@@ -104,6 +104,7 @@ public class SslSelectorTest extends SelectorTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
+        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         server.start();
         Time time = new MockTime();
@@ -128,7 +129,7 @@ public class SslSelectorTest extends SelectorTest {
         selector.close(node);
         super.verifySelectorEmpty(selector);
 
-        Security.removeProvider(provider.getName());
+        Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
         server.close();
         metrics.close();
@@ -155,15 +156,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     private void waitForBytesBuffered(Selector selector, String node) throws Exception {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(0L);
-                    return selector.channel(node).hasBytesBuffered();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(0L);
+                return selector.channel(node).hasBytesBuffered();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 2000L, "Failed to reach socket state with bytes buffered");
     }

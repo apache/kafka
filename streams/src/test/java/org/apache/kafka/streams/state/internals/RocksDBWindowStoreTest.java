@@ -44,8 +44,10 @@ import static org.junit.Assert.assertFalse;
 public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
+    private static final String METRICS_SCOPE = "test-state-id";
 
-    private final KeyValueSegments segments = new KeyValueSegments(STORE_NAME, RETENTION_PERIOD, SEGMENT_INTERVAL);
+    private final KeyValueSegments segments =
+        new KeyValueSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
@@ -75,6 +77,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldOnlyIterateOpenSegments() {
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -102,6 +105,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testRolling() {
 
         // to validate segments
@@ -377,6 +381,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testSegmentMaintenance() {
 
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
@@ -503,6 +508,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testRestore() throws Exception {
         final long startTime = SEGMENT_INTERVAL * 2;
         final long increment = SEGMENT_INTERVAL / 2;

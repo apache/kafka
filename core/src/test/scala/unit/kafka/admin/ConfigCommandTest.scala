@@ -87,22 +87,22 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldParseArgumentsForClientsEntityType() {
+  def shouldParseArgumentsForClientsEntityType(): Unit = {
     testArgumentParse("clients")
   }
 
   @Test
-  def shouldParseArgumentsForTopicsEntityType() {
+  def shouldParseArgumentsForTopicsEntityType(): Unit = {
     testArgumentParse("topics")
   }
 
   @Test
-  def shouldParseArgumentsForBrokersEntityType() {
+  def shouldParseArgumentsForBrokersEntityType(): Unit = {
     testArgumentParse("brokers")
   }
 
   @Test
-  def shouldParseArgumentsForBrokerLoggersEntityType() {
+  def shouldParseArgumentsForBrokerLoggersEntityType(): Unit = {
     testArgumentParse("broker-loggers",
       zkConfig = false)
   }
@@ -278,7 +278,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
-    val node = new Node(1, "localhost", 9092)
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
@@ -290,7 +289,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(): Unit = {
-    val node = new Node(1, "localhost", 9092)
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
@@ -646,7 +644,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testQuotaConfigEntity() {
+  def testQuotaConfigEntity(): Unit = {
 
     def createOpts(entityType: String, entityName: Option[String], otherArgs: Array[String]) : ConfigCommandOptions = {
       val optArray = Array("--zookeeper", zkConnect,
@@ -658,7 +656,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       new ConfigCommandOptions(optArray ++ nameArray ++ otherArgs)
     }
 
-    def checkEntity(entityType: String, entityName: Option[String], expectedEntityName: String, otherArgs: Array[String]) {
+    def checkEntity(entityType: String, entityName: Option[String], expectedEntityName: String, otherArgs: Array[String]): Unit = {
       val opts = createOpts(entityType, entityName, otherArgs)
       opts.checkArgs()
       val entity = ConfigCommand.parseEntity(opts)
@@ -666,7 +664,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       assertEquals(expectedEntityName, entity.fullSanitizedName)
     }
 
-    def checkInvalidEntity(entityType: String, entityName: Option[String], otherArgs: Array[String]) {
+    def checkInvalidEntity(entityType: String, entityName: Option[String], otherArgs: Array[String]): Unit = {
       val opts = createOpts(entityType, entityName, otherArgs)
       try {
         opts.checkArgs()
@@ -718,8 +716,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testUserClientQuotaOpts() {
-    def checkEntity(expectedEntityType: String, expectedEntityName: String, args: String*) {
+  def testUserClientQuotaOpts(): Unit = {
+    def checkEntity(expectedEntityType: String, expectedEntityName: String, args: String*): Unit = {
       val opts = new ConfigCommandOptions(Array("--zookeeper", zkConnect) ++ args)
       opts.checkArgs()
       val entity = ConfigCommand.parseEntity(opts)
@@ -760,10 +758,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def testQuotaDescribeEntities() {
+  def testQuotaDescribeEntities(): Unit = {
     val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
-    def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]) {
+    def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]): Unit = {
       val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))
       expectedFetches.foreach {
         case (name, values) => EasyMock.expect(zkClient.getAllEntitiesWithConfig(name)).andReturn(values)

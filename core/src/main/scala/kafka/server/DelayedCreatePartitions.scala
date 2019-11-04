@@ -61,7 +61,7 @@ class DelayedCreatePartitions(delayMs: Long,
   /**
     * Check for partitions that are still missing a leader, update their error code and call the responseCallback
     */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     trace(s"Completing operation for $createMetadata")
     val results = createMetadata.map { metadata =>
       // ignore topics that already have errors
@@ -83,6 +83,6 @@ class DelayedCreatePartitions(delayMs: Long,
 
   private def isMissingLeader(topic: String, partition: Int): Boolean = {
     val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
-    partitionInfo.isEmpty || partitionInfo.get.basePartitionState.leader == LeaderAndIsr.NoLeader
+    partitionInfo.forall(_.leader == LeaderAndIsr.NoLeader)
   }
 }

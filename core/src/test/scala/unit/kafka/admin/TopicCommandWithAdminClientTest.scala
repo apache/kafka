@@ -25,7 +25,8 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AdminClient, ListTopicsOptions, NewTopic}
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -65,7 +66,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   private val _testName = new TestName
   @Rule def testName = _testName
 
-  def assertExitCode(expected: Int, method: () => Unit) {
+  def assertExitCode(expected: Int, method: () => Unit): Unit = {
     def mockExitProcedure(exitCode: Int, exitMessage: Option[String]): Nothing = {
       assertEquals(expected, exitCode)
       throw new RuntimeException
@@ -80,7 +81,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     }
   }
 
-  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions) {
+  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions): Unit = {
     assertExitCode(expected, options.checkArgs _)
   }
 
@@ -101,7 +102,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -254,7 +255,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateWithInvalidReplicationFactor() {
+  def testCreateWithInvalidReplicationFactor(): Unit = {
     intercept[IllegalArgumentException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
@@ -647,6 +648,53 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     } finally {
       restartDeadBrokers()
     }
+  }
+
+  @Test
+  def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(): Unit = {
+    val configMap = new java.util.HashMap[String, String]()
+    val replicationFactor: Short = 1
+    val partitions = 1
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
+    waitForTopicCreated(testTopicName)
+
+    for (msg <- 0 to 10) {
+      TestUtils.produceMessage(servers, testTopicName, s"$msg")
+    }
+
+    val brokerIds = servers.map(_.config.brokerId)
+    TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttleBytes = 1)
+
+    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
+    val firstPartition = testTopicDesc.partitions().asScala.head
+    val firstTopicPartition = new TopicPartition(testTopicName, firstPartition.partition())
+    val replicasOfFirstPartition = firstPartition.replicas().asScala.map(_.id())
+    val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
+
+    adminClient.alterPartitionReassignments(Collections.singletonMap(firstTopicPartition,
+      NewPartitionReassignment.of(Collections.singletonList(targetReplica))))
+
+    // let's wait until the LAIR is propagated
+    TestUtils.waitUntilTrue(() => {
+      val reassignments = adminClient.listPartitionReassignments(Collections.singleton(firstTopicPartition)).reassignments().get()
+      !reassignments.get(firstTopicPartition).addingReplicas().isEmpty
+    }, "Reassignment didn't add the second node")
+
+    // describe the topic and test if it's under-replicated
+    val simpleDescribeOutput = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
+    val simpleDescribeOutputRows = simpleDescribeOutput.split("\n")
+    assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"))
+    assertEquals(2, simpleDescribeOutputRows.size)
+
+    val underReplicatedOutput = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
+    assertTrue("--under-replicated-partitions shouldn't return anything", underReplicatedOutput.isEmpty)
+
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
+    TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
   @Test

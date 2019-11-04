@@ -64,7 +64,6 @@ import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -183,8 +182,7 @@ public class SenderTest {
                 null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short) 0, (short) 2))));
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
 
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -223,8 +221,7 @@ public class SenderTest {
                 null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short) 0, (short) 2))));
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
 
         Future<RecordMetadata> future2 = accumulator.append(tp1, 0L, "key".getBytes(), "value".getBytes(),
                 null, null, MAX_BLOCK_TIMEOUT, false).future;
@@ -277,8 +274,8 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000,  ClientDnsLookup.DEFAULT,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
+            serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -295,7 +292,8 @@ public class SenderTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.PRODUCE.latestVersion(), new ResponseHeader(request.correlationId()));
+            buffer = response.
+                serialize(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -2121,7 +2119,7 @@ public class SenderTest {
     @Test
     public void testExpiredBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
         long deliverTimeoutMs = 1500L;
-        // create a producer batch with more than one record so it is eligible to split
+        // create a producer batch with more than one record so it is eligible for splitting
         Future<RecordMetadata> request1 =
             accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
                 MAX_BLOCK_TIMEOUT, false).future;
@@ -2129,7 +2127,8 @@ public class SenderTest {
             accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
                 MAX_BLOCK_TIMEOUT, false).future;
 
-        sender.runOnce();  // send request
+        // send request
+        sender.runOnce();
         assertEquals(1, client.inFlightRequestCount());
         // return a MESSAGE_TOO_LARGE error
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
@@ -2322,6 +2321,45 @@ public class SenderTest {
 
         // doInitTransactions calls sender.doOnce three times, only two requests are sent, so we should only poll twice
         verify(client, times(2)).poll(eq(RETRY_BACKOFF_MS), anyLong());
+    }
+
+    @Test
+    public void testTooLargeBatchesAreSafelyRemoved() throws InterruptedException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        // create a producer batch with more than one record so it is eligible for splitting
+        Future<RecordMetadata> request1 =
+                accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
+                        MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 =
+                accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
+                        MAX_BLOCK_TIMEOUT, false).future;
+
+        // send request
+        sender.runOnce();
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        // return a MESSAGE_TOO_LARGE error
+        client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
+        sender.runOnce();
+
+        // process retried response
+        sender.runOnce();
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+
+        // In-flight batches should be empty. Sleep past the expiration time of the batch and run once, no error should be thrown
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        time.sleep(2000);
+        sender.runOnce();
     }
 
     class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {

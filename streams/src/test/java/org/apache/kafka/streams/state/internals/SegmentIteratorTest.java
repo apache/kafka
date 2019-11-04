@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -40,8 +41,12 @@ import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
 
-    private final KeyValueSegment segmentOne = new KeyValueSegment("one", "one", 0);
-    private final KeyValueSegment segmentTwo = new KeyValueSegment("two", "window", 1);
+    private final RocksDBMetricsRecorder rocksDBMetricsRecorder =
+        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+    private final KeyValueSegment segmentOne =
+        new KeyValueSegment("one", "one", 0, rocksDBMetricsRecorder);
+    private final KeyValueSegment segmentTwo =
+        new KeyValueSegment("two", "window", 1, rocksDBMetricsRecorder);
     private final HasNextCondition hasNextCondition = Iterator::hasNext;
 
     private SegmentIterator<KeyValueSegment> iterator = null;

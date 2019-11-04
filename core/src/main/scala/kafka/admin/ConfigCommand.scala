@@ -29,7 +29,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
-import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.security.JaasUtils
@@ -111,7 +111,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -128,7 +128,7 @@ object ConfigCommand extends Config {
       if (dynamicBrokerConfigs.nonEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
         val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
-        val info = "Broker configuraton updates using ZooKeeper are supported for bootstrapping before brokers" +
+        val info = "Broker configuration updates using ZooKeeper are supported for bootstrapping before brokers" +
           " are started to enable encrypted password configs to be stored in ZooKeeper."
         if (perBrokerConfig) {
           adminZkClient.parseBroker(entityName).foreach { brokerId =>
@@ -157,7 +157,7 @@ object ConfigCommand extends Config {
     println(s"Completed Updating config for entity: $entity.")
   }
 
-  private def preProcessScramCredentials(configsToBeAdded: Properties) {
+  private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
     def scramCredential(mechanism: ScramMechanism, credentialStr: String): String = {
       val pattern = "(?:iterations=([0-9]*),)?password=(.*)".r
       val (iterations, password) = credentialStr match {
@@ -194,7 +194,7 @@ object ConfigCommand extends Config {
    * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
-  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
+  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {
     val passwordEncoderConfigs = new Properties
     passwordEncoderConfigs ++= configsToBeAdded.asScala.filter { case (key, _) => key.startsWith("password.encoder.") }
     if (!passwordEncoderConfigs.isEmpty) {
@@ -221,7 +221,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
     val entities = configEntity.getAllEntities(zkClient)
@@ -294,7 +294,7 @@ object ConfigCommand extends Config {
   }
 
   private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
-                                       entityType: String, entityName: String) {
+                                       entityType: String, entityName: String): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts).asScala.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
@@ -339,7 +339,7 @@ object ConfigCommand extends Config {
   }
 
   private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
-                                   entityType: String, entityName: String) {
+                                   entityType: String, entityName: String): Unit = {
     val configs = if (entityType == ConfigType.Broker)
       brokerConfig(adminClient, entityName, includeSynonyms = true)
     else // broker logger
@@ -522,9 +522,9 @@ object ConfigCommand extends Config {
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
             "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
@@ -537,7 +537,7 @@ object ConfigCommand extends Config {
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if(actions != 1)

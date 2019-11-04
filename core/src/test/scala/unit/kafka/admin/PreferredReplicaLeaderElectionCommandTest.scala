@@ -19,37 +19,41 @@ package kafka.admin
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.util
 import java.util.Properties
 
 import scala.collection.Seq
-
 import kafka.common.AdminCommandFailedException
-import kafka.network.RequestChannel
-import kafka.security.auth._
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.{After, Test}
+
+import scala.collection.JavaConverters._
 
 class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]],
-                                        authorizer: Option[String] = None) {
+                                        authorizer: Option[String] = None): Unit = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false"))
@@ -62,7 +66,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   private def createTestTopicAndCluster(partitionsAndAssignments: Map[TopicPartition, List[Int]],
-                                        brokerConfigs: Seq[Properties]) {
+                                        brokerConfigs: Seq[Properties]): Unit = {
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
@@ -83,14 +87,14 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   /** Bounce the given targetServer and wait for all servers to get metadata for the given partition */
-  private def bounceServer(targetServer: Int, partition: TopicPartition) {
+  private def bounceServer(targetServer: Int, partition: TopicPartition): Unit = {
     debug(s"Shutting down server $targetServer so a non-preferred replica becomes leader")
     servers(targetServer).shutdown()
     debug(s"Starting server $targetServer now that a non-preferred replica is leader")
     servers(targetServer).startup()
     TestUtils.waitUntilTrue(() => servers.forall { server =>
-      server.metadataCache.getPartitionInfo(partition.topic(), partition.partition()).exists { partitionState =>
-        partitionState.basePartitionState.isr.contains(targetServer)
+      server.metadataCache.getPartitionInfo(partition.topic, partition.partition).exists { partitionState =>
+        partitionState.isr.contains(targetServer)
       }
     },
       s"Replicas for partition $partition not created")
@@ -102,8 +106,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def awaitLeader(topicPartition: TopicPartition, timeoutMs: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     TestUtils.awaitValue(() => {
-      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
-          .map(_.basePartitionState.leader)
+      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition).map(_.leader)
     }, s"Timed out waiting to find current leader of $topicPartition", timeoutMs)
   }
 
@@ -120,7 +123,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case multiple values are given for --bootstrap-broker */
   @Test
-  def testMultipleBrokersGiven() {
+  def testMultipleBrokersGiven(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -133,7 +136,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case when an invalid broker is given for --bootstrap-broker */
   @Test
-  def testInvalidBrokerGiven() {
+  def testInvalidBrokerGiven(): Unit = {
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
         "--bootstrap-server", "example.com:1234"),
@@ -147,7 +150,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case where no partitions are given (=> elect all partitions) */
   @Test
-  def testNoPartitionsGiven() {
+  def testNoPartitionsGiven(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -169,7 +172,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case where a list of partitions is given */
   @Test
-  def testSingletonPartitionGiven() {
+  def testSingletonPartitionGiven(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -188,7 +191,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case where a topic does not exist */
   @Test
-  def testTopicDoesNotExist() {
+  def testTopicDoesNotExist(): Unit = {
     val nonExistentPartition = new TopicPartition("does.not.exist", 0)
     val nonExistentPartitionAssignment = List(1, 2, 0)
     val nonExistentPartitionAndAssignment = Map(nonExistentPartition -> nonExistentPartitionAssignment)
@@ -213,7 +216,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case where several partitions are given */
   @Test
-  def testMultiplePartitionsSameAssignment() {
+  def testMultiplePartitionsSameAssignment(): Unit = {
     val testPartitionA = new TopicPartition("testA", 0)
     val testPartitionB = new TopicPartition("testB", 0)
     val testPartitionAssignment = List(1, 2, 0)
@@ -240,7 +243,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** What happens when the preferred replica is already the leader? */
   @Test
-  def testNoopElection() {
+  def testNoopElection(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     // Don't bounce the server. Doublecheck the leader for the partition is the preferred one
     assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
@@ -259,7 +262,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** What happens if the preferred replica is offline? */
   @Test
-  def testWithOfflinePreferredReplica() {
+  def testWithOfflinePreferredReplica(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -289,7 +292,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** What happens if the controller gets killed just before an election? */
   @Test
-  def testTimeout() {
+  def testTimeout(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -317,7 +320,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   /** Test the case where client is not authorized */
   @Test
-  def testAuthzFailure() {
+  def testAuthzFailure(): Unit = {
     createTestTopicAndCluster(testPartitionAndAssignment, Some(classOf[PreferredReplicaLeaderElectionCommandTestAuthorizer].getName))
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
@@ -343,7 +346,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   @Test
-  def testPreferredReplicaJsonData() {
+  def testPreferredReplicaJsonData(): Unit = {
     // write preferred replica json data to zk path
     val partitionsForPreferredReplicaElection = Set(new TopicPartition("test", 1), new TopicPartition("test2", 1))
     PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
@@ -354,7 +357,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   @Test
-  def testBasicPreferredReplicaElection() {
+  def testBasicPreferredReplicaElection(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     val partition = 0
@@ -375,7 +378,13 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 }
 
-class PreferredReplicaLeaderElectionCommandTestAuthorizer extends SimpleAclAuthorizer {
-  override def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
-    operation != Alter || resource.resourceType != Cluster
+class PreferredReplicaLeaderElectionCommandTestAuthorizer extends AclAuthorizer {
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map { action =>
+      if (action.operation != AclOperation.ALTER || action.resourcePattern.resourceType != ResourceType.CLUSTER)
+        AuthorizationResult.ALLOWED
+      else
+        AuthorizationResult.DENIED
+    }.asJava
+  }
 }

@@ -45,7 +45,7 @@ object OffsetCheckpointFile {
 }
 
 trait OffsetCheckpoint {
-  def write(epochs: Seq[EpochEntry])
+  def write(epochs: Seq[EpochEntry]): Unit
   def read(): Seq[EpochEntry]
 }
 

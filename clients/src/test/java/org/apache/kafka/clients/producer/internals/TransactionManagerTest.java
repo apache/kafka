@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -134,8 +136,8 @@ public class TransactionManagerTest {
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.INIT_PRODUCER_ID, (short)0, (short)1),
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short)0, (short)7))));
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short)0, (short)1),
+                new ApiVersion(ApiKeys.PRODUCE.id, (short)0, (short)7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
                 DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         Metrics metrics = new Metrics(metricConfig, time);
@@ -2829,9 +2831,9 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
-            assertEquals(producerId, txnOffsetCommitRequest.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.producerEpoch());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }

@@ -65,15 +65,11 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    super.brokerPropertyOverrides(properties)
-  }
-
   @Test
-  def testDynamicConnectionQuota() {
+  def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
 
-    def connectAndVerify() {
+    def connectAndVerify(): Unit = {
       val socket = connect()
       try {
         sendAndReceive(produceRequest, ApiKeys.PRODUCE, socket)
@@ -100,7 +96,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   def testDynamicListenerConnectionQuota(): Unit = {
     val initialConnectionCount = connectionCount
 
-    def connectAndVerify() {
+    def connectAndVerify(): Unit = {
       val socket = connect("PLAINTEXT")
       socket.setSoTimeout(1000)
       try {

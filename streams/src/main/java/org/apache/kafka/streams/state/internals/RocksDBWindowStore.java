@@ -48,6 +48,7 @@ public class RocksDBWindowStore
         super.init(context, root);
     }
 
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());
@@ -63,9 +64,6 @@ public class RocksDBWindowStore
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
         final byte[] bytesValue = wrapped().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum));
-        if (bytesValue == null) {
-            return null;
-        }
         return bytesValue;
     }
 

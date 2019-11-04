@@ -496,7 +496,7 @@ public class RepartitionTopicNamingTest {
         mappedStream.filter((k, v) -> k.equals("A"))
                 .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                         JoinWindows.of(Duration.ofMillis(5000L)),
-                        Joined.with(Serdes.String(), Serdes.String(), Serdes.Long(), fourthRepartitionTopicName))
+                        StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()).withStoreName(fourthRepartitionTopicName).withName(fourthRepartitionTopicName))
                 .to(JOINED_TOPIC);
 
         final Properties properties = new Properties();
@@ -603,7 +603,7 @@ public class RepartitionTopicNamingTest {
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
             "      --> KSTREAM-MAP-0000000001\n" +
             "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000020, KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000009, KSTREAM-FILTER-0000000016, KSTREAM-FILTER-0000000029\n" +
+            "      --> KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000009, KSTREAM-FILTER-0000000020, KSTREAM-FILTER-0000000016, KSTREAM-FILTER-0000000029\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
             "    Processor: KSTREAM-FILTER-0000000020 (stores: [])\n" +
             "      --> KSTREAM-PEEK-0000000021\n" +
