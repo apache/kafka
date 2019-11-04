@@ -36,34 +36,48 @@
         <h1>Naming Kafka Streams DSL Appliations<a class="headerlink" href="#naming" title="Permalink to this headline"></a></h1>
 
        <p>
-		You now can give names to processors when using the Kafka
-		Streams DSL.  Unlike the PAPI, where you are required to give a name for the processor, in the 
-		DSL the names are generated for you.  The name generation strategy is
-		<code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
-		globally incrementing number that represents the operator's order in the topology.  
-		The generated number is prefixed with a varying number of "0"s to create a string that is consistently 10
-		characters long.   While the internal naming makes creating a topology with the DSL much more straightforward, 
-		there are a couple of trade-offs.  The first trade-off is what we could consider a readability issue, and the other
-		more severe trade-off is the shifting of repartition-topic,
-		changelog-topic, and state store names.
+		   You now can give names to processors when using the Kafka Streams DSL.
+		   In the PAPI there are <code>Processors</code> and <code>StateStores</code> and
+		   you are required to explicitly name each one.
+
+		   At the DLS layer, there are operators.  A single DSL operator may
+		   compile down to multiple <code>Processor</code> and <code>StateStores</code> and
+		   if required <code> repartition topics</code>. But with the Kafka Streams
+		   DSL, all these names are generated for you. There is a relationship between
+		   the generated processor-name state store (hence changelog topic name) and repartition
+		   topic names. The name generation strategy is
+		   <code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
+		   globally incrementing number that represents the operator's order in the topology.
+		   The generated number is prefixed with a varying number of "0"s to create a
+		   string that is consistently 10 characters long.   While the internal naming makes creating
+		   a topology with the DSL much more straightforward,
+		   there are a couple of trade-offs.  The first trade-off is what we could
+		   consider a readability issue. The other
+		   more severe trade-off is the shifting of names due to the relationship between the
+		   DSL operator and the generated <code>Processors</code>, <code>StateStores</code> changelog
+		   topics and repartition topics.
 	   </p>
 
 
 		<h2>Readability Issues</h2>
 
-		By saying there is a readability trade-off, we are referring to viewing a description of the topology.
-		When you render the string description of your topology via the <code>Topology#desribe()</code> 
-		method, you can see what the processor is, but you don't have any context for their business purpose.  
-		For example, consider the following simple topology:
+		<p>
+		 	By saying there is a readability trade-off, we are referring to viewing a description of the topology.
+		 	When you render the string description of your topology via the <code>Topology#desribe()</code>
+		 	method, you can see what the processor is, but you don't have any context for its business purpose.
+		 	For example, consider the following simple topology:
 
-		<code>
-		   builder.&gt;String,String&lt;stream("input")
-		          .filter((k,v) -> !v.equals("invalid_txn"))
-		          .mapValues((v) -> v.substring(0,5))
-		          .to("output")
-		</code>
 
-		When running <code>Topology#describe()</code> yields this string:
+			<code>
+		  	 builder.&gt;String,String&lt;stream("input")
+		          	.filter((k,v) -> !v.equals("invalid_txn"))
+		          	.mapValues((v) -> v.substring(0,5))
+		          	.to("output")
+			</code>
+
+		</p>
+
+		Running <code>Topology#describe()</code> yields this string:
 
 		<code>
 		Topologies:
@@ -80,22 +94,22 @@
 		      <-- KSTREAM-MAPVALUES-0000000002
 		 </code>
 
-		 From this report, we can see what the different operators are, but what is the broader context here?  
-		 For example, consider <code>KSTREAM-FILTER-0000000001</code>, we can see it's a 
-		 filter operation meaning records are dropped that don't match the given predicate.  But what is 
-		 the meaning of the predicate?  Additionally, we can see the topic names of the source and sink nodes, 
-		 but what if the topics aren't named in a meaningful way?  Then we're left to guess the 
+		 From this report, you can see what the different operators are, but what is the broader context here?
+		 For example, consider <code>KSTREAM-FILTER-0000000001</code>, we can see that it's a
+		 filter operation, which means that records are dropped that don't match the given predicate.  But what is
+		 the meaning of the predicate?  Additionally, you can see the topic names of the source and sink nodes,
+		 but what if the topics aren't named in a meaningful way?  Then you're left to guess the
 		 business purpose behind these topics.
 
-		 You'll also notice the numbering here; the source node is suffixed with <code>0000000000</code> 
+		 Also notice the numbering here: the source node is suffixed with <code>0000000000</code>
 		 indicating it's the first processor in the topology.  
-		 The filter is suffixed with <code>0000000001</code> indicating it's the second processor in 
-		 the topology.   In the 2.4 release of Kafka Streams, there are now overloaded methods for 
-		 both <code>KStream</code> and <code>KTable</code> accepting 
-		 a new parameter <code>Named</code>.  By using the <code>Named</code> class DSL users can 
-		 now provide meaningful names to the processors in their topology.  
+		 The filter is suffixed with <code>0000000001</code>, indicating it's the second processor in
+		 the topology.   In Kafka Streams, there are now overloaded methods for
+		 both <code>KStream</code> and <code>KTable</code> that accept
+		 a new parameter <code>Named</code>. By using the <code>Named</code> class DSL users can
+		 provide meaningful names to the processors in their topology.
 
-		 Now let's take a look at your topology with naming all the processors:
+		 Now let's take a look at your topology with all the processors named:
 		 <code>
 		     builder.&gt;String,String&lt;stream("input", Consumed.as("Customer_transactions_input_topic"))
 		           .filter((k,v) -> !v.equals("invalid_txn"), Named.as("filter_out_invalid_txns"))
@@ -118,8 +132,8 @@
 		      <-- Map_values_to_first_6_characters
 		 </code>
 
-		Now you can look at the topology description and can easily understand what role each processor 
-		plays in the topology.  But there's another reason for naming your processor nodes when you 
+		Now you can look at the topology description and easily understand what role each processor
+		plays in the topology. But there's another reason for naming your processor nodes when you
 		have stateful operators that remain between restarts of your Kafka Streams applications, 
 		state stores, changelog topics, and repartition topics.
 
