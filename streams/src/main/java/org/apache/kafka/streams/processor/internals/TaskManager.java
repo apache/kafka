@@ -60,6 +60,7 @@ public class TaskManager {
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
+    private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     // the restore consumer is only ever assigned changelogs from restoring tasks or standbys (but not both)
     private boolean restoreConsumerAssignedStandbys = false;
@@ -129,13 +130,15 @@ public class TaskManager {
         }
 
         // Pause all the new partitions until the underlying state store is ready for all the active tasks.
-        log.trace("Pausing partitions: {}", assignment);
-        consumer.pause(assignment);
+        log.debug("Pausing all active task partitions until the underlying state stores are ready");
+        pausePartitions();
     }
 
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
         final Set<TaskId> suspendedTasks = partitionsToTaskSet(assignment);
         suspendedTasks.removeAll(addedActiveTasks.keySet());
+
+        log.debug("Suspended tasks to be resumed: {}", suspendedTasks);
 
         for (final TaskId taskId : suspendedTasks) {
             final Set<TopicPartition> partitions = assignedActiveTasks.get(taskId);
@@ -145,7 +148,7 @@ public class TaskManager {
                     addedActiveTasks.put(taskId, partitions);
                 }
             } catch (final StreamsException e) {
-                log.error("Failed to resume an active task {} due to the following error:", taskId, e);
+                log.error("Failed to resume a suspended active task {} due to the following error:", taskId, e);
                 throw e;
             }
         }
@@ -160,7 +163,7 @@ public class TaskManager {
     }
 
     private void addNewStandbyTasks(final Map<TaskId, Set<TopicPartition>> newStandbyTasks) {
-        log.trace("New standby tasks to be created: {}", newStandbyTasks);
+        log.debug("New standby tasks to be created: {}", newStandbyTasks);
 
         for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
@@ -168,7 +171,8 @@ public class TaskManager {
     }
 
     /**
-     * Returns ids of tasks whose states are kept on the local storage.
+     * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
+     * assigned but not yet cleaned up tasks
      */
     public Set<TaskId> cachedTasksIds() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
@@ -269,25 +273,51 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!assignedActiveTasks.isEmpty()) {
-            throw new IllegalStateException("TaskManager had leftover tasks after removing all zombies");
         }
 
+        verifyActiveTaskStateIsEmpty();
+
         return zombieTasks;
+    }
+
+    private void verifyActiveTaskStateIsEmpty() throws RuntimeException {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        // Verify active has no remaining state, and catch if active.isEmpty throws so we can log any non-empty state
+        try {
+            if (!(active.isEmpty())) {
+                log.error("The set of active tasks was non-empty: {}", active);
+                firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover active task state after closing all zombies"));
+            }
+        } catch (final IllegalStateException e) {
+            firstException.compareAndSet(null, e);
+        }
+
+        if (!(assignedActiveTasks.isEmpty())) {
+            log.error("The set assignedActiveTasks was non-empty: {}", assignedActiveTasks);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover assignedActiveTasks after closing all zombies"));
+        }
+
+        if (!(changelogReader.isEmpty())) {
+            log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover changelog reader state after closing all zombies"));
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        log.debug("Shutting down all active tasks {}, standby tasks {}, and suspended tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
-                  active.suspendedTaskIds());
-
         try {
-            active.close(clean);
+            active.shutdown(clean);
         } catch (final RuntimeException fatalException) {
             firstException.compareAndSet(null, fatalException);
         }
-        standby.close(clean);
+        standby.shutdown(clean);
 
         // remove the changelog partitions from restore consumer
         try {
@@ -304,7 +334,11 @@ public class TaskManager {
         }
     }
 
-    Set<TaskId> activeTaskIds() {
+    public Set<TaskId> previousRunningTaskIds() {
+        return active.previousRunningTaskIds();
+    }
+
+    public Set<TaskId> activeTaskIds() {
         return active.allAssignedTaskIds();
     }
 
@@ -318,10 +352,6 @@ public class TaskManager {
 
     Set<TaskId> revokedStandbyTaskIds() {
         return revokedStandbyTasks.keySet();
-    }
-
-    public Set<TaskId> previousRunningTaskIds() {
-        return active.previousRunningTaskIds();
     }
 
     Set<TaskId> previousActiveTaskIds() {
@@ -366,6 +396,11 @@ public class TaskManager {
         return taskCreator.builder();
     }
 
+    void pausePartitions() {
+        log.trace("Pausing partitions: {}", consumer.assignment());
+        consumer.pause(consumer.assignment());
+    }
+
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -374,9 +409,11 @@ public class TaskManager {
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
-        final Collection<TopicPartition> restored = changelogReader.restore(active);
-        active.updateRestored(restored);
-        removeChangelogsFromRestoreConsumer(restored, false);
+        if (active.hasRestoringTasks()) {
+            final Collection<TopicPartition> restored = changelogReader.restore(active);
+            active.updateRestored(restored);
+            removeChangelogsFromRestoreConsumer(restored, false);
+        }
 
         if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();
@@ -414,6 +451,10 @@ public class TaskManager {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
+    }
+
+    public void setRebalanceInProgress(final boolean rebalanceInProgress) {
+        this.rebalanceInProgress = rebalanceInProgress;
     }
 
     public void setClusterMetadata(final Cluster cluster) {
@@ -458,8 +499,23 @@ public class TaskManager {
             }
         }
 
-        this.assignedActiveTasks = activeTasks;
-        this.assignedStandbyTasks = standbyTasks;
+        log.debug("Assigning metadata with: " +
+                      "\tpreviousAssignedActiveTasks: {},\n" +
+                      "\tpreviousAssignedStandbyTasks: {}\n" +
+                      "The updated task states are: \n" +
+                      "\tassignedActiveTasks {},\n" +
+                      "\tassignedStandbyTasks {},\n" +
+                      "\taddedActiveTasks {},\n" +
+                      "\taddedStandbyTasks {},\n" +
+                      "\trevokedActiveTasks {},\n" +
+                      "\trevokedStandbyTasks {}",
+                  assignedActiveTasks, assignedStandbyTasks,
+                  activeTasks, standbyTasks,
+                  addedActiveTasks, addedStandbyTasks,
+                  revokedActiveTasks, revokedStandbyTasks);
+
+        assignedActiveTasks = activeTasks;
+        assignedStandbyTasks = standbyTasks;
     }
 
     public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
@@ -489,10 +545,10 @@ public class TaskManager {
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
+     * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitAll() {
-        final int committed = active.commit();
-        return committed + standby.commit();
+        return rebalanceInProgress ? -1 : active.commit() + standby.commit();
     }
 
     /**
@@ -514,7 +570,7 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      */
     int maybeCommitActiveTasksPerUserRequested() {
-        return active.maybeCommitPerUserRequested();
+        return rebalanceInProgress ? -1 : active.maybeCommitPerUserRequested();
     }
 
     void maybePurgeCommitedRecords() {
@@ -524,7 +580,8 @@ public class TaskManager {
         if (deleteRecordsResult == null || deleteRecordsResult.all().isDone()) {
 
             if (deleteRecordsResult != null && deleteRecordsResult.all().isCompletedExceptionally()) {
-                log.debug("Previous delete-records request has failed: {}. Try sending the new request now", deleteRecordsResult.lowWatermarks());
+                log.debug("Previous delete-records request has failed: {}. Try sending the new request now",
+                    deleteRecordsResult.lowWatermarks());
             }
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();

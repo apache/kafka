@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,17 +27,22 @@ import java.util.Optional;
  * A new partition reassignment, which can be applied via {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
  */
 public class NewPartitionReassignment {
-    private final List<Integer> targetBrokers;
+    private final List<Integer> targetReplicas;
 
-    public static Optional<NewPartitionReassignment> of(Integer... brokers) {
-        return Optional.of(new NewPartitionReassignment(Arrays.asList(brokers)));
+    /**
+     * @throws IllegalArgumentException if no replicas are supplied
+     */
+    public static Optional<NewPartitionReassignment> of(List<Integer> replicas) {
+        if (replicas == null || replicas.size() == 0)
+            throw new IllegalArgumentException("Cannot create a new partition reassignment without any replicas");
+        return Optional.of(new NewPartitionReassignment(replicas));
     }
 
-    public NewPartitionReassignment(List<Integer> targetBrokers) {
-        this.targetBrokers = Collections.unmodifiableList(new ArrayList<>(targetBrokers));
+    private NewPartitionReassignment(List<Integer> targetReplicas) {
+        this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }
 
-    public List<Integer> targetBrokers() {
-        return targetBrokers;
+    public List<Integer> targetReplicas() {
+        return targetReplicas;
     }
 }

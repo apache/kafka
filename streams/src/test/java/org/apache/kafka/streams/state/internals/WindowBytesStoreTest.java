@@ -37,6 +37,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -63,6 +65,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.After;
@@ -101,7 +104,8 @@ public abstract class WindowBytesStoreTest {
         return new RecordCollectorImpl(name,
             new LogContext(name),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")) {
+            new Metrics().sensor("dropped-records")
+        ) {
             @Override
             public <K1, V1> void send(final String topic,
                 final K1 key,
@@ -663,6 +667,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testPutSameKeyTimestamp() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -771,6 +776,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testDeleteAndUpdate() {
 
         final long currentTime = 0;
@@ -792,6 +798,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         windowStore.put(null, "anyValue");
     }
@@ -876,9 +883,31 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndMeasureExpiredRecordsWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeasureExpiredRecords(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndMeasureExpiredRecords(final String builtInMetricsVersion) {
         setClassLoggerToDebug();
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final WindowStore<Integer, String> windowStore =
+            buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
+        final RecordCollector recordCollector = createRecordCollector(windowStore.name());
+        recordCollector.init(producer);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            new StreamsConfig(streamsConfig),
+            recordCollector
+        );
+        windowStore.init(context, windowStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
         windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
@@ -892,29 +921,52 @@ public abstract class WindowBytesStoreTest {
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
         final String metricScope = getMetricsScope();
+        final String threadId = Thread.currentThread().getName();
+        final Metric dropTotal;
+        final Metric dropRate;
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            dropTotal = metrics.get(new MetricName(
+                "expired-window-record-drop-total",
+                "stream-" + metricScope + "-metrics",
+                "The total number of dropped records due to an expired window",
+                mkMap(
+                    mkEntry("client-id", threadId),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry(metricScope + "-state-id", windowStore.name())
+                )
+            ));
 
-        final Metric dropTotal = metrics.get(new MetricName(
-            "expired-window-record-drop-total",
-            "stream-" + metricScope + "-metrics",
-            "The total number of occurrence of expired-window-record-drop operations.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
-            )
-        ));
+            dropRate = metrics.get(new MetricName(
+                "expired-window-record-drop-rate",
+                "stream-" + metricScope + "-metrics",
+                "The average number of dropped records due to an expired window per second",
+                mkMap(
+                    mkEntry("client-id", threadId),
+                    mkEntry("task-id", "0_0"),
+                    mkEntry(metricScope + "-state-id", windowStore.name())
+                )
+            ));
+        } else {
+            dropTotal = metrics.get(new MetricName(
+                "dropped-records-total",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
 
-        final Metric dropRate = metrics.get(new MetricName(
-            "expired-window-record-drop-rate",
-            "stream-" + metricScope + "-metrics",
-            "The average number of occurrence of expired-window-record-drop operation per second.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry(metricScope + "-id", windowStore.name())
-            )
-        ));
-
+            dropRate = metrics.get(new MetricName(
+                "dropped-records-rate",
+                "stream-task-metrics",
+                "",
+                mkMap(
+                    mkEntry("thread-id", threadId),
+                    mkEntry("task-id", "0_0")
+                )
+            ));
+        }
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
         final List<String> messages = appender.getMessages();
@@ -932,6 +984,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testWindowIteratorPeek() {
         final long currentTime = 0;
         setCurrentTime(currentTime);
@@ -962,6 +1015,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotThrowConcurrentModificationException() {
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -990,6 +1044,7 @@ public abstract class WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testFetchDuplicates() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init(context, windowStore);
@@ -1019,6 +1074,7 @@ public abstract class WindowBytesStoreTest {
     }
 
 
+    @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {
@@ -1034,6 +1090,7 @@ public abstract class WindowBytesStoreTest {
         store.put(5, "five");
     }
 
+    @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {

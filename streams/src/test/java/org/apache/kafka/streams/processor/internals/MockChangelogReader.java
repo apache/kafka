@@ -60,6 +60,11 @@ public class MockChangelogReader implements ChangelogReader {
         }
     }
 
+    @Override
+    public boolean isEmpty() {
+        return restoredOffsets.isEmpty() && registered.isEmpty();
+    }
+
     public boolean wasRegistered(final TopicPartition partition) {
         return registered.contains(partition);
     }

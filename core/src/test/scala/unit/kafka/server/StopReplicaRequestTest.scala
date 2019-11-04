@@ -25,7 +25,6 @@ import org.junit.Assert._
 import org.junit.Test
 import collection.JavaConverters._
 
-
 class StopReplicaRequestTest extends BaseRequestTest {
   override val logDirCount = 2
   override val brokerCount: Int = 1
@@ -44,14 +43,16 @@ class StopReplicaRequestTest extends BaseRequestTest {
     val offlineDir = server.logManager.getLog(tp1).get.dir.getParent
     server.replicaManager.handleLogDirFailure(offlineDir, sendZkNotification = false)
 
-    for (i <- 1 to 2) {
+    for (_ <- 1 to 2) {
       val request1 = new StopReplicaRequest.Builder(1,
         server.config.brokerId, server.replicaManager.controllerEpoch, server.kafkaController.brokerEpoch,
         true, Set(tp0, tp1).asJava).build()
       val response1 = connectAndSend(request1, ApiKeys.STOP_REPLICA, controllerSocketServer)
-      val partitionErrors1 = StopReplicaResponse.parse(response1, request1.version).responses()
-      assertEquals(Errors.NONE, partitionErrors1.get(tp0))
-      assertEquals(Errors.KAFKA_STORAGE_ERROR, partitionErrors1.get(tp1))
+      val partitionErrors1 = StopReplicaResponse.parse(response1, request1.version).partitionErrors.asScala
+      assertEquals(Some(Errors.NONE.code),
+        partitionErrors1.find(pe => pe.topicName == tp0.topic && pe.partitionIndex == tp0.partition).map(_.errorCode))
+      assertEquals(Some(Errors.KAFKA_STORAGE_ERROR.code),
+        partitionErrors1.find(pe => pe.topicName == tp1.topic && pe.partitionIndex == tp1.partition).map(_.errorCode))
     }
   }
 

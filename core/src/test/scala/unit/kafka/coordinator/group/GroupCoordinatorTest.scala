@@ -1188,15 +1188,15 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val followerId = followerJoinGroupResult.memberId
-    val follwerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId, followerId)
-    assertEquals(Errors.NONE, follwerSyncGroupResult._2)
+    val followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId, followerId)
+    assertEquals(Errors.NONE, followerSyncGroupResult._2)
     assertTrue(getGroup(groupId).is(Stable))
 
     new RebalanceResult(newGeneration,
       leaderId,
       leaderSyncGroupResult._1,
       followerId,
-      follwerSyncGroupResult._1)
+      followerSyncGroupResult._1)
   }
 
   private def checkJoinGroupResult(joinGroupResult: JoinGroupResult,
@@ -2827,7 +2827,7 @@ class GroupCoordinatorTest {
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
-    assert(topics.isEmpty)
+    assertTrue(topics.isEmpty)
   }
 
   @Test
@@ -2838,7 +2838,7 @@ class GroupCoordinatorTest {
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.NON_EMPTY_GROUP, groupError)
-    assert(topics.isEmpty)
+    assertTrue(topics.isEmpty)
   }
 
   @Test
@@ -2868,7 +2868,7 @@ class GroupCoordinatorTest {
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
-    assert(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
+    assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = EasyMock.niceMock(classOf[Partition])
@@ -2882,7 +2882,7 @@ class GroupCoordinatorTest {
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 1)
+    assertEquals(1, topics.size)
     assertEquals(Some(Errors.NONE), topics.get(t1p0))
 
     val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, Some(Seq(t1p0, t2p0)))
@@ -2900,21 +2900,19 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult._2)
 
-    val t1p0 = new TopicPartition("foo", 0)
-    val t2p0 = new TopicPartition("bar", 0)
+    val tp = new TopicPartition("foo", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(t1p0 -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
+      Map(tp -> offset))
+    assertEquals(Errors.NONE, validOffsetCommitResult(tp))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 2)
-    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(t1p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t2p0))
+    assertEquals(1, topics.size)
+    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(tp))
   }
 
   @Test
@@ -2927,7 +2925,7 @@ class GroupCoordinatorTest {
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
-    assert(topics.size == 0)
+    assertTrue(topics.isEmpty)
   }
 
   @Test
@@ -2943,7 +2941,6 @@ class GroupCoordinatorTest {
 
     val t1p0 = new TopicPartition("foo", 0)
     val t2p0 = new TopicPartition("bar", 0)
-    val t3p0 = new TopicPartition("unknown", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
@@ -2957,7 +2954,7 @@ class GroupCoordinatorTest {
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
-    assert(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
+    assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = EasyMock.niceMock(classOf[Partition])
@@ -2968,12 +2965,11 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t3p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 2)
+    assertEquals(1, topics.size)
     assertEquals(Some(Errors.NONE), topics.get(t1p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t3p0))
 
     val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, Some(Seq(t1p0, t2p0)))
 
@@ -2997,7 +2993,6 @@ class GroupCoordinatorTest {
 
     val t1p0 = new TopicPartition("foo", 0)
     val t2p0 = new TopicPartition("bar", 0)
-    val t3p0 = new TopicPartition("unknown", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
@@ -3006,7 +3001,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
     assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
 
-    assert(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Stable)))
+    assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Stable)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = EasyMock.niceMock(classOf[Partition])
@@ -3017,13 +3012,12 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0, t3p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 3)
+    assertEquals(2, topics.size)
     assertEquals(Some(Errors.NONE), topics.get(t1p0))
     assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(t2p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t3p0))
 
     val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, Some(Seq(t1p0, t2p0)))
 
@@ -3099,6 +3093,31 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, firstResult.error)
     assertEquals(Errors.NONE, secondResult.error)
     assertEquals(Errors.NONE, thirdResult.error)
+  }
+
+  @Test
+  def testCompleteHeartbeatWithGroupDead(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    EasyMock.reset(replicaManager)
+    heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
+    val group = getGroup(groupId)
+    group.transitionTo(Dead)
+    val leaderMemberId = rebalanceResult.leaderId
+    assertTrue(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout, () => true))
+    groupCoordinator.onExpireHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout)
+    assertTrue(group.has(leaderMemberId))
+  }
+
+  @Test
+  def testCompleteHeartbeatWithMemberAlreadyRemoved(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    EasyMock.reset(replicaManager)
+    heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
+    val group = getGroup(groupId)
+    val leaderMemberId = rebalanceResult.leaderId
+    group.remove(leaderMemberId)
+    assertFalse(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout, () => true))
+    groupCoordinator.onExpireHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout)
   }
 
   private def getGroup(groupId: String): GroupMetadata = {

@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -33,6 +34,10 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
@@ -76,6 +81,8 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -97,11 +104,17 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -149,6 +162,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -226,6 +240,7 @@ public class RequestResponseTest {
         checkRequest(createProduceRequest(3), true);
         checkErrorResponse(createProduceRequest(3), new UnknownServerException(), true);
         checkResponse(createProduceResponse(), 2, true);
+        checkResponse(createProduceResponseWithErrorMessage(), 8, true);
         checkRequest(createStopReplicaRequest(0, true), true);
         checkRequest(createStopReplicaRequest(0, false), true);
         checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException(), true);
@@ -237,6 +252,8 @@ public class RequestResponseTest {
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
         checkErrorResponse(createLeaderAndIsrRequest(1), new UnknownServerException(), false);
+        checkRequest(createLeaderAndIsrRequest(2), true);
+        checkErrorResponse(createLeaderAndIsrRequest(2), new UnknownServerException(), false);
         checkResponse(createLeaderAndIsrResponse(), 0, true);
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException(), true);
@@ -247,7 +264,16 @@ public class RequestResponseTest {
         checkResponse(createSaslAuthenticateResponse(), 1, true);
         checkRequest(createApiVersionRequest(), true);
         checkErrorResponse(createApiVersionRequest(), new UnknownServerException(), true);
+        checkErrorResponse(createApiVersionRequest(), new UnsupportedVersionException("Not Supported"), true);
         checkResponse(createApiVersionResponse(), 0, true);
+        checkResponse(createApiVersionResponse(), 1, true);
+        checkResponse(createApiVersionResponse(), 2, true);
+        checkResponse(createApiVersionResponse(), 3, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 0, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 1, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 2, true);
+        checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 3, true);
+
         checkRequest(createCreateTopicRequest(0), true);
         checkErrorResponse(createCreateTopicRequest(0), new UnknownServerException(), true);
         checkResponse(createCreateTopicResponse(), 0, true);
@@ -548,12 +574,11 @@ public class RequestResponseTest {
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
-        short headerVersion = ApiKeys.PRODUCE.headerVersion(version);
 
         ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
         buffer.rewind();
 
-        ResponseHeader.parse(buffer, headerVersion); // throw away.
+        ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
 
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
@@ -646,8 +671,8 @@ public class RequestResponseTest {
     private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
-        short headerVersion = FETCH.headerVersion(apiVersion);
-        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, headerVersion), apiVersion);
+        short responseHeaderVersion = FETCH.responseHeaderVersion(apiVersion);
+        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, responseHeaderVersion), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -659,7 +684,7 @@ public class RequestResponseTest {
         assertTrue(size > 0);
 
         // read the header
-        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), headerVersion);
+        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
         // read the body
@@ -758,6 +783,93 @@ public class RequestResponseTest {
             Collections.singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));
         assertTrue(string.contains("group1"));
+    }
+
+    @Test
+    public void testApiVersionsRequestBeforeV3Validation() {
+        for (short version = 0; version < 3; version++) {
+            ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData(), version);
+            assertTrue(request.isValid());
+        }
+    }
+
+    @Test
+    public void testValidApiVersionsRequest() {
+        ApiVersionsRequest request;
+
+        request = new ApiVersionsRequest.Builder().build();
+        assertTrue(request.isValid());
+
+        request = new ApiVersionsRequest(new ApiVersionsRequestData()
+            .setClientSoftwareName("apache-kafka.java")
+            .setClientSoftwareVersion("0.0.0-SNAPSHOT"),
+            ApiKeys.API_VERSIONS.latestVersion()
+        );
+        assertTrue(request.isValid());
+    }
+
+    @Test
+    public void testInvalidApiVersionsRequest() {
+        testInvalidCase("java@apache_kafka", "0.0.0-SNAPSHOT");
+        testInvalidCase("apache-kafka-java", "0.0.0@java");
+        testInvalidCase("-apache-kafka-java", "0.0.0");
+        testInvalidCase("apache-kafka-java.", "0.0.0");
+    }
+
+    private void testInvalidCase(String name, String version) {
+        ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData()
+            .setClientSoftwareName(name)
+            .setClientSoftwareVersion(version),
+            ApiKeys.API_VERSIONS.latestVersion()
+        );
+        assertFalse(request.isValid());
+    }
+
+    @Test
+    public void testApiVersionResponseWithUnsupportedError() {
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        ApiVersionsResponse response = request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception());
+
+        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+
+        ApiVersionsResponseKey apiVersion = response.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
+        assertNotNull(apiVersion);
+        assertEquals(ApiKeys.API_VERSIONS.id, apiVersion.apiKey());
+        assertEquals(ApiKeys.API_VERSIONS.oldestVersion(), apiVersion.minVersion());
+        assertEquals(ApiKeys.API_VERSIONS.latestVersion(), apiVersion.maxVersion());
+    }
+
+    @Test
+    public void testApiVersionResponseWithNotUnsupportedError() {
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        ApiVersionsResponse response = request.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
+
+        assertEquals(response.data.errorCode(), Errors.INVALID_REQUEST.code());
+        assertTrue(response.data.apiKeys().isEmpty());
+    }
+
+    @Test
+    public void testApiVersionResponseStructParsingFallback() {
+        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
+
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
+    }
+
+    @Test(expected = SchemaException.class)
+    public void testApiVersionResponseStructParsingFallbackException() {
+        short version = 0;
+        ApiVersionsResponse.fromStruct(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
+    }
+
+    @Test
+    public void testApiVersionResponseStructParsing() {
+        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
+
+        assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
     private ResponseHeader createResponseHeader(short headerVersion) {
@@ -1109,15 +1221,28 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
+    private ProduceResponse createProduceResponseWithErrorMessage() {
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
+                10000, RecordBatch.NO_TIMESTAMP, 100, Collections.singletonList(new ProduceResponse.RecordError(0, "error message")),
+                "global error message"));
+        return new ProduceResponse(responseData, 0);
+    }
+
     private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
         Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
         return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new StopReplicaResponse(Errors.NONE, responses);
+        List<StopReplicaResponseData.StopReplicaPartitionError> partitions = new ArrayList<>();
+        partitions.add(new StopReplicaResponseData.StopReplicaPartitionError()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new StopReplicaResponse(new StopReplicaResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
@@ -1155,15 +1280,39 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
-        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
-        partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, replicas, false));
-        partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, replicas, false));
-        partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, replicas, false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(105)
+            .setControllerEpoch(0)
+            .setLeader(2)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeader(1)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic20")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeader(0)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
 
         Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
@@ -1173,49 +1322,97 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new LeaderAndIsrResponse(Errors.NONE, responses);
+        List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
-        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
+        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         List<Integer> offlineReplicas = asList();
-        partitionStates.put(new TopicPartition("topic5", 105),
-            new UpdateMetadataRequest.PartitionState(0, 2, 1, isr, 2, replicas, offlineReplicas));
-        partitionStates.put(new TopicPartition("topic5", 1),
-            new UpdateMetadataRequest.PartitionState(1, 1, 1, isr, 2, replicas, offlineReplicas));
-        partitionStates.put(new TopicPartition("topic20", 1),
-            new UpdateMetadataRequest.PartitionState(1, 0, 1, isr, 2, replicas, offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(105)
+            .setControllerEpoch(0)
+            .setLeader(2)
+            .setLeaderEpoch(1)
+            .setIsr(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setOfflineReplicas(offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName("topic5")
+                .setPartitionIndex(1)
+                .setControllerEpoch(1)
+                .setLeader(1)
+                .setLeaderEpoch(1)
+                .setIsr(isr)
+                .setZkVersion(2)
+                .setReplicas(replicas)
+                .setOfflineReplicas(offlineReplicas));
+        partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName("topic20")
+                .setPartitionIndex(1)
+                .setControllerEpoch(1)
+                .setLeader(0)
+                .setLeaderEpoch(1)
+                .setIsr(isr)
+                .setZkVersion(2)
+                .setReplicas(replicas)
+                .setOfflineReplicas(offlineReplicas));
 
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
-        List<UpdateMetadataRequest.EndPoint> endPoints1 = new ArrayList<>();
-        endPoints1.add(new UpdateMetadataRequest.EndPoint("host1", 1223, plaintext,
-                ListenerName.forSecurityProtocol(plaintext)));
+        List<UpdateMetadataEndpoint> endpoints1 = new ArrayList<>();
+        endpoints1.add(new UpdateMetadataEndpoint()
+            .setHost("host1")
+            .setPort(1223)
+            .setSecurityProtocol(plaintext.id)
+            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
 
-        List<UpdateMetadataRequest.EndPoint> endPoints2 = new ArrayList<>();
-        endPoints2.add(new UpdateMetadataRequest.EndPoint("host1", 1244, plaintext,
-                ListenerName.forSecurityProtocol(plaintext)));
+        List<UpdateMetadataEndpoint> endpoints2 = new ArrayList<>();
+        endpoints2.add(new UpdateMetadataEndpoint()
+            .setHost("host1")
+            .setPort(1244)
+            .setSecurityProtocol(plaintext.id)
+            .setListener(ListenerName.forSecurityProtocol(plaintext).value()));
         if (version > 0) {
             SecurityProtocol ssl = SecurityProtocol.SSL;
-            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1234, ssl,
-                    ListenerName.forSecurityProtocol(ssl)));
-            endPoints2.add(new UpdateMetadataRequest.EndPoint("host2", 1334, ssl,
-                    new ListenerName("CLIENT")));
+            endpoints2.add(new UpdateMetadataEndpoint()
+                .setHost("host2")
+                .setPort(1234)
+                .setSecurityProtocol(ssl.id)
+                .setListener(ListenerName.forSecurityProtocol(ssl).value()));
+            endpoints2.add(new UpdateMetadataEndpoint()
+                .setHost("host2")
+                .setPort(1334)
+                .setSecurityProtocol(ssl.id));
+            if (version >= 3)
+                endpoints2.get(1).setListener("CLIENT");
         }
 
-        Set<UpdateMetadataRequest.Broker> liveBrokers = Utils.mkSet(
-                new UpdateMetadataRequest.Broker(0, endPoints1, rack),
-                new UpdateMetadataRequest.Broker(1, endPoints2, rack)
+        List<UpdateMetadataBroker> liveBrokers = Arrays.asList(
+            new UpdateMetadataBroker()
+                .setId(0)
+                .setEndpoints(endpoints1)
+                .setRack(rack),
+            new UpdateMetadataBroker()
+                .setId(1)
+                .setEndpoints(endpoints2)
+                .setRack(rack)
         );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
-                liveBrokers).build();
+            liveBrokers).build();
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {
-        return new UpdateMetadataResponse(Errors.NONE);
+        return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.NONE.code()));
     }
 
     private SaslHandshakeRequest createSaslHandshakeRequest() {
@@ -1247,8 +1444,16 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        List<ApiVersionsResponse.ApiVersion> apiVersions = asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
-        return new ApiVersionsResponse(Errors.NONE, apiVersions);
+        ApiVersionsResponseKeyCollection apiVersions = new ApiVersionsResponseKeyCollection();
+        apiVersions.add(new ApiVersionsResponseKey()
+            .setApiKey((short) 0)
+            .setMinVersion((short) 0)
+            .setMaxVersion((short) 2));
+
+        return new ApiVersionsResponse(new ApiVersionsResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setApiKeys(apiVersions));
     }
 
     private CreateTopicsRequest createCreateTopicRequest(int version) {

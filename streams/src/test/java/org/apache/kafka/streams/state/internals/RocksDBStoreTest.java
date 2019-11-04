@@ -59,8 +59,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-
 import static java.nio.charset.StandardCharsets.UTF_8;
+
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.mock;
@@ -256,13 +256,8 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init(context, rocksDBStore);
-
-        final String message = "how can a 4 ounce bird carry a 2lb coconut";
-        int intKey = 1;
-        for (int i = 0; i < 2000000; i++) {
-            rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "theKeyIs" + intKey++)),
-                             stringSerializer.serialize(null, message));
-        }
+        rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
+        rocksDBStore.flush();
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
 
@@ -554,7 +549,7 @@ public class RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
         try {
             rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
-            fail("Should have thrown NullPointerException on deleting null key");
+            fail("Should have thrown NullPointerException on null range key");
         } catch (final NullPointerException e) {
             // this is good
         }

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
@@ -44,6 +47,8 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -66,8 +71,12 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaRequestData;
+import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -83,8 +92,6 @@ import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
@@ -103,18 +110,12 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
-import org.apache.kafka.common.requests.LeaderAndIsrResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.requests.StopReplicaRequest;
-import org.apache.kafka.common.requests.StopReplicaResponse;
-import org.apache.kafka.common.requests.UpdateMetadataRequest;
-import org.apache.kafka.common.requests.UpdateMetadataResponse;
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 
@@ -122,6 +123,8 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
+import static org.apache.kafka.common.protocol.types.Type.COMPACT_NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 
@@ -133,10 +136,9 @@ public enum ApiKeys {
     FETCH(1, "Fetch", FetchRequest.schemaVersions(), FetchResponse.schemaVersions()),
     LIST_OFFSETS(2, "ListOffsets", ListOffsetRequest.schemaVersions(), ListOffsetResponse.schemaVersions()),
     METADATA(3, "Metadata", MetadataRequestData.SCHEMAS, MetadataResponseData.SCHEMAS),
-    LEADER_AND_ISR(4, "LeaderAndIsr", true, LeaderAndIsrRequest.schemaVersions(), LeaderAndIsrResponse.schemaVersions()),
-    STOP_REPLICA(5, "StopReplica", true, StopReplicaRequest.schemaVersions(), StopReplicaResponse.schemaVersions()),
-    UPDATE_METADATA(6, "UpdateMetadata", true, UpdateMetadataRequest.schemaVersions(),
-            UpdateMetadataResponse.schemaVersions()),
+    LEADER_AND_ISR(4, "LeaderAndIsr", true, LeaderAndIsrRequestData.SCHEMAS, LeaderAndIsrResponseData.SCHEMAS),
+    STOP_REPLICA(5, "StopReplica", true, StopReplicaRequestData.SCHEMAS, StopReplicaResponseData.SCHEMAS),
+    UPDATE_METADATA(6, "UpdateMetadata", true, UpdateMetadataRequestData.SCHEMAS, UpdateMetadataResponseData.SCHEMAS),
     CONTROLLED_SHUTDOWN(7, "ControlledShutdown", true, ControlledShutdownRequestData.SCHEMAS,
             ControlledShutdownResponseData.SCHEMAS),
     OFFSET_COMMIT(8, "OffsetCommit", OffsetCommitRequestData.SCHEMAS, OffsetCommitResponseData.SCHEMAS),
@@ -151,7 +153,7 @@ public enum ApiKeys {
             DescribeGroupsResponseData.SCHEMAS),
     LIST_GROUPS(16, "ListGroups", ListGroupsRequestData.SCHEMAS, ListGroupsResponseData.SCHEMAS),
     SASL_HANDSHAKE(17, "SaslHandshake", SaslHandshakeRequestData.SCHEMAS, SaslHandshakeResponseData.SCHEMAS),
-    API_VERSIONS(18, "ApiVersions", ApiVersionsRequest.schemaVersions(), ApiVersionsResponse.schemaVersions()) {
+    API_VERSIONS(18, "ApiVersions", ApiVersionsRequestData.SCHEMAS, ApiVersionsResponseData.SCHEMAS) {
         @Override
         public Struct parseResponse(short version, ByteBuffer buffer) {
             // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
@@ -335,12 +337,12 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
-    public short headerVersion(short apiVersion) {
-        if ((this == CONTROLLED_SHUTDOWN) && (apiVersion == 0)) {
-            return 0;
-        } else {
-            return 1;
-        }
+    public short requestHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).requestHeaderVersion(apiVersion);
+    }
+
+    public short responseHeaderVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).responseHeaderVersion(apiVersion);
     }
 
     private static String toHtml() {
@@ -373,7 +375,8 @@ public enum ApiKeys {
         Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
-                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
+                if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS ||
+                    field == COMPACT_BYTES || field == COMPACT_NULLABLE_BYTES)
                     hasBuffer.set(true);
             }
         };

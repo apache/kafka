@@ -188,7 +188,7 @@ class AdminManager(val config: KafkaConfig,
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
           CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
-      }).toIndexedSeq
+      }).toBuffer
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
@@ -204,7 +204,7 @@ class AdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, responseCallback)
-      val delayedCreateKeys = toCreate.values.map(topic => new TopicKey(topic.name)).toIndexedSeq
+      val delayedCreateKeys = toCreate.values.map(topic => new TopicKey(topic.name)).toBuffer
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
@@ -259,20 +259,20 @@ class AdminManager(val config: KafkaConfig,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
 
-    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
     val allBrokers = adminZkClient.getBrokerMetadatas()
     val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
     val metadata = newPartitions.map { case (topic, newPartition) =>
       try {
-        // We prevent addition partitions while a reassignment is in progress, since
-        // during reassignment there is no meaningful notion of replication factor
-        if (reassignPartitionsInProgress)
-          throw new ReassignmentInProgressException("A partition reassignment is in progress.")
-
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
-          case (topicPartition, assignment) => topicPartition.partition -> assignment
+          case (topicPartition, assignment) =>
+            if (assignment.isBeingReassigned) {
+              // We prevent adding partitions while topic reassignment is in progress, to protect from a race condition
+              // between the controller thread processing reassignment update and createPartitions(this) request.
+              throw new ReassignmentInProgressException(s"A partition reassignment is in progress for the topic '$topic'.")
+            }
+            topicPartition.partition -> assignment
         }
         if (existingAssignment.isEmpty)
           throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
@@ -345,7 +345,7 @@ class AdminManager(val config: KafkaConfig,
         val filteredConfigPairs = configs.filter { case (configName, _) =>
           /* Always returns true if configNames is None */
           configNames.forall(_.contains(configName))
-        }.toIndexedSeq
+        }.toBuffer
 
         val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
         new DescribeConfigsResponse.Config(ApiError.NONE, configEntries.asJava)

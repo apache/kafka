@@ -46,7 +46,7 @@ import scala.collection.{Map, Seq}
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
-  val ZkSessionTimeoutMs = 6000
+  val ZkSessionTimeoutMs = 18000
   val ZkSyncTimeMs = 2000
   val ZkEnableSecureAcls = false
   val ZkMaxInFlightRequests = 10
@@ -128,7 +128,7 @@ object Defaults {
   val ControllerSocketTimeoutMs = RequestTimeoutMs
   val ControllerMessageQueueSize = Int.MaxValue
   val DefaultReplicationFactor = 1
-  val ReplicaLagTimeMaxMs = 10000L
+  val ReplicaLagTimeMaxMs = 30000L
   val ReplicaSocketTimeoutMs = 30 * 1000
   val ReplicaSocketReceiveBufferBytes = 64 * 1024
   val ReplicaFetchMaxBytes = 1024 * 1024

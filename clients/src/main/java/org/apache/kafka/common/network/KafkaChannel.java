@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
@@ -328,7 +328,7 @@ public class KafkaChannel implements AutoCloseable {
     /**
      * Returns true if this channel has been explicitly muted using {@link KafkaChannel#mute()}
      */
-    public boolean isMute() {
+    public boolean isMuted() {
         return muteState != ChannelMuteState.NOT_MUTED;
     }
 
@@ -375,32 +375,51 @@ public class KafkaChannel implements AutoCloseable {
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
-    public NetworkReceive read() throws IOException {
-        NetworkReceive result = null;
+    public Send maybeCompleteSend() {
+        if (send != null && send.completed()) {
+            midWrite = false;
+            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
+            Send result = send;
+            send = null;
+            return result;
+        }
+        return null;
+    }
 
+    public long read() throws IOException {
         if (receive == null) {
             receive = new NetworkReceive(maxReceiveSize, id, memoryPool);
         }
 
-        receive(receive);
-        if (receive.complete()) {
-            receive.payload().rewind();
-            result = receive;
-            receive = null;
-        } else if (receive.requiredMemoryAmountKnown() && !receive.memoryAllocated() && isInMutableState()) {
+        long bytesReceived = receive(this.receive);
+
+        if (this.receive.requiredMemoryAmountKnown() && !this.receive.memoryAllocated() && isInMutableState()) {
             //pool must be out of memory, mute ourselves.
             mute();
         }
-        return result;
+        return bytesReceived;
     }
 
-    public Send write() throws IOException {
-        Send result = null;
-        if (send != null && send(send)) {
-            result = send;
-            send = null;
+    public NetworkReceive currentReceive() {
+        return receive;
+    }
+
+    public NetworkReceive maybeCompleteReceive() {
+        if (receive != null && receive.complete()) {
+            receive.payload().rewind();
+            NetworkReceive result = receive;
+            receive = null;
+            return result;
         }
-        return result;
+        return null;
+    }
+
+    public long write() throws IOException {
+        if (send == null)
+            return 0;
+
+        midWrite = true;
+        return send.writeTo(transportLayer);
     }
 
     /**
@@ -422,16 +441,6 @@ public class KafkaChannel implements AutoCloseable {
 
     private long receive(NetworkReceive receive) throws IOException {
         return receive.readFrom(transportLayer);
-    }
-
-    private boolean send(Send send) throws IOException {
-        midWrite = true;
-        send.writeTo(transportLayer);
-        if (send.completed()) {
-            midWrite = false;
-            transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-        }
-        return send.completed();
     }
 
     /**
@@ -520,7 +529,7 @@ public class KafkaChannel implements AutoCloseable {
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.
          */
-        long nowNanos = nowNanosSupplier.get().longValue();
+        long nowNanos = nowNanosSupplier.get();
         /*
          * Cannot re-authenticate more than once every second; an attempt to do so will
          * result in the SASL handshake network receive being processed normally, which

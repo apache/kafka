@@ -545,7 +545,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition]): (Errors, Map[TopicPartition, Errors]) = {
     var groupError: Errors = Errors.NONE
     var partitionErrors: Map[TopicPartition, Errors] = Map()
-    var partitionEligibleForDeletion: Seq[TopicPartition] = Seq()
+    var partitionsEligibleForDeletion: Seq[TopicPartition] = Seq()
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_DELETE) match {
       case Some(error) =>
@@ -565,38 +565,30 @@ class GroupCoordinator(val brokerId: Int,
                     Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR
 
                 case Empty =>
-                  val (knownPartitions, unknownPartitions) =
-                    partitions.partition(tp => group.offset(tp).nonEmpty)
-
-                  partitionEligibleForDeletion = knownPartitions
-                  partitionErrors = unknownPartitions.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION).toMap
+                  partitionsEligibleForDeletion = partitions
 
                 case PreparingRebalance | CompletingRebalance | Stable if group.isConsumerGroup =>
-                  val (knownPartitions, unknownPartitions) =
-                    partitions.partition(tp => group.offset(tp).nonEmpty)
-
                   val (consumed, notConsumed) =
-                    knownPartitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
+                    partitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
 
-                  partitionEligibleForDeletion = notConsumed
-                  partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap ++
-                    unknownPartitions.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION).toMap
+                  partitionsEligibleForDeletion = notConsumed
+                  partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap
 
                 case _ =>
                   groupError = Errors.NON_EMPTY_GROUP
               }
             }
 
-            if (partitionEligibleForDeletion.nonEmpty) {
+            if (partitionsEligibleForDeletion.nonEmpty) {
               val offsetsRemoved = groupManager.cleanupGroupMetadata(Seq(group), group => {
-                group.removeOffsets(partitionEligibleForDeletion)
+                group.removeOffsets(partitionsEligibleForDeletion)
               })
 
-              partitionErrors ++= partitionEligibleForDeletion.map(_ -> Errors.NONE).toMap
+              partitionErrors ++= partitionsEligibleForDeletion.map(_ -> Errors.NONE).toMap
 
               offsetDeletionSensor.record(offsetsRemoved)
 
-              info(s"The following offsets of the group $groupId were deleted: ${partitionEligibleForDeletion.mkString(", ")}. " +
+              info(s"The following offsets of the group $groupId were deleted: ${partitionsEligibleForDeletion.mkString(", ")}. " +
                 s"A total of $offsetsRemoved offsets were removed.")
             }
         }
@@ -1110,24 +1102,37 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (isPending) {
+      // The group has been unloaded and invalid, we should complete the heartbeat.
+      if (group.is(Dead)) {
+        forceComplete()
+      } else if (isPending) {
         // complete the heartbeat if the member has joined the group
         if (group.has(memberId)) {
           forceComplete()
         } else false
-      }
-      else {
-        val member = group.get(memberId)
-        if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving) {
+      } else {
+        if (shouldCompleteNonPendingHeartbeat(group, memberId, heartbeatDeadline)) {
           forceComplete()
         } else false
       }
     }
   }
 
+  def shouldCompleteNonPendingHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long): Boolean = {
+    if (group.has(memberId)) {
+      val member = group.get(memberId)
+      member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving
+    } else {
+      info(s"Member id $memberId was not found in ${group.groupId} during heartbeat expiration.")
+      false
+    }
+  }
+
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long): Unit = {
     group.inLock {
-      if (isPending) {
+      if (group.is(Dead)) {
+        info(s"Received notification of heartbeat expiration for member $memberId after group ${group.groupId} had already been unloaded or deleted.")
+      } else if (isPending) {
         info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
         removePendingMemberAndUpdateGroup(group, memberId)
       } else if (!group.has(memberId)) {

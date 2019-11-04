@@ -90,7 +90,7 @@ public final class ClientRequest {
                 setRequestApiVersion(version).
                 setClientId(clientId).
                 setCorrelationId(correlationId),
-            ApiKeys.forId(requestApiKey).headerVersion(version));
+            ApiKeys.forId(requestApiKey).requestHeaderVersion(version));
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {
