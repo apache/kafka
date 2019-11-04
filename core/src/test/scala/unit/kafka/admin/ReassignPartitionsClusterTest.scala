@@ -29,7 +29,7 @@ import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 import scala.util.Random
 import java.io.File
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.ExecutionException
 
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -1218,7 +1218,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   def reassignmentEntry(tp: TopicPartition, replicas: Seq[Int]): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
-    tp -> NewPartitionReassignment.of(replicas.map(_.asInstanceOf[Integer]).asJava)
+    tp -> Optional.of(new NewPartitionReassignment((replicas.map(_.asInstanceOf[Integer]).asJava)))
 
   def cancelReassignmentEntry(tp: TopicPartition): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
     tp -> java.util.Optional.empty()

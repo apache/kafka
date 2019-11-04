@@ -22,7 +22,7 @@ import java.time.{Duration => JDuration}
 import java.util.Arrays.asList
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
 import kafka.log.LogConfig
@@ -1996,9 +1996,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     createTopic(topic, numPartitions = 4)
 
 
-    val validAssignment = NewPartitionReassignment.of(
+    val validAssignment = Optional.of(new NewPartitionReassignment(
       (0 until brokerCount).map(_.asInstanceOf[Integer]).asJava
-    )
+    ))
 
     val nonExistentTp1 = new TopicPartition("topicA", 0)
     val nonExistentTp2 = new TopicPartition(topic, 4)
@@ -2012,9 +2012,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
     assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
 
-    val extraNonExistentReplica = NewPartitionReassignment.of((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
-    val negativeIdReplica = NewPartitionReassignment.of(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
-    val duplicateReplica = NewPartitionReassignment.of(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
+    val extraNonExistentReplica = Optional.of(new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava))
+    val negativeIdReplica = Optional.of(new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava))
+    val duplicateReplica = Optional.of(new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava))
     val invalidReplicaResult = client.alterPartitionReassignments(Map(
       tp1 -> extraNonExistentReplica,
       tp2 -> negativeIdReplica,
