@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CACHE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version.FROM_100_TO_24;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version.FROM_0100_TO_24;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMinAndMaxToSensor;
 
 public class NamedCacheMetrics {
@@ -41,7 +41,7 @@ public class NamedCacheMetrics {
 
         final Sensor hitRatioSensor;
         final String hitRatioName;
-        if (streamsMetrics.version() == FROM_100_TO_24) {
+        if (streamsMetrics.version() == FROM_0100_TO_24) {
             hitRatioName = HIT_RATIO_0100_TO_24;
             final Sensor taskLevelHitRatioSensor = streamsMetrics.taskLevelSensor(
                 threadId,

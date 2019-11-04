@@ -584,26 +584,11 @@ public class Selector implements Selectable, AutoCloseable {
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
 
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
-                if (channel.hasSend()
-                        && channel.ready()
-                        && key.isWritable()
-                        && !channel.maybeBeginClientReauthentication(() -> nowNanos)) {
-                    try {
-                        long bytesSent = channel.write();
-                        if (bytesSent > 0) {
-                            long currentTimeMs = time.milliseconds();
-                            this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
-
-                            Send send = channel.maybeCompleteSend();
-                            if (send != null) {
-                                this.completedSends.add(send);
-                                this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
-                            }
-                        }
-                    } catch (Exception e) {
-                        sendFailed = true;
-                        throw e;
-                    }
+                try {
+                    attemptWrite(key, channel, nowNanos);
+                } catch (Exception e) {
+                    sendFailed = true;
+                    throw e;
                 }
 
                 /* cancel any defunct sockets */
@@ -635,6 +620,33 @@ public class Selector implements Selectable, AutoCloseable {
                     close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
+            }
+        }
+    }
+
+    private void attemptWrite(SelectionKey key, KafkaChannel channel, long nowNanos) throws IOException {
+        if (channel.hasSend()
+                && channel.ready()
+                && key.isWritable()
+                && !channel.maybeBeginClientReauthentication(() -> nowNanos)) {
+            write(channel);
+        }
+    }
+
+    // package-private for testing
+    void write(KafkaChannel channel) throws IOException {
+        String nodeId = channel.id();
+        long bytesSent = channel.write();
+        Send send = channel.maybeCompleteSend();
+        // We may complete the send with bytesSent < 1 if `TransportLayer.hasPendingWrites` was true and `channel.write()`
+        // caused the pending writes to be written to the socket channel buffer
+        if (bytesSent > 0 || send != null) {
+            long currentTimeMs = time.milliseconds();
+            if (bytesSent > 0)
+                this.sensors.recordBytesSent(nodeId, bytesSent, currentTimeMs);
+            if (send != null) {
+                this.completedSends.add(send);
+                this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
             }
         }
     }
