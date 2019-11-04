@@ -177,6 +177,36 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(10L, filthiestLog.firstDirtyOffset)
   }
 
+  @Test
+  def testDirtyOffsetResetIfLargerThanActiveLogSegmentBaseOffset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+
+    val logs = new Pool[TopicPartition, Log]()
+    val log = createLog(2048, LogConfig.Compact, topicPartition = tp)
+    logs.put(tp, log)
+
+    val recordsPerBatch = 5
+    for (i <- 0 until 2) {
+      val startOffset = i * recordsPerBatch
+      val endOffset = startOffset + recordsPerBatch
+      val records = (startOffset until endOffset).map { offset =>
+        new SimpleRecord(time.milliseconds(), s"key-$offset".getBytes, s"value-$offset".getBytes)
+      }
+
+      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records: _*), leaderEpoch = 1)
+      log.onHighWatermarkIncremented(log.logEndOffsetMetadata.messageOffset)
+
+      if (i == 0)
+        log.roll()
+    }
+
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 6L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(0L, filthiestLog.firstDirtyOffset)
+  }
+
   /**
     * When checking for logs with segments ready for deletion
     * we shouldn't consider logs where cleanup.policy=delete
