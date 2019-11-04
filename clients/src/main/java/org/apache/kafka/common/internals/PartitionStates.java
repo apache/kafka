@@ -89,8 +89,8 @@ public class PartitionStates<S> {
         return map.entrySet().stream().map(entry -> new PartitionState<>(entry.getKey(), entry.getValue()));
     }
 
-    public LinkedHashMap<TopicPartition, S> partitionStateMap() {
-        return map;
+    public Map<TopicPartition, S> partitionStateMap() {
+        return Collections.unmodifiableMap(map);
     }
 
     /**
