@@ -35,7 +35,7 @@ import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.memory.{BounceBufferPool, MemoryPool}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
@@ -83,6 +83,7 @@ class KafkaApisTest {
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
+  private val fetchBufferPool: BounceBufferPool = EasyMock.createNiceMock(classOf[BounceBufferPool])
 
   @After
   def tearDown(): Unit = {
@@ -112,7 +113,8 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
+      null,
+      fetchBufferPool
     )
   }
 

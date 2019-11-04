@@ -420,6 +420,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return toStruct(version, throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
     }
 
+    // TODO: remove this
     @Override
     protected Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
         Struct responseHeaderStruct = responseHeader.toStruct();

@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.memory.BounceBufferPool
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection.mutable
