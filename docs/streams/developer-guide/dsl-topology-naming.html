@@ -35,22 +35,23 @@
         <span id="streams-developer-guide-dsl-topology-naming"></span>
         <h1>Naming Kafka Streams DSL Appliations<a class="headerlink" href="#naming" title="Permalink to this headline"></a></h1>
 
-
-		With the 2.4 release, you now can give names to processors when using the Kafka 
+       <p>
+		You now can give names to processors when using the Kafka
 		Streams DSL.  Unlike the PAPI, where you are required to give a name for the processor, in the 
-		DSL, the names are generated for you.  The name generation strategy is 
-		<code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number suffix is a 
+		DSL the names are generated for you.  The name generation strategy is
+		<code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
 		globally incrementing number that represents the operator's order in the topology.  
-		The number prefixed with a varying number of "0"s to create a suffix that is consistently 10 
+		The generated number is prefixed with a varying number of "0"s to create a string that is consistently 10
 		characters long.   While the internal naming makes creating a topology with the DSL much more straightforward, 
-		there are a couple of trade-offs.  The first trade-off is what we could consider cognitive, and the other 
-		more severe trade-off is the shifting of repartition topic, 
-		changelog topic, and state store names.
+		there are a couple of trade-offs.  The first trade-off is what we could consider a readability issue, and the other
+		more severe trade-off is the shifting of repartition-topic,
+		changelog-topic, and state store names.
+	   </p>
 
 
-		<h2>Cognitive Issues</h2>
+		<h2>Readability Issues</h2>
 
-		By saying there is a cognitive trade-off, we are referring to viewing a description of the topology. 
+		By saying there is a readability trade-off, we are referring to viewing a description of the topology.
 		When you render the string description of your topology via the <code>Topology#desribe()</code> 
 		method, you can see what the processor is, but you don't have any context for their business purpose.  
 		For example, consider the following simple topology:
