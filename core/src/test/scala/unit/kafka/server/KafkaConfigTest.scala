@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Collections
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
@@ -790,61 +789,63 @@ class KafkaConfigTest {
     // Every log config prop must be explicitly accounted for here.
     // A value other than the default value for this config should be set to ensure that we can check whether
     // the value is dynamically updatable.
-    LogConfig.configNames.foreach {
-      case LogConfig.CleanupPolicyProp =>
-        assertDynamic(KafkaConfig.LogCleanupPolicyProp, Defaults.Compact, () => config.logCleanupPolicy)
-      case LogConfig.CompressionTypeProp =>
-        assertDynamic(KafkaConfig.CompressionTypeProp, "lz4", () => config.compressionType)
-      case LogConfig.SegmentBytesProp =>
-      assertDynamic(KafkaConfig.LogSegmentBytesProp, 10000, () => config.logSegmentBytes)
-      case LogConfig.SegmentMsProp =>
-        assertDynamic(KafkaConfig.LogRollTimeMillisProp, 10001L, () => config.logRollTimeMillis)
-      case LogConfig.DeleteRetentionMsProp =>
-        assertDynamic(KafkaConfig.LogCleanerDeleteRetentionMsProp, 10002L, () => config.logCleanerDeleteRetentionMs)
-      case LogConfig.FileDeleteDelayMsProp =>
-        assertDynamic(KafkaConfig.LogDeleteDelayMsProp, 10003L, () => config.logDeleteDelayMs)
-      case LogConfig.FlushMessagesProp =>
-        assertDynamic(KafkaConfig.LogFlushIntervalMessagesProp, 10004L, () => config.logFlushIntervalMessages)
-      case LogConfig.FlushMsProp =>
-        assertDynamic(KafkaConfig.LogFlushIntervalMsProp, 10005L, () => config.logFlushIntervalMs)
-      case LogConfig.MaxCompactionLagMsProp =>
-        assertDynamic(KafkaConfig.LogCleanerMaxCompactionLagMsProp, 10006L, () => config.logCleanerMaxCompactionLagMs)
-      case LogConfig.IndexIntervalBytesProp =>
-        assertDynamic(KafkaConfig.LogIndexIntervalBytesProp, 10007, () => config.logIndexIntervalBytes)
-      case LogConfig.MaxMessageBytesProp =>
-        assertDynamic(KafkaConfig.MessageMaxBytesProp, 10008, () => config.messageMaxBytes)
-      case LogConfig.MessageDownConversionEnableProp =>
-        assertDynamic(KafkaConfig.LogMessageDownConversionEnableProp, false, () => config.logMessageDownConversionEnable)
-      case LogConfig.MessageTimestampDifferenceMaxMsProp =>
-        assertDynamic(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
-      case LogConfig.MessageTimestampTypeProp =>
-        assertDynamic(KafkaConfig.LogMessageTimestampTypeProp, "LogAppendTime", () => config.logMessageTimestampType.name)
-      case LogConfig.MinCleanableDirtyRatioProp =>
-        assertDynamic(KafkaConfig.LogCleanerMinCleanRatioProp, 0.01, () => config.logCleanerMinCleanRatio)
-      case LogConfig.MinCompactionLagMsProp =>
-        assertDynamic(KafkaConfig.LogCleanerMinCompactionLagMsProp, 10010L, () => config.logCleanerMinCompactionLagMs)
-      case LogConfig.MinInSyncReplicasProp =>
-        assertDynamic(KafkaConfig.MinInSyncReplicasProp, 4, () => config.minInSyncReplicas)
-      case LogConfig.PreAllocateEnableProp =>
-        assertDynamic(KafkaConfig.LogPreAllocateProp, true, () => config.logPreAllocateEnable)
-      case LogConfig.RetentionBytesProp =>
-        assertDynamic(KafkaConfig.LogRetentionBytesProp, 10011L, () => config.logRetentionBytes)
-      case LogConfig.RetentionMsProp =>
-        assertDynamic(KafkaConfig.LogCleanerDeleteRetentionMsProp, 10012L, () => config.logCleanerDeleteRetentionMs)
-      case LogConfig.SegmentIndexBytesProp =>
-        assertDynamic(KafkaConfig.LogIndexIntervalBytesProp, 10013, () => config.logIndexIntervalBytes)
-      case LogConfig.SegmentJitterMsProp =>
-        assertDynamic(KafkaConfig.LogRollTimeJitterMillisProp, 10014L, () => config.logRollTimeJitterMillis)
-      case LogConfig.UncleanLeaderElectionEnableProp =>
-        assertDynamic(KafkaConfig.UncleanLeaderElectionEnableProp, true, () => config.uncleanLeaderElectionEnable)
-      case LogConfig.MessageFormatVersionProp =>
-      // not dynamically updatable
-      case LogConfig.FollowerReplicationThrottledReplicasProp =>
-      // topic only config
-      case LogConfig.LeaderReplicationThrottledReplicasProp =>
-      // topic only config
-      case prop =>
-        fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
+    LogConfig.TopicConfigSynonyms.foreach { case (logConfig, kafkaConfigProp) =>
+      logConfig match {
+        case LogConfig.CleanupPolicyProp =>
+          assertDynamic(kafkaConfigProp, Defaults.Compact, () => config.logCleanupPolicy)
+        case LogConfig.CompressionTypeProp =>
+          assertDynamic(kafkaConfigProp, "lz4", () => config.compressionType)
+        case LogConfig.SegmentBytesProp =>
+          assertDynamic(kafkaConfigProp, 10000, () => config.logSegmentBytes)
+        case LogConfig.SegmentMsProp =>
+          assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)
+        case LogConfig.DeleteRetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10002L, () => config.logCleanerDeleteRetentionMs)
+        case LogConfig.FileDeleteDelayMsProp =>
+          assertDynamic(kafkaConfigProp, 10003L, () => config.logDeleteDelayMs)
+        case LogConfig.FlushMessagesProp =>
+          assertDynamic(kafkaConfigProp, 10004L, () => config.logFlushIntervalMessages)
+        case LogConfig.FlushMsProp =>
+          assertDynamic(kafkaConfigProp, 10005L, () => config.logFlushIntervalMs)
+        case LogConfig.MaxCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10006L, () => config.logCleanerMaxCompactionLagMs)
+        case LogConfig.IndexIntervalBytesProp =>
+          assertDynamic(kafkaConfigProp, 10007, () => config.logIndexIntervalBytes)
+        case LogConfig.MaxMessageBytesProp =>
+          assertDynamic(kafkaConfigProp, 10008, () => config.messageMaxBytes)
+        case LogConfig.MessageDownConversionEnableProp =>
+          assertDynamic(kafkaConfigProp, false, () => config.logMessageDownConversionEnable)
+        case LogConfig.MessageTimestampDifferenceMaxMsProp =>
+          assertDynamic(kafkaConfigProp, 10009, () => config.logMessageTimestampDifferenceMaxMs)
+        case LogConfig.MessageTimestampTypeProp =>
+          assertDynamic(kafkaConfigProp, "LogAppendTime", () => config.logMessageTimestampType.name)
+        case LogConfig.MinCleanableDirtyRatioProp =>
+          assertDynamic(kafkaConfigProp, 0.01, () => config.logCleanerMinCleanRatio)
+        case LogConfig.MinCompactionLagMsProp =>
+          assertDynamic(kafkaConfigProp, 10010L, () => config.logCleanerMinCompactionLagMs)
+        case LogConfig.MinInSyncReplicasProp =>
+          assertDynamic(kafkaConfigProp, 4, () => config.minInSyncReplicas)
+        case LogConfig.PreAllocateEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.logPreAllocateEnable)
+        case LogConfig.RetentionBytesProp =>
+          assertDynamic(kafkaConfigProp, 10011L, () => config.logRetentionBytes)
+        case LogConfig.RetentionMsProp =>
+          assertDynamic(kafkaConfigProp, 10012L, () => config.logRetentionTimeMillis)
+        case LogConfig.SegmentIndexBytesProp =>
+          assertDynamic(kafkaConfigProp, 10013, () => config.logIndexSizeMaxBytes)
+        case LogConfig.SegmentJitterMsProp =>
+          assertDynamic(kafkaConfigProp, 10014L, () => config.logRollTimeJitterMillis)
+        case LogConfig.UncleanLeaderElectionEnableProp =>
+          assertDynamic(kafkaConfigProp, true, () => config.uncleanLeaderElectionEnable)
+        case LogConfig.MessageFormatVersionProp =>
+        // not dynamically updatable
+        case LogConfig.FollowerReplicationThrottledReplicasProp =>
+        // topic only config
+        case LogConfig.LeaderReplicationThrottledReplicasProp =>
+        // topic only config
+        case prop =>
+          fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
+      }
     }
   }
 
