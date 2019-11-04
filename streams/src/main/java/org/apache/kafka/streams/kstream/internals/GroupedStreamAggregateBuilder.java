@@ -84,7 +84,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
             final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeBuilder.name();
-            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder, !repartitionTopicPrefix.contains("KSTREAM-"));
+            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
 
             // First time through we need to create a repartition node.
             // Any subsequent calls to GroupedStreamAggregateBuilder#build we check if
@@ -122,15 +122,13 @@ class GroupedStreamAggregateBuilder<K, V> {
      * @return the new sourceName of the repartitioned source
      */
     private String createRepartitionSource(final String repartitionTopicNamePrefix,
-                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder,
-                                           final boolean hasUserProvidedTopicName) {
+                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
 
         return KStreamImpl.createRepartitionedSource(builder,
                                                      keySerde,
                                                      valueSerde,
                                                      repartitionTopicNamePrefix,
-                                                     optimizableRepartitionNodeBuilder,
-                                                     hasUserProvidedTopicName);
+                                                     optimizableRepartitionNodeBuilder);
 
     }
 }
