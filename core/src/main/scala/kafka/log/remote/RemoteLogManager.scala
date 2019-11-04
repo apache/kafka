@@ -118,13 +118,14 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     val rsm = rsmClassLoader.loadClass(rlmConfig.remoteLogStorageManagerClass)
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
+    val rsmWrapper = new RemoteStorageManagerWrapper(rsm, rsmClassLoader)
 
     val rsmProps = new util.HashMap[String, Any]()
     rlmConfig.remoteStorageConfig.foreach { case (k, v) => rsmProps.put(k, v) }
     rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
     rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
-    rsm.configure(rsmProps)
-    rsm
+    rsmWrapper.configure(rsmProps)
+    rsmWrapper
   }
 
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
