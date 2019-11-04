@@ -65,6 +65,12 @@ object DynamicConfig {
     def names = brokerConfigDef.names
 
     def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
+
+    def typeOf(key: String): ConfigDef.Type =
+      brokerConfigDef.configKeys.get(key) match {
+        case null => null
+        case configKey => configKey.`type`
+      }
   }
 
   object Client {

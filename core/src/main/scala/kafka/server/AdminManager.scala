@@ -631,7 +631,7 @@ class AdminManager(val config: KafkaConfig,
     if (configType != null)
       configType
     else
-      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
+      synonyms.iterator.map(config.typeOf).find(_ != null).getOrElse(DynamicConfig.Broker.typeOf(name))
   }
 
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
