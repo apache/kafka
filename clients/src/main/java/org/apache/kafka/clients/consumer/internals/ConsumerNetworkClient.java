@@ -304,10 +304,11 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Poll for network IO in best-effort only; i.e. do not check any pending requests or metadata errors
-     * so that no exception should ever be thrown, also wakeups be triggered and no interrupted exception either.
+     * Poll for network IO in best-effort only trying to transmit the ready-to-send request
+     * Do not check any pending requests or metadata errors so that no exception should ever
+     * be thrown, also no wakeups be triggered and no interrupted exception either.
      */
-    public void pollNoThrow() {
+    public void transmitSends() {
         Timer timer = time.timer(0);
 
         // do not try to handle any disconnects, prev request failures, metadata exception etc;
