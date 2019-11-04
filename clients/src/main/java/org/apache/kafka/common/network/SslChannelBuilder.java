@@ -49,6 +49,9 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
 
+    private MemoryPoolHelper memoryPoolHelper = MemoryPoolHelper.SERVER_MODE;
+;
+
     /**
      * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
@@ -98,7 +101,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
             Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE, memoryPoolHelper);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -203,5 +206,12 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         public boolean complete() {
             return true;
         }
+    }
+
+    @Override
+    public void setMemoryPoolHelper(MemoryPoolHelper netClient) {
+        this.memoryPoolHelper = netClient;
+        // TODO Auto-generated method stub
+        
     }
 }

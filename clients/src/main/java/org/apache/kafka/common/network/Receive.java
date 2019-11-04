@@ -41,7 +41,7 @@ public interface Receive extends Closeable {
      * @return The number of bytes read
      * @throws IOException If the reading fails
      */
-    long readFrom(ScatteringByteChannel channel) throws IOException;
+    long readFrom(ScatteringByteChannel channel, boolean usePool) throws IOException;
 
     /**
      * Do we know yet how much memory we require to fully read this
@@ -52,4 +52,6 @@ public interface Receive extends Closeable {
      * Has the underlying memory required to complete reading been allocated yet?
      */
     boolean memoryAllocated();
+    
+    boolean usePool();
 }

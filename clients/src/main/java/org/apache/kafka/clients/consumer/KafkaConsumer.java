@@ -761,6 +761,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     apiVersions,
                     throttleTimeSensor,
                     logContext);
+            channelBuilder.setMemoryPoolHelper(netClient);
             this.client = new ConsumerNetworkClient(
                     logContext,
                     netClient,

@@ -87,6 +87,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
 
+    private MemoryPoolHelper netClient = MemoryPoolHelper.SERVER_MODE;
+
     public SaslChannelBuilder(Mode mode,
                               Map<String, JaasContext> jaasContexts,
                               SecurityProtocol securityProtocol,
@@ -205,7 +207,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         transportLayer,
                         subjects.get(clientSaslMechanism));
             }
-            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
+            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE, netClient);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -321,5 +323,12 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             default:
                 return SaslClientCallbackHandler.class;
         }
+    }
+
+    @Override
+    public void setMemoryPoolHelper(MemoryPoolHelper netClient) {
+        this.netClient = netClient;
+        // TODO Auto-generated method stub
+        
     }
 }
