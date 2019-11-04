@@ -290,7 +290,7 @@ class FetchSessionTest {
   }
 
   @Test
-  def testFetchManagerCacheUsage(): Unit = {
+  def testFetchManagerCacheIntegration(): Unit = {
     val time = new MockTime()
     // set maximum entries to 2 to allow for eviction later
     val cache = new FetchSessionCache(2, 1000)
@@ -351,14 +351,30 @@ class FetchSessionTest {
     // total sleep time will now be large enough that fetch session 1 will be evicted if not correctly touched
     time.sleep(501)
 
-    // create one final session directly in cache to test that the least recently used entry is evicted
-    // the second session should be evicted because the first session was incrementally fetched more recently than
-    // the second session was created
-    val latestSessionId = cache.maybeCreateSession(time.milliseconds(), false, 40, () => dummyCreate(40))
+    // create one final session to test that the least recently used entry is evicted
+    // the second session should be evicted because the first session was incrementally fetched
+    // more recently than the second session was created
+    val session3req = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    session3req.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    session3req.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    val session3context = fetchManager.newContext(JFetchMetadata.INITIAL, session3req, EMPTY_PART_LIST, false)
+    assertEquals(classOf[FullFetchContext], session3context.getClass)
+    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    respData3.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
+      Errors.NONE, 100, 100, 100, null, null))
+    respData3.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
+      Errors.NONE, 10, 10, 10, null, null))
+    val session3resp = session3context.updateAndGenerateResponseData(respData1)
+    assertEquals(Errors.NONE, session3resp.error())
+    assertTrue(session3resp.sessionId() != INVALID_SESSION_ID)
+    assertEquals(2, session3resp.responseData().size())
+
     assertTrue(cache.get(session1resp.sessionId()).isDefined)
     assertFalse("session 2 should have been evicted by latest session, as session 1 was used more recently",
       cache.get(session2resp.sessionId()).isDefined)
-    assertTrue(cache.get(latestSessionId).isDefined)
+    assertTrue(cache.get(session3resp.sessionId()).isDefined)
   }
 
   @Test
