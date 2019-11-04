@@ -96,7 +96,7 @@ object ApiVersion {
     // Flexible version support in inter-broker APIs
     KAFKA_2_4_IV1,
     // InitProducerIdRequest V2 - allow producers to safely bump the producer epoch (KIP-360)
-    KAFKA_2_5_IV0,
+    KAFKA_2_5_IV0
   )
 
   // Map keys are the union of the short and full versions
