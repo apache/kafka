@@ -85,7 +85,7 @@ public class NamedCacheMetricsTest {
             HIT_RATIO_AVG_DESCRIPTION,
             HIT_RATIO_MIN_DESCRIPTION,
             HIT_RATIO_MAX_DESCRIPTION);
-        setUpStreamsMetrics(Version.FROM_100_TO_24, hitRatio, parentSensor);
+        setUpStreamsMetrics(Version.FROM_0100_TO_24, hitRatio, parentSensor);
         replay(streamsMetrics);
         replay(StreamsMetricsImpl.class);
 

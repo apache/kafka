@@ -28,12 +28,12 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -393,6 +393,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 1.0,
                 getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
             );
+        } else {
+            assertEquals(
+                1.0,
+                getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
+            );
         }
         assertThat(
             appender.getMessages(),
@@ -401,9 +406,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private InternalMockProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-thread", builtInMetricsVersion);
-        ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -419,6 +422,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
             }
         };
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
         final StoreBuilder<SessionStore<String, Long>> storeBuilder =
             Stores.sessionStoreBuilder(
                 Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),

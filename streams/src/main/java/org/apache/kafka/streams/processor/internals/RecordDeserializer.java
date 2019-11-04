@@ -25,24 +25,22 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.slf4j.Logger;
 
-import java.util.Optional;
-
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
     private final SourceNode sourceNode;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final Logger log;
-    private final Optional<Sensor> skippedRecordSensor;
+    private final Sensor droppedRecordsSensor;
 
     RecordDeserializer(final SourceNode sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
-                       final Optional<Sensor> skippedRecordsSensor) {
+                       final Sensor droppedRecordsSensor) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.log = logContext.logger(RecordDeserializer.class);
-        this.skippedRecordSensor = skippedRecordsSensor;
+        this.droppedRecordsSensor = droppedRecordsSensor;
     }
 
     /**
@@ -92,7 +90,7 @@ class RecordDeserializer {
                     rawRecord.offset(),
                     deserializationException
                 );
-                skippedRecordSensor.ifPresent(Sensor::record);
+                droppedRecordsSensor.record();
                 return null;
             }
         }

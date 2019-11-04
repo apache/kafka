@@ -37,7 +37,8 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import scala.collection.JavaConverters._
 
 /**
- * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream]] and delegates method calls to the underlying Java object.
+ * Wraps the Java class [[org.apache.kafka.streams.kstream.KStream KStream]] and delegates method calls to the
+ * underlying Java object.
  *
  * @tparam K Type of keys
  * @tparam V Type of values
@@ -48,8 +49,7 @@ import scala.collection.JavaConverters._
 class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**
-   * Create a new [[KStream]] that consists all records of this stream which satisfies the given
-   * predicate
+   * Create a new [[KStream]] that consists all records of this stream which satisfies the given predicate.
    *
    * @param predicate a filter that is applied to each record
    * @return a [[KStream]] that contains only those records that satisfy the given predicate
@@ -60,7 +60,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**
    * Create a new [[KStream]] that consists all records of this stream which do <em>not</em> satisfy the given
-   * predicate
+   * predicate.
    *
    * @param predicate a filter that is applied to each record
    * @return a [[KStream]] that contains only those records that do <em>not</em> satisfy the given predicate
@@ -432,7 +432,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with
-   * serializers and deserializers supplied by the implicit `Joined` instance.
+   * serializers and deserializers supplied by the implicit `StreamJoined` instance.
    *
    * @param otherStream the [[KStream]] to be joined with this stream
    * @param joiner      a function that computes the join result for a pair of matching records
@@ -466,7 +466,9 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    * one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KStream#join`
+   * @deprecated since 2.4. Use [[KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)]] instead.
    */
+  @deprecated
   def join[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
     inner.join[VT, VR](table.inner, joiner.asValueJoiner, joined)
 
@@ -493,7 +495,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed left equi join with
-   * serializers and deserializers supplied by the implicit `Joined` instance.
+   * serializers and deserializers supplied by the implicit `StreamJoined` instance.
    *
    * @param otherStream the [[KStream]] to be joined with this stream
    * @param joiner      a function that computes the join result for a pair of matching records
@@ -527,7 +529,9 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains join-records for each key and values computed by the given `joiner`,
    *                 one for each matched record-pair with the same key
    * @see `org.apache.kafka.streams.kstream.KStream#leftJoin`
+   * @deprecated since 2.4. Use [[KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)]] instead.
    */
+  @deprecated
   def leftJoin[VT, VR](table: KTable[K, VT])(joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
     inner.leftJoin[VT, VR](table.inner, joiner.asValueJoiner, joined)
 

@@ -53,6 +53,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -773,6 +774,16 @@ public class SelectorTest {
         assertEquals(1, metrics.metrics().size());
     }
 
+    @Test
+    public void testWriteCompletesSendWithNoBytesWritten() throws IOException {
+        KafkaChannel channel = mock(KafkaChannel.class);
+        when(channel.id()).thenReturn("1");
+        when(channel.write()).thenReturn(0L);
+        ByteBufferSend send = new ByteBufferSend("destination", ByteBuffer.allocate(0));
+        when(channel.maybeCompleteSend()).thenReturn(send);
+        selector.write(channel);
+        assertEquals(asList(send), selector.completedSends());
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

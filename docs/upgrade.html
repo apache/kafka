@@ -19,6 +19,13 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
+<ul>
+    <li>For improved resiliency in typical network environments, the default value of
+        <code>zookeeper.session.timeout.ms</code> has been increased from 6s to 18s and
+        <code>replica.lag.time.max.ms</code> from 10s to 30s.</li>
+</ul>
+
 <h4><a id="upgrade_2_4_0" href="#upgrade_2_4_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x or 2.3.x to 2.4.0</a></h4>
 
 <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
@@ -86,6 +93,13 @@
         It enables fewer request/response iterations between clients and brokers fetching for the committed offsets for the consumer group.
         The old overloaded functions are deprecated and we would recommend users to make their code changes to leverage the new methods (details
         can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-520%3A+Add+overloaded+Consumer%23committed+for+batching+partitions">KIP-520</a>).
+    </li>
+    <li>We've introduced a new <code>INVALID_RECORD</code> error in the produce response to distinguish from the <code>CORRUPT_MESSAGE</code> error.
+        To be more concrete, previously when a batch of records were sent as part of a single request to the broker and one or more of the records failed
+        the validation due to various causes (mismatch magic bytes, crc checksum errors, null key for log compacted topics, etc), the whole batch would be rejected
+        with the same and misleading <code>CORRUPT_MESSAGE</code>, and the caller of the producer client would see the corresponding exception from either
+        the future object of <code>RecordMetadata</code> returned from the <code>send</code> call as well as in the <code>Callback#onCompletion(RecordMetadata metadata, Exception exception)</code>
+        Now with the new error code and improved error messages of the exception, producer callers would be better informed about the root cause why their sent records were failed.
     </li>
     <li>We are introducing incremental cooperative rebalancing to the clients' group protocol, which allows consumers to keep all of their assigned partitions during a rebalance
         and at the end revoke only those which must be migrated to another consumer for overall cluster balance. The <code>ConsumerCoordinator</code> will choose the latest <code>RebalanceProtocol</code>

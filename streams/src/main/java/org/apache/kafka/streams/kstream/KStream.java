@@ -2367,8 +2367,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
@@ -2437,8 +2437,8 @@ public interface KStream<K, V> {
      * @param streamJoined   a {@link StreamJoined} used to configure join stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -2613,8 +2613,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join}, all records from this stream will
      * produce at least one output record (cf. below).
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
@@ -2678,17 +2678,17 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param streamJoined
+     * @param <VO>         the value type of the other stream
+     * @param <VR>         the value type of the result stream
+     * @param otherStream  the {@code KStream} to be joined with this stream
+     * @param joiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows      the specification of the {@link JoinWindows}
+     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * this {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #join(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -2865,8 +2865,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
      * least one output record (cf. below).
@@ -2931,17 +2931,17 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param streamJoined
+     * @param <VO>         the value type of the other stream
+     * @param <VR>         the value type of the result stream
+     * @param otherStream  the {@code KStream} to be joined with this stream
+     * @param joiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows      the specification of the {@link JoinWindows}
+     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #join(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -3327,6 +3327,7 @@ public interface KStream<K, V> {
                                      final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
                                      final ValueJoiner<? super V, ? super GV, ? extends RV> joiner,
                                      final Named named);
+
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
      * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner-join}, all records from this stream

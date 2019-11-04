@@ -46,7 +46,6 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -57,7 +56,7 @@ public class RecordQueueTest {
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
 
-    private final Optional<Sensor> skippedRecordsSensor = Optional.of(new Metrics().sensor("skipped-records"));
+    private final Sensor droppedRecordsSensor = new Metrics().sensor("skipped-records");
 
     final InternalMockProcessorContext context = new InternalMockProcessorContext(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
@@ -65,7 +64,7 @@ public class RecordQueueTest {
             null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
-            skippedRecordsSensor
+            droppedRecordsSensor
         )
     );
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
