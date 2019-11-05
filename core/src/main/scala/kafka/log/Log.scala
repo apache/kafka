@@ -1918,7 +1918,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       val view = Option(segments.floorKey(from)).map { floor =>
         if (to < floor)
-          throw new IllegalArgumentException(s"Invalid log segment range: requested segments from offset $from " +
+          throw new IllegalArgumentException(s"Invalid log segment range of partition $topicPartition: requested segments from offset $from " +
             s"mapping to segment with base offset $floor, which is greater than limit offset $to")
         segments.subMap(floor, to)
       }.getOrElse(segments.headMap(to))
@@ -1928,19 +1928,15 @@ class Log(@volatile var dir: File,
 
   def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = {
     lock synchronized {
-      if (from > activeSegment.baseOffset)
-        throw new IllegalArgumentException("Illegal request for non-active segments beginning at " +
-          s"offset $from, which is larger than the active segment's base offset ${activeSegment.baseOffset}")
-      logSegments(from, activeSegment.baseOffset)
+      if (from > activeSegment.baseOffset) {
+        warn(s"Illegal request for non-active segments of partition $topicPartition beginning at offset $from, " +
+          s"which is larger than the active segment's base offset ${activeSegment.baseOffset}. " +
+          "Select all segments until base offset.")
+        logSegments(-1, activeSegment.baseOffset)
+      } else {
+        logSegments(from, activeSegment.baseOffset)
+      }
     }
-  }
-
-  /**
-   * Get the largest log segment with a base offset less than or equal to the given offset, if one exists.
-   * @return the optional log segment
-   */
-  private def floorLogSegment(offset: Long): Option[LogSegment] = {
-    Option(segments.floorEntry(offset)).map(_.getValue)
   }
 
   override def toString = "Log(" + dir + ")"

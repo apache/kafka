@@ -537,11 +537,13 @@ private[log] object LogCleanerManager extends Logging {
         warn(s"The last checkpoint dirty offset for partition $topicPartition is $checkpointDirtyOffset, " +
           s"which is larger than the log end offset ${log.logEndOffset}. Resetting to the log start offset $logStartOffset.")
         logStartOffset
-      } else if (checkpointDirtyOffset > log.activeSegment.baseOffset) {
+      } else if (checkpointDirtyOffset > log.activeSegment.baseOffset && logStartOffset > log.activeSegment.baseOffset) {
         // The dirty offset has gotten ahead of the active segment base offset.
-        warn(s"The last checkpoint dirty offset for partition $topicPartition is $checkpointDirtyOffset, " +
-          s"which is larger than the active log segment base offset ${log.activeSegment.baseOffset}. Resetting to the log start offset $logStartOffset.")
-        logStartOffset
+        warn(s"The log start offset for partition $topicPartition is $logStartOffset and " +
+          s"its last checkpoint dirty offset is $checkpointDirtyOffset. " +
+          s"Both are larger than the active log segment base offset ${log.activeSegment.baseOffset}. " +
+          s"Resetting to the active log segment base offset ${log.activeSegment.baseOffset}.")
+        log.activeSegment.baseOffset
       } else {
         checkpointDirtyOffset
       }
