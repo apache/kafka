@@ -410,7 +410,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
                 // and  shouldn't block hearbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment
-                synchronized (this) {
+                synchronized (AbstractCoordinator.this) {
                     generationSnapshot = this.generation;
                 }
 
@@ -426,7 +426,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     needsJoinPrepare = true;
                 } else {
                     log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
-                    resetStateAndRejoin();
+                    synchronized (AbstractCoordinator.this) {
+                        resetStateAndRejoin();
+                    }
                     resetJoinGroupFuture();
                     return false;
                 }
@@ -447,10 +449,12 @@ public abstract class AbstractCoordinator implements Closeable {
         return true;
     }
 
+    // reset join-group future in order to retry the join-group request
     private synchronized void resetJoinGroupFuture() {
         this.joinFuture = null;
     }
 
+    // reset state to UNJOINED and request re-join
     private void resetStateAndRejoin() {
         rejoinNeeded = true;
         state = MemberState.UNJOINED;
