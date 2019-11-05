@@ -427,7 +427,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else {
                     log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
                     resetStateAndRejoin();
-
+                    resetJoinGroupFuture();
                     return false;
                 }
             } else {
