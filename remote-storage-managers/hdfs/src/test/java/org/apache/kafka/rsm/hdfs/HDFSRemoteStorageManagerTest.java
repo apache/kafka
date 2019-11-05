@@ -412,7 +412,7 @@ public class HDFSRemoteStorageManagerTest {
     }
 
     @Test
-    public void testListRemoteSegmentsWithMinBaseOffset() throws Exception {
+    public void testListRemoteSegmentsWithMinOffset() throws Exception {
         HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
         rsm.configure(config);
 
@@ -425,11 +425,27 @@ public class HDFSRemoteStorageManagerTest {
             rsm.copyLogSegment(tp, seg, leaderEpoch);
         }
 
-        int numSegments = 5;
-        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, numSegments * segmentSize);
+        int numSegments = 4;
+        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize);
         assertEquals(numSegments, remoteSegments.size());
-        for (int i = numSegments; i < 10; i++) {
-            RemoteLogSegmentInfo segment = remoteSegments.get(i - numSegments);
+        for (int i = 10 - numSegments, j = 0; i < 10; i++, j++) {
+            RemoteLogSegmentInfo segment = remoteSegments.get(j);
+            assertEquals(segmentSize * i, segment.baseOffset());
+            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset());
+        }
+
+        remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize + segmentSize - 1);
+        assertEquals(numSegments, remoteSegments.size());
+        for (int i = 10 - numSegments, j = 0; i < 10; i++, j++) {
+            RemoteLogSegmentInfo segment = remoteSegments.get(j);
+            assertEquals(segmentSize * i, segment.baseOffset());
+            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset());
+        }
+
+        remoteSegments = rsm.listRemoteSegments(tp, (10 - numSegments) * segmentSize + segmentSize);
+        assertEquals(numSegments  - 1, remoteSegments.size());
+        for (int i = 10 - numSegments  + 1, j = 0; i < 10; i++, j++) {
+            RemoteLogSegmentInfo segment = remoteSegments.get(j);
             assertEquals(segmentSize * i, segment.baseOffset());
             assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset());
         }

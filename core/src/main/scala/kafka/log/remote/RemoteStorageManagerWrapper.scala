@@ -37,8 +37,8 @@ class RemoteStorageManagerWrapper(val rsm: RemoteStorageManager, val rsmClassLoa
   }
 
   @throws(classOf[IOException])
-  override def listRemoteSegments(topicPartition: TopicPartition, minBaseOffset: Long): util.List[RemoteLogSegmentInfo] = {
-    withClassLoader { rsm.listRemoteSegments(topicPartition, minBaseOffset) }
+  override def listRemoteSegments(topicPartition: TopicPartition, minOffset: Long): util.List[RemoteLogSegmentInfo] = {
+    withClassLoader { rsm.listRemoteSegments(topicPartition, minOffset) }
   }
 
   @throws(classOf[IOException])

@@ -154,7 +154,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minBaseOffset) throws IOException {
+    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minOffset) throws IOException {
 
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
@@ -172,8 +172,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             if (m.matches()) {
                 try {
                     long baseOffset = Long.parseLong(m.group(1));
-                    if (baseOffset >= minBaseOffset) {
-                        long endOffset = Long.parseLong(m.group(2));
+                    long endOffset = Long.parseLong(m.group(2));
+                    if (endOffset >= minOffset) {
                         //todo set the right leaderEpoch
                         int leaderEpoch = 0;
                         RemoteLogSegmentInfo segment = new RemoteLogSegmentInfo(baseOffset, endOffset, topicPartition,

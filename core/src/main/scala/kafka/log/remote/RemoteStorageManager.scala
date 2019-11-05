@@ -69,14 +69,14 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   }
 
   /**
-   * List the remote log segment files of the specified topicPartition starting from the base offset minBaseOffset.
+   * List the remote log segment files of the specified topicPartition with offset >= minOffset.
    * The RLM of a follower uses this method to find out the remote data
    *
-   * @param minBaseOffset The minimum base offset for a segment to be returned.
-   * @return List of remote segments starting from the base offset minBaseOffset, sorted by baseOffset in ascending order.
+   * @param minOffset The minimum offset for a segment to be returned.
+   * @return List of remote segments that contains offsets >= minOffset, sorted by baseOffset in ascending order.
    */
   @throws(classOf[IOException])
-  def listRemoteSegments(topicPartition: TopicPartition, minBaseOffset: Long): util.List[RemoteLogSegmentInfo]
+  def listRemoteSegments(topicPartition: TopicPartition, minOffset: Long): util.List[RemoteLogSegmentInfo]
 
   /**
    * Returns a List of RemoteLogIndexEntry for the given RemoteLogSegmentInfo. This is used by follower to store remote
