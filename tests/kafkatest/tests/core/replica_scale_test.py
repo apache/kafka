@@ -55,16 +55,17 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
         self.trogdor.stop()
 
+    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
     @cluster(num_nodes=12)
-    def test_100k_bench(self):
+    def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
-        for i in range(100):
+        for i in range(topic_count):
             topic = "100k_replicas_bench%d" % i
             self.logger.info("Creating topic %s" % topic)
             topic_cfg = {
                 "topic": topic,
-                "partitions": 34,
-                "replication-factor": 3,
+                "partitions": partition_count,
+                "replication-factor": replication_factor,
                 "configs": {"min.insync.replicas": 1}
             }
             self.kafka.create_topic(topic_cfg)
@@ -81,7 +82,9 @@ class ReplicaScaleTest(Test):
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 inactive_topics={},
-                                                active_topics={"100k_replicas_bench[0-2]": {"numPartitions": 34, "replicationFactor": 3}})
+                                                active_topics={"100k_replicas_bench[0-2]": {
+                                                    "numPartitions": partition_count, "replicationFactor": replication_factor
+                                                }})
         produce_workload = self.trogdor.create_task("100k-replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=3600)
 
