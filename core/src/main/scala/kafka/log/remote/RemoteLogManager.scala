@@ -204,7 +204,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     @volatile private var leaderEpoch: Int = -1
     @volatile def isLeader: Boolean = leaderEpoch >= 0
 
-    private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(0L)
+    // The highest offset that is already in the local remote index files
+    // When looking for new remote segments, we will only look for the remote segments that contains larger offsets
+    private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(-1)
 
     fetchLog(tp).foreach {log => log.updateRemoteIndexHighestOffset(readOffset)}
 
