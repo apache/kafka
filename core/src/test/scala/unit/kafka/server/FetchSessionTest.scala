@@ -290,7 +290,7 @@ class FetchSessionTest {
   }
 
   @Test
-  def testFetchManagerCacheIntegration(): Unit = {
+  def testFetchSessionExpiration(): Unit = {
     val time = new MockTime()
     // set maximum entries to 2 to allow for eviction later
     val cache = new FetchSessionCache(2, 1000)
