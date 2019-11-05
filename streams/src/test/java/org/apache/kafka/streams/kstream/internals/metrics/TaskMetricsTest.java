@@ -293,6 +293,7 @@ public class TaskMetricsTest {
         }
     }
 
+    @Test
     public void shouldGetDroppedRecordsSensorOrLateRecordDropSensor() {
         final String processorNodeId = "test-processor-node";
         mockStatic(ProcessorNodeMetrics.class);

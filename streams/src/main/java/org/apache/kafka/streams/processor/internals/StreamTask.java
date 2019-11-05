@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -134,9 +135,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         threadId = Thread.currentThread().getName();
         final String taskId = id.toString();
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
-        final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-        commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics, parent);
-        enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
+            commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics, parent);
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
+        } else {
+            commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics);
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
+        }
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         recordLatenessSensor = TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics);

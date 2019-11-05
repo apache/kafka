@@ -73,13 +73,12 @@ public class ProcessorNodeMetrics {
     private static final String CREATE_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + CREATE_DESCRIPTION2;
 
     private static final String DESTROY = "destroy";
-    private static final String DESTROY_DESCRIPTION1 = "processor nodes destroyed";
-    private static final String DESTROY_DESCRIPTION2 = "destructions of processor nodes";
-    private static final String DESTROY_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + DESTROY_DESCRIPTION1;
+    private static final String DESTROY_DESCRIPTION = "destructions of processor nodes";
+    private static final String DESTROY_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + DESTROY_DESCRIPTION;
     private static final String DESTROY_RATE_DESCRIPTION =
-        RATE_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION1 + RATE_DESCRIPTION_SUFFIX;
-    private static final String DESTROY_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION2;
-    private static final String DESTROY_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION2;
+        RATE_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String DESTROY_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION;
+    private static final String DESTROY_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + DESTROY_DESCRIPTION;
 
     private static final String FORWARD = "forward";
     private static final String FORWARD_DESCRIPTION = "calls to forward";
@@ -247,18 +246,15 @@ public class ProcessorNodeMetrics {
                                               final String taskId,
                                               final String processorNodeId,
                                               final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            return throughputSensor(
-                threadId,
-                taskId,
-                processorNodeId,
-                LATE_RECORD_DROP,
-                LATE_RECORD_DROP_RATE_DESCRIPTION,
-                LATE_RECORD_DROP_TOTAL_DESCRIPTION,
-                RecordingLevel.INFO,
-                streamsMetrics);
-        }
-        return emptySensor(threadId, taskId, processorNodeId, LATE_RECORD_DROP, RecordingLevel.INFO, streamsMetrics);
+        return throughputSensor(
+            threadId,
+            taskId,
+            processorNodeId,
+            LATE_RECORD_DROP,
+            LATE_RECORD_DROP_RATE_DESCRIPTION,
+            LATE_RECORD_DROP_TOTAL_DESCRIPTION,
+            RecordingLevel.INFO,
+            streamsMetrics);
     }
 
     public static Sensor processorAtSourceSensorOrForwardSensor(final String threadId,

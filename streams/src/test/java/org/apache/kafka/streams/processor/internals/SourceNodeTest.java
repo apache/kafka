@@ -35,7 +35,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class SourceNodeTest {
@@ -90,9 +89,9 @@ public class SourceNodeTest {
         final String threadIdTagKey =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
         final Map<String, String> metricTags = mkMap(
-            mkEntry("processor-node-id", node.name()),
+            mkEntry(threadIdTagKey, threadId),
             mkEntry("task-id", context.taskId().toString()),
-            mkEntry(threadIdTagKey, threadId)
+            mkEntry("processor-node-id", node.name())
         );
 
         if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
@@ -111,9 +110,8 @@ public class SourceNodeTest {
             // test parent sensors
             metricTags.put("processor-node-id", StreamsMetricsImpl.ROLLUP_VALUE);
             final String parentGroupName = "stream-task-metrics";
-            assertFalse(StreamsTestUtils.containsMetric(metrics, "process-rate ", parentGroupName, metricTags));
-            assertFalse(StreamsTestUtils.containsMetric(metrics, "process-total ", parentGroupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
         }
     }
-
 }

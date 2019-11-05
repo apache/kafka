@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,6 +53,7 @@ public class ProcessorNode<K, V> {
     private Sensor punctuateSensor;
     private Sensor destroySensor;
     private Sensor createSensor;
+    private Version builtInMetricsVersion;
 
     public ProcessorNode(final String name) {
         this(name, null, null);
@@ -109,6 +111,7 @@ public class ProcessorNode<K, V> {
         threadId = Thread.currentThread().getName();
         final String taskId = internalProcessorContext.taskId().toString();
         final StreamsMetricsImpl streamsMetrics = internalProcessorContext.metrics();
+        builtInMetricsVersion = streamsMetrics.version();
         processSensor = ProcessorNodeMetrics.processSensor(threadId, taskId, name, streamsMetrics);
         punctuateSensor = ProcessorNodeMetrics.punctuateSensor(threadId, taskId, name, streamsMetrics);
         createSensor = ProcessorNodeMetrics.createSensor(threadId, taskId, name, streamsMetrics);
@@ -139,7 +142,11 @@ public class ProcessorNode<K, V> {
 
     public void process(final K key, final V value) {
         try {
-            maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
+            if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
+                maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
+            } else {
+                processor.process(key, value);
+            }
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
@@ -158,7 +165,11 @@ public class ProcessorNode<K, V> {
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
+        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
+            maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
+        } else {
+            punctuator.punctuate(timestamp);
+        }
     }
 
     /**

@@ -199,9 +199,9 @@ public final class StreamsTestUtils {
     }
 
     public static boolean containsMetric(final Metrics metrics,
-                                        final String name,
-                                        final String group,
-                                        final Map<String, String> tags) {
+                                         final String name,
+                                         final String group,
+                                         final Map<String, String> tags) {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
     }

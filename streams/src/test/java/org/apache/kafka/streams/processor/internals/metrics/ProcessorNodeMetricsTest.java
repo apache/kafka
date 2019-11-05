@@ -179,8 +179,8 @@ public class ProcessorNodeMetricsTest {
     @Test
     public void shouldGetDestroySensor() {
         final String metricNamePrefix = "destroy";
-        final String descriptionOfCount = "The total number of processor nodes destroyed";
-        final String descriptionOfRate = "The average number of processor nodes destroyed per second";
+        final String descriptionOfCount = "The total number of destructions of processor nodes";
+        final String descriptionOfRate = "The average number of destructions of processor nodes per second";
         final String descriptionOfAvgLatency = "The average latency of destructions of processor nodes";
         final String descriptionOfMaxLatency = "The maximum latency of destructions of processor nodes";
         shouldGetThroughputAndLatencySensorWithParentOrEmptySensor(
@@ -219,22 +219,12 @@ public class ProcessorNodeMetricsTest {
         final String metricNamePrefix = "late-record-drop";
         final String descriptionOfCount = "The total number of dropped late records";
         final String descriptionOfRate = "The average number of dropped late records per second";
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            setUpThroughputSensor(
-                metricNamePrefix,
-                descriptionOfRate,
-                descriptionOfCount,
-                RecordingLevel.INFO
-            );
-        } else {
-            expect(streamsMetrics.nodeLevelSensor(
-                THREAD_ID,
-                TASK_ID,
-                PROCESSOR_NODE_ID,
-                metricNamePrefix,
-                RecordingLevel.INFO
-            )).andReturn(expectedSensor);
-        }
+        setUpThroughputSensor(
+            metricNamePrefix,
+            descriptionOfRate,
+            descriptionOfCount,
+            RecordingLevel.INFO
+        );
 
         verifySensor(() -> ProcessorNodeMetrics.lateRecordDropSensor(THREAD_ID, TASK_ID, PROCESSOR_NODE_ID, streamsMetrics));
     }

@@ -142,10 +142,8 @@ public class ProcessorNodeTest {
             for (final String opName : latencyOperations) {
                 assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-avg", groupName, metricTags));
                 assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-latency-max", groupName, metricTags));
-                if (!"process".equals(opName)) {
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
-                    assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
-                }
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-rate", groupName, metricTags));
+                assertFalse(StreamsTestUtils.containsMetric(metrics, opName + "-total", groupName, metricTags));
             }
 
             // test parent sensors
