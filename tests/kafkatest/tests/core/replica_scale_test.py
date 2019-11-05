@@ -57,7 +57,7 @@ class ReplicaScaleTest(Test):
     @cluster(num_nodes=12)
     def test_100k_bench(self):
         t0 = time.time()
-        for i in range(10):
+        for i in range(100):
             topic = "100k_replicas_bench%d" % i
             self.logger.info("Creating topic %s" % topic)
             topic_cfg = {
