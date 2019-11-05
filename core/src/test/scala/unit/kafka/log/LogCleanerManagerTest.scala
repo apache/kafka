@@ -509,7 +509,8 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(0L, cleanableOffsets._2)
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
-      new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0, isFromClient = false)
+      new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0,
+      origin = AppendOrigin.Coordinator)
     log.roll()
     log.updateHighWatermark(4L)
 
