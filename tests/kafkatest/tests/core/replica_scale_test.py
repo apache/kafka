@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark.resource import cluster
+from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -96,21 +97,20 @@ class ReplicaScaleTest(Test):
         consume_workload = self.trogdor.create_task("100k-replicas-consume_workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=600)
 
+    @parametrize(topic_count=1000, partition_count=34, replication_factor=1)
     @cluster(num_nodes=12)
-    def test_100k_clean_bounce(self):
-
+    def test_100k_clean_bounce(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
-        for i in range(1000):
+        for i in range(topic_count):
             topic = "topic-%04d" % i
             self.logger.info("Creating topic %s" % topic)
             topic_cfg = {
                 "topic": topic,
-                "partitions": 34,
-                "replication-factor": 3,
+                "partitions": partition_count,
+                "replication-factor": replication_factor,
                 "configs": {"min.insync.replicas": 1}
             }
             self.kafka.create_topic(topic_cfg)
-
         t1 = time.time()
         self.logger.info("Time to create topics: %d" % (t1-t0))
 
@@ -118,20 +118,17 @@ class ReplicaScaleTest(Test):
         for node in self.kafka.nodes:
             t2 = time.time()
             self.kafka.stop_node(node, clean_shutdown=True, timeout_sec=600)
-            self.afka.start_node(node, timeout_sec=600)
+            self.kafka.start_node(node, timeout_sec=600)
             t3 = time.time()
             restart_times.append(t3-t2)
             self.logger.info("Time to restart %s: %d" % (node.name, t3-t2))
 
         self.logger.info("Restart times: %s" % restart_times)
 
-        for i in range(1000):
+        t0 = time.time()
+        for i in range(topic_count):
             topic = "topic-%04d" % i
             self.logger.info("Deleting topic %s" % topic)
-            topic_cfg = {
-                "topic": topic,
-                "partitions": 34,
-                "replication-factor": 3,
-                "configs": {"min.insync.replicas": 1}
-            }
-            self.kafka.create_topic(topic_cfg)
+            self.kafka.delete_topic(topic)
+        t1 = time.time()
+        self.logger.info("Time to delete topics: %d" % (t1-t0))
