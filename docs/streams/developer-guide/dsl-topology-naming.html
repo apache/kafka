@@ -45,11 +45,7 @@
 		   if required <code> repartition topics</code>. But with the Kafka Streams
 		   DSL, all these names are generated for you. There is a relationship between
 		   the generated processor-name state store (hence changelog topic name) and repartition
-		   topic names. The name generation strategy is
-		   <code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
-		   globally incrementing number that represents the operator's order in the topology.
-		   The generated number is prefixed with a varying number of "0"s to create a
-		   string that is consistently 10 characters long.   While the internal naming makes creating
+		   topic names. While the internal naming makes creating
 		   a topology with the DSL much more straightforward,
 		   there are a couple of trade-offs.  The first trade-off is what we could
 		   consider a readability issue. The other
@@ -139,15 +135,24 @@
 
 		 <h2>Changing Names</h2>
 
-		 We've seen that the generated names are numbered where they are built in the topology.  
-		 This means that if you add/remove or shift the order of operations, the position of the 
-		 processor shifts, hence shifting the name of the processor.  Since <strong>most</strong> processors exist 
-		 in memory only this name shifting on topology changes presents no issue.  But the name 
+		 Generated names are numbered where they are built in the topology.
+		 The name generation strategy is
+		 <code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
+		 globally incrementing number that represents the operator's order in the topology.
+		 The generated number is prefixed with a varying number of "0"s to create a
+		 string that is consistently 10 characters long.
+		 This means that if you add/remove or shift the order of operations, the position of the
+		 processor shifts, which shifts the name of the processor.  Since <strong>most</strong> processors exist
+		 in memory only, this name shifting on topology changes presents no issue.  But the name
 		 shifting does have implications for topologies with stateful operators or repartition topics. 
 
-		 Let's look at a different topology with some state:
+		 Here's a different topology with some state:
 		 <code>
-		  builder.&gt;String,String&lt;stream("input").groupByKey().count().toStream().to("output");
+		  builder.&gt;String,String&lt;stream("input")
+			     .groupByKey()
+			     .count()
+			     .toStream()
+			     .to("output");
 		 </code>
 
 		 This topology description yields the following:
@@ -167,8 +172,8 @@
 
 		  </code>
 		  
-		  We can see from the topology description above the state store is named 
-		  <code>KSTREAM-AGGREGATE-STATE-STORE-0000000002</code>.  But let's see what happens when we 
+		  You can see from the topology description above that the state store is named
+		  <code>KSTREAM-AGGREGATE-STATE-STORE-0000000002</code>.  Here's what happens when you
 		  add a filter to keep some of the records out of the aggregation:
 		  <code>
 		    builder.&gt;String, String&lt;stream("input")
@@ -198,20 +203,20 @@
 		      <-- KTABLE-TOSTREAM-0000000004
 		  </code>
 
-		  Notice that since we've added an operation before the <code>count</code> operation, the state 
-		  store (hence the changelog topic as well) names have changed.  This name change means you can't 
-		  do a rolling re-deployment of your updated topology.  Additionally you'll have to use the  
+		Notice that since you've added an operation <em>before</em> the <code>count</code> operation, the state
+		  store (and the changelog topic as well) names have changed.  This name change means you can't
+		  do a rolling re-deployment of your updated topology.  Also, you must to use the
 		  <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool">Streams Reset Tool</a> 
-		  to re-calculate the aggregations as since the changelog topic has changed on start-up the 
+		  to re-calculate the aggregations, because the changelog topic has changed on start-up, the
 		  new changelog topic contains no data.
 
-		  Fortunately, there is an easy solution to remedy this situation.  If we give a user-defined name 
-		  to the state store instead of relying on the generated one, we don't have to worry about topology 
-		  changes shifting the name of the state store.  
+		  Fortunately, there's an easy solution to remedy this situation.  Give the
+		  state store a user-defined name instead of relying on the generated one,
+		  so you don't have to worry about topology changes shifting the name of the state store.
 
-		  You've had the ability to name reparition topics with the <code>Joined</code>, 
-		  (also now with <code>StreamJoined</code>)
-		  <code>Grouped</code> classes and state store (and changelog topics) with <code>Materialized</code>.  
+		  You've had the ability to name repartition topics with the <code>Joined</code>,
+		  <code>StreamJoined</code>, and<code>Grouped</code> classes and
+		  state store (and changelog topics) with <code>Materialized</code>.
 		  But it's worth reiterating the importance of naming these DSL topology operations again.
 
 		  Here's how your DSL code looks now giving a specific name to your state store:
@@ -244,38 +249,39 @@
 		      <-- KTABLE-TOSTREAM-0000000003
 		  </code>
 
-		  So now, even though you've added processors before your state store, the store name and its changelog 
-		  topic names don't change!  This makes your topology more robust and resilient to changes made by 
+		  Now, even though you've added processors before your state store, the store name and its changelog
+		  topic names don't change.  This makes your topology more robust and resilient to changes made by
 		  adding or removing processors.
 
 		<h2>Conclusion</h2>
 
-		 So to summarize, it's a good practice to name your processing nodes when using the DSL, and it's even
-		 more important to do so when you have processing that remains when re-start your application - repartition
+		 It's a good practice to name your processing nodes when using the DSL, and it's even
+		 more important to do this when you have processing that remains when you restart
+		your application such as repartition
 		 topics and state stores (and the accompanying changelog topics).
 
-		 A couple of points we should go over again regarding naming your DSL topology:
+		 Here are a couple of points to remember when naming your DSL topology:
 		<ol>
 			<li>
-				If you have an <em>existing topology</em> and you've <em>haven't</em> named your
-				state stores (hence chagelog topics) and repartition topics it's recommended that you
+				If you have an <em>existing topology</em> and you <em>haven't</em> named your
+				state stores (and changelog topics) and repartition topics, we recommended that you
 				do so.  But this will be a topology breaking change, so you'll need to shut down all
-				application instances, make the changes then run the
+				application instances, make the changes, and run the
 				<a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool">Streams Reset Tool</a>.
 				Although this may be inconvenient at first, it's worth the effort to protect your application from
 				unexpected errors due to topology changes.
 			</li>
 			<li>
-				If you have a <em>new topology</em> make sure you name the persistent parts of your topology
-				: state stores (changelog topics) and repartition topics.  That way once you deploy your
-				application you are protected from topology changes breaking your Kafka Streams application.
-				Even if you don't want to add names to transient processors at first, that's fine as you can
+				If you have a <em>new topology</em>, make sure you name the persistent parts of your topology:
+				state stores (changelog topics) and repartition topics. This way, when you deploy your
+				application, you're protected from topology changes that otherwise would break your Kafka Streams application.
+				If you don't want to add names to stateless processors at first, that's fine as you can
 				always go back and add the names later.
 			</li>
 		</ol>
 
-		  Here's a table giving you a quick reference on how you can name the critical parts of 
-		  your Kafka Streams application to prevent topology name changes from breaking your application
+		  Here's a quick reference on naming the critical parts the critical parts of
+		  your Kafka Streams application to prevent topology name changes from breaking your application:
 
 		  <table>
 		      <tr>
@@ -287,11 +293,14 @@
 		      <tr>
 		          <td>KStream-KStream Join repartition topics</td><td>StreamJoined</td>
 		      </tr>
+			  <tr>
+				  <td>KStream-KTable Join repartition topic</td><td>Joined</td>
+			  </tr>
 		      <tr>
 		          <td>KStream-KStream Join state stores</td><td>StreamJoined</td>
 		      </tr>
 		      <tr>
-		          <td>State Stores</td><td>Materialized</td>
+		          <td>State Stores (for aggregations and KTable-KTable joins)</td><td>Materialized</td>
 		      </tr>
 		      <tr>
 		          <td>Stream/Table non-stateful operations</td><td>Named</td>
