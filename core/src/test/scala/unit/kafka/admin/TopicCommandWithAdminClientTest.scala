@@ -16,7 +16,7 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.TopicCommand.{AdminClientTopicService, TopicCommandOptions}
 import kafka.common.AdminCommandFailedException
@@ -674,7 +674,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
 
     adminClient.alterPartitionReassignments(Collections.singletonMap(firstTopicPartition,
-      NewPartitionReassignment.of(Collections.singletonList(targetReplica))))
+      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
 
     // let's wait until the LAIR is propagated
     TestUtils.waitUntilTrue(() => {
