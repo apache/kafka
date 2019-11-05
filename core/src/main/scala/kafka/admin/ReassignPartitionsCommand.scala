@@ -261,10 +261,13 @@ object ReassignPartitionsCommand extends Logging {
             adminClientOpt: Option[Admin],
             proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
             proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
-            adminZkClientOpt: Option[AdminZkClient] = None) : ReassignPartitionsCommand = {
-    val commandServiceClient = new ZkClientReassignCommandService(zkClient, adminZkClientOpt)
-    new ReassignPartitionsCommand(commandServiceClient, adminClientOpt, proposedPartitionAssignment, proposedReplicaAssignment)
-  }
+            adminZkClientOpt: Option[AdminZkClient] = None) : ReassignPartitionsCommand =
+    new ReassignPartitionsCommand(new ZkClientReassignCommandService(zkClient, adminZkClientOpt), proposedPartitionAssignment, proposedReplicaAssignment)
+
+  def apply(adminClient:Admin,
+            proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
+            proposedReplicaAssignment: Map[TopicPartitionReplica, String]) : ReassignPartitionsCommand =
+    new ReassignPartitionsCommand(new AdminClientReassignCommandService(adminClient), proposedPartitionAssignment, proposedReplicaAssignment)
 
   // Package-private constructor for testing
   def apply(serviceClient: ReassignCommandService,
@@ -444,7 +447,7 @@ object ReassignPartitionsCommand extends Logging {
   def executeAssignment(serviceClient : ReassignCommandService, adminClientOpt: Option[Admin],
                         reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long): Unit = {
     val (partitionAssignment, replicaAssignment) = parseAndValidate(serviceClient, reassignmentJsonString)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(serviceClient, adminClientOpt,      partitionAssignment.toMap, replicaAssignment)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(serviceClient, partitionAssignment.toMap, replicaAssignment)
 
     // If there is an existing rebalance running, attempt to change its throttle
     if (serviceClient.reassignInProgress) {
@@ -750,7 +753,6 @@ object ReassignPartitionsCommand extends Logging {
 }
 
 class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
-                                         adminClientOpt: Option[Admin],
                                          proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
                                          proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty)
   extends Logging {
