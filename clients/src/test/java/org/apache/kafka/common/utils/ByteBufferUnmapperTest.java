@@ -24,7 +24,7 @@ import java.io.File;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
-public class MappedByteBuffersTest {
+public class ByteBufferUnmapperTest {
 
     /**
      * Checks that unmap doesn't throw exceptions.
@@ -34,7 +34,7 @@ public class MappedByteBuffersTest {
         File file = TestUtils.tempFile();
         try (FileChannel channel = FileChannel.open(file.toPath())) {
             MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
-            MappedByteBuffers.unmap(file.getAbsolutePath(), map);
+            ByteBufferUnmapper.unmap(file.getAbsolutePath(), map);
         }
     }
 

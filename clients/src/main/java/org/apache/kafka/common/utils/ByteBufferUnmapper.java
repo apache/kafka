@@ -17,16 +17,12 @@
 
 package org.apache.kafka.common.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 
 import static java.lang.invoke.MethodHandles.constant;
 import static java.lang.invoke.MethodHandles.dropArguments;
@@ -36,13 +32,11 @@ import static java.lang.invoke.MethodHandles.lookup;
 import static java.lang.invoke.MethodType.methodType;
 
 /**
- * Utility methods for MappedByteBuffer implementations.
+ * Provides a mechanism to unmap mapped and direct byte buffers.
  *
- * The unmap implementation was inspired by the one in Lucene's MMapDirectory.
+ * The implementation was inspired by the one in Lucene's MMapDirectory.
  */
-public final class MappedByteBuffers {
-
-    private static final Logger log = LoggerFactory.getLogger(MappedByteBuffers.class);
+public final class ByteBufferUnmapper {
 
     // null if unmap is not supported
     private static final MethodHandle UNMAP;
@@ -67,16 +61,24 @@ public final class MappedByteBuffers {
         }
     }
 
-    private MappedByteBuffers() {}
+    private ByteBufferUnmapper() {}
 
-    public static void unmap(String resourceDescription, MappedByteBuffer buffer) throws IOException {
+    /**
+     * Unmap the provided mapped or direct byte buffer.
+     *
+     * This buffer cannot be referenced after this call, so it's highly recommended that any fields referencing it
+     * should be set to null.
+     *
+     * @throws IllegalArgumentException if buffer is not mapped or direct.
+     */
+    public static void unmap(String resourceDescription, ByteBuffer buffer) throws IOException {
         if (!buffer.isDirect())
             throw new IllegalArgumentException("Unmapping only works with direct buffers");
         if (UNMAP == null)
             throw UNMAP_NOT_SUPPORTED_EXCEPTION;
 
         try {
-            UNMAP.invokeExact((ByteBuffer) buffer);
+            UNMAP.invokeExact(buffer);
         } catch (Throwable throwable) {
             throw new IOException("Unable to unmap the mapped buffer: " + resourceDescription, throwable);
         }
@@ -112,7 +114,7 @@ public final class MappedByteBuffers {
         MethodHandle directBufferCleanerMethod = lookup.unreflect(m);
         Class<?> cleanerClass = directBufferCleanerMethod.type().returnType();
         MethodHandle cleanMethod = lookup.findVirtual(cleanerClass, "clean", methodType(void.class));
-        MethodHandle nonNullTest = lookup.findStatic(MappedByteBuffers.class, "nonNull",
+        MethodHandle nonNullTest = lookup.findStatic(ByteBufferUnmapper.class, "nonNull",
                 methodType(boolean.class, Object.class)).asType(methodType(boolean.class, cleanerClass));
         MethodHandle noop = dropArguments(constant(Void.class, null).asType(methodType(void.class)), 0, cleanerClass);
         MethodHandle unmapper = filterReturnValue(directBufferCleanerMethod, guardWithTest(nonNullTest, cleanMethod, noop))
