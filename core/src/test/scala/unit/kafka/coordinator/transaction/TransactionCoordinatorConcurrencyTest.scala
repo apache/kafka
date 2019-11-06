@@ -22,7 +22,7 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
+import kafka.server._
 import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -37,8 +37,7 @@ import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.Map
-import scala.collection.mutable
+import scala.collection.{mutable, Map}
 import scala.collection.JavaConverters._
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
@@ -64,12 +63,16 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    EasyMock.expect(metadataCache.getPartitionCount(EasyMock.anyString, EasyMock.anyInt)).andReturn(2).anyTimes()
+    val brokerNode = new Node(0, "host", 10)
+    EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
+      EasyMock.anyString(),
+      EasyMock.anyInt(),
+      EasyMock.anyObject())
+    ).andReturn(Some(brokerNode)).anyTimes()
+    EasyMock.replay(metadataCache)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time, new Metrics())
+    txnStateManager = new TransactionStateManager(0, metadataCache, scheduler, replicaManager, txnConfig, time, new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -81,13 +84,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
       new MockTimer,
       reaperEnabled = false)
-    val brokerNode = new Node(0, "host", 10)
-    val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
-    EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
-      EasyMock.anyString(),
-      EasyMock.anyInt(),
-      EasyMock.anyObject())
-    ).andReturn(Some(brokerNode)).anyTimes()
     val networkClient: NetworkClient = EasyMock.createNiceMock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
@@ -110,14 +106,13 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       time,
       new LogContext)
     EasyMock.replay(pidManager)
-    EasyMock.replay(metadataCache)
     EasyMock.replay(networkClient)
   }
 
   @After
   override def tearDown(): Unit = {
     try {
-      EasyMock.reset(zkClient, replicaManager)
+      EasyMock.reset(metadataCache, replicaManager)
       transactionCoordinator.shutdown()
     } finally {
       super.tearDown()

@@ -19,13 +19,12 @@ package kafka.coordinator.transaction
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
-import javax.management.ObjectName
 
+import javax.management.ObjectName
 import kafka.log.Log
-import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager}
+import kafka.server._
 import kafka.utils.{MockScheduler, Pool}
 import org.scalatest.Assertions.fail
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
@@ -38,8 +37,7 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import org.easymock.{Capture, EasyMock, IAnswer}
 
-import scala.collection.Map
-import scala.collection.mutable
+import scala.collection.{mutable, Map}
 import scala.collection.JavaConverters._
 
 class TransactionStateManagerTest {
@@ -54,18 +52,18 @@ class TransactionStateManagerTest {
 
   val time = new MockTime()
   val scheduler = new MockScheduler(time)
-  val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-  EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-    .andReturn(Some(numPartitions))
+  EasyMock.expect(metadataCache.getPartitionCount(EasyMock.anyString, EasyMock.anyInt))
+    .andReturn(numPartitions)
     .anyTimes()
 
-  EasyMock.replay(zkClient)
+  EasyMock.replay(metadataCache)
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time, metrics)
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, metadataCache, scheduler, replicaManager, txnConfig, time, metrics)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
@@ -86,7 +84,7 @@ class TransactionStateManagerTest {
 
   @After
   def tearDown(): Unit = {
-    EasyMock.reset(zkClient, replicaManager)
+    EasyMock.reset(metadataCache, replicaManager)
     transactionManager.shutdown()
   }
 

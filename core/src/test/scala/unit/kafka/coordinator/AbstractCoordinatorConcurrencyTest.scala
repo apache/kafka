@@ -27,7 +27,6 @@ import kafka.log.Log
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
@@ -47,17 +46,16 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val executor = Executors.newFixedThreadPool(nThreads)
   val scheduler = new MockScheduler(time)
   var replicaManager: TestReplicaManager = _
-  var zkClient: KafkaZkClient = _
+  var metadataCache: MetadataCache = _
   val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
   val random = new Random
 
   @Before
   def setUp(): Unit = {
-
     replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
     replicaManager.createDelayedProducePurgatory(timer)
 
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    metadataCache = EasyMock.createMock(classOf[MetadataCache])
   }
 
   @After

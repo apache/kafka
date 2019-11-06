@@ -20,7 +20,7 @@ package kafka.server
 import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{mutable, Seq, Set}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
@@ -178,6 +178,13 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     metadataSnapshot.partitionStates.get(topic).flatMap(_.get(partitionId))
+  }
+
+  def getPartitionCount(topic: String, defaultPartitionCount: Int): Int = {
+    metadataSnapshot.partitionStates.get(topic) match {
+      case Some(partitionStates) => partitionStates.size
+      case _ => defaultPartitionCount
+    }
   }
 
   // if the leader is not known, return None;
