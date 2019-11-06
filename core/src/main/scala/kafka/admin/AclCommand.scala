@@ -29,11 +29,12 @@ object AclCommand {
 
   class SimpleAclAuthorizer extends kafka.security.auth.SimpleAclAuthorizer{
     /**
-     * in AclCommand,configure SimpleAclAuthorizer,but no need call loadCache.
-     * If there are a lot of topics, loadCache will be very slow.
+     * When using AclCommand,avoid call the global method loadcache in SimpleAclAuthorizer.
+     * now we have 20,000 topics in a new cluster,all these topics need to be authed for each project group.No matter how to run AclCommand, it will be very slow.
+     * this updating can improve the running time from minutes to less than one second
      */
     override protected def loadCache()  {
-      println("no need loadCache");
+      println("there's no need to call loadCache");
     }
   }
 
