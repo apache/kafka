@@ -17,9 +17,9 @@
 package kafka.coordinator.transaction
 
 
-import kafka.api.{KAFKA_2_3_IV1, KAFKA_2_4_IV1}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatest.Assertions.intercept
@@ -28,8 +28,7 @@ import scala.collection.JavaConverters._
 
 class TransactionLogTest {
 
-  val producerEpoch: Short = 1
-  val lastProducerEpoch: Short = 0
+  val producerEpoch: Short = 0
   val transactionTimeoutMs: Int = 1000
 
   val topicPartitions: Set[TopicPartition] = Set[TopicPartition](new TopicPartition("topic1", 0),
@@ -47,7 +46,7 @@ class TransactionLogTest {
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
-      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_4_IV1)
+      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
     }
   }
 
@@ -67,46 +66,42 @@ class TransactionLogTest {
       4L -> PrepareAbort,
       5L -> CompleteAbort)
 
+    // generate transaction log messages
+    val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
+      val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs,
+        transactionStates(producerId), 0)
 
-    Seq(KAFKA_2_3_IV1, KAFKA_2_4_IV1).foreach { interBrokerProtocolVersion =>
-      // generate transaction log messages
-      val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-        val txnMetadata = TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
-          transactionTimeoutMs, transactionStates(producerId), 0)
+      if (!txnMetadata.state.equals(Empty))
+        txnMetadata.addPartitions(topicPartitions)
 
-        if (!txnMetadata.state.equals(Empty))
-          txnMetadata.addPartitions(topicPartitions)
+      val keyBytes = TransactionLog.keyToBytes(transactionalId)
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
 
-        val keyBytes = TransactionLog.keyToBytes(transactionalId)
-        val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), interBrokerProtocolVersion)
+      new SimpleRecord(keyBytes, valueBytes)
+    }.toSeq
 
-        new SimpleRecord(keyBytes, valueBytes)
-      }.toSeq
+    val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
 
-      val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
+    var count = 0
+    for (record <- records.records.asScala) {
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
+      val transactionalId = txnKey.transactionalId
+      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
-      var count = 0
-      for (record <- records.records.asScala) {
-        val txnKey = TransactionLog.readTxnRecordKey(record.key)
-        val transactionalId = txnKey.transactionalId
-        val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+      assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
+      assertEquals(producerEpoch, txnMetadata.producerEpoch)
+      assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
+      assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
-        assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
-        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_4_IV1) pidMappings(transactionalId) else -1, txnMetadata.lastProducerId)
-        assertEquals(producerEpoch, txnMetadata.producerEpoch)
-        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_4_IV1) lastProducerEpoch else -1, txnMetadata.lastProducerEpoch)
-        assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
-        assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
+      if (txnMetadata.state.equals(Empty))
+        assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
+      else
+        assertEquals(topicPartitions, txnMetadata.topicPartitions)
 
-        if (txnMetadata.state.equals(Empty))
-          assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
-        else
-          assertEquals(topicPartitions, txnMetadata.topicPartitions)
-
-        count = count + 1
-      }
-
-      assertEquals(pidMappings.size, count)
+      count = count + 1
     }
+
+    assertEquals(pidMappings.size, count)
   }
+
 }

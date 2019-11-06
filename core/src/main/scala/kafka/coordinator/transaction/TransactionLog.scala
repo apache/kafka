@@ -25,7 +25,6 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import kafka.api.{ApiVersion, KAFKA_2_4_IV1}
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 
 import scala.collection.mutable
@@ -37,7 +36,6 @@ import scala.collection.mutable
  *
  * key version 0:               [transactionalId]
  *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
-  *   -> value version 1:       [producer_id, producer_epoch, last_producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
 object TransactionLog {
 
@@ -72,19 +70,17 @@ object TransactionLog {
     def ofVersion(version: Int): Option[Schema] = SCHEMAS.get(version)
   }
 
-  private[coordinator] object ValueSchema {
-    val ProducerIdKey = "producer_id"
-    val LastProducerIdKey = "last_producer_id"
-    val ProducerEpochKey = "producer_epoch"
-    val LastProducerEpochKey = "last_producer_epoch"
-    val TxnTimeoutKey = "transaction_timeout"
-    val TxnStatusKey = "transaction_status"
-    val TxnPartitionsKey = "transaction_partitions"
-    val TxnEntryTimestampKey = "transaction_entry_timestamp"
-    val TxnStartTimestampKey = "transaction_start_timestamp"
+  private object ValueSchema {
+    private val ProducerIdKey = "producer_id"
+    private val ProducerEpochKey = "producer_epoch"
+    private val TxnTimeoutKey = "transaction_timeout"
+    private val TxnStatusKey = "transaction_status"
+    private val TxnPartitionsKey = "transaction_partitions"
+    private val TxnEntryTimestampKey = "transaction_entry_timestamp"
+    private val TxnStartTimestampKey = "transaction_start_timestamp"
 
-    val PartitionIdsKey = "partition_ids"
-    val TopicKey = "topic"
+    private val PartitionIdsKey = "partition_ids"
+    private val TopicKey = "topic"
     private val PartitionsSchema = new Schema(new Field(TopicKey, STRING),
       new Field(PartitionIdsKey, new ArrayOf(INT32)))
 
@@ -98,22 +94,18 @@ object TransactionLog {
       new Field(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
       new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
 
-    private val V1 = new Schema(new Field(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
-      new Field(LastProducerIdKey, INT64, "The last producer id assigned to the producer"),
-      new Field(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
-      new Field(LastProducerEpochKey, INT16, "The last epoch associated with the producer id", -1.toShort),
-      new Field(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
-      new Field(TxnStatusKey, INT8,
-        "TransactionState the transaction is in"),
-      new Field(TxnPartitionsKey, ArrayOf.nullable(PartitionsSchema),
-        "Set of partitions involved in the transaction"),
-      new Field(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
-      new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
+    private val Schemas = Map(0 -> V0)
 
-    private val Schemas = Map(0 -> V0, 1 -> V1)
-
-    val CurrentVersion = 1.toShort
+    val CurrentVersion = 0.toShort
     val Current = schemaForValue(CurrentVersion)
+
+    val ProducerIdField = V0.get(ProducerIdKey)
+    val ProducerEpochField = V0.get(ProducerEpochKey)
+    val TxnTimeoutField = V0.get(TxnTimeoutKey)
+    val TxnStatusField = V0.get(TxnStatusKey)
+    val TxnPartitionsField = V0.get(TxnPartitionsKey)
+    val TxnEntryTimestampField = V0.get(TxnEntryTimestampKey)
+    val TxnStartTimestampField = V0.get(TxnStartTimestampKey)
 
     val PartitionsTopicField = PartitionsSchema.get(TopicKey)
     val PartitionIdsField = PartitionsSchema.get(PartitionIdsKey)
@@ -154,49 +146,37 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(txnMetadata: TxnTransitMetadata,
-                                        interBrokerProtocolVersion: ApiVersion): Array[Byte] = {
+  private[coordinator] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
     import ValueSchema._
-
-    val version = interBrokerProtocolVersion match {
-      case v if v < KAFKA_2_4_IV1 => 0.toShort
-      case _                      => 1.toShort
-    }
-
-    val value = new Struct(schemaForValue(version))
-    value.set(ProducerIdKey, txnMetadata.producerId)
-    value.set(ProducerEpochKey, txnMetadata.producerEpoch)
-    value.set(TxnTimeoutKey, txnMetadata.txnTimeoutMs)
-    value.set(TxnStatusKey, txnMetadata.txnState.byte)
-    value.set(TxnEntryTimestampKey, txnMetadata.txnLastUpdateTimestamp)
-    value.set(TxnStartTimestampKey, txnMetadata.txnStartTimestamp)
-
-    if (version >= 1) {
-      value.set(LastProducerIdKey, txnMetadata.lastProducerId)
-      value.set(LastProducerEpochKey, txnMetadata.lastProducerEpoch)
-    }
+    val value = new Struct(Current)
+    value.set(ProducerIdField, txnMetadata.producerId)
+    value.set(ProducerEpochField, txnMetadata.producerEpoch)
+    value.set(TxnTimeoutField, txnMetadata.txnTimeoutMs)
+    value.set(TxnStatusField, txnMetadata.txnState.byte)
+    value.set(TxnEntryTimestampField, txnMetadata.txnLastUpdateTimestamp)
+    value.set(TxnStartTimestampField, txnMetadata.txnStartTimestamp)
 
     if (txnMetadata.txnState == Empty) {
       if (txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      value.set(TxnPartitionsKey, null)
+      value.set(TxnPartitionsField, null)
     } else {
       // first group the topic partitions by their topic names
       val topicAndPartitions = txnMetadata.topicPartitions.groupBy(_.topic())
 
       val partitionArray = topicAndPartitions.map { case(topic, partitions) =>
-        val topicPartitionsStruct = value.instance(TxnPartitionsKey)
+        val topicPartitionsStruct = value.instance(TxnPartitionsField)
         val partitionIds: Array[Integer] = partitions.map(topicPartition => Integer.valueOf(topicPartition.partition())).toArray
         topicPartitionsStruct.set(PartitionsTopicField, topic)
         topicPartitionsStruct.set(PartitionIdsField, partitionIds)
         topicPartitionsStruct
       }
-      value.set(TxnPartitionsKey, partitionArray.toArray)
+      value.set(TxnPartitionsField, partitionArray.toArray)
     }
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(version)
+    byteBuffer.putShort(CurrentVersion)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -222,10 +202,6 @@ object TransactionLog {
   /**
     * Decodes the transaction log messages' payload and retrieves the transaction metadata from it
     *
-    * If the payload was written using an IBP prior to 2.4.IV1, the lastProducerId and lastProducerEpoch will not be
-    * present in the log. The effect of this is that, if an InitProducerId request is retried after a coordinator
-    * change, the retry will fail due to the missing values. We expect this to be a rare case.
-    *
     * @return a transaction metadata object from the message
     */
   def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): TransactionMetadata = {
@@ -237,26 +213,21 @@ object TransactionLog {
       val valueSchema = schemaForValue(version)
       val value = valueSchema.read(buffer)
 
-      if (version <= CurrentVersion) {
-        val producerId = value.getLong(ProducerIdKey)
-        val lastProducerId: Long =
-          if (version >= 1) value.getLong(LastProducerIdKey) else RecordBatch.NO_PRODUCER_ID
-        val epoch = value.getShort(ProducerEpochKey)
-        val lastEpoch: Short =
-          if (version >= 1) value.getShort(LastProducerEpochKey) else RecordBatch.NO_PRODUCER_EPOCH
+      if (version == CurrentVersion) {
+        val producerId = value.getLong(ProducerIdField)
+        val epoch = value.getShort(ProducerEpochField)
+        val timeout = value.getInt(TxnTimeoutField)
 
-        val timeout = value.getInt(TxnTimeoutKey)
-
-        val stateByte = value.getByte(TxnStatusKey)
+        val stateByte = value.getByte(TxnStatusField)
         val state = TransactionMetadata.byteToState(stateByte)
-        val entryTimestamp = value.getLong(TxnEntryTimestampKey)
-        val startTimestamp = value.getLong(TxnStartTimestampKey)
+        val entryTimestamp = value.getLong(TxnEntryTimestampField)
+        val startTimestamp = value.getLong(TxnStartTimestampField)
 
-        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, lastProducerId, epoch, lastEpoch,
-          timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
+        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID,
+          epoch, RecordBatch.NO_PRODUCER_EPOCH, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
         if (!state.equals(Empty)) {
-          val topicPartitionArray = value.getArray(TxnPartitionsKey)
+          val topicPartitionArray = value.getArray(TxnPartitionsField)
 
           topicPartitionArray.foreach { memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]

@@ -437,10 +437,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     addPartitionsOp.awaitAndVerify(txn)
 
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_4_IV1))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
 
     txnMetadata.state = PrepareCommit
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_4_IV1))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
 
     prepareTxnLog(partitionId)
   }

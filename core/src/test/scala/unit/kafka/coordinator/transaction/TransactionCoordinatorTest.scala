@@ -633,6 +633,26 @@ class TransactionCoordinatorTest {
     EasyMock.verify(transactionManager)
   }
 
+
+  @Test
+  def testInitProducerIdWithNoLastProducerData(): Unit = {
+    // If the metadata doesn't include the previous producer data (for example, if it was written to the log by a broker
+    // on an old version), the retry case should fail
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds)
+
+    EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
+      .andReturn(true).anyTimes()
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))).once
+    EasyMock.replay(transactionManager)
+
+    // Simulate producer trying to continue after new producer has already been initialized
+    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
+      initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.INVALID_PRODUCER_EPOCH), result)
+  }
+
   @Test
   def testFenceProducerWhenMappingExistsWithDifferentProducerId(): Unit = {
     // Existing transaction ID maps to new producer ID
