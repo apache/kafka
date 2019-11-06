@@ -55,8 +55,8 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
         self.trogdor.stop()
 
-    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
     @cluster(num_nodes=12)
+    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
     def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
@@ -100,8 +100,8 @@ class ReplicaScaleTest(Test):
         consume_workload = self.trogdor.create_task("100k-replicas-consume_workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=600)
 
-    @parametrize(topic_count=1000, partition_count=34, replication_factor=1)
     @cluster(num_nodes=12)
+    @parametrize(topic_count=1000, partition_count=34, replication_factor=1)
     def test_100k_clean_bounce(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
