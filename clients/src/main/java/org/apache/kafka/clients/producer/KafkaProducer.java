@@ -71,6 +71,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -881,17 +882,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
-            byte[] serializedKey;
+            ByteBuffer serializedKey;
             try {
-                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+                serializedKey = keySerializer.serializeToBuffer(record.topic(), record.headers(), record.key());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in key.serializer", cce);
             }
-            byte[] serializedValue;
+            ByteBuffer serializedValue;
             try {
-                serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+                serializedValue = valueSerializer.serializeToBuffer(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
@@ -1254,12 +1255,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * if the record has partition returns the value otherwise
      * calls configured partitioner class to compute the partition.
      */
-    private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
+    private int partition(ProducerRecord<K, V> record, ByteBuffer serializedKey, ByteBuffer serializedValue, Cluster cluster) {
         Integer partition = record.partition();
-        return partition != null ?
-                partition :
-                partitioner.partition(
-                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+        if (partition != null) {
+            return partition;
+        }
+        byte[] keyBytes = null;
+        byte[] valueBytes = null;
+        if (serializedKey != null) {
+            keyBytes = new byte[serializedKey.remaining()];
+            serializedKey.get(keyBytes);
+            serializedKey.rewind();
+        }
+        if (serializedValue != null) {
+            valueBytes = new byte[serializedValue.remaining()];
+            serializedValue.get(valueBytes);
+            serializedValue.rewind();
+        }
+        return partitioner.partition(record.topic(), record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 
     private void throwIfNoTransactionManager() {

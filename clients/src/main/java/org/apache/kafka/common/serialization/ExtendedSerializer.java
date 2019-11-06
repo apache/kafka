@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 import org.apache.kafka.common.header.Headers;
@@ -58,6 +59,11 @@ public interface ExtendedSerializer<T> extends Serializer<T> {
         }
 
         @Override
+        public ByteBuffer serializeToBuffer(String topic, Headers headers, T data) {
+            return serializeToBuffer(topic, data);
+        }
+
+        @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
             serializer.configure(configs, isKey);
         }
@@ -65,6 +71,11 @@ public interface ExtendedSerializer<T> extends Serializer<T> {
         @Override
         public byte[] serialize(String topic, T data) {
             return serializer.serialize(topic, data);
+        }
+
+        @Override
+        public ByteBuffer serializeToBuffer(String topic, T data) {
+            return serializer.serializeToBuffer(topic, data);
         }
 
         @Override

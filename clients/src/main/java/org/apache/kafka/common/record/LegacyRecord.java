@@ -429,22 +429,9 @@ public final class LegacyRecord {
         return crc;
     }
 
-    /**
-     * Write a record using raw fields (without validation). This should only be used in testing.
-     */
-    public static void write(DataOutputStream out,
-                             byte magic,
-                             long crc,
-                             byte attributes,
-                             long timestamp,
-                             byte[] key,
-                             byte[] value) throws IOException {
-        write(out, magic, crc, attributes, timestamp, wrapNullable(key), wrapNullable(value));
-    }
-
     // Write a record to the buffer, if the record's compression type is none, then
     // its value payload should be already compressed with the specified type
-    private static void write(DataOutputStream out,
+    public static void write(DataOutputStream out,
                               byte magic,
                               long crc,
                               byte attributes,
@@ -508,15 +495,10 @@ public final class LegacyRecord {
         return attributes;
     }
 
-    // visible only for testing
-    public static long computeChecksum(byte magic, byte attributes, long timestamp, byte[] key, byte[] value) {
-        return computeChecksum(magic, attributes, timestamp, wrapNullable(key), wrapNullable(value));
-    }
-
     /**
      * Compute the checksum of the record from the attributes, key and value payloads
      */
-    private static long computeChecksum(byte magic, byte attributes, long timestamp, ByteBuffer key, ByteBuffer value) {
+    public static long computeChecksum(byte magic, byte attributes, long timestamp, ByteBuffer key, ByteBuffer value) {
         Crc32 crc = new Crc32();
         crc.update(magic);
         crc.update(attributes);

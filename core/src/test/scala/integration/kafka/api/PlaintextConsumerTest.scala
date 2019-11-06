@@ -39,6 +39,7 @@ import kafka.server.QuotaType
 import kafka.server.KafkaServer
 
 import scala.collection.mutable
+import java.nio.ByteBuffer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -73,9 +74,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   trait SerializerImpl extends Serializer[Array[Byte]]{
     var serializer = new ByteArraySerializer()
 
-    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+    override def serializeToBuffer(topic: String, headers: Headers, data: Array[Byte]): ByteBuffer = {
       headers.add("content-type", "application/octet-stream".getBytes)
-      serializer.serialize(topic, data)
+      serializer.serializeToBuffer(topic, data)
     }
 
     override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)

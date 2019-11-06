@@ -99,7 +99,7 @@ public final class ProducerBatch {
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+    public FutureRecordMetadata tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Callback callback, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
@@ -109,8 +109,8 @@ public final class ProducerBatch {
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
-                                                                   key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length,
+                                                                   key == null ? -1 : key.remaining(),
+                                                                   value == null ? -1 : value.remaining(),
                                                                    Time.SYSTEM);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.

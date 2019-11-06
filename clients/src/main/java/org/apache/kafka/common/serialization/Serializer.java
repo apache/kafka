@@ -17,8 +17,10 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -51,6 +53,17 @@ public interface Serializer<T> extends Closeable {
     byte[] serialize(String topic, T data);
 
     /**
+     * Convert {@code data} into a ByteBuffer.
+     *
+     * @param topic topic associated with data
+     * @param data typed data
+     * @return serialized ByteBuffer
+     */
+    default ByteBuffer serializeToBuffer(String topic, T data) {
+        return Utils.wrapNullable(serialize(topic, data));
+    }
+
+    /**
      * Convert {@code data} into a byte array.
      *
      * @param topic topic associated with data
@@ -60,6 +73,18 @@ public interface Serializer<T> extends Closeable {
      */
     default byte[] serialize(String topic, Headers headers, T data) {
         return serialize(topic, data);
+    }
+
+    /**
+     * Convert {@code data} into a ByteBuffer.
+     *
+     * @param topic topic associated with data
+     * @param headers headers associated with the record
+     * @param data typed data
+     * @return serialized ByteBuffer
+     */
+    default ByteBuffer serializeToBuffer(String topic, Headers headers, T data) {
+        return serializeToBuffer(topic, data);
     }
 
     /**

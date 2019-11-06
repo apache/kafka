@@ -134,7 +134,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
-@SuppressWarnings("deprecation")
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
@@ -462,12 +461,12 @@ public class FetcherTest {
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
         byte magic = RecordBatch.MAGIC_VALUE_V1;
-        byte[] key = "foo".getBytes();
-        byte[] value = "baz".getBytes();
+        ByteBuffer key = ByteBuffer.wrap("foo".getBytes());
+        ByteBuffer value = ByteBuffer.wrap("baz".getBytes());
         long offset = 0;
         long timestamp = 500L;
 
-        int size = LegacyRecord.recordSize(magic, key.length, value.length);
+        int size = LegacyRecord.recordSize(magic, key.remaining(), value.remaining());
         byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
         long crc = LegacyRecord.computeChecksum(magic, attributes, timestamp, key, value);
 

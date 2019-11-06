@@ -83,8 +83,8 @@ public class LegacyRecordTest {
                 magic,
                 attributes,
                 this.timestamp,
-                this.key == null ? null : this.key.array(),
-                this.value == null ? null : this.value.array()
+                this.key == null ? null : this.key,
+                this.value == null ? null : this.value
         ));
         assertTrue(record.isValid());
         for (int i = LegacyRecord.CRC_OFFSET + LegacyRecord.CRC_LENGTH; i < record.sizeInBytes(); i++) {
