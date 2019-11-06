@@ -281,7 +281,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, created.get(id), lostTaskChangelogs));
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), lostTaskChangelogs));
             } else if (running.containsKey(id)) {
                 log.debug("Closing the zombie running stream task {}.", id);
                 firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
@@ -346,6 +346,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
+                restoringByPartition.keySet().removeAll(task.partitions());
+                restoringByPartition.keySet().removeAll(task.changelogPartitions());
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());
@@ -361,6 +363,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
         if (allTasksRunning()) {
             restoredPartitions.clear();
+
+            if (!restoringByPartition.isEmpty()) {
+                log.error("Finished restoring all tasks but found leftover partitions in restoringByPartition: {}",
+                    restoringByPartition);
+                throw new IllegalStateException("Restoration is complete but not all partitions were cleared.");
+            }
         }
     }
 
@@ -494,22 +502,28 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     public void shutdown(final boolean clean) {
         final String shutdownType = clean ? "Clean" : "Unclean";
-        log.debug(shutdownType + " shutdown of all active tasks" + "\n" +
+        log.debug("{} shutdown of all active tasks" + "\n" +
                       "non-initialized stream tasks to close: {}" + "\n" +
                       "restoring tasks to close: {}" + "\n" +
                       "running stream tasks to close: {}" + "\n" +
                       "suspended stream tasks to close: {}",
-            clean, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
+            shutdownType, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
         super.shutdown(clean);
     }
 
     @Override
-    public boolean isEmpty() {
-        return super.isEmpty()
-            && restoring.isEmpty()
-            && restoringByPartition.isEmpty()
-            && restoredPartitions.isEmpty()
-            && suspended.isEmpty();
+    public boolean isEmpty() throws IllegalStateException {
+        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
+            log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
+                      "restoring by partitions map contained {}", restoringByPartition);
+            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
+        } else {
+            return super.isEmpty()
+                       && restoring.isEmpty()
+                       && restoringByPartition.isEmpty()
+                       && restoredPartitions.isEmpty()
+                       && suspended.isEmpty();
+        }
     }
 
     public String toString(final String indent) {
