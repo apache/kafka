@@ -35,7 +35,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
      * this updating can improve the running time from minutes to less than one second
      */
     override protected def loadCache()  {
-      println("there's no need to call loadCache");
+      println("AclCommandTest:there's no need to call loadCache");
     }
   }
 
@@ -122,6 +122,25 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+  }
+
+  @Test
+  def testInitSimpleAclAuthorizerLocal() {
+    val brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
+    brokerProps.put(KafkaConfig.AuthorizerClassNameProp, "kafka.security.auth.SimpleAclAuthorizer")
+    withAuthorizer(brokerProps) { authorizer =>
+      println("authorizer.class="+authorizer.getClass)
+    }
+    println("local:success init SimpleAclAuthorizer ")
+  }
+
+  @Test
+  def testInitSimpleAclAuthorizer() {
+    val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect,"--add","--allow-principal",  "User:user1","--operation","add","--topic","topic1")
+    AclCommand.withAuthorizer(new AclCommandOptions(args)) { authorizer =>
+      println("authorizer.class="+authorizer.getClass)
+    }
+    println("success init SimpleAclAuthorizer")
   }
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {

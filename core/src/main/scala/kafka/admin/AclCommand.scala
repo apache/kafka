@@ -34,7 +34,7 @@ object AclCommand {
      * this updating can improve the running time from minutes to less than one second
      */
     override protected def loadCache()  {
-      println("there's no need to call loadCache");
+      println("AclCommand:there's no need to call loadCache");
     }
   }
 
