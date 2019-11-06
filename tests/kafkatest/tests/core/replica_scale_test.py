@@ -35,15 +35,8 @@ class ReplicaScaleTest(Test):
         self.test_context = test_context
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk)
-        self.producer_workload_service = ProduceBenchWorkloadService(self.test_context, self.kafka)
-        self.consumer_workload_service = ConsumeBenchWorkloadService(self.test_context, self.kafka)
-        self.trogdor = TrogdorService(context=self.test_context,
-                                      client_services=[self.kafka, self.producer_workload_service, self.consumer_workload_service])
-        self.active_topics = {"100k_replicas_bench[0-9]": {"numPartitions": 34, "replicationFactor": 3}}
-        self.inactive_topics = {"100k_replicas_bench[10-99]": {"numPartitions": 34, "replicationFactor": 3}}
 
     def setUp(self):
-        self.trogdor.start()
         self.zk.start()
         self.kafka.start()
 
@@ -53,7 +46,6 @@ class ReplicaScaleTest(Test):
             self.kafka.stop_node(node, clean_shutdown=False, timeout_sec=60)
         self.kafka.stop()
         self.zk.stop()
-        self.trogdor.stop()
 
     @cluster(num_nodes=12)
     @parametrize(topic_count=100, partition_count=34, replication_factor=3)
@@ -73,9 +65,15 @@ class ReplicaScaleTest(Test):
         t1 = time.time()
         self.logger.info("Time to create topics: %d" % (t1-t0))
 
+        producer_workload_service = ProduceBenchWorkloadService(self.test_context, self.kafka)
+        consumer_workload_service = ConsumeBenchWorkloadService(self.test_context, self.kafka)
+        trogdor = TrogdorService(context=self.test_context,
+                              client_services=[self.kafka, producer_workload_service, consumer_workload_service])
+        trogdor.start()
+        
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-                                                self.producer_workload_service.producer_node,
-                                                self.producer_workload_service.bootstrap_servers,
+                                                producer_workload_service.producer_node,
+                                                producer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=10000,
                                                 max_messages=3400000,
                                                 producer_conf={},
@@ -85,20 +83,24 @@ class ReplicaScaleTest(Test):
                                                 active_topics={"100k_replicas_bench[0-2]": {
                                                     "numPartitions": partition_count, "replicationFactor": replication_factor
                                                 }})
-        produce_workload = self.trogdor.create_task("100k-replicas-produce-workload", produce_spec)
+        produce_workload = trogdor.create_task("100k-replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=3600)
+        self.logger.info("Completed produce bench")
 
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
-                                                self.consumer_workload_service.consumer_node,
-                                                self.consumer_workload_service.bootstrap_servers,
+                                                consumer_workload_service.consumer_node,
+                                                consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=10000,
                                                 max_messages=3400000,
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 active_topics=["100k_replicas_bench[0-2]"])
-        consume_workload = self.trogdor.create_task("100k-replicas-consume_workload", consume_spec)
+        consume_workload = trogdor.create_task("100k-replicas-consume_workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=600)
+        self.logger.info("Completed consume bench")
+
+        trogdor.stop()
 
     @cluster(num_nodes=12)
     @parametrize(topic_count=1000, partition_count=34, replication_factor=1)
