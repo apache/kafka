@@ -428,9 +428,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     needsJoinPrepare = true;
                 } else {
                     log.info("Generation data was cleared by heartbeat thread. Initiating rejoin.");
-                    synchronized (AbstractCoordinator.this) {
-                        resetStateAndRejoin();
-                    }
+                    resetStateAndRejoin();
                     resetJoinGroupFuture();
                     return false;
                 }
@@ -455,7 +453,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.joinFuture = null;
     }
 
-    private void resetStateAndRejoin() {
+    private synchronized void resetStateAndRejoin() {
         rejoinNeeded = true;
         state = MemberState.UNJOINED;
     }
