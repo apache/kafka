@@ -28,6 +28,17 @@ import org.junit.Test
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
+  class SimpleAclAuthorizer extends kafka.security.auth.SimpleAclAuthorizer{
+    /**
+     * When using AclCommand,avoid call the global method loadcache in SimpleAclAuthorizer.
+     * now we have 20,000 topics in a new cluster,all these topics need to be authed for each project group.No matter how to run AclCommand, it will be very slow.
+     * this updating can improve the running time from minutes to less than one second
+     */
+    override protected def loadCache()  {
+      println("there's no need to call loadCache");
+    }
+  }
+
   private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"), KafkaPrincipal.fromString("User:test2"))
   private val Hosts = Set("host1", "host2")
   private val AllowHostCommand = Array("--allow-host", "host1", "--allow-host", "host2")
