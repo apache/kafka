@@ -130,12 +130,15 @@ public class TaskManager {
         }
 
         // Pause all the new partitions until the underlying state store is ready for all the active tasks.
+        log.debug("Pausing all active task partitions until the underlying state stores are ready");
         pausePartitions();
     }
 
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
         final Set<TaskId> suspendedTasks = partitionsToTaskSet(assignment);
         suspendedTasks.removeAll(addedActiveTasks.keySet());
+
+        log.debug("Suspended tasks to be resumed: {}", suspendedTasks);
 
         for (final TaskId taskId : suspendedTasks) {
             final Set<TopicPartition> partitions = assignedActiveTasks.get(taskId);
@@ -160,7 +163,7 @@ public class TaskManager {
     }
 
     private void addNewStandbyTasks(final Map<TaskId, Set<TopicPartition>> newStandbyTasks) {
-        log.trace("New standby tasks to be created: {}", newStandbyTasks);
+        log.debug("New standby tasks to be created: {}", newStandbyTasks);
 
         for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
@@ -168,7 +171,8 @@ public class TaskManager {
     }
 
     /**
-     * Returns ids of tasks whose states are kept on the local storage.
+     * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
+     * assigned but not yet cleaned up tasks
      */
     public Set<TaskId> cachedTasksIds() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
@@ -269,11 +273,40 @@ public class TaskManager {
 
         if (exception != null) {
             throw exception;
-        } else if (!(active.isEmpty() && assignedActiveTasks.isEmpty() && changelogReader.isEmpty())) {
-            throw new IllegalStateException("TaskManager found leftover active task state after closing all zombies");
         }
 
+        verifyActiveTaskStateIsEmpty();
+
         return zombieTasks;
+    }
+
+    private void verifyActiveTaskStateIsEmpty() throws RuntimeException {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        // Verify active has no remaining state, and catch if active.isEmpty throws so we can log any non-empty state
+        try {
+            if (!(active.isEmpty())) {
+                log.error("The set of active tasks was non-empty: {}", active);
+                firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover active task state after closing all zombies"));
+            }
+        } catch (final IllegalStateException e) {
+            firstException.compareAndSet(null, e);
+        }
+
+        if (!(assignedActiveTasks.isEmpty())) {
+            log.error("The set assignedActiveTasks was non-empty: {}", assignedActiveTasks);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover assignedActiveTasks after closing all zombies"));
+        }
+
+        if (!(changelogReader.isEmpty())) {
+            log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
+            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover changelog reader state after closing all zombies"));
+        }
+
+        final RuntimeException fatalException = firstException.get();
+        if (fatalException != null) {
+            throw fatalException;
+        }
     }
 
     void shutdown(final boolean clean) {
@@ -467,21 +500,22 @@ public class TaskManager {
         }
 
         log.debug("Assigning metadata with: " +
-                      "\tactiveTasks: {},\n" +
-                      "\tstandbyTasks: {}\n" +
-                      "The updated active task states are: \n" +
+                      "\tpreviousAssignedActiveTasks: {},\n" +
+                      "\tpreviousAssignedStandbyTasks: {}\n" +
+                      "The updated task states are: \n" +
                       "\tassignedActiveTasks {},\n" +
                       "\tassignedStandbyTasks {},\n" +
                       "\taddedActiveTasks {},\n" +
                       "\taddedStandbyTasks {},\n" +
                       "\trevokedActiveTasks {},\n" +
                       "\trevokedStandbyTasks {}",
-                  activeTasks, standbyTasks,
                   assignedActiveTasks, assignedStandbyTasks,
+                  activeTasks, standbyTasks,
                   addedActiveTasks, addedStandbyTasks,
                   revokedActiveTasks, revokedStandbyTasks);
-        this.assignedActiveTasks = activeTasks;
-        this.assignedStandbyTasks = standbyTasks;
+
+        assignedActiveTasks = activeTasks;
+        assignedStandbyTasks = standbyTasks;
     }
 
     public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
