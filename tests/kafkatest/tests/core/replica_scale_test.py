@@ -70,7 +70,7 @@ class ReplicaScaleTest(Test):
         trogdor = TrogdorService(context=self.test_context,
                               client_services=[self.kafka, producer_workload_service, consumer_workload_service])
         trogdor.start()
-        
+
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 producer_workload_service.producer_node,
                                                 producer_workload_service.bootstrap_servers,
