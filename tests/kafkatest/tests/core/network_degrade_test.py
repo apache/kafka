@@ -44,13 +44,12 @@ class NetworkDegradeTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=5)
-    @parametrize(task_name="latency-100", latency_ms=50, rate_limit_kbit=0)
-    @parametrize(task_name="latency-100-rate-1000", latency_ms=50, rate_limit_kbit=1000)
-    def test_latency(self, task_name, latency_ms, rate_limit_kbit):
+    @parametrize(task_name="latency-100", "eth0", latency_ms=50, rate_limit_kbit=0)
+    @parametrize(task_name="latency-100-rate-1000", "eth0", latency_ms=50, rate_limit_kbit=1000)
+    def test_latency(self, task_name, device_name, latency_ms, rate_limit_kbit):
         spec = DegradedNetworkFaultSpec(0, 10000, {})
         for node in self.zk.nodes:
-            device = network_device(node)
-            spec.add_node_spec(node.name, device, latency_ms, rate_limit_kbit)
+            spec.add_node_spec(node.name, device_name, latency_ms, rate_limit_kbit)
 
         latency = self.trogdor.create_task(task_name, spec)
 
@@ -82,15 +81,14 @@ class NetworkDegradeTest(Test):
         assert len(fast_times) > 8, "Expected to see more fast (<10ms) ping times"
 
     @cluster(num_nodes=5)
-    @parametrize(task_name="rate-1000", latency_ms=0, rate_limit_kbit=1000)
-    @parametrize(task_name="rate-1000-latency-50", latency_ms=50, rate_limit_kbit=1000)
-    def test_rate(self, task_name, latency_ms, rate_limit_kbit):
+    @parametrize(task_name="rate-1000", device_name="eth0", latency_ms=0, rate_limit_kbit=1000)
+    @parametrize(task_name="rate-1000-latency-50", device_name="eth0", latency_ms=50, rate_limit_kbit=1000)
+    def test_rate(self, task_name, device_name, latency_ms, rate_limit_kbit):
         zk0 = self.zk.nodes[0]
         zk1 = self.zk.nodes[1]
 
         spec = DegradedNetworkFaultSpec(0, 60000, {})
-        device = network_device(zk0)
-        spec.add_node_spec(zk0.name, device, latency_ms, rate_limit_kbit)
+        spec.add_node_spec(zk0.name, device_name, latency_ms, rate_limit_kbit)
 
         # start the task and wait
         rate_limit = self.trogdor.create_task(task_name, spec)
