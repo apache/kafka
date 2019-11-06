@@ -62,16 +62,6 @@ class NetworkDegradeTest(Test):
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=2 ttl=64 time=0.197 ms
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=3 ttl=64 time=0.145 ms
         times = []
-        self.logger.info("devices: %s" % zk0.account.ssh_output("ifconfig -a", allow_fail=True))
-        self.logger.info("devices: %s" % zk0.account.ssh_output("ipconfig -a", allow_fail=True))
-
-        self.logger.info("network device: %s" % zk0.account.ssh_output("ip route get %s | head -n1 | awk '{ print $5 }" %
-                                           self.trogdor.coordinator_node.account.externally_routable_ip, allow_fail=True))
-
-        self.logger.info("ping test 1: %s" % zk0.account.ssh_output("sudo traceroute -T -O info %s" % zk1.account.hostname, allow_fail=True))
-        self.logger.info("ping test 2: %s" % zk0.account.ssh_output("sudo traceroute -T -O info %s" % zk1.account.hostname, allow_fail=True))
-        self.logger.info("ping test 3: %s" % zk0.account.ssh_output("sudo traceroute -T -O info %s" % zk1.account.hostname, allow_fail=True))
-
         for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.hostname):
             self.logger.debug("Ping output: %s" % line)
             m = r.match(line)
