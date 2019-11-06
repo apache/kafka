@@ -23,7 +23,6 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.trogdor.degraded_network_fault_spec import DegradedNetworkFaultSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.utils.remote_account import network_device
 
 
 class NetworkDegradeTest(Test):
