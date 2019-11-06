@@ -2333,7 +2333,7 @@ public class ConsumerCoordinatorTest {
 
             assertFalse(res);
             assertFalse(client.hasPendingResponses());
-            //SynGroupRequest not responded.
+            // SynGroupRequest not responded.
             assertEquals(1, client.inFlightRequestCount());
             assertEquals(generationId, coordinator.generation().generationId);
             assertEquals(memberId, coordinator.generation().memberId);
@@ -2345,10 +2345,20 @@ public class ConsumerCoordinatorTest {
 
             client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-            //Join future should succeed but generation already cleared so result of join is false.
+            // Join future should succeed but generation already cleared so result of join is false.
             res = coordinator.joinGroupIfNeeded(time.timer(1));
 
             assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            // Retry join should then succeed
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            res = coordinator.joinGroupIfNeeded(time.timer(2));
+
+            assertTrue(res);
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
         }
