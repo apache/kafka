@@ -57,8 +57,10 @@ public class ChildFirstClassLoader extends URLClassLoader {
                             String lower = name.toLowerCase();
                             return lower.endsWith(".jar") || lower.endsWith(".zip");
                         });
-                        for (File jarFile : files) {
-                            urls.add(jarFile.getCanonicalFile().toURI().toURL());
+                        if(files != null) {
+                            for (File jarFile : files) {
+                                urls.add(jarFile.getCanonicalFile().toURI().toURL());
+                            }
                         }
                     }
                 } catch (IOException e) {
