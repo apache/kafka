@@ -16,6 +16,7 @@
 import re
 
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -43,6 +44,7 @@ class NetworkDegradeTest(Test):
         self.trogdor.stop()
         self.zk.stop()
 
+    @cluster(num_nodes=5)
     @parametrize(task_name="latency-100", latency_ms=50, rate_limit_kbit=0)
     @parametrize(task_name="latency-100-rate-1000", latency_ms=50, rate_limit_kbit=1000)
     def test_latency(self, task_name, latency_ms, rate_limit_kbit):
@@ -80,6 +82,7 @@ class NetworkDegradeTest(Test):
         assert len(slow_times) > 8, "Expected to see more slow (>100ms) ping times"
         assert len(fast_times) > 8, "Expected to see more fast (<10ms) ping times"
 
+    @cluster(num_nodes=5)
     @parametrize(task_name="rate-1000", latency_ms=0, rate_limit_kbit=1000)
     @parametrize(task_name="rate-1000-latency-50", latency_ms=50, rate_limit_kbit=1000)
     def test_rate(self, task_name, latency_ms, rate_limit_kbit):
