@@ -420,8 +420,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
                     onJoinComplete(generationSnapshot.generationId, generationSnapshot.memberId, generationSnapshot.protocol, memberAssignment);
 
-                    // We reset the join group future only after the completion callback returns. This ensures
+                    // Generally speaking we should always resetJoinGroupFuture once the future is done, but here
+                    // we can only reset the join group future after the completion callback returns. This ensures
                     // that if the callback is woken up, we will retry it on the next joinGroupIfNeeded.
+                    // And because of that we should explicitly trigger resetJoinGroupFuture in other conditions below.
                     resetJoinGroupFuture();
                     needsJoinPrepare = true;
                 } else {
@@ -449,12 +451,10 @@ public abstract class AbstractCoordinator implements Closeable {
         return true;
     }
 
-    // reset join-group future in order to retry the join-group request
     private synchronized void resetJoinGroupFuture() {
         this.joinFuture = null;
     }
 
-    // reset state to UNJOINED and request re-join
     private void resetStateAndRejoin() {
         rejoinNeeded = true;
         state = MemberState.UNJOINED;
