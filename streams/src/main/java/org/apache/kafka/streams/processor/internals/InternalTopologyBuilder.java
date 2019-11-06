@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -85,7 +84,7 @@ public class InternalTopologyBuilder {
     // map from source processor names to regex subscription patterns
     private final Map<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
 
-    // map from sink processor names to subscribed topic (without application-id prefix for internal topics)
+    // map from sink processor names to sink topic (without application-id prefix for internal topics)
     private final Map<String, String> nodeToSinkTopic = new HashMap<>();
 
     // map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
@@ -749,25 +748,16 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
+    // Order node groups by their position in the actual topology, ie upstream subtopologies come before downstream
     private Map<Integer, Set<String>> makeNodeGroups() {
         final Map<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final Map<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
 
-        // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        final Set<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
-        allSourceNodes.addAll(nodeToSourcePatterns.keySet());
-
-        for (final String nodeName : Utils.sorted(allSourceNodes)) {
+        // Traverse in topological order
+        for (final String nodeName : nodeFactories.keySet()) {
             nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-        }
-
-        // Go through non-source nodes
-        for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToSourceTopics.containsKey(nodeName)) {
-                nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-            }
         }
 
         return nodeGroups;
@@ -1905,11 +1895,11 @@ public class InternalTopologyBuilder {
 
     // following functions are for test only
 
-    public synchronized Set<String> getSourceTopicNames() {
+    public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }
 
-    public synchronized Map<String, StateStoreFactory> getStateStores() {
+    public synchronized Map<String, StateStoreFactory> stateStores() {
         return stateFactories;
     }
 }

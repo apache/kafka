@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
@@ -102,26 +103,28 @@ public abstract class AbstractJoinIntegrationTest {
     AtomicBoolean finalResultReached = new AtomicBoolean(false);
 
     private final List<Input<String>> input = Arrays.asList(
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, "A"),
-            new Input<>(INPUT_TOPIC_RIGHT, "a"),
-            new Input<>(INPUT_TOPIC_LEFT, "B"),
-            new Input<>(INPUT_TOPIC_RIGHT, "b"),
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, "C"),
-            new Input<>(INPUT_TOPIC_RIGHT, "c"),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_LEFT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, null),
-            new Input<>(INPUT_TOPIC_RIGHT, "d"),
-            new Input<>(INPUT_TOPIC_LEFT, "D")
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "A"),
+        new Input<>(INPUT_TOPIC_RIGHT, "a"),
+        new Input<>(INPUT_TOPIC_LEFT, "B"),
+        new Input<>(INPUT_TOPIC_RIGHT, "b"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "C"),
+        new Input<>(INPUT_TOPIC_RIGHT, "c"),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, null),
+        new Input<>(INPUT_TOPIC_RIGHT, "d"),
+        new Input<>(INPUT_TOPIC_LEFT, "D")
     );
 
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
     final boolean cacheEnabled;
+
+    private static final long TIMEOUT = 30000;
 
     AbstractJoinIntegrationTest(final boolean cacheEnabled) {
         this.cacheEnabled = cacheEnabled;
@@ -198,7 +201,7 @@ public abstract class AbstractJoinIntegrationTest {
         KeyValueTimestamp<Long, String> expectedFinalResult = null;
 
         try {
-            streams.start();
+            startKafkaStreamsAndWaitForRunningState(streams, TIMEOUT);
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
@@ -231,19 +234,12 @@ public abstract class AbstractJoinIntegrationTest {
     /*
      * Runs the actual test. Checks the final result only after expected number of records have been consumed.
      */
-    void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult) throws Exception {
-        runTest(expectedFinalResult, null);
-    }
-
-    /*
-     * Runs the actual test. Checks the final result only after expected number of records have been consumed.
-     */
     void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult, final String storeName) throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
         try {
-            streams.start();
+            startKafkaStreamsAndWaitForRunningState(streams, TIMEOUT);
 
             final long firstTimestamp = System.currentTimeMillis();
             long ts = firstTimestamp;
@@ -288,7 +284,7 @@ public abstract class AbstractJoinIntegrationTest {
         }
     }
 
-    private final class Input<V> {
+    private static final class Input<V> {
         String topic;
         KeyValue<Long, V> record;
 

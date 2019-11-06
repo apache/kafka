@@ -16,7 +16,7 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.TopicCommand.{AdminClientTopicService, TopicCommandOptions}
 import kafka.common.AdminCommandFailedException
@@ -25,7 +25,8 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AdminClient, ListTopicsOptions, NewTopic}
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -647,6 +648,53 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     } finally {
       restartDeadBrokers()
     }
+  }
+
+  @Test
+  def testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(): Unit = {
+    val configMap = new java.util.HashMap[String, String]()
+    val replicationFactor: Short = 1
+    val partitions = 1
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
+    waitForTopicCreated(testTopicName)
+
+    for (msg <- 0 to 10) {
+      TestUtils.produceMessage(servers, testTopicName, s"$msg")
+    }
+
+    val brokerIds = servers.map(_.config.brokerId)
+    TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttleBytes = 1)
+
+    val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
+    val firstPartition = testTopicDesc.partitions().asScala.head
+    val firstTopicPartition = new TopicPartition(testTopicName, firstPartition.partition())
+    val replicasOfFirstPartition = firstPartition.replicas().asScala.map(_.id())
+    val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
+
+    adminClient.alterPartitionReassignments(Collections.singletonMap(firstTopicPartition,
+      Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
+
+    // let's wait until the LAIR is propagated
+    TestUtils.waitUntilTrue(() => {
+      val reassignments = adminClient.listPartitionReassignments(Collections.singleton(firstTopicPartition)).reassignments().get()
+      !reassignments.get(firstTopicPartition).addingReplicas().isEmpty
+    }, "Reassignment didn't add the second node")
+
+    // describe the topic and test if it's under-replicated
+    val simpleDescribeOutput = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
+    val simpleDescribeOutputRows = simpleDescribeOutput.split("\n")
+    assertTrue(simpleDescribeOutputRows(0).startsWith(s"Topic: $testTopicName"))
+    assertEquals(2, simpleDescribeOutputRows.size)
+
+    val underReplicatedOutput = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
+    assertTrue("--under-replicated-partitions shouldn't return anything", underReplicatedOutput.isEmpty)
+
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
+    TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
   @Test

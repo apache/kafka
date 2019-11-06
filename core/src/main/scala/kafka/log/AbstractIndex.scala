@@ -27,7 +27,7 @@ import kafka.common.IndexOffsetOverflowException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
 
 import scala.math.ceil
 
@@ -319,7 +319,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap(): Unit = {
-    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+    try ByteBufferUnmapper.unmap(file.getAbsolutePath, mmap)
     finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
@@ -405,8 +405,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {
     searchEntity match {
-      case IndexSearchType.KEY => indexEntry.indexKey.compareTo(target)
-      case IndexSearchType.VALUE => indexEntry.indexValue.compareTo(target)
+      case IndexSearchType.KEY => java.lang.Long.compare(indexEntry.indexKey, target)
+      case IndexSearchType.VALUE => java.lang.Long.compare(indexEntry.indexValue, target)
     }
   }
 

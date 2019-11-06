@@ -10,11 +10,11 @@
 
     <!-- Generator -->
     <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
-              files="(SchemaGenerator|MessageDataGenerator).java"/>
+              files="(SchemaGenerator|MessageDataGenerator|FieldSpec).java"/>
     <suppress checks="NPathComplexity"
               files="(FieldSpec).java"/>
     <suppress checks="JavaNCSS"
-              files="(ApiMessageType).java"/>
+              files="(ApiMessageType).java|MessageDataGenerator.java"/>
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
@@ -34,7 +34,7 @@
               files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java|KafkaConsumer.java"/>
 
     <suppress checks="ParameterNumber"
-              files="NetworkClient.java"/>
+              files="NetworkClient.java|FieldSpec.java"/>
     <suppress checks="ParameterNumber"
               files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
@@ -70,7 +70,7 @@
     <suppress checks="(UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
 
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|MethodLength|JavaNCSS)"
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
             files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
@@ -184,6 +184,11 @@
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
+    <!-- generated code -->
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
+              files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+
+
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
               files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
@@ -196,6 +201,9 @@
               files="KStreamWindowAggregateTest.java"/>
     <suppress checks="MethodLength"
               files="RocksDBWindowStoreTest.java"/>
+
+    <suppress checks="MemberName"
+              files="StreamsPartitionAssignorTest.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
@@ -214,9 +222,7 @@
               files="SmokeTestDriver.java"/>
 
     <suppress checks="NPathComplexity"
-              files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java"/>
-    <suppress checks="NPathComplexity"
-              files="KStreamKStreamLeftJoinTest.java"/>
+              files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java|KStreamKStreamLeftJoinTest.java|KTableKTableForeignKeyJoinIntegrationTest.java"/>
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>

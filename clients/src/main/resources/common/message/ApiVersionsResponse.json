@@ -28,8 +28,7 @@
   // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
   // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
   "validVersions": "0-3",
-  // TODO(dajac) Enable this once KIP-482 is committed.
-  // "flexibleVersions": "3+",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code." },

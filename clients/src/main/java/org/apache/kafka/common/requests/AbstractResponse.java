@@ -28,26 +28,27 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(header.toStruct(), toStruct(apiVersion)));
+        return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serialize(ApiKeys apiKey, int correlationId) {
-        return serialize(apiKey, apiKey.latestVersion(), correlationId);
+    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
+        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
-        ResponseHeader header = new ResponseHeader(correlationId, apiKey.headerVersion(version));
-        return serialize(header.toStruct(), toStruct(version));
+        ResponseHeader header =
+            new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
+        return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
     public abstract Map<Errors, Integer> errorCounts();
@@ -116,7 +117,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
-                return ApiVersionsResponse.apiVersionsResponse(struct, version);
+                return ApiVersionsResponse.fromStruct(struct, version);
             case CREATE_TOPICS:
                 return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:

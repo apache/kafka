@@ -147,13 +147,14 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Turning off cooperative rebalancing for upgrade from {}.x", upgradeFrom);
+                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        return RebalanceProtocol.EAGER;
+        log.info("Cooperative rebalancing enabled now");
+        return RebalanceProtocol.COOPERATIVE;
     }
 
     public String logPrefix() {
@@ -181,14 +182,19 @@ public final class AssignorConfiguration {
                         upgradeFrom
                     );
                     return VERSION_TWO;
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                    // These configs are for cooperative rebalancing and should not affect the metadata version
+                    break;
                 default:
                     throw new IllegalArgumentException(
                         "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
                     );
             }
-        } else {
-            return priorVersion;
         }
+        return priorVersion;
     }
 
     public int getNumStandbyReplicas() {

@@ -21,6 +21,7 @@ import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapt
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
@@ -30,9 +31,11 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
+import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -50,7 +53,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -564,8 +566,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     // Visible for testing
     final Metrics metrics;
+    final KafkaConsumerMetrics kafkaConsumerMetrics;
 
-    private final Logger log;
+    private Logger log;
     private final String clientId;
     private String groupId;
     private final ConsumerCoordinator coordinator;
@@ -667,15 +670,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @SuppressWarnings("unchecked")
     private KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
-            String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-            if (clientId.isEmpty())
-                clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-            this.clientId = clientId;
-            this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
-
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                                                                                 GroupRebalanceConfig.ProtocolType.CONSUMER);
+                    GroupRebalanceConfig.ProtocolType.CONSUMER);
+
+            this.groupId = groupRebalanceConfig.groupId;
+            this.clientId = buildClientId(config.getString(CommonClientConfigs.CLIENT_ID_CONFIG), groupRebalanceConfig);
+
             LogContext logContext;
+
             // If group.instance.id is set, we will append it to the log context.
             if (groupRebalanceConfig.groupInstanceId.isPresent()) {
                 logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
@@ -806,12 +808,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     isolationLevel,
                     apiVersions);
 
+            this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
+
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
-            close(0, true);
+            // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
+            if (this.log != null) {
+                close(0, true);
+            }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -852,6 +859,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
         this.groupId = groupId;
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+    }
+
+    private static String buildClientId(String configuredClientId, GroupRebalanceConfig rebalanceConfig) {
+        if (!configuredClientId.isEmpty())
+            return configuredClientId;
+
+        if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty())
+            return "consumer-" + rebalanceConfig.groupId + "-" + rebalanceConfig.groupInstanceId.orElseGet(() ->
+                    CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "");
+
+        return "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
 
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
@@ -1053,11 +1072,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
-            this.subscriptions.unsubscribe();
             if (this.coordinator != null) {
                 this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
             }
+            this.subscriptions.unsubscribe();
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();
@@ -1201,6 +1220,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
+            this.kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
+
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
@@ -1238,6 +1259,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return ConsumerRecords.empty();
         } finally {
             release();
+            this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
     }
 

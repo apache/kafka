@@ -63,4 +63,14 @@ public class RequestHeaderTest {
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
     }
+
+    @Test
+    public void testRequestHeaderV2() {
+        RequestHeader header = new RequestHeader(ApiKeys.CREATE_DELEGATION_TOKEN, (short) 2, "", 10);
+        assertEquals(2, header.headerVersion());
+        ByteBuffer buffer = toBuffer(header.toStruct());
+        assertEquals(11, buffer.remaining());
+        RequestHeader deserialized = RequestHeader.parse(buffer);
+        assertEquals(header, deserialized);
+    }
 }

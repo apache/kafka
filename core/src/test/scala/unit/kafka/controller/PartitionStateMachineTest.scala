@@ -517,6 +517,6 @@ class PartitionStateMachineTest {
     assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
   }
 
-  private def replicaAssignment(replicas: Seq[Int]): PartitionReplicaAssignment = PartitionReplicaAssignment(replicas, Seq(), Seq())
+  private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())
 
 }

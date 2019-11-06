@@ -527,10 +527,10 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testResumePartitionReassignmentThatWasCompleted(): Unit = {
-    val expectedReplicaAssignment = Map(0  -> List(0, 1))
+    val initialAssignment = Map(0  -> List(0, 2))
     val topic = "test"
     // create the topic
-    adminZkClient.createTopicWithAssignment(topic, config = new Properties, expectedReplicaAssignment)
+    adminZkClient.createTopicWithAssignment(topic, config = new Properties, initialAssignment)
     // put the partition in the reassigned path as well
     // reassign partition 0
     val newReplicas = Seq(0, 1)

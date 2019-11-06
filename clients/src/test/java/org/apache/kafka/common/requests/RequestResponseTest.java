@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -573,12 +574,11 @@ public class RequestResponseTest {
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
-        short headerVersion = ApiKeys.PRODUCE.headerVersion(version);
 
         ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
         buffer.rewind();
 
-        ResponseHeader.parse(buffer, headerVersion); // throw away.
+        ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
 
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
@@ -671,8 +671,8 @@ public class RequestResponseTest {
     private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
-        short headerVersion = FETCH.headerVersion(apiVersion);
-        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, headerVersion), apiVersion);
+        short responseHeaderVersion = FETCH.responseHeaderVersion(apiVersion);
+        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, responseHeaderVersion), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -684,7 +684,7 @@ public class RequestResponseTest {
         assertTrue(size > 0);
 
         // read the header
-        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), headerVersion);
+        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
         // read the body
@@ -851,7 +851,8 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseStructParsingFallback() {
         Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
@@ -859,13 +860,14 @@ public class RequestResponseTest {
     @Test(expected = SchemaException.class)
     public void testApiVersionResponseStructParsingFallbackException() {
         short version = 0;
-        ApiVersionsResponse.apiVersionsResponse(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
+        ApiVersionsResponse.fromStruct(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
     }
 
     @Test
     public void testApiVersionResponseStructParsing() {
         Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(struct, ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.
+            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
@@ -1222,7 +1224,8 @@ public class RequestResponseTest {
     private ProduceResponse createProduceResponseWithErrorMessage() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100, Collections.singletonMap(0, "error message"), "global error message"));
+                10000, RecordBatch.NO_TIMESTAMP, 100, Collections.singletonList(new ProduceResponse.RecordError(0, "error message")),
+                "global error message"));
         return new ProduceResponse(responseData, 0);
     }
 

@@ -47,6 +47,7 @@ import static org.powermock.api.easymock.PowerMock.verify;
 @PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
+    private final static String THREAD_ID = "thread-id";
     private final static String STORE_NAME = "store-name";
     private final static String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
     private final static String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
@@ -72,7 +73,7 @@ public class RocksDBMetricsRecorderTest {
     private final TaskId taskId1 = new TaskId(0, 0);
     private final TaskId taskId2 = new TaskId(0, 2);
 
-    private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
+    private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
 
     @Before
     public void setUp() {
@@ -327,7 +328,7 @@ public class RocksDBMetricsRecorderTest {
     private void setUpMetricsMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(taskId1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(THREAD_ID, taskId1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))

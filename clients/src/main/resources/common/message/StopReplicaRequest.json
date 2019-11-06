@@ -19,7 +19,8 @@
   "name": "StopReplicaRequest",
   // Version 1 adds the broker epoch and reorganizes the partitions to be stored
   // per topic.
-  "validVersions": "0-1",
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },

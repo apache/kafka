@@ -131,6 +131,7 @@ class CachingWindowStore
         return true;
     }
 
+    @Deprecated
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {

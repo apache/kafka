@@ -31,12 +31,14 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
@@ -48,18 +50,18 @@ import static org.junit.Assert.assertTrue;
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
                               final MockProcessorSupplier<String, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "2", 25L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "3", 20L));
-            driver.pipeInput(recordFactory.create(topic1, "D", "4", 10L));
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic1.pipeInput("A", "1", 5L);
+            inputTopic1.pipeInput("B", "2", 25L);
+            inputTopic1.pipeInput("C", "3", 20L);
+            inputTopic1.pipeInput("D", "4", 10L);
             assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
                     new KeyValueTimestamp<>("B", 2, 25),
                     new KeyValueTimestamp<>("C", 3, 20),
@@ -114,15 +116,17 @@ public class KTableMapValuesTest {
         topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
             getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01", 50L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01", 30L));
+            inputTopic1.pipeInput("A", "01", 50L);
+            inputTopic1.pipeInput("B", "01", 10L);
+            inputTopic1.pipeInput("C", "01", 30L);
 
             assertEquals(ValueAndTimestamp.make(1, 50L), getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(1, 10L), getter2.get("B"));
@@ -132,8 +136,8 @@ public class KTableMapValuesTest {
             assertEquals(ValueAndTimestamp.make(-1, 10L), getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(-1, 30L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02", 25L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02", 20L));
+            inputTopic1.pipeInput("A", "02", 25L);
+            inputTopic1.pipeInput("B", "02", 20L);
 
             assertEquals(ValueAndTimestamp.make(2, 25L), getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(2, 20L), getter2.get("B"));
@@ -143,7 +147,7 @@ public class KTableMapValuesTest {
             assertEquals(ValueAndTimestamp.make(-2, 20L), getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(-1, 30L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03", 35L));
+            inputTopic1.pipeInput("A", "03", 35L);
 
             assertEquals(ValueAndTimestamp.make(3, 35L), getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(2, 20L), getter2.get("B"));
@@ -153,7 +157,7 @@ public class KTableMapValuesTest {
             assertEquals(ValueAndTimestamp.make(-2, 20L), getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(-1, 30L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 1L));
+            inputTopic1.pipeInput("A", (String) null, 1L);
 
             assertNull(getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(2, 20L), getter2.get("B"));
@@ -208,27 +212,29 @@ public class KTableMapValuesTest {
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
             assertFalse(table1.sendingOldValueEnabled());
             assertFalse(table2.sendingOldValueEnabled());
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
+            inputTopic1.pipeInput("A", "01", 5L);
+            inputTopic1.pipeInput("B", "01", 10L);
+            inputTopic1.pipeInput("C", "01", 15L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
                     new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
                     new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02", 8L));
+            inputTopic1.pipeInput("A", "02", 10L);
+            inputTopic1.pipeInput("B", "02", 8L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 10),
                     new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03", 20L));
+            inputTopic1.pipeInput("A", "03", 20L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, null), 20));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 30L));
+            inputTopic1.pipeInput("A", (String) null, 30L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 30));
         }
     }
@@ -248,27 +254,29 @@ public class KTableMapValuesTest {
         builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
             assertTrue(table1.sendingOldValueEnabled());
             assertTrue(table2.sendingOldValueEnabled());
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
+            inputTopic1.pipeInput("A", "01", 5L);
+            inputTopic1.pipeInput("B", "01", 10L);
+            inputTopic1.pipeInput("C", "01", 15L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
                     new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
                     new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02", 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02", 8L));
+            inputTopic1.pipeInput("A", "02", 10L);
+            inputTopic1.pipeInput("B", "02", 8L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 10),
                     new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03", 20L));
+            inputTopic1.pipeInput("A", "03", 20L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 30L));
+            inputTopic1.pipeInput("A", (String) null, 30L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 30));
         }
     }
