@@ -802,7 +802,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
         fetchRequest.replicaId,
-        fetchRequest.minBytes,
+        Math.min(fetchRequest.maxBytes, fetchRequest.minBytes),
         Math.min(fetchRequest.maxBytes, config.fetchMaxBytes),
         versionId <= 2,
         interesting,
