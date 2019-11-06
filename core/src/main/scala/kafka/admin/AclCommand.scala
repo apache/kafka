@@ -27,6 +27,16 @@ import scala.collection.JavaConverters._
 
 object AclCommand {
 
+  class SimpleAclAuthorizer extends kafka.security.auth.SimpleAclAuthorizer{
+    /**
+     * in AclCommand,configure SimpleAclAuthorizer,but no need call loadCache.
+     * If there are a lot of topics, loadCache will be very slow.
+     */
+    override protected def loadCache()  {
+      println("no need loadCache");
+    }
+  }
+
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe, All, Delete),

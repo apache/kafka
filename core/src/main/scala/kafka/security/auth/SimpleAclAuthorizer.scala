@@ -226,7 +226,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     if (zkUtils != null) zkUtils.close()
   }
 
-  private def loadCache()  {
+  protected def loadCache()  {
     inWriteLock(lock) {
       val resourceTypes = zkUtils.getChildren(SimpleAclAuthorizer.AclZkPath)
       for (rType <- resourceTypes) {
