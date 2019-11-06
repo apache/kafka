@@ -27,6 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -96,10 +97,15 @@ class ProduceRequestTest extends BaseRequestTest {
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
     assertEquals(Errors.INVALID_TIMESTAMP, partitionResponse.error)
-    assertEquals(1, partitionResponse.recordErrors.size())
+    // there are 3 records with InvalidTimestampException created from inner function createRecords
+    assertEquals(3, partitionResponse.recordErrors.size())
     assertEquals(0, partitionResponse.recordErrors.get(0).batchIndex)
-    assertNull(partitionResponse.recordErrors.get(0).message)
-    assertNotNull(partitionResponse.errorMessage)
+    assertEquals(1, partitionResponse.recordErrors.get(1).batchIndex)
+    assertEquals(2, partitionResponse.recordErrors.get(2).batchIndex)
+    for (recordError <- partitionResponse.recordErrors.asScala) {
+      assertNotNull(recordError.message)
+    }
+    assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
   }
 
   @Test
