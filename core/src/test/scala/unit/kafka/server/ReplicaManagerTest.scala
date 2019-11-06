@@ -983,7 +983,7 @@ class ReplicaManagerTest {
     val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, None, timeout = 10)
     assertNull(fetchResult.get)
 
-    // Now become a follower and
+    // Become a follower and ensure that the delayed fetch returns immediately
     val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp0.topic)
@@ -1000,6 +1000,55 @@ class ReplicaManagerTest {
 
     assertNotNull(fetchResult.get)
     assertEquals(fetchResult.get.error, Errors.NOT_LEADER_FOR_PARTITION)
+  }
+
+  @Test
+  def testBecomeFollowerWhileNewClientFetchInPurgatory(): Unit = {
+    val mockTimer = new MockTimer
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer, aliveBrokerIds = Seq(0, 1))
+
+    val tp0 = new TopicPartition(topic, 0)
+    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    replicaManager.createPartition(tp0).createLogIfNotExists(0, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    val partition0Replicas = Seq[Integer](0, 1).asJava
+
+    val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic)
+        .setPartitionIndex(tp0.partition)
+        .setControllerEpoch(0)
+        .setLeader(0)
+        .setLeaderEpoch(1)
+        .setIsr(partition0Replicas)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+
+    val clientMetadata = new DefaultClientMetadata("", "", null, KafkaPrincipal.ANONYMOUS, "")
+    val partitionData = new FetchRequest.PartitionData(0L, 0L, 100,
+      Optional.of(1))
+    val fetchResult = sendConsumerFetch(replicaManager, tp0, partitionData, Some(clientMetadata), timeout = 10)
+    assertNull(fetchResult.get)
+
+    // Become a follower and ensure that the delayed fetch returns immediately
+    val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      Seq(new LeaderAndIsrPartitionState()
+        .setTopicName(tp0.topic)
+        .setPartitionIndex(tp0.partition)
+        .setControllerEpoch(0)
+        .setLeader(1)
+        .setLeaderEpoch(2)
+        .setIsr(partition0Replicas)
+        .setZkVersion(0)
+        .setReplicas(partition0Replicas)
+        .setIsNew(true)).asJava,
+      Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+    replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
+
+    assertNotNull(fetchResult.get)
+    assertEquals(fetchResult.get.error, Errors.FENCED_LEADER_EPOCH)
   }
 
   @Test
