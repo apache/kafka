@@ -454,9 +454,13 @@ class AclAuthorizer extends CachedAuthorizer with Logging {
     } else {
       aclCache = aclCache - resource
     }
-    // any time we get new Acls, we just update authorizer's cache of this resource
-    this.removeResourceAuthorizerCache(resource)
-    authorizerLogger.debug(s"remove resource AuthorizerCache for resource $resource")
+    if(resource.patternType==PatternType.LITERAL && !Acl.WildCardResource.equals(resource.name)) {
+        this.removeResourceAuthorizerCache(resource)
+        authorizerLogger.debug(s"remove resource AuthorizerCache for resource $resource")
+    }else{
+      this.resetAuthorizerCache()
+      authorizerLogger.debug(s"reset resource AuthorizerCache for all resources")
+    }
   }
 
   private def updateAclChangedFlag(resource: Resource): Unit = {

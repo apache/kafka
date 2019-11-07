@@ -36,7 +36,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 abstract class CachedAuthorizer extends Authorizer {
 
   // we use a concurrent map to be thread safe, as the SimpleAclAuthorizer uses a lot of locks
-  private val authorizerCache = TrieMap[Resource,TrieMap[(InetAddress, KafkaPrincipal, AclOperation), AuthorizationResult]]()
+  private var authorizerCache = TrieMap[Resource,TrieMap[(InetAddress, KafkaPrincipal, AclOperation), AuthorizationResult]]()
 
   /**
     * a call to authorize that will leverage the internal cache when possible
@@ -78,6 +78,14 @@ abstract class CachedAuthorizer extends Authorizer {
     */
   def authorizeActionUncached(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult
 
+  /**
+   * reset the cache
+   *
+   * @return unit
+   */
+  def resetAuthorizerCache(): Unit = {
+    authorizerCache = TrieMap[Resource,TrieMap[(InetAddress, KafkaPrincipal, AclOperation), AuthorizationResult]]()
+  }
   /**
     * remove the cache by the data dim for resource
     * @return unit

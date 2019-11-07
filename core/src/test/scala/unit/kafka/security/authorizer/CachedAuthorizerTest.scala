@@ -112,6 +112,7 @@ class CachedAuthorizerTest extends ZooKeeperTestHarness {
     assertFalse(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(GROUP, "", LITERAL)))
     addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(GROUP, WILDCARD_RESOURCE, LITERAL))
     assertTrue(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(GROUP, "", LITERAL)))
+    assertTrue(authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(GROUP, "", LITERAL)))
   }
 
   // Authorizing the empty resource is not supported because we create a znode with the resource name.
