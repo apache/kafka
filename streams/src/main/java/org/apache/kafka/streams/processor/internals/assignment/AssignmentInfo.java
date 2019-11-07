@@ -61,13 +61,6 @@ public class AssignmentInfo {
             0);
     }
 
-    // for testing only
-    public AssignmentInfo(final List<TaskId> activeTasks,
-                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
-        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, partitionsByHost, 0);
-    }
-
     public AssignmentInfo(final int version,
                           final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
@@ -129,19 +122,33 @@ public class AssignmentInfo {
         try (final DataOutputStream out = new DataOutputStream(baos)) {
             switch (usedVersion) {
                 case 1:
-                    encodeVersionOne(out);
+                    out.writeInt(usedVersion); // version
+                    encodeActiveAndStandbyTaskAssignment(out);
                     break;
                 case 2:
-                    encodeVersionTwo(out);
+                    out.writeInt(usedVersion); // version
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodePartitionsByHost(out);
                     break;
                 case 3:
-                    encodeVersionThree(out);
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodePartitionsByHost(out);
                     break;
                 case 4:
-                    encodeVersionFour(out);
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodePartitionsByHost(out);
+                    out.writeInt(errCode);
                     break;
                 case 5:
-                    encodeVersionFive(out);
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodePartitionsByHostAsDictionary(out);
+                    out.writeInt(errCode);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -155,11 +162,6 @@ public class AssignmentInfo {
         } catch (final IOException ex) {
             throw new TaskAssignmentException("Failed to encode AssignmentInfo", ex);
         }
-    }
-
-    private void encodeVersionOne(final DataOutputStream out) throws IOException {
-        out.writeInt(1); // version
-        encodeActiveAndStandbyTaskAssignment(out);
     }
 
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
@@ -178,12 +180,6 @@ public class AssignmentInfo {
             final Set<TopicPartition> partitions = entry.getValue();
             writeTopicPartitions(out, partitions);
         }
-    }
-
-    private void encodeVersionTwo(final DataOutputStream out) throws IOException {
-        out.writeInt(2); // version
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
     }
 
     private void encodePartitionsByHost(final DataOutputStream out) throws IOException {
@@ -243,29 +239,6 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeVersionThree(final DataOutputStream out) throws IOException {
-        out.writeInt(3);
-        out.writeInt(commonlySupportedVersion);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
-    }
-
-    private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        out.writeInt(4);
-        out.writeInt(commonlySupportedVersion);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
-        out.writeInt(errCode);
-    }
-
-    private void encodeVersionFive(final DataOutputStream out) throws IOException {
-        out.writeInt(5);
-        out.writeInt(commonlySupportedVersion);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHostAsDictionary(out);
-        out.writeInt(errCode);
-    }
-
     /**
      * @throws TaskAssignmentException if method fails to decode the data or if the data version is unknown
      */
@@ -281,26 +254,38 @@ public class AssignmentInfo {
             switch (usedVersion) {
                 case 1:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);
-                    decodeVersionOneData(assignmentInfo, in);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    assignmentInfo.partitionsByHost = new HashMap<>();
                     break;
                 case 2:
                     assignmentInfo = new AssignmentInfo(usedVersion, UNKNOWN);
-                    decodeVersionTwoData(assignmentInfo, in);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodePartitionsByHost(assignmentInfo, in);
                     break;
                 case 3:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
-                    decodeVersionThreeData(assignmentInfo, in);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodePartitionsByHost(assignmentInfo, in);
                     break;
                 case 4:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
-                    decodeVersionFourData(assignmentInfo, in);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodePartitionsByHost(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
                     break;
                 case 5:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
-                    decodeVersionFiveData(assignmentInfo, in);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodePartitionsByHostUsingDictionary(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -313,13 +298,6 @@ public class AssignmentInfo {
         } catch (final IOException ex) {
             throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
         }
-    }
-
-    private static void decodeVersionOneData(final AssignmentInfo assignmentInfo,
-                                             final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in);
-        decodeStandbyTasks(assignmentInfo, in);
-        assignmentInfo.partitionsByHost = new HashMap<>();
     }
 
     private static void decodeActiveTasks(final AssignmentInfo assignmentInfo,
@@ -339,13 +317,6 @@ public class AssignmentInfo {
             final TaskId id = TaskId.readFrom(in);
             assignmentInfo.standbyTasks.put(id, readTopicPartitions(in));
         }
-    }
-
-    private static void decodeVersionTwoData(final AssignmentInfo assignmentInfo,
-                                             final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in);
-        decodeStandbyTasks(assignmentInfo, in);
-        decodePartitionsByHost(assignmentInfo, in);
     }
 
     private static void decodePartitionsByHost(final AssignmentInfo assignmentInfo,
@@ -391,27 +362,6 @@ public class AssignmentInfo {
             partitions.add(new TopicPartition(topicIndexDict.get(in.readInt()), in.readInt()));
         }
         return partitions;
-    }
-
-    private static void decodeVersionThreeData(final AssignmentInfo assignmentInfo,
-                                               final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in);
-        decodeStandbyTasks(assignmentInfo, in);
-        decodePartitionsByHost(assignmentInfo, in);
-    }
-
-    private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
-                                              final DataInputStream in) throws IOException {
-        decodeVersionThreeData(assignmentInfo, in);
-        assignmentInfo.errCode = in.readInt();
-    }
-
-    private static void decodeVersionFiveData(final AssignmentInfo assignmentInfo,
-                                              final DataInputStream in) throws IOException {
-        decodeActiveTasks(assignmentInfo, in);
-        decodeStandbyTasks(assignmentInfo, in);
-        decodePartitionsByHostUsingDictionary(assignmentInfo, in);
-        assignmentInfo.errCode = in.readInt();
     }
 
     @Override
