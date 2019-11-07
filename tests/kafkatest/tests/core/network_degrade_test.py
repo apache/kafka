@@ -44,8 +44,8 @@ class NetworkDegradeTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=5)
-    @parametrize(task_name="latency-100", "eth0", latency_ms=50, rate_limit_kbit=0)
-    @parametrize(task_name="latency-100-rate-1000", "eth0", latency_ms=50, rate_limit_kbit=1000)
+    @parametrize(task_name="latency-100", device_name="eth0", latency_ms=50, rate_limit_kbit=0)
+    @parametrize(task_name="latency-100-rate-1000", device_name="eth0", latency_ms=50, rate_limit_kbit=1000)
     def test_latency(self, task_name, device_name, latency_ms, rate_limit_kbit):
         spec = DegradedNetworkFaultSpec(0, 10000, {})
         for node in self.zk.nodes:
