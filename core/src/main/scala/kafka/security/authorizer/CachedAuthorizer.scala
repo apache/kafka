@@ -19,15 +19,12 @@ package kafka.security.authorizer
 
 import java.net.InetAddress
 
-import kafka.network.RequestChannel.Session
-import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
-import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Delete, Deny, Describe, DescribeConfigs, Read, Write}
+import kafka.security.auth.{ Resource}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 import scala.collection.concurrent.TrieMap
-import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
-import org.apache.kafka.server.authorizer.{AclCreateResult, AclDeleteResult, Action, AuthorizableRequestContext, AuthorizationResult, Authorizer, AuthorizerServerInfo}
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 
 
 /**
@@ -45,7 +42,7 @@ abstract class CachedAuthorizer extends Authorizer {
     * a call to authorize that will leverage the internal cache when possible
     * @param requestContext Request context interface that provides data from request header as well as connection and authentication information to plugins.
     * @param action Type of operation client is trying to perform on resource.
-    * @return true if the operation should be permitted, false otherwise
+    * @return ALLOWED,if the operation should be permitted, DENIED otherwise
     */
   def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
@@ -74,14 +71,15 @@ abstract class CachedAuthorizer extends Authorizer {
   /**
     * The result of this call will be cached.
     * Therefore the implementation can be "expensive" on the first call.
-    * @param requestContext Request context interface that provides data from request header as well as connection and authentication information to plugins.
+   *
+   * @param requestContext Request context interface that provides data from request header as well as connection and authentication information to plugins.
     * @param action Type of operation client is trying to perform on resource.
-    * @return true if the operation should be permitted, false otherwise
+    * @return ALLOWED,if the operation should be permitted, DENIED otherwise
     */
   def authorizeActionUncached(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult
 
   /**
-    * remove the cache
+    * remove the cache by the data dim for resource
     * @return unit
     */
   def removeResourceAuthorizerCache(resource: Resource): Unit = {
