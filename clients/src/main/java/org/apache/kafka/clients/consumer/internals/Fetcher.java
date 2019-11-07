@@ -30,12 +30,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -450,7 +445,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (remaining <= 0)
                 break;
 
-            if (metadata.updateRequested())
+            if (metadata.updateRequested() || future.exception() instanceof InvalidMetadataException)
                 client.awaitMetadataUpdate(remaining);
             else
                 time.sleep(Math.min(remaining, retryBackoffMs));
