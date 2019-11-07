@@ -2133,9 +2133,9 @@ class Log(@volatile var dir: File,
   def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = {
     lock synchronized {
       if (from > activeSegment.baseOffset)
-        throw new IllegalArgumentException("Illegal request for non-active segments beginning at " +
-          s"offset $from, which is larger than the active segment's base offset ${activeSegment.baseOffset}")
-      logSegments(from, activeSegment.baseOffset)
+        Seq.empty
+      else
+        logSegments(from, activeSegment.baseOffset)
     }
   }
 
