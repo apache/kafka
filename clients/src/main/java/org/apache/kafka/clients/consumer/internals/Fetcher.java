@@ -451,7 +451,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (remaining <= 0)
                 break;
 
-            if (metadata.updateRequested() || future.exception() instanceof InvalidMetadataException)
+            if (metadata.updateRequested() || (future.failed() && future.exception() instanceof InvalidMetadataException))
                 client.awaitMetadataUpdate(remaining);
             else
                 time.sleep(Math.min(remaining, retryBackoffMs));
