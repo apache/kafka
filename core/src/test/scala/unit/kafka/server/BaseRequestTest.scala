@@ -29,7 +29,7 @@ import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, RequestUtils, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 abstract class BaseRequestTest extends IntegrationTestHarness {
@@ -170,7 +170,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     */
   def sendStructAndReceive(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
     val header = nextRequestHeader(apiKey, apiVersion)
-    val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
+    val serializedBytes = RequestUtils.serialize(header.toStruct, requestStruct).array
     val response = requestAndReceive(socket, serializedBytes)
     skipResponseHeader(response, apiKey.responseHeaderVersion(apiVersion))
   }

@@ -25,16 +25,17 @@ import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.{FetchMetadata => SFetchMetadata}
+import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -46,19 +47,19 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
+import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
+import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse, DescribeLogDirsResponse, EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, LeaderAndIsrResponse, OffsetsForLeaderEpochRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
-import org.apache.kafka.common.replica.{ClientMetadata, _}
 
-import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 
 /*
  * Result metadata of a log append operation on the log
@@ -119,7 +120,8 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               records: Records,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
-                              preferredReadReplica: Option[Int])
+                              preferredReadReplica: Option[Int],
+                              isReassignmentFetch: Boolean)
 
 
 /**
@@ -267,6 +269,14 @@ class ReplicaManager(val config: KafkaConfig,
       def value = leaderPartitionsIterator.count(_.isAtMinIsr)
     }
   )
+  val reassigningPartitions = newGauge(
+    "ReassigningPartitions",
+    new Gauge[Int] {
+      def value = reassigningPartitionsCount
+    }
+  )
+
+  def reassigningPartitionsCount: Int = leaderPartitionsIterator.count(_.isReassigning)
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -409,6 +419,13 @@ class ReplicaManager(val config: KafkaConfig,
     Option(allPartitions.get(topicPartition)).getOrElse(HostedPartition.None)
   }
 
+  def isAddingReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
+    getPartition(topicPartition) match {
+      case Online(partition) => partition.isAddingReplica(replicaId)
+      case _ => false
+    }
+  }
+
   // Visible for testing
   def createPartition(topicPartition: TopicPartition): Partition = {
     val partition = Partition(topicPartition, time, this)
@@ -499,7 +516,8 @@ class ReplicaManager(val config: KafkaConfig,
         topicPartition ->
                 ProducePartitionStatus(
                   result.info.lastOffset + 1, // required offset
-                  new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime, result.info.logStartOffset)) // response status
+                  new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime,
+                    result.info.logStartOffset, result.info.recordErrors.asJava, result.info.errorMessage)) // response status
       }
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
@@ -753,6 +771,19 @@ class ReplicaManager(val config: KafkaConfig,
                                isFromClient: Boolean,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
+
+    def processFailedRecord(topicPartition: TopicPartition, t: Throwable) = {
+      val logStartOffset = getPartition(topicPartition) match {
+        case HostedPartition.Online(partition) => partition.logStartOffset
+        case HostedPartition.None | HostedPartition.Offline => -1L
+      }
+      brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
+      brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
+      error(s"Error processing append operation on partition $topicPartition", t)
+
+      logStartOffset
+    }
+
     trace(s"Append [$entriesPerPartition] to local log")
     entriesPerPartition.map { case (topicPartition, records) =>
       brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
@@ -786,17 +817,15 @@ class ReplicaManager(val config: KafkaConfig,
                    _: RecordTooLargeException |
                    _: RecordBatchTooLargeException |
                    _: CorruptRecordException |
-                   _: KafkaStorageException |
-                   _: InvalidTimestampException) =>
+                   _: KafkaStorageException) =>
             (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
+          case rve: RecordValidationException =>
+            val logStartOffset = processFailedRecord(topicPartition, rve.invalidException)
+            val recordErrors = rve.recordErrors
+            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(
+              logStartOffset, recordErrors, rve.invalidException.getMessage), Some(rve.invalidException)))
           case t: Throwable =>
-            val logStartOffset = getPartition(topicPartition) match {
-              case HostedPartition.Online(partition) => partition.logStartOffset
-              case HostedPartition.None | HostedPartition.Offline => -1L
-            }
-            brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
-            brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
-            error(s"Error processing append operation on partition $topicPartition", t)
+            val logStartOffset = processFailedRecord(topicPartition, t)
             (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
         }
       }
@@ -837,18 +866,20 @@ class ReplicaManager(val config: KafkaConfig,
                     isolationLevel: IsolationLevel,
                     clientMetadata: Option[ClientMetadata]): Unit = {
     val isFromFollower = Request.isValidBrokerId(replicaId)
-
-    val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
+    val isFromConsumer = !(isFromFollower || replicaId == Request.FutureLocalReplicaId)
+    val fetchIsolation = if (!isFromConsumer)
       FetchLogEnd
     else if (isolationLevel == IsolationLevel.READ_COMMITTED)
       FetchTxnCommitted
     else
       FetchHighWatermark
 
+    // Restrict fetching to leader if request is from follower or from a client with older version (no ClientMetadata)
+    val fetchOnlyFromLeader = isFromFollower || (isFromConsumer && clientMetadata.isEmpty)
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
-        fetchOnlyFromLeader = isFromFollower,
+        fetchOnlyFromLeader = fetchOnlyFromLeader,
         fetchIsolation = fetchIsolation,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
@@ -894,7 +925,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
       }
       maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {
@@ -906,8 +937,8 @@ class ReplicaManager(val config: KafkaConfig,
           fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
         })
       }
-      val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
-        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
+      val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit,
+        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
         maybeUpdateHwAndSendResponse)
 
@@ -960,7 +991,7 @@ class ReplicaManager(val config: KafkaConfig,
               s"${preferredReadReplica.get} for $clientMetadata")
           }
           // If a preferred read-replica is set, skip the read
-          val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
+          val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader = false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
             leaderLogStartOffset = offsetSnapshot.logStartOffset,
@@ -1519,7 +1550,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     // Shrink ISRs for non offline partitions
     allPartitions.keys.foreach { topicPartition =>
-      nonOfflinePartition(topicPartition).foreach(_.maybeShrinkIsr(config.replicaLagTimeMaxMs))
+      nonOfflinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
 
@@ -1551,7 +1582,7 @@ class ReplicaManager(val config: KafkaConfig,
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
-                s"one of the assigned replicas ${partition.allReplicaIds.mkString(",")} " +
+                s"one of the assigned replicas ${partition.assignmentState.replicas.mkString(",")} " +
                 s"for partition $topicPartition. Empty records will be returned for this partition.")
               readResult.withEmptyFetchInfo
             }

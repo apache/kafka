@@ -17,7 +17,7 @@
 
 package kafka.admin
 
-import kafka.controller.PartitionReplicaAssignment
+import kafka.controller.ReplicaAssignment
 import kafka.network.SocketServer
 import org.junit.Assert._
 import kafka.utils.TestUtils._
@@ -39,15 +39,15 @@ class AddPartitionsTest extends BaseRequestTest {
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0 -> PartitionReplicaAssignment(Seq(0,1), List(), List()))
+  val topic1Assignment = Map(0 -> ReplicaAssignment(Seq(0,1), List(), List()))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0 -> PartitionReplicaAssignment(Seq(1,2), List(), List()))
+  val topic2Assignment = Map(0 -> ReplicaAssignment(Seq(1,2), List(), List()))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0 -> PartitionReplicaAssignment(Seq(2,3,0,1), List(), List()))
+  val topic3Assignment = Map(0 -> ReplicaAssignment(Seq(2,3,0,1), List(), List()))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0 -> PartitionReplicaAssignment(Seq(0,3), List(), List()))
+  val topic4Assignment = Map(0 -> ReplicaAssignment(Seq(0,3), List(), List()))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1 -> PartitionReplicaAssignment(Seq(0,1), List(), List()))
+  val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
 
   @Before
   override def setUp(): Unit = {

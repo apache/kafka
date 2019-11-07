@@ -331,18 +331,20 @@ public class SmokeTestDriver extends SmokeTestUtil {
         int retry = 0;
         final long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(1));
+            final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                verificationResult = verifyAll(inputs, events);
+                verificationResult = verifyAll(inputs, events, false);
                 if (verificationResult.passed()) {
                     break;
                 } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
                     System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
                     break;
                 } else {
-                    System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying...");
+                    System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying..." + retry);
                 }
             } else {
+                System.out.println(Instant.now() + " Get some more results from " + records.partitions() + ", resetting retry.");
+
                 retry = 0;
                 for (final ConsumerRecord<String, Number> record : records) {
                     final String key = record.key();
@@ -406,7 +408,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         // give it one more try if it's not already passing.
         if (!verificationResult.passed()) {
-            verificationResult = verifyAll(inputs, events);
+            verificationResult = verifyAll(inputs, events, true);
         }
         success &= verificationResult.passed();
 
@@ -435,23 +437,24 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
-                                                final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
+                                                final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+                                                final boolean printResults) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
-            pass = verifyTAgg(resultStream, inputs, events.get("tagg"));
-            pass &= verifySuppressed(resultStream, "min-suppressed", events);
+            pass = verifyTAgg(resultStream, inputs, events.get("tagg"), printResults);
+            pass &= verifySuppressed(resultStream, "min-suppressed", events, printResults);
             pass &= verify(resultStream, "min-suppressed", inputs, events, windowedKey -> {
                 final String unwindowedKey = windowedKey.substring(1, windowedKey.length() - 1).replaceAll("@.*", "");
                 return getMin(unwindowedKey);
-            });
-            pass &= verifySuppressed(resultStream, "sws-suppressed", events);
-            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin);
-            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax);
-            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue());
-            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum);
-            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L);
-            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg);
+            }, printResults);
+            pass &= verifySuppressed(resultStream, "sws-suppressed", events, printResults);
+            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin, printResults);
+            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax, printResults);
+            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), printResults);
+            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, printResults);
+            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, printResults);
+            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, printResults);
         }
         return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
     }
@@ -460,7 +463,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                   final String topic,
                                   final Map<String, Set<Integer>> inputData,
                                   final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                  final Function<String, Number> keyToExpectation) {
+                                  final Function<String, Number> keyToExpectation,
+                                  final boolean printResults) {
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
         if (outputEvents.isEmpty()) {
@@ -479,13 +483,23 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final Number expected = keyToExpectation.apply(key);
                 final Number actual = entry.getValue().getLast().value();
                 if (!expected.equals(actual)) {
-                    resultStream.printf("%s fail: key=%s actual=%s expected=%s%n\t inputEvents=%n%s%n\toutputEvents=%n%s%n",
-                                        topic,
-                                        key,
-                                        actual,
-                                        expected,
-                                        indent("\t\t", observedInputEvents.get(key)),
-                                        indent("\t\t", entry.getValue()));
+                    resultStream.printf("%s fail: key=%s actual=%s expected=%s%n", topic, key, actual, expected);
+
+                    if (printResults) {
+                        resultStream.printf("\t inputEvents=%n%s%n\t" +
+                                "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
+                            indent("\t\t", observedInputEvents.get(key)),
+                            indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
+                            indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
+                            indent("\t\t", events.getOrDefault("min", emptyMap()).getOrDefault(key, new LinkedList<>())),
+                            indent("\t\t", events.getOrDefault("dif", emptyMap()).getOrDefault(key, new LinkedList<>())),
+                            indent("\t\t", events.getOrDefault("cnt", emptyMap()).getOrDefault(key, new LinkedList<>())),
+                            indent("\t\t", events.getOrDefault("tagg", emptyMap()).getOrDefault(key, new LinkedList<>())));
+
+                        if (!Utils.mkSet("echo", "max", "min", "dif", "cnt", "tagg").contains(topic))
+                            resultStream.printf("%sEvents=%n%s%n", topic, indent("\t\t", entry.getValue()));
+                    }
+
                     return false;
                 }
             }
@@ -496,7 +510,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     private static boolean verifySuppressed(final PrintStream resultStream,
                                             @SuppressWarnings("SameParameterValue") final String topic,
-                                            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
+                                            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+                                            final boolean printResults) {
         resultStream.println("verifying suppressed " + topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> topicEvents = events.getOrDefault(topic, emptyMap());
         for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : topicEvents.entrySet()) {
@@ -504,12 +519,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final String unsuppressedTopic = topic.replace("-suppressed", "-raw");
                 final String key = entry.getKey();
                 final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
-                resultStream.printf("fail: key=%s%n\tnon-unique result:%n%s%n\traw results:%n%s%n\tinput data:%n%s%n",
+                resultStream.printf("fail: key=%s%n\tnon-unique result:%n%s%n",
                                     key,
-                                    indent("\t\t", entry.getValue()),
-                                    indent("\t\t", events.get(unsuppressedTopic).get(key)),
-                                    indent("\t\t", events.get("data").get(unwindowedKey))
-                );
+                                    indent("\t\t", entry.getValue()));
+
+                if (printResults)
+                    resultStream.printf("\tresultEvents:%n%s%n\tinputEvents:%n%s%n",
+                        indent("\t\t", events.get(unsuppressedTopic).get(key)),
+                        indent("\t\t", events.get("data").get(unwindowedKey)));
+
                 return false;
             }
         }
@@ -540,7 +558,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     private static boolean verifyTAgg(final PrintStream resultStream,
                                       final Map<String, Set<Integer>> allData,
-                                      final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents) {
+                                      final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
+                                      final boolean printResults) {
         if (taggEvents == null) {
             resultStream.println("tagg is missing");
             return false;
@@ -570,7 +589,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                 if (entry.getValue().getLast().value().longValue() != expectedCount) {
                     resultStream.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expectedCount);
-                    resultStream.println("\t outputEvents: " + entry.getValue());
+
+                    if (printResults)
+                        resultStream.println("\t taggEvents: " + entry.getValue());
                     return false;
                 }
             }

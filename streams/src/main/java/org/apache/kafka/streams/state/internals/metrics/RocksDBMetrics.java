@@ -26,7 +26,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MIN_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndSumMetricsToSensor;
@@ -150,7 +150,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_TO_DB);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -169,7 +169,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_FROM_DB);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -188,7 +188,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_BYTES_FLUSHED);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -207,7 +207,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -225,7 +225,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_AVG);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -243,7 +243,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_MIN);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -261,7 +261,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_MAX);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -279,7 +279,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, WRITE_STALL_DURATION);
         addAvgAndSumMetricsToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -298,7 +298,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_DATA_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -316,7 +316,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_INDEX_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -334,7 +334,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_FILTER_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -352,7 +352,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_DURING_COMPACTION);
         addRateOfSumMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -370,7 +370,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_DURING_COMPACTION);
         addRateOfSumMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -388,7 +388,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_AVG);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -406,7 +406,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_MIN);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -424,7 +424,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_MAX);
         addValueMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -442,7 +442,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_OPEN_FILES);
         addSumMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),
@@ -461,7 +461,7 @@ public class RocksDBMetrics {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_FILE_ERRORS);
         addSumMetricToSensor(
             sensor,
-            STATE_LEVEL_GROUP,
+            STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
                 metricContext.threadId(),
                 metricContext.taskName(),

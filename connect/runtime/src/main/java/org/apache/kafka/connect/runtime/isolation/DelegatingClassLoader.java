@@ -132,6 +132,25 @@ public class DelegatingClassLoader extends URLClassLoader {
         return connectorClientConfigPolicies;
     }
 
+    /**
+     * Retrieve the PluginClassLoader associated with a plugin class
+     * @param name The fully qualified class name of the plugin
+     * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.
+     */
+    public PluginClassLoader pluginClassLoader(String name) {
+        if (!PluginUtils.shouldLoadInIsolation(name)) {
+            return null;
+        }
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+        if (inner == null) {
+            return null;
+        }
+        ClassLoader pluginLoader = inner.get(inner.lastKey());
+        return pluginLoader instanceof PluginClassLoader
+               ? (PluginClassLoader) pluginLoader
+               : null;
+    }
+
     public ClassLoader connectorLoader(Connector connector) {
         return connectorLoader(connector.getClass().getName());
     }
@@ -141,8 +160,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         String fullName = aliases.containsKey(connectorClassOrAlias)
                           ? aliases.get(connectorClassOrAlias)
                           : connectorClassOrAlias;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
-        if (inner == null) {
+        PluginClassLoader classLoader = pluginClassLoader(fullName);
+        if (classLoader == null) {
             log.error(
                     "Plugin class loader for connector: '{}' was not found. Returning: {}",
                     connectorClassOrAlias,
@@ -150,7 +169,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             );
             return this;
         }
-        return inner.get(inner.lastKey());
+        return classLoader;
     }
 
     private static PluginClassLoader newPluginClassLoader(
@@ -338,10 +357,16 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
-        ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (T pluginImpl : serviceLoader) {
-            result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(), versionFor(pluginImpl), loader));
+        try {
+            ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
+            for (T pluginImpl : serviceLoader) {
+                result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(),
+                    versionFor(pluginImpl), loader));
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
         }
         return result;
     }
@@ -357,19 +382,11 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (!PluginUtils.shouldLoadInIsolation(name)) {
-            // There are no paths in this classloader, will attempt to load with the parent.
-            return super.loadClass(name, resolve);
-        }
-
         String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
-        if (inner != null) {
-            ClassLoader pluginLoader = inner.get(inner.lastKey());
+        PluginClassLoader pluginLoader = pluginClassLoader(fullName);
+        if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
-            return pluginLoader instanceof PluginClassLoader
-                   ? ((PluginClassLoader) pluginLoader).loadClass(fullName, resolve)
-                   : super.loadClass(fullName, resolve);
+            return pluginLoader.loadClass(fullName, resolve);
         }
 
         return super.loadClass(fullName, resolve);

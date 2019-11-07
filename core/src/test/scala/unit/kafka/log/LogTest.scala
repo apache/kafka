@@ -25,7 +25,7 @@ import java.util.{Collections, Optional, Properties}
 
 import com.yammer.metrics.Metrics
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
-import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
+import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -1504,6 +1504,35 @@ class LogTest {
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
+  @Test
+  def testDeleteSnapshotsOnIncrementLogStartOffset(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig)
+    val pid1 = 1L
+    val pid2 = 2L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)), producerId = pid1,
+      producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "b".getBytes)), producerId = pid2,
+      producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+
+    assertEquals(2, log.activeProducersWithLastSequence.size)
+    assertEquals(2, ProducerStateManager.listSnapshotFiles(log.producerStateManager.logDir).size)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.maybeIncrementLogStartOffset(2L)
+
+    // Deleting records should not remove producer state but should delete snapshots
+    assertEquals(2, log.activeProducersWithLastSequence.size)
+    assertEquals(1, ProducerStateManager.listSnapshotFiles(log.producerStateManager.logDir).size)
+    val retainedLastSeqOpt = log.activeProducersWithLastSequence.get(pid2)
+    assertTrue(retainedLastSeqOpt.isDefined)
+    assertEquals(0, retainedLastSeqOpt.get)
+  }
+
   /**
    * Test for jitter s for time based log roll. This test appends messages then changes the time
    * using the mock clock to force the log to roll and checks the number of segments.
@@ -1846,24 +1875,31 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(cleanupPolicy = LogConfig.Compact)
     val log = createLog(logDir, logConfig)
 
-    try {
+    val errorMsgPrefix = "Compacted topic cannot accept message without key"
+
+    var e = intercept[RecordValidationException] {
       log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case _: InvalidRecordException => // this is good
     }
-    try {
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(1, e.recordErrors.size)
+    assertEquals(0, e.recordErrors.head.batchIndex)
+    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
+
+    e = intercept[RecordValidationException] {
       log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case _: InvalidRecordException => // this is good
     }
-    try {
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(1, e.recordErrors.size)
+    assertEquals(0, e.recordErrors.head.batchIndex)
+    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
+
+    e = intercept[RecordValidationException] {
       log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case _: InvalidRecordException => // this is good
     }
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertEquals(1, e.recordErrors.size)
+    assertEquals(1, e.recordErrors.head.batchIndex)     // batch index is 1
+    assertTrue(e.recordErrors.head.message.startsWith(errorMsgPrefix))
 
     // check if metric for NoKeyCompactedTopicRecordsPerSec is logged
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec}")), 1)
@@ -2523,7 +2559,7 @@ class LogTest {
 
     val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
       maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
-    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), downgradedLogConfig)
+    log.updateConfig(downgradedLogConfig)
     assertLeaderEpochCacheEmpty(log)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
@@ -2542,7 +2578,7 @@ class LogTest {
 
     val upgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
       maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_11_0_IV0.shortVersion)
-    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), upgradedLogConfig)
+    log.updateConfig(upgradedLogConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
   }

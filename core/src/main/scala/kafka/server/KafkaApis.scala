@@ -22,7 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
@@ -30,7 +30,7 @@ import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
-import kafka.controller.{KafkaController, PartitionReplicaAssignment}
+import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
@@ -703,9 +703,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+      val reassigningPartitions = mutable.Set[TopicPartition]()
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        if (data.isReassignmentFetch)
+          reassigningPartitions.add(tp)
         partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
           abortedTransactions, data.records))
@@ -731,9 +734,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Prepare fetch response from converted data
         val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
           unconvertedFetchResponse.sessionId())
-        response.responseData.asScala.foreach { case (topicPartition, data) =>
-          // record the bytes out metrics only when the response is being sent
-          brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
+        // record the bytes out metrics only when the response is being sent
+        response.responseData.asScala.foreach { case (tp, data) =>
+          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
         }
         response
       }
@@ -1320,7 +1323,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setClientId(member.clientId)
             .setClientHost(member.clientHost)
             .setMemberAssignment(member.assignment)
-            .setMemberMetadata(member.assignment)
+            .setMemberMetadata(member.metadata)
         }
 
         val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
@@ -2350,7 +2353,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
-    def sendResponseCallback(result: Either[Map[TopicPartition, PartitionReplicaAssignment], ApiError]): Unit = {
+    def sendResponseCallback(result: Either[Map[TopicPartition, ReplicaAssignment], ApiError]): Unit = {
       val responseData = result match {
         case Right(error) => new ListPartitionReassignmentsResponseData().setErrorMessage(error.message()).setErrorCode(error.error().code())
 
@@ -2688,27 +2691,35 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = offsetDeleteRequest.data.groupId
 
     if (authorize(request, DELETE, GROUP, groupId)) {
-      val topicPartitions = offsetDeleteRequest.data.topics.asScala.flatMap { topic =>
-        topic.partitions.asScala.map { partition =>
-          new TopicPartition(topic.name, partition.partitionIndex)
-        }
-      }.toSeq
+      val authorizedTopics = filterAuthorized(request, READ, TOPIC,
+        offsetDeleteRequest.data.topics.asScala.map(_.name).toSeq)
 
-      val authorizedTopics = filterAuthorized(request, READ, TOPIC, topicPartitions.map(_.topic))
-      val (authorizedTopicPartitions, unauthorizedTopicPartitions) = topicPartitions.partition { topicPartition =>
-        authorizedTopics.contains(topicPartition.topic)
+      val topicPartitionErrors = mutable.Map[TopicPartition, Errors]()
+      val topicPartitions = mutable.ArrayBuffer[TopicPartition]()
+
+      for (topic <- offsetDeleteRequest.data.topics.asScala) {
+        for (partition <- topic.partitions.asScala) {
+          val tp = new TopicPartition(topic.name, partition.partitionIndex)
+          if (!authorizedTopics.contains(topic.name))
+            topicPartitionErrors(tp) = Errors.TOPIC_AUTHORIZATION_FAILED
+          else if (!metadataCache.contains(tp))
+            topicPartitionErrors(tp) = Errors.UNKNOWN_TOPIC_OR_PARTITION
+          else
+            topicPartitions += tp
+        }
       }
 
-      val unauthorizedTopicPartitionsErrors = unauthorizedTopicPartitions.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED)
-      val (groupError, authorizedTopicPartitionsErrors) = groupCoordinator.handleDeleteOffsets(groupId, authorizedTopicPartitions)
-      val topicPartitionsErrors = unauthorizedTopicPartitionsErrors ++ authorizedTopicPartitionsErrors
+      val (groupError, authorizedTopicPartitionsErrors) = groupCoordinator.handleDeleteOffsets(
+        groupId, topicPartitions)
+
+      topicPartitionErrors ++= authorizedTopicPartitionsErrors
 
       sendResponseMaybeThrottle(request, requestThrottleMs => {
         if (groupError != Errors.NONE)
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicPartitionsErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
+          topicPartitionErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
             topicPartitions.map { case (topicPartition, error) =>
               partitions.add(

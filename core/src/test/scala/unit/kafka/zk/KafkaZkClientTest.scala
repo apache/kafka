@@ -40,7 +40,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
-import kafka.controller.{LeaderIsrAndControllerEpoch, PartitionReplicaAssignment}
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
@@ -169,7 +169,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val expectedAssignment = assignment map { topicAssignment =>
       val partition = topicAssignment._1.partition
       val assignment = topicAssignment._2
-      partition -> PartitionReplicaAssignment(assignment, List(), List())
+      partition -> ReplicaAssignment(assignment, List(), List())
     }
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
@@ -179,7 +179,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => PartitionReplicaAssignment(v, List(), List()) }.toMap)
+    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => ReplicaAssignment(v, List(), List()) }.toMap)
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
     // add second topic
@@ -817,7 +817,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopicAssignment(topicPartition.topic(),
       Map(topicPartition -> Seq()))
 
-    val expectedAssignment = PartitionReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
+    val expectedAssignment = ReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
     val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(),
       Map(topicPartition -> expectedAssignment), controllerEpochZkVersion)
     assertEquals(Code.OK, response.resultCode)

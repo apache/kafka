@@ -582,7 +582,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         assignmentSnapshot = metadataSnapshot;
 
-        log.debug("Finished assignment for group: {}", assignments);
+        log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
@@ -622,7 +622,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!totalAddedPartitions.isEmpty()) {
             log.error("With the COOPERATIVE protocol, owned partitions cannot be " +
                 "reassigned to other members; however the assignor has reassigned partitions {} which are still owned " +
-                "by some members; return the error code to all members to let them stop", totalAddedPartitions);
+                "by some members", totalAddedPartitions);
 
             throw new IllegalStateException("Assignor supporting the COOPERATIVE protocol violates its requirements");
         }
@@ -692,11 +692,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void onLeavePrepare() {
+        // Save the current Generation and use that to get the memberId, as the hb thread can change it at any time
+        final Generation currentGeneration = generation();
+        final String memberId = currentGeneration.memberId;
+
+        log.debug("Executing onLeavePrepare with generation {} and memberId {}", currentGeneration, memberId);
+
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
-            final Exception e = invokePartitionsRevoked(droppedPartitions);
+            final Exception e;
+            if (generation() != Generation.NO_GENERATION) {
+                e = invokePartitionsRevoked(droppedPartitions);
+            } else {
+                e = invokePartitionsLost(droppedPartitions);
+            }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -764,8 +775,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         final Timer timer) {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
-        final Generation generation = generation();
-        if (pendingCommittedOffsetRequest != null && !pendingCommittedOffsetRequest.sameRequest(partitions, generation)) {
+        final Generation generationForOffsetRequest = generationIfStable();
+        if (pendingCommittedOffsetRequest != null &&
+            !pendingCommittedOffsetRequest.sameRequest(partitions, generationForOffsetRequest)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
         }
@@ -779,7 +791,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 future = pendingCommittedOffsetRequest.response;
             } else {
                 future = sendOffsetFetchRequest(partitions);
-                pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generation, future);
+                pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generationForOffsetRequest, future);
 
             }
             client.poll(future, timer);
@@ -1039,7 +1051,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         final Generation generation;
         if (subscriptions.partitionsAutoAssigned()) {
-            generation = generation();
+            generation = generationIfStable();
             // if the generation is null, we are not part of an active group (and we expect to be).
             // the only thing we can do is fail the commit and let the user rejoin the group in poll()
             if (generation == null) {

@@ -53,6 +53,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private KafkaStreams streams;
     private boolean uncaughtException = false;
     private boolean started;
+    private boolean closed;
 
     public SmokeTestClient(final String name) {
         super();
@@ -61,6 +62,10 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     public boolean started() {
         return started;
+    }
+
+    public boolean closed() {
+        return closed;
     }
 
     public void start(final Properties streamsProperties) {
@@ -119,6 +124,10 @@ public class SmokeTestClient extends SmokeTestUtil {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
                 started = true;
+            }
+
+            if (newState == KafkaStreams.State.NOT_RUNNING) {
+                closed = true;
             }
         });
         streamsClient.setUncaughtExceptionHandler((t, e) -> {

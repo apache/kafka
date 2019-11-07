@@ -65,7 +65,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         return new Schema[]{DESCRIBE_CONFIGS_REQUEST_V0, DESCRIBE_CONFIGS_REQUEST_V1, DESCRIBE_CONFIGS_REQUEST_V2};
     }
 
-    public static class Builder extends AbstractRequest.Builder {
+    public static class Builder extends AbstractRequest.Builder<DescribeConfigsRequest> {
         private final Map<ConfigResource, Collection<String>> resourceToConfigNames;
         private boolean includeSynonyms;
 
