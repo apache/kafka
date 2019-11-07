@@ -830,7 +830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else
       quotas.fetch.getMaxValueInQuotaWindow(request.session, clientId).toInt
 
-    val fetchMaxBytes = Math.min(fetchRequest.maxBytes, maxQuotaWindowBytes)
+    val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
     val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
     if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
