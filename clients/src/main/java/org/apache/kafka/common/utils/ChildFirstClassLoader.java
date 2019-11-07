@@ -22,6 +22,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 
 /**
@@ -54,10 +55,10 @@ public class ChildFirstClassLoader extends URLClassLoader {
                     File parent = new File(new File(f.getCanonicalPath()).getParent());
                     if (parent.isDirectory()) {
                         File[] files = parent.listFiles((dir, name) -> {
-                            String lower = name.toLowerCase();
+                            String lower = name.toLowerCase(Locale.ROOT);
                             return lower.endsWith(".jar") || lower.endsWith(".zip");
                         });
-                        if(files != null) {
+                        if (files != null) {
                             for (File jarFile : files) {
                                 urls.add(jarFile.getCanonicalFile().toURI().toURL());
                             }
@@ -114,7 +115,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
         return new Enumeration<URL>() {
             @Override
             public boolean hasMoreElements() {
-                return (urls1 != null && urls1.hasMoreElements()) || (urls2 !=null && urls2.hasMoreElements());
+                return (urls1 != null && urls1.hasMoreElements()) || (urls2 != null && urls2.hasMoreElements());
             }
 
             @Override
