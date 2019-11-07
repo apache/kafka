@@ -63,7 +63,7 @@ object AclAuthorizer {
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
 }
 
-class AclAuthorizer extends Authorizer with Logging {
+class AclAuthorizer extends CachedAuthorizer with Logging {
   private[security] val authorizerLogger = Logger("kafka.authorizer.logger")
   private var superUsers = Set.empty[KafkaPrincipal]
   private var shouldAllowEveryoneIfNoAclIsFound = false
@@ -224,7 +224,7 @@ class AclAuthorizer extends Authorizer with Logging {
     if (zkClient != null) zkClient.close()
   }
 
-  private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
+  def authorizeActionUncached(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
     if (resource.patternType != PatternType.LITERAL) {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
@@ -454,6 +454,9 @@ class AclAuthorizer extends Authorizer with Logging {
     } else {
       aclCache = aclCache - resource
     }
+    // any time we get new Acls, we just update authorizer's cache of this resource
+    this.removeResourceAuthorizerCache(resource)
+    authorizerLogger.debug(s"remove resource AuthorizerCache for resource $resource")
   }
 
   private def updateAclChangedFlag(resource: Resource): Unit = {
