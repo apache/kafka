@@ -23,7 +23,6 @@ from kafkatest.services.trogdor.round_trip_workload import RoundTripWorkloadServ
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.utils.remote_account import network_device
 
 
 class RoundTripFaultTest(Test):
@@ -101,7 +100,7 @@ class RoundTripFaultTest(Test):
         node_specs = {}
         spec = DegradedNetworkFaultSpec(0, 60000, node_specs)
         for node in self.kafka.nodes + self.zk.nodes:
-            spec.add_node_spec(node.name, network_device(node), 100, 3000)
+            spec.add_node_spec(node.name, "eth0", 100, 3000)
         slow1 = self.trogdor.create_task("slow1", spec)
         workload1.wait_for_done(timeout_sec=600)
         slow1.stop()
