@@ -290,7 +290,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, 60000, "waiting for metadata, store and value to be non null");
         }
     }
 
