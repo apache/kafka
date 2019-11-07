@@ -81,7 +81,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
-  private[zookeeper] val expiryScheduler = new KafkaScheduler(threads = 1, "zk-session-expiry-handler")
+  private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, "zk-client-reinit-")
 
   private val metricNames = Set[String]()
 
@@ -115,7 +115,7 @@ class ZooKeeperClient(connectString: String,
 
   metricNames += "SessionState"
 
-  expiryScheduler.startup()
+  reinitializeScheduler.startup()
   try waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
   catch {
     case e: Throwable =>
@@ -344,7 +344,7 @@ class ZooKeeperClient(connectString: String,
     // Shutdown scheduler outside of lock to avoid deadlock if scheduler
     // is waiting for lock to process session expiry. Close expiry thread
     // first to ensure that new clients are not created during close().
-    expiryScheduler.shutdown()
+    reinitializeScheduler.shutdown()
 
     inWriteLock(initializationLock) {
       zNodeChangeHandlers.clear()
@@ -419,9 +419,9 @@ class ZooKeeperClient(connectString: String,
   }
 
   // Visibility for testing
-  private[zookeeper] def scheduleSessionExpiryHandler(): Unit = {
-    expiryScheduler.scheduleOnce("zk-session-expired", () => {
-      info("Session expired.")
+  private[zookeeper] def scheduleReinitialize(name: String, message: String): Unit = {
+    reinitializeScheduler.scheduleOnce(name, () => {
+      info(message)
       reinitialize()
     })
   }
@@ -440,8 +440,14 @@ class ZooKeeperClient(connectString: String,
           if (state == KeeperState.AuthFailed) {
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
+
+            // If this is during initial startup, the reinitialization scheduler hasn't been started yet.
+            // To support failing fast, allow authorization to fail in that case.
+            if (reinitializeScheduler.isStarted) {
+              scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.")
+            }
           } else if (state == KeeperState.Expired) {
-            scheduleSessionExpiryHandler()
+            scheduleReinitialize("session-expired", "Session expired.")
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
