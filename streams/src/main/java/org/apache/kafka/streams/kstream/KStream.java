@@ -882,6 +882,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -975,6 +976,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1334,6 +1336,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1414,6 +1417,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1495,6 +1499,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1578,6 +1583,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1666,6 +1672,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1756,6 +1763,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1845,6 +1853,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1933,6 +1942,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
@@ -1994,6 +2004,7 @@ public interface KStream<K, V> {
      * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
      * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
      * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
