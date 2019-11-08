@@ -855,7 +855,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                               when send is invoked after producer has been closed.
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
-     * @throws TimeoutException If the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      */
     @Override

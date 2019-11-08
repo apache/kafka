@@ -134,13 +134,14 @@ public class RecordCollectorImpl implements RecordCollector {
     ) {
         String errorLogMessage = LOG_MESSAGE;
         String errorMessage = EXCEPTION_MESSAGE;
-        // There is no documented API for detecting retriable errors, so we rely on `RetriableException`
-        // even though it's an implementation detail (i.e. we do the best we can given what's available)
+
         if (exception instanceof TimeoutException) {
             final String topicTimeoutHint = String.format(TIMEOUT_HINT_TEMPLATE, topic);
             errorLogMessage += topicTimeoutHint;
             errorMessage += topicTimeoutHint;
         } else if (exception instanceof RetriableException) {
+            // There is no documented API for detecting retriable errors, so we rely on `RetriableException`
+            // even though it's an implementation detail (i.e. we do the best we can given what's available)
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
         }
