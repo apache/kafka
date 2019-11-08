@@ -2362,7 +2362,7 @@ class Log(@volatile var dir: File,
 
         val bytesAppended = newSegment.appendFromFile(sourceRecords, position)
         if (bytesAppended == 0)
-          throw new IllegalStateException(s"Failed to append records to $topicPartition from position $position in $segment")
+          throw new IllegalStateException(s"Failed to append records from position $position in $segment")
 
         position += bytesAppended
       }
@@ -2377,7 +2377,7 @@ class Log(@volatile var dir: File,
       }
       // size of all the new segments combined must equal size of the original segment
       if (totalSizeOfNewSegments != segment.log.sizeInBytes)
-        throw new IllegalStateException(s"Inconsistent segment sizes in $topicPartition after split" +
+        throw new IllegalStateException("Inconsistent segment sizes after split" +
           s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
 
       // replace old segment with new ones
