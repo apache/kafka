@@ -48,7 +48,7 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=1000, partition_count=34, replication_factor=3)
     def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
