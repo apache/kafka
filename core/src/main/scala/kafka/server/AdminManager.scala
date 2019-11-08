@@ -180,7 +180,7 @@ class AdminManager(val config: KafkaConfig,
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
-          debug(s"Topic '${topic.name}' already exists.", e)
+          debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
           CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
