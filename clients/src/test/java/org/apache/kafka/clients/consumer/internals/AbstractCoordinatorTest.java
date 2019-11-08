@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -34,7 +33,6 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -496,33 +494,6 @@ public class AbstractCoordinatorTest {
         RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
         assertNotNull(leaveGroupFuture);
         assertTrue(leaveGroupFuture.exception() instanceof UnknownMemberIdException);
-    }
-
-    @Test
-    public void testHandleSingleLeaveGroupRequest() {
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-        mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.LEAVE_GROUP.id, (short) 2, (short) 2));
-
-        LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
-            new MemberResponse()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(memberId)));
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-        mockClient.prepareResponse(body -> {
-            if (body instanceof LeaveGroupRequest) {
-                LeaveGroupRequest request = (LeaveGroupRequest) body;
-                return request.data().memberId().equals(memberId)
-                    && request.data().members().isEmpty();
-            } else {
-                return false;
-            }
-        }, expectedResponse);
-
-        coordinator.ensureActiveGroup();
-        RequestFuture<Void> leaveGroupFuture = coordinator.maybeLeaveGroup("test single leave group");
-        assertTrue(leaveGroupFuture.succeeded());
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {
