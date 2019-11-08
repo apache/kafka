@@ -298,7 +298,7 @@ public class KStreamAggregationDedupIntegrationTest {
             valueDeserializer.getClass().getName());
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
             outputTopic,
-            numMessages, 2 * 60 * 1000);
+            numMessages, 3 * 60 * 1000);
 
     }
 
