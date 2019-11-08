@@ -136,12 +136,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 suspended.put(id, task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // swallow and move on since we are rebalancing
-                log.info("Failed to suspend the stream task {} since it got migrated to another thread already. " +
+                log.info("Failed to suspend stream task {} since it got migrated to another thread already. " +
                     "Closing it as zombie and moving on.", id);
                 firstException.compareAndSet(null, closeZombieTask(task));
                 prevActiveTasks.remove(id);
             } catch (final RuntimeException e) {
-                log.error("Suspending the stream task {} failed due to the following error:", id, e);
+                log.error("Suspending stream task {} failed due to the following error:", id, e);
                 firstException.compareAndSet(null, e);
                 try {
                     prevActiveTasks.remove(id);
@@ -152,9 +152,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                         id, f);
                 }
             } finally {
-                running.remove(id);
-                runningByPartition.keySet().removeAll(task.partitions());
-                runningByPartition.keySet().removeAll(task.changelogPartitions());
+                removeTaskFromRunning(task);
                 taskChangelogs.addAll(task.changelogPartitions());
             }
         }
@@ -193,9 +191,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private RuntimeException closeRunning(final boolean isZombie,
                                           final StreamTask task,
                                           final List<TopicPartition> closedTaskChangelogs) {
-        running.remove(task.id());
-        runningByPartition.keySet().removeAll(task.partitions());
-        runningByPartition.keySet().removeAll(task.changelogPartitions());
+        removeTaskFromRunning(task);
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
@@ -228,12 +224,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private RuntimeException closeRestoring(final boolean isZombie,
                                             final StreamTask task,
                                             final List<TopicPartition> closedTaskChangelogs) {
-        restoring.remove(task.id());
+        removeTaskFromRestoring(task);
         closedTaskChangelogs.addAll(task.changelogPartitions());
-        for (final TopicPartition tp : task.partitions()) {
-            restoredPartitions.remove(tp);
-            restoringByPartition.remove(tp);
-        }
 
         try {
             final boolean clean = !isZombie;
@@ -282,15 +274,19 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
         for (final TaskId id : lostTasks) {
             if (suspended.containsKey(id)) {
+                log.debug("Closing the zombie suspended stream task {}.", id);
                 firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
             } else if (created.containsKey(id)) {
+                log.debug("Closing the zombie created stream task {}.", id);
                 firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
             } else if (restoring.containsKey(id)) {
-                firstException.compareAndSet(null, closeRestoring(true, created.get(id), lostTaskChangelogs));
+                log.debug("Closing the zombie restoring stream task {}.", id);
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), lostTaskChangelogs));
             } else if (running.containsKey(id)) {
+                log.debug("Closing the zombie running stream task {}.", id);
                 firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
             } else {
-                // task may have already been closed as a zombie and removed from all task maps
+                log.warn("Skipping closing the zombie stream task {} as it was already removed.", id);
             }
         }
 
@@ -324,14 +320,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 } catch (final TaskMigratedException e) {
                     // we need to catch migration exception internally since this function
                     // is triggered in the rebalance callback
-                    log.info("Failed to resume the stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
-                    final RuntimeException fatalException = closeZombieTask(task);
-                    running.remove(taskId);
-
-                    if (fatalException != null) {
-                        throw fatalException;
-                    }
+                    log.info("Failed to resume stream task {} since it got migrated to another thread already. " +
+                             "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                     throw e;
                 }
                 log.trace("Resuming the suspended stream task {}", task.id());
@@ -356,6 +346,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
+                restoringByPartition.keySet().removeAll(task.partitions());
+                restoringByPartition.keySet().removeAll(task.changelogPartitions());
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());
@@ -371,16 +363,34 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
         if (allTasksRunning()) {
             restoredPartitions.clear();
+
+            if (!restoringByPartition.isEmpty()) {
+                log.error("Finished restoring all tasks but found leftover partitions in restoringByPartition: {}",
+                    restoringByPartition);
+                throw new IllegalStateException("Restoration is complete but not all partitions were cleared.");
+            }
         }
     }
 
-    void addToRestoring(final StreamTask task) {
+    void addTaskToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
         }
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
+        }
+    }
+
+    private void removeTaskFromRestoring(final StreamTask task) {
+        restoring.remove(task.id());
+        for (final TopicPartition topicPartition : task.partitions()) {
+            restoredPartitions.remove(topicPartition);
+            restoringByPartition.remove(topicPartition);
+        }
+        for (final TopicPartition topicPartition : task.changelogPartitions()) {
+            restoredPartitions.remove(topicPartition);
+            restoringByPartition.remove(topicPartition);
         }
     }
 
@@ -392,8 +402,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         int committed = 0;
         RuntimeException firstException = null;
 
-        for (final Iterator<StreamTask> it = running().iterator(); it.hasNext(); ) {
-            final StreamTask task = it.next();
+        for (final StreamTask task : running.values()) {
             try {
                 if (task.commitRequested() && task.commitNeeded()) {
                     task.commit();
@@ -402,12 +411,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
+                         "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to commit stream task {} due to the following error:", task.id(), t);
@@ -443,21 +447,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     int process(final long now) {
         int processed = 0;
 
-        final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
-        while (it.hasNext()) {
-            final StreamTask task = it.next().getValue();
+        for (final StreamTask task : running.values()) {
             try {
                 if (task.isProcessable(now) && task.process()) {
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
+                        "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
             } catch (final RuntimeException e) {
                 log.error("Failed to process stream task {} due to the following error:", task.id(), e);
@@ -473,9 +470,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      */
     int punctuate() {
         int punctuated = 0;
-        final Iterator<Map.Entry<TaskId, StreamTask>> it = running.entrySet().iterator();
-        while (it.hasNext()) {
-            final StreamTask task = it.next().getValue();
+
+        for (final StreamTask task : running.values()) {
             try {
                 if (task.maybePunctuateStreamTime()) {
                     punctuated++;
@@ -485,12 +481,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
+                        "Will trigger a new rebalance and close all tasks as zombies together.", task.id());
                 throw e;
             } catch (final KafkaException e) {
                 log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
@@ -511,13 +502,28 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     public void shutdown(final boolean clean) {
         final String shutdownType = clean ? "Clean" : "Unclean";
-        log.debug(shutdownType + " shutdown of all active tasks" + "\n" +
-                      "non-initialized tasks to close: {}" + "\n" +
+        log.debug("{} shutdown of all active tasks" + "\n" +
+                      "non-initialized stream tasks to close: {}" + "\n" +
                       "restoring tasks to close: {}" + "\n" +
-                      "running tasks to close: {}" + "\n" +
-                      "suspended tasks to close: {}",
-            clean, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
+                      "running stream tasks to close: {}" + "\n" +
+                      "suspended stream tasks to close: {}",
+            shutdownType, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
         super.shutdown(clean);
+    }
+
+    @Override
+    public boolean isEmpty() throws IllegalStateException {
+        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
+            log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
+                      "restoring by partitions map contained {}", restoringByPartition);
+            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
+        } else {
+            return super.isEmpty()
+                       && restoring.isEmpty()
+                       && restoringByPartition.isEmpty()
+                       && restoredPartitions.isEmpty()
+                       && suspended.isEmpty();
+        }
     }
 
     public String toString(final String indent) {

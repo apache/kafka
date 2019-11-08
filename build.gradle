@@ -1177,6 +1177,31 @@ project(':streams') {
     testRuntime libs.slf4jlog4j
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "org.apache.kafka.streams.internals.generated",
+             "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "src/main/resources/common/message" ]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+
   javadoc {
     include "**/org/apache/kafka/streams/**"
     exclude "**/internals/**"

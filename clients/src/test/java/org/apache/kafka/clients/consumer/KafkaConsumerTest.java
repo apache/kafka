@@ -720,6 +720,37 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testNoCommittedOffsets() {
+        long offset1 = 10000;
+
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer.assign(Arrays.asList(tp0, tp1));
+
+        // lookup coordinator
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        // fetch offset for one topic
+        client.prepareResponseFrom(offsetResponse(Utils.mkMap(Utils.mkEntry(tp0, offset1), Utils.mkEntry(tp1, -1L)), Errors.NONE), coordinator);
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(Utils.mkSet(tp0, tp1));
+        assertEquals(2, committed.size());
+        assertEquals(offset1, committed.get(tp0).offset());
+        assertNull(committed.get(tp1));
+
+        consumer.close(Duration.ofMillis(0));
+    }
+
+    @Test
     public void testAutoCommitSentBeforePositionUpdate() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);

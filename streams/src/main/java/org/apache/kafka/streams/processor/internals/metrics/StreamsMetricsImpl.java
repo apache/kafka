@@ -46,12 +46,13 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
     public enum Version {
         LATEST,
-        FROM_100_TO_24
+        FROM_0100_TO_24
     }
 
     static class ImmutableMetricValue<T> implements Gauge<T> {
@@ -140,14 +141,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String THREAD_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String PROCESSOR_NODE_LEVEL_GROUP = GROUP_PREFIX + "processor-node" + GROUP_SUFFIX;
-    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
-    public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
+    public static final String STATE_STORE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
+    public static final String BUFFER_LEVEL_GROUP_0100_TO_24 = GROUP_PREFIX + "buffer" + GROUP_SUFFIX;
     public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
     public static final String TOTAL_DESCRIPTION = "The total number of ";
     public static final String RATE_DESCRIPTION = "The average per-second number of ";
 
-    public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
     public static final String LATE_RECORD_DROP = "late-record-drop";
 
     public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
@@ -164,7 +164,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
             return Version.LATEST;
         } else {
-            return Version.FROM_100_TO_24;
+            return Version.FROM_0100_TO_24;
         }
     }
 
@@ -399,7 +399,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String taskId,
                                                 final String storeName) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        if (version == Version.FROM_100_TO_24) {
+        if (version == Version.FROM_0100_TO_24) {
             tagMap.put(THREAD_ID_TAG_0100_TO_24, threadId);
         } else {
             tagMap.put(THREAD_ID_TAG, threadId);
@@ -662,16 +662,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                          final Map<String, String> tags,
                                                          final String operation,
                                                          final String descriptionOfRate,
-                                                         final String descriptionOfInvocation) {
+                                                         final String descriptionOfCount) {
+        addInvocationRateToSensor(sensor, group, tags, operation, descriptionOfRate);
         sensor.add(
             new MetricName(
                 operation + TOTAL_SUFFIX,
                 group,
-                descriptionOfInvocation,
+                descriptionOfCount,
                 tags
             ),
             new CumulativeCount()
         );
+    }
+
+    public static void addInvocationRateToSensor(final Sensor sensor,
+                                                 final String group,
+                                                 final Map<String, String> tags,
+                                                 final String operation,
+                                                 final String descriptionOfRate) {
         sensor.add(
             new MetricName(
                 operation + RATE_SUFFIX,
@@ -774,6 +782,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             }
         } else {
             actionToMeasure.run();
+        }
+    }
+
+    public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
+                                            final Time time,
+                                            final Sensor sensor) {
+        if (sensor.shouldRecord()) {
+            final long startNs = time.nanoseconds();
+            try {
+                return actionToMeasure.get();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            return actionToMeasure.get();
         }
     }
 

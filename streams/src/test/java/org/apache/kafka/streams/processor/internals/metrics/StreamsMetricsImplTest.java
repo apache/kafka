@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -51,9 +52,10 @@ import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.resetToDefault;
 import static org.easymock.EasyMock.verify;
 import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.resetToDefault;
 import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -62,10 +64,9 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
 import static org.powermock.api.easymock.PowerMock.createMock;
-import static org.powermock.api.easymock.PowerMock.replay;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({StreamsMetricsImpl.class, Sensor.class})
+@PrepareForTest(Sensor.class)
 public class StreamsMetricsImplTest {
 
     private final static String SENSOR_PREFIX_DELIMITER = ".";
@@ -513,6 +514,18 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    public void shouldAddInvocationRateToSensor() {
+        final Sensor sensor = createMock(Sensor.class);
+        final MetricName expectedMetricName = new MetricName(METRIC_NAME1 + "-rate", group, description1, tags);
+        expect(sensor.add(eq(expectedMetricName), anyObject(Rate.class))).andReturn(true);
+        replay(sensor);
+
+        StreamsMetricsImpl.addInvocationRateToSensor(sensor, group, tags, METRIC_NAME1, description1);
+
+        verify(sensor);
+    }
+
+    @Test
     public void shouldAddAmountRateAndSum() {
         StreamsMetricsImpl
             .addRateOfSumAndSumMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
@@ -606,7 +619,7 @@ public class StreamsMetricsImplTest {
     public void shouldReturnMetricsVersionFrom100To23() {
         assertThat(
             new StreamsMetricsImpl(metrics, THREAD_ID, StreamsConfig.METRICS_0100_TO_24).version(),
-            equalTo(Version.FROM_100_TO_24)
+            equalTo(Version.FROM_0100_TO_24)
         );
     }
 

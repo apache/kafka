@@ -331,7 +331,6 @@ public final class MessageTest {
 
             if (version < 6) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-
             }
 
             if (version < 7) {
@@ -598,7 +597,7 @@ public final class MessageTest {
     }
 
     private void testAllMessageRoundTripsFromVersion(short fromVersion, Message message) throws Exception {
-        for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
+        for (short version = fromVersion; version <= message.highestSupportedVersion(); version++) {
             testEquivalentMessageRoundTrip(version, message);
         }
     }

@@ -353,7 +353,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     assertTrue("Unexpected exception " + e2.getCause, e2.getCause.isInstanceOf[TopicAuthorizationException])
 
     // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume
-    // from the unauthorized topic and throw
+    // from the unauthorized topic and throw; since we can now return data during the time we are updating
+    // metadata / fetching positions, it is possible that the authorized topic record is returned during this time.
     consumer.assign(List(tp, tp2).asJava)
     sendRecords(producer, numRecords, tp2)
     var topic2RecordConsumed = false
@@ -368,7 +369,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)
-
     if (!topic2RecordConsumed) {
       consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 1, topic2)
     }

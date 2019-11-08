@@ -38,7 +38,9 @@ import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -67,8 +69,8 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer netReadBuffer;
     private ByteBuffer netWriteBuffer;
     private ByteBuffer appReadBuffer;
+    private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
-    private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         return new SslTransportLayer(channelId, key, sslEngine);
@@ -94,12 +96,9 @@ public class SslTransportLayer implements TransportLayer {
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
         this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
         this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
-
-        //clear & set netRead & netWrite buffers
-        netWriteBuffer.position(0);
         netWriteBuffer.limit(0);
-        netReadBuffer.position(0);
         netReadBuffer.limit(0);
+
         state = State.HANDSHAKE;
         //initiate handshake
         sslEngine.beginHandshake();
@@ -168,7 +167,7 @@ public class SslTransportLayer implements TransportLayer {
                 //prep the buffer for the close message
                 netWriteBuffer.clear();
                 //perform the close, since we called sslEngine.closeOutbound
-                SSLEngineResult wrapResult = sslEngine.wrap(emptyBuf, netWriteBuffer);
+                SSLEngineResult wrapResult = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
                 //we should be in a close state
                 if (wrapResult.getStatus() != SSLEngineResult.Status.CLOSED) {
                     throw new IOException("Unexpected status returned by SSLEngine.wrap, expected CLOSED, received " +
@@ -185,6 +184,10 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = null;
             netWriteBuffer = null;
             appReadBuffer = null;
+            if (fileChannelBuffer != null) {
+                ByteBufferUnmapper.unmap("fileChannelBuffer", fileChannelBuffer);
+                fileChannelBuffer = null;
+            }
         }
     }
 
@@ -445,7 +448,7 @@ public class SslTransportLayer implements TransportLayer {
         //this should never be called with a network buffer that contains data
         //so we can clear it here.
         netWriteBuffer.clear();
-        SSLEngineResult result = sslEngine.wrap(emptyBuf, netWriteBuffer);
+        SSLEngineResult result = sslEngine.wrap(ByteUtils.EMPTY_BUF, netWriteBuffer);
         //prepare the results to be written
         netWriteBuffer.flip();
         handshakeStatus = result.getHandshakeStatus();
@@ -637,42 +640,37 @@ public class SslTransportLayer implements TransportLayer {
     * Writes a sequence of bytes to this channel from the given buffer.
     *
     * @param src The buffer from which bytes are to be retrieved
-    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @return The number of bytes read from src, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
     @Override
     public int write(ByteBuffer src) throws IOException {
-        int written = 0;
         if (state == State.CLOSING)
             throw closingException();
         if (state != State.READY)
-            return written;
+            return 0;
 
-        if (!flush(netWriteBuffer))
-            return written;
-
-        netWriteBuffer.clear();
-        SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
-        netWriteBuffer.flip();
-
-        //handle ssl renegotiation
-        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
-            throw renegotiationException();
-
-        if (wrapResult.getStatus() == Status.OK) {
-            written = wrapResult.bytesConsumed();
-            flush(netWriteBuffer);
-        } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
-            int currentNetWriteBufferSize = netWriteBufferSize();
-            netWriteBuffer.compact();
-            netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+        int written = 0;
+        while (flush(netWriteBuffer) && src.hasRemaining()) {
+            netWriteBuffer.clear();
+            SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
             netWriteBuffer.flip();
-            if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
-                throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
-        } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-            throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
-        } else if (wrapResult.getStatus() == Status.CLOSED) {
-            throw new EOFException();
+
+            //handle ssl renegotiation
+            if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
+                throw renegotiationException();
+
+            if (wrapResult.getStatus() == Status.OK) {
+                written += wrapResult.bytesConsumed();
+            } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
+                // BUFFER_OVERFLOW means that the last `wrap` call had no effect, so we expand the buffer and try again
+                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, netWriteBufferSize());
+                netWriteBuffer.position(netWriteBuffer.limit());
+            } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+                throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
+            } else if (wrapResult.getStatus() == Status.CLOSED) {
+                throw new EOFException();
+            }
         }
         return written;
     }
@@ -903,6 +901,63 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
-        return fileChannel.transferTo(position, count, this);
+        if (state == State.CLOSING)
+            throw closingException();
+        if (state != State.READY)
+            return 0;
+
+        if (!flush(netWriteBuffer))
+            return 0;
+
+        long channelSize = fileChannel.size();
+        if (position > channelSize)
+            return 0;
+        int totalBytesToWrite = (int) Math.min(Math.min(count, channelSize - position), Integer.MAX_VALUE);
+
+        if (fileChannelBuffer == null) {
+            // Pick a size that allows for reasonably efficient disk reads, keeps the memory overhead per connection
+            // manageable and can typically be drained in a single `write` call. The `netWriteBuffer` is typically 16k
+            // and the socket send buffer is 100k by default, so 32k is a good number given the mentioned trade-offs.
+            int transferSize = 32768;
+            // Allocate a direct buffer to avoid one heap to heap buffer copy. SSLEngine copies the source
+            // buffer (fileChannelBuffer) to the destination buffer (netWriteBuffer) and then encrypts in-place.
+            // FileChannel.read() to a heap buffer requires a copy from a direct buffer to a heap buffer, which is not
+            // useful here.
+            fileChannelBuffer = ByteBuffer.allocateDirect(transferSize);
+            // The loop below drains any remaining bytes from the buffer before reading from disk, so we ensure there
+            // are no remaining bytes in the empty buffer
+            fileChannelBuffer.position(fileChannelBuffer.limit());
+        }
+
+        int totalBytesWritten = 0;
+        long pos = position;
+        try {
+            while (totalBytesWritten < totalBytesToWrite) {
+                if (!fileChannelBuffer.hasRemaining()) {
+                    fileChannelBuffer.clear();
+                    int bytesRemaining = totalBytesToWrite - totalBytesWritten;
+                    if (bytesRemaining < fileChannelBuffer.limit())
+                        fileChannelBuffer.limit(bytesRemaining);
+                    int bytesRead = fileChannel.read(fileChannelBuffer, pos);
+                    if (bytesRead <= 0)
+                        break;
+                    fileChannelBuffer.flip();
+                }
+                int networkBytesWritten = write(fileChannelBuffer);
+                totalBytesWritten += networkBytesWritten;
+                // In the case of a partial write we only return the written bytes to the caller. As a result, the
+                // `position` passed in the next `transferFrom` call won't include the bytes remaining in
+                // `fileChannelBuffer`. By draining `fileChannelBuffer` first, we ensure we update `pos` before
+                // we invoke `fileChannel.read`.
+                if (fileChannelBuffer.hasRemaining())
+                    break;
+                pos += networkBytesWritten;
+            }
+            return totalBytesWritten;
+        } catch (IOException e) {
+            if (totalBytesWritten > 0)
+                return totalBytesWritten;
+            throw e;
+        }
     }
 }
