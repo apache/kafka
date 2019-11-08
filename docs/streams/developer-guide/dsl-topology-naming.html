@@ -45,7 +45,10 @@
 		   if required <code> repartition topics</code>. But with the Kafka Streams
 		   DSL, all these names are generated for you. There is a relationship between
 		   the generated processor-name state store (hence changelog topic name) and repartition
-		   topic names. While the internal naming makes creating
+		   topic names. But the state store, changelog topic and repartition
+		   topic names are <em>stateful</em> and the other processor-names are stateless.  This distinction
+		   of stateful vs. stateless names has important implications when updating your topology.
+		   While the internal naming makes creating
 		   a topology with the DSL much more straightforward,
 		   there are a couple of trade-offs.  The first trade-off is what we could
 		   consider a readability issue. The other
@@ -143,7 +146,7 @@
 		 string that is consistently 10 characters long.
 		 This means that if you add/remove or shift the order of operations, the position of the
 		 processor shifts, which shifts the name of the processor.  Since <strong>most</strong> processors exist
-		 in memory only, this name shifting on topology changes presents no issue.  But the name
+		 in memory only, this name shifting presents no issue for many topologies.  But the name
 		 shifting does have implications for topologies with stateful operators or repartition topics. 
 
 		 Here's a different topology with some state:
@@ -204,7 +207,7 @@
 		  </code>
 
 		Notice that since you've added an operation <em>before</em> the <code>count</code> operation, the state
-		  store (and the changelog topic as well) names have changed.  This name change means you can't
+		  store (and the changelog topic) names have changed.  This name change means you can't
 		  do a rolling re-deployment of your updated topology.  Also, you must use the
 		  <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool">Streams Reset Tool</a> 
 		  to re-calculate the aggregations, because the changelog topic has changed on start-up and the
