@@ -400,7 +400,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   def handleLogDirFailure(dir: String): Unit = {
-    info(s"Stopping cleaning logs in dir $dir")
+    warn(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
       checkpoints = checkpoints.filter { case (k, _) => k.getAbsolutePath != dir }
     }
