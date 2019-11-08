@@ -125,47 +125,6 @@ class CachedAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testTopicUpdateAcl(): Unit = {
-    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val host1 = InetAddress.getByName("192.168.1.1")
-    val host2 = InetAddress.getByName("192.168.1.2")
-
-    val host1Context = newRequestContext(user1, host1)
-    val host2Context = newRequestContext(user1, host2)
-
-    //user1 has READ access from host1 and host2.
-    val acl1 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
-    changeAclAndVerify(Set.empty, Set(acl1), Set.empty)
-    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
-    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
-    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
-
-    //user1 does not have  READ access from host1.
-    val acl2 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, DENY)
-    changeAclAndVerify(Set.empty,  Set(acl2), Set.empty)
-    assertFalse("User1 should not have READ access from host1 due to denyAcl", authorize(aclAuthorizer, host1Context, READ, resource))
-    assertFalse("User1 should not have READ access from host1 due to denyAcl", authorize(aclAuthorizer, host1Context, READ, resource))
-    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
-
-    //user1 has WRITE access from host1 only.
-    val acl3 = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, ALLOW)
-    changeAclAndVerify(Set.empty, Set(acl3), Set.empty)
-    assertTrue("User1 should have WRITE access from host1", authorize(aclAuthorizer, host1Context, WRITE, resource))
-    assertFalse("User1 should not have WRITE access from host2 as no allow acl is defined", authorize(aclAuthorizer, host2Context, WRITE, resource))
-
-    //user1 has DESCRIBE access from all hosts.
-    val acl4 = new AccessControlEntry(user1.toString, WildcardHost, DESCRIBE, ALLOW)
-    changeAclAndVerify(Set.empty, Set(acl4), Set.empty)
-    assertTrue("User1 should not have DESCRIBE access from host1", authorize(aclAuthorizer, host1Context, DESCRIBE, resource))
-    assertTrue("User1 should not have DESCRIBE access from host1", authorize(aclAuthorizer, host1Context, DESCRIBE, resource))
-    assertTrue("User1 should have DESCRIBE access from host2", authorize(aclAuthorizer, host2Context, DESCRIBE, resource))
-
-    assertFalse("User1 should not have edit access from host1", authorize(aclAuthorizer, host1Context, ALTER, resource))
-    assertFalse("User1 should not have edit access from host1", authorize(aclAuthorizer, host1Context, ALTER, resource))
-    assertFalse("User1 should not have edit access from host2", authorize(aclAuthorizer, host2Context, ALTER, resource))
-  }
-
-  @Test
   def testTopicAcl(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
@@ -215,13 +174,10 @@ class CachedAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue("User3 should have DESCRIBE access from host2", authorize(aclAuthorizer, user3Context, DESCRIBE, resource))
     assertTrue("User2 should have READ access from host1", authorize(aclAuthorizer, user2Context, READ, resource))
     assertTrue("User3 should have WRITE access from host2", authorize(aclAuthorizer, user3Context, WRITE, resource))
-
-    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
-    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, WRITE, resource))
   }
 
   /**
-  CustomPrincipals should be compared with their principal type and name
+    CustomPrincipals should be compared with their principal type and name
    */
   @Test
   def testAllowAccessWithCustomPrincipal(): Unit = {
@@ -282,7 +238,7 @@ class CachedAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   /**
-  CustomPrincipals should be compared with their principal type and name
+    CustomPrincipals should be compared with their principal type and name
    */
   @Test
   def testSuperUserWithCustomPrincipalHasAccess(): Unit = {
@@ -529,8 +485,8 @@ class CachedAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   /**
-   * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
-   */
+    * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
+    */
   @Test
   def testAclInheritance(): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
