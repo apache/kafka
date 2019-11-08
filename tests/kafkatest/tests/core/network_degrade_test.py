@@ -68,7 +68,7 @@ class NetworkDegradeTest(Test):
             if m is not None and m.group("time"):
                 times.append(float(m.group("time")))
                 self.logger.info("Parsed ping time of %d" % float(m.group("time")))
-        self.logger.debug("Captured ping times: " + times)
+        self.logger.debug("Captured ping times: %s" % times)
 
         # We expect to see some low ping times (before and after the task runs)
         # as well as high ping times (during the task)
