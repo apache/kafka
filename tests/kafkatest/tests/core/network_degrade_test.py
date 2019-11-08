@@ -68,21 +68,23 @@ class NetworkDegradeTest(Test):
             if m is not None and m.group("time"):
                 times.append(float(m.group("time")))
                 self.logger.info("Parsed ping time of %d" % float(m.group("time")))
+        self.logger.debug("Captured ping times: " + times)
 
         # We expect to see some low ping times (before and after the task runs)
         # as well as high ping times (during the task)
-        slow_times = [t for t in times if t > 100]
+        slow_times = [t for t in times if t > 0.8*2*latency_ms]
         fast_times = [t for t in times if t < 10]
 
         latency.stop()
         latency.wait_for_done()
 
-        assert len(slow_times) > 8, "Expected to see more slow (>100ms) ping times"
-        assert len(fast_times) > 8, "Expected to see more fast (<10ms) ping times"
+        # We captured 20 ping times. Assert that at least 5 were "fast" and 5 were "slow"
+        assert len(slow_times) > 5, "Expected to see more slow ping times"
+        assert len(fast_times) > 5, "Expected to see more fast ping times"
 
     @cluster(num_nodes=5)
-    @parametrize(task_name="rate-1000", device_name="eth0", latency_ms=0, rate_limit_kbit=1000)
-    @parametrize(task_name="rate-1000-latency-50", device_name="eth0", latency_ms=50, rate_limit_kbit=1000)
+    @parametrize(task_name="rate-1000", device_name="eth0", latency_ms=0, rate_limit_kbit=1000000)
+    @parametrize(task_name="rate-1000-latency-50", device_name="eth0", latency_ms=50, rate_limit_kbit=1000000)
     def test_rate(self, task_name, device_name, latency_ms, rate_limit_kbit):
         zk0 = self.zk.nodes[0]
         zk1 = self.zk.nodes[1]

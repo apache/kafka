@@ -138,7 +138,7 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
     }
 
     private void tbfRate(int rateLimitKbit, Consumer<String> consumer) {
-        Stream.of("tbf", "rate", String.format("%dkbit", rateLimitKbit), "buffer", "32kbit", "latency", "500").forEach(consumer);
+        Stream.of("tbf", "rate", String.format("%dkbit", rateLimitKbit), "burst", "1mbit", "latency", "500ms").forEach(consumer);
     }
 
     private void disableTrafficControl(Platform platform, String networkDevice) throws IOException {
