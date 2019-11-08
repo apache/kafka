@@ -202,7 +202,7 @@ class TrogdorService(KafkaPathResolverMixin, Service):
         """
         session = requests.Session()
         session.mount('http://',
-                      HTTPAdapter(max_retries=Retry(total=10, backoff_factor=0.1)))
+                      HTTPAdapter(max_retries=Retry(total=5, backoff_factor=0.3)))
         return session
 
     def _coordinator_post(self, path, message):
