@@ -2123,7 +2123,7 @@ class Log(@volatile var dir: File,
       val view = Option(segments.floorKey(from)).map { floor =>
         if (to < floor)
           throw new IllegalArgumentException(s"Invalid log segment range: requested segments in $topicPartition " +
-            s"from from offset $from mapping to segment with base offset $floor, which is greater than limit offset $to")
+            s"from offset $from mapping to segment with base offset $floor, which is greater than limit offset $to")
         segments.subMap(floor, to)
       }.getOrElse(segments.headMap(to))
       view.values.asScala
