@@ -56,11 +56,10 @@ class NetworkDegradeTest(Test):
         zk0 = self.zk.nodes[0]
         zk1 = self.zk.nodes[1]
 
-        r = re.compile(r".*time=(?P<time>[\d.]+)\sms.*")
-        # PING ducker01 (172.24.0.2) 56(84) bytes of data.
+        # Capture the ping times from the ping stdout
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=1 ttl=64 time=0.325 ms
-        # 64 bytes from ducker01 (172.24.0.2): icmp_seq=2 ttl=64 time=0.197 ms
-        # 64 bytes from ducker01 (172.24.0.2): icmp_seq=3 ttl=64 time=0.145 ms
+        r = re.compile(r".*time=(?P<time>[\d.]+)\sms.*")
+
         times = []
         for line in zk0.account.ssh_capture("ping -i 1 -c 20 %s" % zk1.account.hostname):
             self.logger.debug("Ping output: %s" % line)
@@ -70,17 +69,20 @@ class NetworkDegradeTest(Test):
                 self.logger.info("Parsed ping time of %d" % float(m.group("time")))
         self.logger.debug("Captured ping times: %s" % times)
 
-        # We expect to see some low ping times (before and after the task runs)
-        # as well as high ping times (during the task)
-        slow_times = [t for t in times if t > 0.8*2*latency_ms]
-        fast_times = [t for t in times if t < 10]
+        # We expect to see some low ping times (before and after the task runs) as well as high ping times
+        # (during the task). For the high time, it's twice the configured latency since both links apply the
+        # rule, 80% for a little variance buffer
+        high_time_ms = 0.8 * 2 * latency_ms
+        low_time_ms = 10
+        slow_times = [t for t in times if t > high_time_ms]
+        fast_times = [t for t in times if t < low_time_ms]
 
         latency.stop()
         latency.wait_for_done()
 
         # We captured 20 ping times. Assert that at least 5 were "fast" and 5 were "slow"
-        assert len(slow_times) > 5, "Expected to see more slow ping times"
-        assert len(fast_times) > 5, "Expected to see more fast ping times"
+        assert len(slow_times) > 5, "Expected to see more slow ping times (lower than %d)" % low_time_ms
+        assert len(fast_times) > 5, "Expected to see more fast ping times (higher than %d)" % high_time_ms
 
     @cluster(num_nodes=5)
     @parametrize(task_name="rate-1000", device_name="eth0", latency_ms=0, rate_limit_kbit=1000000)
@@ -98,13 +100,13 @@ class NetworkDegradeTest(Test):
                    timeout_sec=10,
                    err_msg="%s failed to start within 10 seconds." % rate_limit)
 
+        # Run iperf server on zk1, iperf client on zk0
         iperf_server = zk1.account.ssh_capture("iperf -s")
 
-        r = re.compile(r"^.*\s(?P<rate>[\d.]+)\sKbits/sec$")
-        # [ ID] Interval       Transfer     Bandwidth
+        # Capture the measured kbps between the two nodes.
         # [  3]  0.0- 1.0 sec  2952576 KBytes  24187503 Kbits/sec
-        # [  3]  1.0- 2.0 sec  2899072 KBytes  23749198 Kbits/sec
-        # [  3]  2.0- 3.0 sec  2998784 KBytes  24566039 Kbits/sec
+        r = re.compile(r"^.*\s(?P<rate>[\d.]+)\sKbits/sec$")
+
         measured_rates = []
         for line in zk0.account.ssh_capture("iperf -i 1 -t 20 -f k -c %s" % zk1.account.hostname):
             self.logger.info("iperf output %s" % line)
@@ -114,8 +116,8 @@ class NetworkDegradeTest(Test):
                 measured_rates.append(measured_rate)
                 self.logger.info("Parsed rate of %d kbit/s from iperf" % measured_rate)
 
+        # kill iperf server and consume the stdout to ensure clean exit
         zk1.account.kill_process("iperf")
-        # consume the output
         for _ in iperf_server:
             continue
 
@@ -123,7 +125,11 @@ class NetworkDegradeTest(Test):
         rate_limit.wait_for_done()
 
         self.logger.info("Measured rates: %s" % measured_rates)
-        acceptable_rates = [r for r in measured_rates if rate_limit_kbit / 10 < r < rate_limit_kbit * 10]
+
+        # We expect to see measured rates within an order of magnitude of our target rate
+        low_kbps = rate_limit_kbit / 10
+        high_kbps = rate_limit_kbit * 10
+        acceptable_rates = [r for r in measured_rates if low_kbps < r < high_kbps]
 
         msg = "Expected most of the measured rates to be within an order of magnitude of target %d." % rate_limit_kbit
         msg += " This means `tc` did not limit the bandwidth as expected."
