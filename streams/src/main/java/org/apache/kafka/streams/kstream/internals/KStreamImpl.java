@@ -836,10 +836,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
 
-        final String repartitionTopic = repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
-        final String sinkName = builder.newProcessorName(SINK_NAME);
-        final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
-        final String sourceName = builder.newProcessorName(SOURCE_NAME);
+        final String repartitionTopicName = repartitionTopicNamePrefix.endsWith(REPARTITION_TOPIC_SUFFIX) ?
+            repartitionTopicNamePrefix : repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
+
+        // Always need to generate the names to burn index counter for compatibility
+        final String genSinkName = builder.newProcessorName(SINK_NAME);
+        final String genNullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
+        final String genSourceName = builder.newProcessorName(SOURCE_NAME);
+
+        final String sinkName;
+        final String sourceName;
+        final String nullKeyFilterProcessorName;
+
+        if (repartitionTopicNamePrefix.matches("KSTREAM.*-[0-9]{10}")) {
+            sinkName = genSinkName;
+            sourceName = genSourceName;
+            nullKeyFilterProcessorName = genNullKeyFilterProcessorName;
+        } else {
+            sinkName = repartitionTopicName + "-sink";
+            sourceName = repartitionTopicName + "-source";
+            nullKeyFilterProcessorName = repartitionTopicName + "-filter";
+        }
 
         final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
 
@@ -851,7 +868,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         optimizableRepartitionNodeBuilder.withKeySerde(keySerde)
                                          .withValueSerde(valSerde)
                                          .withSourceName(sourceName)
-                                         .withRepartitionTopic(repartitionTopic)
+                                         .withRepartitionTopic(repartitionTopicName)
                                          .withSinkName(sinkName)
                                          .withProcessorParameters(processorParameters)
                                          // reusing the source name for the graph node name
