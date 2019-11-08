@@ -2122,8 +2122,8 @@ class Log(@volatile var dir: File,
     lock synchronized {
       val view = Option(segments.floorKey(from)).map { floor =>
         if (to < floor)
-          throw new IllegalArgumentException(s"Invalid log segment range: requested segments from offset $from " +
-            s"mapping to segment with base offset $floor, which is greater than limit offset $to")
+          throw new IllegalArgumentException(s"Invalid log segment range: requested segments in $topicPartition " +
+            s"from from offset $from mapping to segment with base offset $floor, which is greater than limit offset $to")
         segments.subMap(floor, to)
       }.getOrElse(segments.headMap(to))
       view.values.asScala
@@ -2362,7 +2362,7 @@ class Log(@volatile var dir: File,
 
         val bytesAppended = newSegment.appendFromFile(sourceRecords, position)
         if (bytesAppended == 0)
-          throw new IllegalStateException(s"Failed to append records from position $position in $segment")
+          throw new IllegalStateException(s"Failed to append records to $topicPartition from position $position in $segment")
 
         position += bytesAppended
       }
@@ -2377,7 +2377,7 @@ class Log(@volatile var dir: File,
       }
       // size of all the new segments combined must equal size of the original segment
       if (totalSizeOfNewSegments != segment.log.sizeInBytes)
-        throw new IllegalStateException("Inconsistent segment sizes after split" +
+        throw new IllegalStateException(s"Inconsistent segment sizes in $topicPartition after split" +
           s" before: ${segment.log.sizeInBytes} after: $totalSizeOfNewSegments")
 
       // replace old segment with new ones
