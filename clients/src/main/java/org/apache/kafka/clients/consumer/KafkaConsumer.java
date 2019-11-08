@@ -1234,7 +1234,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // try to update assignment metadata BUT do not need to block on the timer,
                     // since even if we are 1) in the middle of a rebalance or 2) have partitions
                     // with unknown starting positions we may still want to return some data
-                    // as long as there are some partitions fetchable
+                    // as long as there are some partitions fetchable; NOTE we used a timer for 1ms
+                    // because we want to try at least transmit the ready data in each consumer.poll call,
+                    // otherwise we may fall into an endless loop of no rebalance progress since no request
+                    // would be sent out at all
                     updateAssignmentMetadataIfNeeded(timer.remainingMs() > 0 ? time.timer(1L) : timer);
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
@@ -1565,6 +1568,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    // this is an optimization on the client side: if we are doomed to be rejected by the group coordinator
+    // due to invalid generation, we can just fail fast and inform the callers earlier
     private void maybeThrowIfCommitOffsetsNotOwned(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (subscriptions.partitionsAutoAssigned()) {
             final Set<TopicPartition> partitions = assignment();

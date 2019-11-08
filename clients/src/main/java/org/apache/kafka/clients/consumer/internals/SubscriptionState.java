@@ -222,29 +222,22 @@ public class SubscriptionState {
         if (this.assignment.partitionSet().equals(partitions))
             return false;
 
-        final Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(partitions);
-
         assignmentId++;
 
         // update the subscribed topics
         Set<String> manualSubscribedTopics = new HashSet<>();
+        Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
         for (TopicPartition partition : partitions) {
+            TopicPartitionState state = assignment.stateValue(partition);
+            if (state == null)
+                state = new TopicPartitionState();
+            partitionToState.put(partition, state);
+
             manualSubscribedTopics.add(partition.topic());
         }
 
-        this.assignment.set(assignedPartitionStates);
+        this.assignment.set(partitionToState);
         return changeSubscription(manualSubscribedTopics);
-    }
-
-    private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
-        final Map<TopicPartition, TopicPartitionState> partitionToStateMap = new HashMap<>(assignments.size());
-        for (final TopicPartition tp : assignments) {
-            if (assignment.contains(tp))
-                partitionToStateMap.put(tp, assignment.stateValue(tp));
-            else
-                partitionToStateMap.put(tp, new TopicPartitionState());
-        }
-        return partitionToStateMap;
     }
 
     /**

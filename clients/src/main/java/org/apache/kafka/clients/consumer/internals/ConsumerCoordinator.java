@@ -1148,7 +1148,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                              */
                             requestRejoin();
                             future.raise(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
-                                "consumer group undergoing a rebalance at the moment. You can try completing the rebalance " +
+                                "consumer group is executing a rebalance at the moment. You can try completing the rebalance " +
                                 "by calling poll() and then retry commit again"));
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID ||
