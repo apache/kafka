@@ -879,7 +879,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #map(KeyValueMapper) map()} but provides access to the {@code ProcessorContext} and
+     * associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -970,7 +973,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).  Note that it is not
+     *  automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     *  similar to {@link #map(KeyValueMapper) map()} but provides access to the {@code ProcessorContext} and
+     *  associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1063,8 +1069,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
-     * record transformation).
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}. Note that it is
+     * not automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #flatMap(KeyValueMapper) flatMap()} but provides access to the {@code ProcessorContext} and
+     * associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1155,8 +1163,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
-     * record transformation).
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}). Note that it is
+     * not automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #flatMap(KeyValueMapper) flatMap()} but provides access to the {@code ProcessorContext} and
+     * associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1248,7 +1258,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #mapValues(ValueMapper)} but provides access to the {@code ProcessorContext} and associated
+     * metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1323,7 +1336,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #mapValues(ValueMapper)} but provides access to the {@code ProcessorContext} and associated
+     * metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1401,7 +1417,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #mapValues(ValueMapperWithKey)} but provides access to the {@code ProcessorContext} and
+     * associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1480,7 +1499,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #mapValues(ValueMapperWithKey)} but provides access to the {@code ProcessorContext} and
+     * associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1561,7 +1583,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #mapValues(ValueMapper)} but provides access to the {@code ProcessorContext} and associated
+     * metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1647,7 +1672,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}). Note that it
+     * is not automatically stateful, and will be stateless if you choose not to attach a state store. In this case it
+     * is similar to {@link #mapValues(ValueMapper) mapValues()} but provides access to the {@code ProcessorContext}
+     * and associated metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1736,6 +1764,9 @@ public interface KStream<K, V> {
      * each input record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
      * This is a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     *  Note that it is not automatically stateful, and will be stateless if you choose not to attach a state store.
+     *  In this case it is similar to {@link #flatMapValues(ValueMapperWithKey) flatMapValues()} but provides access
+     *  to the {@code ProcessorContext} and associated  metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1823,6 +1854,9 @@ public interface KStream<K, V> {
      * each input record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
      * This is a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * Note that it is not automatically stateful, and will be stateless if you choose not to attach a state store.
+     * In this case it is similar to {@link #flatMapValues(ValueMapperWithKey) flatMapValues()} but provides access
+     * to the {@code ProcessorContext} and associated  metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1908,7 +1942,10 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #foreach(ForeachAction)} but provides access to the {@code ProcessorContext} and associated
+     * metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
@@ -1967,7 +2004,10 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}). Note that it is not
+     * automatically stateful, and will be stateless if you choose not to attach a state store. In this case it is
+     * similar to {@link #foreach(ForeachAction)} but provides access to the {@code ProcessorContext} and associated
+     * metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
