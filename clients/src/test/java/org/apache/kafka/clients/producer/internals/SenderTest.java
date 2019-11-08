@@ -1428,10 +1428,11 @@ public class SenderTest {
         sender.runOnce(); // receive response 0, should be retried since the logStartOffset > lastAckedOffset.
 
         // We should have reset the sequence number state of the partition because the state was lost on the broker.
-        assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
+        /* assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertFalse(request2.isDone());
-        assertFalse(client.hasInFlightRequests());
+        assertFalse(client.hasInFlightRequests()); */
+        assertTrue(transactionManager.shouldBumpEpoch());
 
         sender.runOnce(); // should retry request 1
 

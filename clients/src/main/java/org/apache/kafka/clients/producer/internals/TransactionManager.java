@@ -508,7 +508,8 @@ public class TransactionManager {
         this.partitionsWithUnresolvedSequences.clear();
     }
 
-    private synchronized boolean shouldBumpEpoch() {
+    // package-private for unit testing
+    synchronized boolean shouldBumpEpoch() {
         return epochBumpRequired;
     }
 
@@ -651,10 +652,29 @@ public class TransactionManager {
             return;
         }
 
-        removeInFlightBatch(batch);
-        if (exception instanceof RecordTooLargeException) {
-            adjustSequencesDueToFailedBatch(batch);
-        } else if (canBumpEpoch() && !(exception instanceof TimeoutException)) {
+        // In the event of a timeout, we are uncertain whether the batch was written to the log, so we will allow
+        // subsequent batches to either complete successfully or to fail, at which point we will reset the producer ID
+        if (exception instanceof TimeoutException) {
+            removeInFlightBatch(batch);
+        } else {
+            /* if (topicPartitionBookkeeper.contains(batch.topicPartition)) {
+                topicPartitionBookkeeper.getPartition(batch.topicPartition).failBatches(exception);
+            } */
+            removeInFlightBatch(batch);
+
+            if (canBumpEpoch()) {
+                epochBumpRequired = true;
+            } else if (exception instanceof UnknownProducerIdException) {
+                resetSequenceNumbers();
+            }
+        }
+
+        log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
+                exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
+
+
+        /* // removeInFlightBatch(batch);
+        if (canBumpEpoch() && !(exception instanceof TimeoutException)) {
             epochBumpRequired = true;
         } else if (exception instanceof UnknownProducerIdException) {
             resetSequenceNumbers();
@@ -662,7 +682,7 @@ public class TransactionManager {
 
         log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
                 exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
-        /* if (topicPartitionBookkeeper.contains(batch.topicPartition)) {
+        if (topicPartitionBookkeeper.contains(batch.topicPartition)) {
             topicPartitionBookkeeper.getPartition(batch.topicPartition).failBatches(exception);
         } */
     }
@@ -699,7 +719,6 @@ public class TransactionManager {
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
         });
     }
-
 
     private boolean hasInflightBatches(TopicPartition topicPartition) {
         return topicPartitionBookkeeper.contains(topicPartition)
@@ -1035,7 +1054,7 @@ public class TransactionManager {
 
     private boolean canBumpEpoch() {
         return !isTransactional() ||
-                apiVersions.get(transactionCoordinator.idString()).apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 2;
+                apiVersions.get(transactionCoordinator.idString()).apiVersion(ApiKeys.INIT_PRODUCER_ID).maxVersion >= 3;
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
