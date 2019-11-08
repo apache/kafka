@@ -290,7 +290,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                 }
-            }, 60000, "waiting for metadata, store and value to be non null");
+            }, 120000, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -322,7 +322,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                 }
-            }, 30000, "waiting for metadata, store and value to be non null");
+            }, 120000, "waiting for metadata, store and value to be non null");
         }
     }
 
@@ -668,7 +668,7 @@ public class QueryableStateIntegrationTest {
             config,
             topic,
             numRecs,
-            60 * 1000);
+            120 * 1000);
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
