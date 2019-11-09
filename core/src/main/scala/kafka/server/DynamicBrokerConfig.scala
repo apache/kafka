@@ -237,6 +237,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       case Some(authz: Reconfigurable) => addReconfigurable(authz)
       case _ =>
     }
+    addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 

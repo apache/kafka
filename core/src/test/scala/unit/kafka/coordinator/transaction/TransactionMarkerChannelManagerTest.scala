@@ -29,8 +29,8 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.Test
-import com.yammer.metrics.Metrics
 import kafka.common.RequestAndCompletionHandler
+import kafka.metrics.KafkaYammerMetrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 
@@ -423,7 +423,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldCreateMetricsOnStarting(): Unit = {
-    val metrics = Metrics.defaultRegistry.allMetrics.asScala
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
 
     assertEquals(1, metrics
       .filterKeys(_.getMBeanName == "kafka.coordinator.transaction:type=TransactionMarkerChannelManager,name=UnknownDestinationQueueSize")
