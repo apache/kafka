@@ -986,6 +986,12 @@ public class KafkaAdminClient extends AdminClient {
                     long nodeTimeout = client.pollDelayMs(node, now);
                     pollTimeout = Math.min(pollTimeout, nodeTimeout);
                     log.trace("Client is not ready to send to {}. Must delay {} ms", node, nodeTimeout);
+
+                    AuthenticationException authenticationException = client.authenticationException(node);
+                    if (authenticationException != null) {
+                        Call call = calls.remove(0);
+                        call.fail(now, authenticationException);
+                    }
                     continue;
                 }
                 Call call = calls.remove(0);

@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A simple implementation of `MetadataUpdater` that returns the cluster nodes set via the constructor or via
@@ -69,19 +71,23 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleDisconnection(String destination) {
+    public void handleDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeFatalException) {
+        if (maybeFatalException.isPresent()) {
+            // We don't fail the broker on failures, but there should be sufficient information in the
+            // logs indicating the reason for failure.
+            log.error("Received authentication failure from brokerId={}", nodeId, maybeFatalException.get());
+        } else {
+            log.info("Received disconnect from brokerId={}", nodeId);
+        }
+    }
+
+    @Override
+    public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
         // Do nothing
     }
 
     @Override
-    public void handleFatalException(KafkaException exception) {
-        // We don't fail the broker on failures, but there should be sufficient information in the logs indicating the reason
-        // for failure.
-        log.debug("An error occurred in broker-to-broker communication.", exception);
-    }
-
-    @Override
-    public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+    public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
         // Do nothing
     }
 
