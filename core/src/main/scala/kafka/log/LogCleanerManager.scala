@@ -32,7 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
 
-import scala.collection.{Iterable, Seq, immutable, mutable}
+import scala.collection.{Iterable, Seq, mutable}
 
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
@@ -109,8 +109,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
                   val now = Time.SYSTEM.milliseconds
                   partitions.map { tp =>
                     val log = logs.get(tp)
-                    val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, tp, lastClean, now)
-                    val (_, uncleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
+                    val lastCleanOffset = lastClean.get(tp)
+                    val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
+                    val (_, uncleanableBytes) = calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
                     uncleanableBytes
                   }.sum
                 }
@@ -185,7 +186,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
           try {
-            val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, topicPartition, lastClean, now)
+            val lastCleanOffset = lastClean.get(topicPartition)
+            val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
             val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
@@ -519,15 +521,11 @@ private[log] object LogCleanerManager extends Logging {
     * Returns the range of dirty offsets that can be cleaned.
     *
     * @param log the log
-    * @param lastClean the map of checkpointed offsets
+    * @param lastCleanOffset the last checkpointed offset
     * @param now the current time in milliseconds of the cleaning operation
     * @return the lower (inclusive) and upper (exclusive) offsets
     */
-  def cleanableOffsets(log: Log, topicPartition: TopicPartition, lastClean: immutable.Map[TopicPartition, Long], now: Long): (Long, Long) = {
-
-    // the checkpointed offset, ie., the first offset of the next dirty segment
-    val lastCleanOffset: Option[Long] = lastClean.get(topicPartition)
-
+  def cleanableOffsets(log: Log, lastCleanOffset: Option[Long], now: Long): (Long, Long) = {
     // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
     // reset to the log starting offset and log the error
     val firstDirtyOffset = {
@@ -543,7 +541,7 @@ private[log] object LogCleanerManager extends Logging {
       } else if (checkpointDirtyOffset > log.logEndOffset) {
         // The dirty offset has gotten ahead of the log end offset. This could happen if there was data
         // corruption at the end of the log. We conservatively assume that the full log needs cleaning.
-        warn(s"The last checkpoint dirty offset for partition $topicPartition is $checkpointDirtyOffset, " +
+        warn(s"The last checkpoint dirty offset for partition ${log.name} is $checkpointDirtyOffset, " +
           s"which is larger than the log end offset ${log.logEndOffset}. Resetting to the log start offset $logStartOffset.")
         logStartOffset
       } else {
@@ -570,14 +568,31 @@ private[log] object LogCleanerManager extends Logging {
         val dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset)
         dirtyNonActiveSegments.find { s =>
           val isUncleanable = s.largestTimestamp > now - minCompactionLagMs
-          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - minCompactionLagMs}; is uncleanable=$isUncleanable")
+          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} " +
+            s"segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - minCompactionLagMs}; " +
+            s"is uncleanable=$isUncleanable")
           isUncleanable
         }.map(_.baseOffset)
       } else None
     ).flatten.min
 
-    debug(s"Finding range of cleanable offsets for log=${log.name} topicPartition=$topicPartition. Last clean offset=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegment.baseOffset=${log.activeSegment.baseOffset}")
+    debug(s"Finding range of cleanable offsets for log=${log.name}. Last clean offset=$lastCleanOffset " +
+      s"now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset " +
+      s"activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 
-    (firstDirtyOffset, firstUncleanableDirtyOffset)
+    (firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableDirtyOffset))
   }
+
+  /**
+   * Given the first dirty offset and an uncleanable offset, calculates the total cleanable bytes for this log
+   * @return the biggest uncleanable offset and the total amount of cleanable bytes
+   */
+  def calculateCleanableBytes(log: Log, firstDirtyOffset: Long, uncleanableOffset: Long): (Long, Long) = {
+    val firstUncleanableSegment = log.nonActiveLogSegmentsFrom(uncleanableOffset).headOption.getOrElse(log.activeSegment)
+    val firstUncleanableOffset = firstUncleanableSegment.baseOffset
+    val cleanableBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, firstUncleanableOffset)).map(_.size.toLong).sum
+
+    (firstUncleanableOffset, cleanableBytes)
+  }
+
 }
