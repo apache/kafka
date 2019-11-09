@@ -41,7 +41,7 @@ public class RecordHeaders implements Headers {
         if (headers == null) {
             this.headers = new ArrayList<>();
         } else {
-            this.headers = new ArrayList<>(Arrays.asList(headers));
+            this.headers = new ArrayList<>(headers);
         }
     }
 
