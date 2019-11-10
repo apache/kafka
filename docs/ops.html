@@ -85,16 +85,16 @@
 
   <h4><a id="basic_ops_leader_balancing" href="#basic_ops_leader_balancing">Balancing leadership</a></h4>
 
-  Whenever a broker stops or crashes leadership for that broker's partitions transfers to other replicas. This means that by default when the broker is restarted it will only be a follower for all its partitions, meaning it will not be used for client reads and writes.
+  Whenever a broker stops or crashes, leadership for that broker's partitions transfers to other replicas. When the broker is restarted it will only be a follower for all its partitions, meaning it will not be used for client reads and writes.
   <p>
-  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. You can have the Kafka cluster try to restore leadership to the restored replicas by running the command:
-  <pre class="brush: bash;">
-  &gt; bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
-  </pre>
+  To avoid this imbalance, Kafka has a notion of preferred replicas. If the list of replicas for a partition is 1,5,9 then node 1 is preferred as the leader to either node 5 or 9 because it is earlier in the replica list. By default the Kafka cluster will try to restore leadership to the restored replicas.  This behaviour is configured with:
 
-  Since running this command can be tedious you can also configure Kafka to do this automatically by setting the following configuration:
   <pre class="brush: text;">
       auto.leader.rebalance.enable=true
+  </pre>
+    You can also set this to false, but you will then need to manually restore leadership to the restored replicas by running the command:
+  <pre class="brush: bash;">
+  &gt; bin/kafka-preferred-replica-election.sh --zookeeper zk_host:port/chroot
   </pre>
 
   <h4><a id="basic_ops_racks" href="#basic_ops_racks">Balancing Replicas Across Racks</a></h4>
