@@ -318,7 +318,6 @@ public class RecordCollectorTest {
         } catch (final StreamsException expected) { /* ok */ }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowStreamsExceptionWithTimeoutHintOnProducerTimeoutWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
@@ -326,7 +325,7 @@ public class RecordCollectorTest {
                 logContext,
                 new DefaultProductionExceptionHandler(),
                 new Metrics().sensor("skipped-records"));
-        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
                 callback.onCompletion(null, new TimeoutException());
@@ -336,13 +335,9 @@ public class RecordCollectorTest {
 
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        try {
-            collector.flush();
-            fail("Should have thrown StreamsException");
-        } catch (final StreamsException expected) {
-            assertTrue(expected.getCause() instanceof TimeoutException);
-            assertTrue(expected.getMessage().endsWith(topic1TimeoutHint));
-        }
+        final StreamsException expected = assertThrows(StreamsException.class, () -> collector.flush());
+        assertTrue(expected.getCause() instanceof TimeoutException);
+        assertTrue(expected.getMessage().endsWith(topic1TimeoutHint));
     }
 
     @SuppressWarnings("unchecked")
