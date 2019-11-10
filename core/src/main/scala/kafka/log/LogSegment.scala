@@ -62,6 +62,8 @@ class LogSegment private[log] (val log: FileRecords,
                                val rollJitterMs: Long,
                                val time: Time) extends Logging {
 
+  def firstCleanedTime: Long = -1L
+
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
   def timeIndex: TimeIndex = lazyTimeIndex.get

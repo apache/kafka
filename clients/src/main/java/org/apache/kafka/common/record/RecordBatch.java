@@ -214,7 +214,7 @@ public interface RecordBatch extends Iterable<Record> {
      * Whether or not the base timestamp has been set to the delete horizon
      * @return true if it is, false otherwise
      */
-    boolean isBaseTimestampDeleteHorizon();
+    boolean isDeleteHorizonSet();
 
     /**
      * Get the partition leader epoch of this record batch.

@@ -249,7 +249,8 @@ public class MemoryRecords extends AbstractRecords {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
                 originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
                 originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
-                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit());
+                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(),
+                originalBatch.isDeleteHorizonSet());
 
         for (Record record : retainedRecords)
             builder.append(record);
