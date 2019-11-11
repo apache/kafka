@@ -348,7 +348,7 @@ class LogManager(logDirs: Seq[File],
           dirContent <- Option(dir.listFiles).toList
           logDir <- dirContent if logDir.isDirectory
         } yield {
-          CoreUtils.runnable {
+          val runnable: Runnable = () => {
             try {
               loadLog(logDir, recoveryPoints, logStartOffsets)
             } catch {
@@ -357,6 +357,7 @@ class LogManager(logDirs: Seq[File],
                 error(s"Error while loading log dir ${dir.getAbsolutePath}", e)
             }
           }
+          runnable
         }
         jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
       } catch {
@@ -459,12 +460,13 @@ class LogManager(logDirs: Seq[File],
 
       val logsInDir = localLogsByDir.getOrElse(dir.toString, Map()).values
 
-      val jobsForDir = logsInDir map { log =>
-        CoreUtils.runnable {
+      val jobsForDir = logsInDir.map { log =>
+        val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
           log.flush()
           log.close()
         }
+        runnable
       }
 
       jobs(dir) = jobsForDir.map(pool.submit).toSeq

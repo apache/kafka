@@ -30,7 +30,7 @@ import javax.net.ssl._
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.SaslAuthenticateRequestData
@@ -299,7 +299,7 @@ class SocketServerTest {
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
+      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 

@@ -229,11 +229,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     var completed = false
     EasyMock.expect(markerChannelManager.completeSendMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          completed = true
-        }
-      })
+      .andAnswer(() => completed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 
@@ -249,11 +245,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
     var removed = false
     EasyMock.expect(markerChannelManager.removeMarkersForTxnId(transactionalId))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          removed = true
-        }
-      })
+      .andAnswer(() => removed = true)
       .once()
     EasyMock.replay(markerChannelManager)
 

@@ -24,7 +24,7 @@ import java.util.Properties
 import java.util.concurrent._
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -138,7 +138,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     // Verify that connection blocked on the limit connects successfully when an existing connection is closed
     val plaintextConnections = (connectionCount until maxConnectionsPlaintext).map(_ => connect("PLAINTEXT"))
     executor = Executors.newSingleThreadExecutor
-    val future = executor.submit(CoreUtils.runnable { createAndVerifyConnection() })
+    val future = executor.submit((() => createAndVerifyConnection()): Runnable)
     Thread.sleep(100)
     assertFalse(future.isDone)
     plaintextConnections.head.close()

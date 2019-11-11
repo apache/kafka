@@ -65,14 +65,12 @@ object SslAdminIntegrationTest {
           semaphore.foreach(_.acquire())
           try {
             action.apply().asScala.zip(futures).foreach { case (baseFuture, resultFuture) =>
-              baseFuture.whenComplete(new BiConsumer[T, Throwable]() {
-                override def accept(result: T, exception: Throwable): Unit = {
-                  if (exception != null)
-                    resultFuture.completeExceptionally(exception)
-                  else
-                    resultFuture.complete(result)
-                }
-              })
+              baseFuture.whenComplete { (result, exception) =>
+                if (exception != null)
+                  resultFuture.completeExceptionally(exception)
+                else
+                  resultFuture.complete(result)
+              }
             }
           } finally {
             semaphore.foreach(_.release())
