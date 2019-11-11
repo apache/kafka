@@ -18,8 +18,10 @@ package org.apache.kafka.common.compress;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
@@ -45,17 +47,14 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     public static final int BLOCKSIZE_256KB = 5;
     public static final int BLOCKSIZE_1MB = 6;
     public static final int BLOCKSIZE_4MB = 7;
+    private static final LZ4Compressor COMPRESSOR = LZ4Factory.fastestInstance().fastCompressor();
+    private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
 
-    private final LZ4Compressor compressor;
-    private final XXHash32 checksum;
     private final boolean useBrokenFlagDescriptorChecksum;
     private final FLG flg;
     private final BD bd;
-    private final int maxBlockSize;
-    private OutputStream out;
-    private byte[] buffer;
-    private byte[] compressedBuffer;
-    private int bufferOffset;
+    private ByteBufferOutputStream out;
+    private ByteBuffer buffer;
     private boolean finished;
 
     /**
@@ -70,17 +69,14 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      *            compatible with older kafka clients.
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+    public KafkaLZ4BlockOutputStream(ByteBufferOutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
         this.out = out;
-        compressor = LZ4Factory.fastestInstance().fastCompressor();
-        checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
         bd = new BD(blockSize);
         flg = new FLG(blockChecksum);
-        bufferOffset = 0;
-        maxBlockSize = bd.getBlockMaximumSize();
-        buffer = new byte[maxBlockSize];
-        compressedBuffer = new byte[compressor.maxCompressedLength(maxBlockSize)];
+        buffer = ByteBuffer
+            .allocate(bd.getBlockMaximumSize())
+            .order(ByteOrder.LITTLE_ENDIAN);
         finished = false;
         writeHeader();
     }
@@ -95,7 +91,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      *            every block of data
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum) throws IOException {
+    public KafkaLZ4BlockOutputStream(ByteBufferOutputStream out, int blockSize, boolean blockChecksum) throws IOException {
         this(out, blockSize, blockChecksum, false);
     }
 
@@ -107,7 +103,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      *            values will generate an exception
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize) throws IOException {
+    public KafkaLZ4BlockOutputStream(ByteBufferOutputStream out, int blockSize) throws IOException {
         this(out, blockSize, false, false);
     }
 
@@ -117,11 +113,11 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @param out The output stream to compress
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out) throws IOException {
+    public KafkaLZ4BlockOutputStream(ByteBufferOutputStream out) throws IOException {
         this(out, BLOCKSIZE_64KB);
     }
 
-    public KafkaLZ4BlockOutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
+    public KafkaLZ4BlockOutputStream(ByteBufferOutputStream out, boolean useBrokenHC) throws IOException {
         this(out, BLOCKSIZE_64KB, false, useBrokenHC);
     }
 
@@ -140,25 +136,25 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     private void writeHeader() throws IOException {
-        ByteUtils.writeUnsignedIntLE(buffer, 0, MAGIC);
-        bufferOffset = 4;
-        buffer[bufferOffset++] = flg.toByte();
-        buffer[bufferOffset++] = bd.toByte();
+        buffer.putInt(MAGIC)
+            .put(flg.toByte())
+            .put(bd.toByte());
         // TODO write uncompressed content size, update flg.validate()
 
         // compute checksum on all descriptor fields
         int offset = 4;
-        int len = bufferOffset - offset;
+        int len = buffer.position() - offset;
         if (this.useBrokenFlagDescriptorChecksum) {
             len += offset;
             offset = 0;
         }
-        byte hash = (byte) ((checksum.hash(buffer, offset, len, 0) >> 8) & 0xFF);
-        buffer[bufferOffset++] = hash;
+        byte hash = (byte) ((CHECKSUM.hash(buffer, offset, len, 0) >> 8) & 0xFF);
+        buffer.put(hash);
 
         // write out frame descriptor
-        out.write(buffer, 0, bufferOffset);
-        bufferOffset = 0;
+        buffer.flip();
+        out.write(buffer);
+        buffer.clear();
     }
 
     /**
@@ -168,31 +164,51 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     private void writeBlock() throws IOException {
-        if (bufferOffset == 0) {
+        if (buffer.position() == 0) {
             return;
         }
 
-        int compressedLength = compressor.compress(buffer, 0, bufferOffset, compressedBuffer, 0);
-        byte[] bufferToWrite = compressedBuffer;
+        buffer.flip();
+        int maxLength = COMPRESSOR.maxCompressedLength(buffer.remaining());
+        out.ensureRemaining(
+            Integer.BYTES // length + compressedFlag
+            + maxLength
+            + Integer.BYTES // checksum
+        );
+
+        // note: this changes the target output stream buffer endianness. This should be safe
+        // since ByteBufferOutputStream does not preserve endianness when it expands buffers.
+        ByteBuffer outputBuffer = out.buffer()
+            .order(ByteOrder.LITTLE_ENDIAN);
+
+        // compress writes to the output buffer but does not modify its position
+        int compressedLength = COMPRESSOR
+            .compress(buffer, 0, buffer.remaining(),
+                      outputBuffer,
+                      outputBuffer.position() + Integer.BYTES, // leave room to prepend frame length
+                      maxLength);
         int compressMethod = 0;
 
         // Store block uncompressed if compressed length is greater (incompressible)
-        if (compressedLength >= bufferOffset) {
-            bufferToWrite = buffer;
-            compressedLength = bufferOffset;
+        if (compressedLength >= buffer.remaining()) {
+            compressedLength = buffer.remaining();
             compressMethod = LZ4_FRAME_INCOMPRESSIBLE_MASK;
+            // prepend the uncompressed length, and overwrite the data written by compress()
+            outputBuffer.putInt(compressedLength | compressMethod);
+            outputBuffer.put(buffer);
+        } else {
+            // prepend the compressed length
+            outputBuffer.putInt(compressedLength | compressMethod);
+            // skip ahead past the data written by compress()
+            outputBuffer.position(outputBuffer.position() + compressedLength);
         }
-
-        // Write content
-        ByteUtils.writeUnsignedIntLE(out, compressedLength | compressMethod);
-        out.write(bufferToWrite, 0, compressedLength);
 
         // Calculate and write block checksum
         if (flg.isBlockChecksumSet()) {
-            int hash = checksum.hash(bufferToWrite, 0, compressedLength, 0);
-            ByteUtils.writeUnsignedIntLE(out, hash);
+            int hash = CHECKSUM.hash(outputBuffer, outputBuffer.position() - compressedLength, compressedLength, 0);
+            outputBuffer.putInt(hash);
         }
-        bufferOffset = 0;
+        buffer.clear();
     }
 
     /**
@@ -202,17 +218,18 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @throws IOException
      */
     private void writeEndMark() throws IOException {
-        ByteUtils.writeUnsignedIntLE(out, 0);
+        out.ensureRemaining(Integer.BYTES);
+        out.buffer().order(ByteOrder.LITTLE_ENDIAN).putInt(0);
         // TODO implement content checksum, update flg.validate()
     }
 
     @Override
     public void write(int b) throws IOException {
         ensureNotFinished();
-        if (bufferOffset == maxBlockSize) {
+        if (buffer.remaining() == 0) {
             writeBlock();
         }
-        buffer[bufferOffset++] = (byte) b;
+        buffer.put((byte) b);
     }
 
     @Override
@@ -220,21 +237,17 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
         net.jpountz.util.SafeUtils.checkRange(b, off, len);
         ensureNotFinished();
 
-        int bufferRemainingLength = maxBlockSize - bufferOffset;
         // while b will fill the buffer
-        while (len > bufferRemainingLength) {
+        while (len > buffer.remaining()) {
             // fill remaining space in buffer
-            System.arraycopy(b, off, buffer, bufferOffset, bufferRemainingLength);
-            bufferOffset = maxBlockSize;
+            int remaining = buffer.remaining();
+            buffer.put(b, off, remaining);
             writeBlock();
             // compute new offset and length
-            off += bufferRemainingLength;
-            len -= bufferRemainingLength;
-            bufferRemainingLength = maxBlockSize;
+            off += remaining;
+            len -= remaining;
         }
-
-        System.arraycopy(b, off, buffer, bufferOffset, len);
-        bufferOffset += len;
+        buffer.put(b, off, len);
     }
 
     @Override
@@ -275,7 +288,6 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
             } finally {
                 out = null;
                 buffer = null;
-                compressedBuffer = null;
                 finished = true;
             }
         }
