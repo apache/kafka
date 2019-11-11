@@ -111,7 +111,6 @@ class DelayedFetchTest extends EasyMockSupport {
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
       .andThrow(new ReplicaNotAvailableException(s"Replica for $topicPartition not available"))
     expectReadFromReplicaWithError(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.REPLICA_NOT_AVAILABLE)
-    EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)
 
     replayAll()
 
