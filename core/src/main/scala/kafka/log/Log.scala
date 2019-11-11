@@ -329,8 +329,8 @@ class Log(@volatile var dir: File,
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
   }
 
-  def updateLogStartOffsetFromRemoteTier(remoteLso: Long): Unit = {
-    if(remoteLogEnabled) logStartOffset = if (remoteLso < 0) localLogStartOffset else remoteLso
+  def updateLogStartOffsetFromRemoteTier(remoteLogStartOffset: Long): Unit = {
+    if(remoteLogEnabled) logStartOffset = if (remoteLogStartOffset < 0) localLogStartOffset else remoteLogStartOffset
     else warn(s"updateLogStartOffsetFromRemoteTier call is ignored as remoteLogEnabled is determined to be false.")
   }
 
