@@ -108,6 +108,33 @@ public class SelectorTest {
         return SecurityProtocol.PLAINTEXT;
     }
 
+    @Test
+    public void numberOfSensorsIsIncreased_whenNodeConnects() throws IOException {
+        final String node = "0";
+        int size = selector.numberOfSensors();
+
+        blockingConnect(node);
+
+        assertTrue(
+                "number of sensors should be increased when node is connected",
+                size < selector.numberOfSensors()
+        );
+
+        selector.close(node);
+    }
+
+    @Test
+    public void sensorsAreRemove_afterNodeDisconnects() throws IOException {
+        final String node = "0";
+        int size = selector.numberOfSensors();
+
+        blockingConnect(node);
+
+        selector.close(node);
+
+        assertEquals(selector.numberOfSensors(), size);
+    }
+
     /**
      * Validate that when the server disconnects, a client send ends up with that node in the disconnected list.
      */

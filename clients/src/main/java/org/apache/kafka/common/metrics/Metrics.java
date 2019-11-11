@@ -599,8 +599,8 @@ public class Metrics implements Closeable {
     }
 
     /* For testing use only. */
-    Map<Sensor, List<Sensor>> childrenSensors() {
-        return Collections.unmodifiableMap(childrenSensors);
+    List<Sensor> childrenSensors(Sensor sensor) {
+        return Collections.unmodifiableList(childrenSensors.getOrDefault(sensor, emptyList()));
     }
 
     public MetricName metricInstance(MetricNameTemplate template, String... keyValue) {
