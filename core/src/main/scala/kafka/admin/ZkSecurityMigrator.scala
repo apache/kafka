@@ -62,7 +62,7 @@ object ZkSecurityMigrator extends Logging {
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
 
-  def run(args: Array[String], checkPathExists: Boolean = true): Unit = {
+  def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
@@ -96,8 +96,9 @@ object ZkSecurityMigrator extends Logging {
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
       Int.MaxValue, Time.SYSTEM)
+    val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
-    migrator.run(checkPathExists)
+    migrator.run(enablePathCheck)
   }
 
   def main(args: Array[String]): Unit = {
@@ -119,6 +120,8 @@ object ZkSecurityMigrator extends Logging {
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
+    val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
+      "before migration. If not, exit the command.")
     options = parser.parse(args : _*)
   }
 }
@@ -219,11 +222,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
-  private def run(checkPathExists: Boolean): Unit = {
+  private def run(enablePathCheck: Boolean): Unit = {
     try {
       setAclIndividually("/")
-      if (checkPathExists)
-        checkPathsExistAndAskToProceed()
+      checkPathExistenceAndMaybeExit(enablePathCheck)
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
         zkClient.makeSurePersistentPathExists(path)
@@ -250,13 +252,12 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
-  private def checkPathsExistAndAskToProceed(): Unit = {
+  private def checkPathExistenceAndMaybeExit(enablePathCheck: Boolean): Unit = {
     val nonExistingSecureRootPaths = ZkData.SecureRootPaths.filterNot(zkClient.pathExists)
     if (nonExistingSecureRootPaths.nonEmpty) {
-      println(s"Following secure root paths do not exist on ZooKeeper: ${nonExistingSecureRootPaths.mkString(",")}")
+      println(s"Warning: The following secure root paths do not exist in ZooKeeper: ${nonExistingSecureRootPaths.mkString(",")}")
       println("That might be due to an incorrect chroot is specified when executing the command.")
-      println("Are you sure you want to continue? [y/n]")
-      if (!StdIn.readLine().equalsIgnoreCase("y")) {
+      if (enablePathCheck) {
         println("Exit the command.")
         Exit.exit(0)
       }
