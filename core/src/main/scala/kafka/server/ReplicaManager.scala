@@ -224,7 +224,7 @@ class ReplicaManager(val config: KafkaConfig,
     override def doWork(): Unit = {
       val newOfflineLogDir = logDirFailureChannel.takeNextOfflineLogDir()
       if (haltBrokerOnDirFailure) {
-        fatal(s"Halting broker because dir $newOfflineLogDir is offline")
+        error(s"Halting broker because dir $newOfflineLogDir is offline")
         Exit.halt(1)
       }
       handleLogDirFailure(newOfflineLogDir)

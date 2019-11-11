@@ -380,7 +380,7 @@ class TransactionStateManager(brokerId: Int,
       val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
         s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
         s"this should not happen"
-      fatal(errorMsg)
+      error(errorMsg)
       throw new IllegalStateException(errorMsg)
     }
   }

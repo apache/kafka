@@ -182,7 +182,7 @@ class LogManager(logDirs: Seq[File],
       }
     }
     if (liveLogDirs.isEmpty) {
-      fatal(s"Shutdown broker because none of the specified log dirs from ${dirs.mkString(", ")} can be created or validated")
+      error(s"Shutdown broker because none of the specified log dirs from ${dirs.mkString(", ")} can be created or validated")
       Exit.halt(1)
     }
 
@@ -200,7 +200,7 @@ class LogManager(logDirs: Seq[File],
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
-        fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
+        error(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
         Exit.halt(1)
       }
 

@@ -45,7 +45,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
     catch {
       case _: Throwable =>
         // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
-        fatal("Exiting Kafka.")
+        error("Exiting Kafka.")
         Exit.exit(1)
     }
   }
@@ -54,7 +54,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
     try server.shutdown()
     catch {
       case _: Throwable =>
-        fatal("Halting Kafka.")
+        error("Halting Kafka.")
         // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
         Exit.halt(1)
     }

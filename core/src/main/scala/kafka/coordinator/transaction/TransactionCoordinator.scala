@@ -218,7 +218,7 @@ class TransactionCoordinator(brokerId: Int,
         case Dead | PrepareEpochFence =>
           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
             s"This is illegal as we should never have transitioned to this state."
-          fatal(errorMsg)
+          error(errorMsg)
           throw new IllegalStateException(errorMsg)
 
       }
@@ -354,7 +354,7 @@ class TransactionCoordinator(brokerId: Int,
               case Dead | PrepareEpochFence =>
                 val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                   s"This is illegal as we should never have transitioned to this state."
-                fatal(errorMsg)
+                error(errorMsg)
                 throw new IllegalStateException(errorMsg)
 
             }
@@ -373,7 +373,7 @@ class TransactionCoordinator(brokerId: Int,
                 case None =>
                   val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
                     s"no metadata in the cache; this is not expected"
-                  fatal(errorMsg)
+                  error(errorMsg)
                   throw new IllegalStateException(errorMsg)
 
                 case Some(epochAndMetadata) =>
@@ -402,7 +402,7 @@ class TransactionCoordinator(brokerId: Int,
                         case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."
-                          fatal(errorMsg)
+                          error(errorMsg)
                           throw new IllegalStateException(errorMsg)
 
                       }

@@ -236,7 +236,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       } catch {
         case t: Throwable =>
           exitingOnSendFailure = true
-          fatal("Mirror maker thread failure due to ", t)
+          error("Mirror maker thread failure due to ", t)
       } finally {
         CoreUtils.swallow ({
           info("Flushing producer.")
@@ -254,7 +254,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
         if (!isShuttingDown.get()) {
-          fatal("Mirror maker thread exited abnormally, stopping the whole mirror maker.")
+          error("Mirror maker thread exited abnormally, stopping the whole mirror maker.")
           sys.exit(-1)
         }
       }

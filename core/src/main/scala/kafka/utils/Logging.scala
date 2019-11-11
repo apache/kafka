@@ -74,10 +74,4 @@ trait Logging {
   def error(msg: => String): Unit = logger.error(msgWithLogIdent(msg))
 
   def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
-
-  def fatal(msg: => String): Unit =
-    logger.error(Logging.FatalMarker, msgWithLogIdent(msg))
-
-  def fatal(msg: => String, e: => Throwable): Unit =
-    logger.error(Logging.FatalMarker, msgWithLogIdent(msg), e)
 }

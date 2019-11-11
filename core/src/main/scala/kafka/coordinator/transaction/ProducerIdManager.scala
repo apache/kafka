@@ -54,7 +54,7 @@ object ProducerIdManager extends Logging {
     } catch {
       case e: java.lang.NumberFormatException =>
         // this should never happen: the written data has exceeded long type limit
-        fatal(s"Read jason data $jsonData contains producerIds that have exceeded long type limit")
+        error(s"Read jason data $jsonData contains producerIds that have exceeded long type limit")
         throw e
     }
   }
@@ -97,7 +97,7 @@ class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends 
 
           if (currProducerIdBlock.blockEndId > Long.MaxValue - ProducerIdManager.PidBlockSize) {
             // we have exhausted all producerIds (wow!), treat it as a fatal error
-            fatal(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.blockEndId})")
+            error(s"Exhausted all producerIds as the next block's end producerId is will has exceeded long type limit (current block end producerId is ${currProducerIdBlock.blockEndId})")
             throw new KafkaException("Have exhausted all producerIds.")
           }
 
