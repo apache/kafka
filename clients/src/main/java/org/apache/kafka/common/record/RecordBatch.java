@@ -217,6 +217,12 @@ public interface RecordBatch extends Iterable<Record> {
     boolean isDeleteHorizonSet();
 
     /**
+     * Get the delete horizon, returns -1L if the first timestamp is not the delete horizon
+     * @return timestamp of the delete horizon
+     */
+    long deleteHorizonMs();
+
+    /**
      * Get the partition leader epoch of this record batch.
      * @return The leader epoch or -1 if it is unknown
      */

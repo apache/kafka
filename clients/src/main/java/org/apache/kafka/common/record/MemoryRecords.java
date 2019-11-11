@@ -159,6 +159,7 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
+            final long firstTimestamp = filter.retrieveDeleteHorizon(batch);
             filterResult.bytesRead += batch.sizeInBytes();
 
             if (batchRetention == BatchRetention.DELETE)
@@ -170,7 +171,8 @@ public class MemoryRecords extends AbstractRecords {
             // recopy the messages to the destination buffer.
 
             byte batchMagic = batch.magic();
-            boolean writeOriginalBatch = true;
+            // we want to check if the delete horizon has been set or stayed the same
+            boolean writeOriginalBatch = batch.isDeleteHorizonSet() || firstTimestamp == RecordBatch.NO_TIMESTAMP;
             List<Record> retainedRecords = new ArrayList<>();
 
             try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
@@ -199,7 +201,7 @@ public class MemoryRecords extends AbstractRecords {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
+                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, firstTimestamp);
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
@@ -238,7 +240,8 @@ public class MemoryRecords extends AbstractRecords {
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
                                                                  List<Record> retainedRecords,
-                                                                 ByteBufferOutputStream bufferOutputStream) {
+                                                                 ByteBufferOutputStream bufferOutputStream,
+                                                                 final long deleteHorizonMs) {
         byte magic = originalBatch.magic();
         TimestampType timestampType = originalBatch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ?
@@ -250,7 +253,7 @@ public class MemoryRecords extends AbstractRecords {
                 originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
                 originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
                 originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(),
-                originalBatch.isDeleteHorizonSet());
+                deleteHorizonMs);
 
         for (Record record : retainedRecords)
             builder.append(record);
@@ -319,6 +322,13 @@ public class MemoryRecords extends AbstractRecords {
          * explicitly discarded with {@link BatchRetention#DELETE} will be considered.
          */
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
+
+        /**
+         * Retrieves the delete horizon ms for a specific batch
+         */
+        protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
+            return -1L;
+        }
     }
 
     public static class FilterResult {
@@ -504,7 +514,7 @@ public class MemoryRecords extends AbstractRecords {
                                                boolean isControlBatch,
                                                int partitionLeaderEpoch) {
         return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
+                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch,
                 buffer.remaining());
     }
 
@@ -596,7 +606,7 @@ public class MemoryRecords extends AbstractRecords {
             logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compressionType, timestampType,
                 initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
-                partitionLeaderEpoch, sizeEstimate);
+                partitionLeaderEpoch, sizeEstimate, RecordBatch.NO_TIMESTAMP);
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();
@@ -632,7 +642,7 @@ public class MemoryRecords extends AbstractRecords {
         boolean isControlBatch = true;
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
-                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
+                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch,
                 buffer.capacity());
         builder.appendEndTxnMarker(timestamp, marker);
         builder.close();

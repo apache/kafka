@@ -252,6 +252,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
+    public long deleteHorizonMs() {
+        if (isDeleteHorizonSet()) {
+            return firstTimestamp();
+        }
+        return RecordBatch.NO_TIMESTAMP;
+    }
+
+    @Override
     public boolean isControlBatch() {
         return (attributes() & CONTROL_FLAG_MASK) > 0;
     }
@@ -751,6 +759,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         @Override
         public boolean isDeleteHorizonSet() {
             return loadBatchHeader().isDeleteHorizonSet();
+        }
+
+        @Override
+        public long deleteHorizonMs() {
+            if (isDeleteHorizonSet()) {
+                return super.loadFullBatch().deleteHorizonMs();
+            }
+            return RecordBatch.NO_TIMESTAMP;
         }
 
         @Override

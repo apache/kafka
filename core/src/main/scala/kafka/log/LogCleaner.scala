@@ -590,7 +590,7 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-            transactionMetadata, lastOffsetOfActiveProducers, stats)
+            transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -643,7 +643,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats): Unit = {
+                             stats: CleanerStats,
+                             tombstoneRetentionMs: Long): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -681,6 +682,12 @@ private[log] class Cleaner(val id: Int,
           false
         else
           Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats)
+      }
+
+      override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
+        if (batch.isDeleteHorizonSet())
+          return batch.deleteHorizonMs() // means that we keep the old timestamp stored
+        return time.milliseconds() + tombstoneRetentionMs;
       }
     }
 
