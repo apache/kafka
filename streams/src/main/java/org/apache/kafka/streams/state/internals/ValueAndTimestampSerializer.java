@@ -57,6 +57,10 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
             return null;
         }
         final byte[] rawValue = valueSerializer.serialize(topic, data);
+        if (rawValue == null) {
+            return null;
+        }
+        
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
         return ByteBuffer
             .allocate(rawTimestamp.length + rawValue.length)
