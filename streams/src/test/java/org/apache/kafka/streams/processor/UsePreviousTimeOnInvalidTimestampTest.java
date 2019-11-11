@@ -36,8 +36,8 @@ public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTes
 
         final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
         final long timestamp = extractor.extract(
-                new ConsumerRecord<>("anyTopic", 0, 0, null, null),
-                previousTime
+            new ConsumerRecord<>("anyTopic", 0, 0, null, null),
+            previousTime
         );
 
         assertThat(timestamp, is(previousTime));
