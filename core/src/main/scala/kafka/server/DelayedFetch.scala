@@ -74,6 +74,7 @@ class DelayedFetch(delayMs: Long,
    * Case E: The partition is in an offline log directory on this broker
    * Case F: This broker is the leader, but the requested epoch is now fenced
    * Case G: The high watermark on this broker has changed within a FetchSession, need to propagate to follower (KIP-392)
+   * Case H: The replica is no longer available on this broker
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
@@ -138,6 +139,9 @@ class DelayedFetch(delayMs: Long,
             return forceComplete()
           case _: NotLeaderForPartitionException =>  // Case A
             debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
+            return forceComplete()
+          case _: ReplicaNotAvailableException =>  // Case H
+            debug("Broker no longer has a replica of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
             return forceComplete()
         }
     }
