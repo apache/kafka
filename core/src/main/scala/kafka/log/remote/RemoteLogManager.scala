@@ -260,9 +260,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val fileName = file.getName
                 val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
                 rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
-                readOffset = entries.get(entries.size() - 1).lastOffset
-                //update the highest remote offset in the log till which indexes exist locally.
-                log.updateRemoteIndexHighestOffset(readOffset)
+                if (!entries.isEmpty) {
+                  readOffset = entries.get(entries.size() - 1).lastOffset
+                  //update the highest remote offset in the log till which indexes exist locally.
+                  log.updateRemoteIndexHighestOffset(readOffset)
+                }
               }
             }
           } else {

@@ -98,7 +98,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         // directly return empty seq if the log segment is empty
         // we don't need to copy empty segment
-        if (lastOffset <= baseOffset)
+        if (lastOffset < baseOffset)
             return Collections.emptyList();
 
         String desDir = getSegmentRemoteDir(topicPartition, baseOffset, lastOffset);
