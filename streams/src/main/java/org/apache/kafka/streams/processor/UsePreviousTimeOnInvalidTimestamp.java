@@ -20,11 +20,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.StreamsException;
 
 /**
- * @deprecated UsePreviousTimeOnInvalidTimestamp will be deprecated in the future, please use
- * {@link UsePartitionTimeOnInvalidTimestamp} instead
  * Retrieves embedded metadata timestamps from Kafka messages.
  * If a record has a negative (invalid) timestamp, a new timestamp will be inferred from the current stream-time.
- * <p></p>
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
@@ -39,6 +37,8 @@ import org.apache.kafka.streams.errors.StreamsException;
  * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
+ * @deprecated UsePreviousTimeOnInvalidTimestamp will be deprecated in the future, please use
+ * {@link UsePartitionTimeOnInvalidTimestamp} instead
  *
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp

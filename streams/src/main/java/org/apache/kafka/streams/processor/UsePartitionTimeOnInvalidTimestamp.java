@@ -22,7 +22,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
  * If a record has a negative (invalid) timestamp, a new timestamp will be inferred from the current stream-time.
- * <p></p>
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
