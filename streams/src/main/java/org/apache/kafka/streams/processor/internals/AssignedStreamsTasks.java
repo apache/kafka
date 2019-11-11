@@ -513,10 +513,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     @Override
     public boolean isEmpty() throws IllegalStateException {
-        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
+        if (restoring.isEmpty() && !(restoringByPartition.isEmpty() && restoredPartitions.isEmpty())) {
             log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
-                      "restoring by partitions map contained {}", restoringByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
+                      "restoring by partitions map contained {}, and the restored by partitions map contained {}", restoringByPartition, restoredPartitions);
+            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition/restoredPartition");
         } else {
             return super.isEmpty()
                        && restoring.isEmpty()
@@ -531,6 +531,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         builder.append(super.toString(indent));
         describe(builder, restoring.values(), indent, "Restoring:");
         describe(builder, suspended.values(), indent, "Suspended:");
+        describe(builder, restoringByPartition.values(), indent, "Restoring partitions:");
+
+        builder.append(indent).append("Restored partitions");
+        for (final TopicPartition tp : restoredPartitions) {
+            builder.append(indent).append(tp.toString());
+        }
+        builder.append("\n");
         return builder.toString();
     }
 
