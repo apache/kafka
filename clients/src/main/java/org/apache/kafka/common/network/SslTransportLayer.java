@@ -422,7 +422,7 @@ public class SslTransportLayer implements TransportLayer {
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
-                        session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                            session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
             }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",

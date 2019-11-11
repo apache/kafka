@@ -41,23 +41,23 @@ public class CertStores {
 
     private final Map<String, Object> sslConfig;
 
-    public CertStores(boolean server, String hostName) throws Exception {
-        this(server, hostName, new TestSslUtils.CertificateBuilder());
+    public CertStores(boolean server, String hostName, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, hostName, new TestSslUtils.CertificateBuilder(), provider);
     }
 
-    public CertStores(boolean server, String commonName, String sanHostName) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsName(sanHostName));
+    public CertStores(boolean server, String commonName, String sanHostName, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsName(sanHostName), provider);
     }
 
-    public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress));
+    public CertStores(boolean server, String commonName, InetAddress hostAddress, TestSslUtils.SSLProvider provider) throws Exception {
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress), provider);
     }
 
-    private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder) throws Exception {
+    private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder, TestSslUtils.SSLProvider provider) throws Exception {
         String name = server ? "server" : "client";
         Mode mode = server ? Mode.SERVER : Mode.CLIENT;
         File truststoreFile = File.createTempFile(name + "TS", ".jks");
-        sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder);
+        sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder, provider);
     }
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {

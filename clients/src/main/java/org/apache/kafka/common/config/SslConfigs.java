@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.security.ssl.SimpleSslContextProvider;
 import org.apache.kafka.common.utils.Utils;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -46,6 +47,11 @@ public class SslConfigs {
     @Deprecated
     public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS =
             org.apache.kafka.common.security.auth.DefaultPrincipalBuilder.class.getName();
+
+    public static final String SSL_CONTEXT_PROVIDER_CLASS_CONFIG = "ssl.context.provider.class";
+    public static final String SSL_CONTEXT_PROVIDER_CLASS_DOC = "The fully qualified name of a class that implements the "
+            + "SslContextProvider interface, which is used to build SSLContext insides encrypted channels.";
+    public static final String DEFAULT_SSL_CONTEXT_PROVIDER_CLASS = SimpleSslContextProvider.class.getName();
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
@@ -123,6 +129,7 @@ public class SslConfigs {
 
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
+                .define(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_DOC)
                 .define(SslConfigs.SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
                 .define(SslConfigs.SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SslConfigs.SSL_CIPHER_SUITES_DOC)
                 .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
@@ -152,6 +159,7 @@ public class SslConfigs {
             BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
             SslConfigs.SSL_PROTOCOL_CONFIG,
             SslConfigs.SSL_PROVIDER_CONFIG,
+            SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG,
             SslConfigs.SSL_CIPHER_SUITES_CONFIG,
             SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
             SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,

@@ -20,7 +20,7 @@
 ext {
   versions = [:]
   libs = [:]
-  
+
   // Enabled by default when commands like `testAll` are invoked
   defaultScalaVersions = [ '2.11', '2.12', '2.13' ]
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
@@ -115,7 +115,8 @@ versions += [
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.1",
   zookeeper: "3.5.8",
-  zstd: "1.4.3-1"
+  zstd: "1.4.3-1",
+  conscrypt: "2.1.0"
 ]
 
 libs += [
@@ -185,5 +186,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
+  conscrypt: "org.conscrypt:conscrypt-openjdk-uber:2.2.1"
 ]

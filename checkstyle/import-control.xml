@@ -54,6 +54,7 @@
     <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.conscrypt" />
 
     <subpackage name="acl">
       <allow pkg="org.apache.kafka.common.annotation" />

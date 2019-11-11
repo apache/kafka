@@ -1021,6 +1021,7 @@ project(':clients') {
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
+    compile libs.conscrypt
 
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 

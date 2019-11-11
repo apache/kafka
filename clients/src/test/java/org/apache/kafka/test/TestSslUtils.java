@@ -44,6 +44,8 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.ssl.BoringSslContextProvider;
+import org.apache.kafka.common.security.ssl.SimpleSslContextProvider;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -71,6 +73,9 @@ import java.util.ArrayList;
 public class TestSslUtils {
 
     public static final String TRUST_STORE_PASSWORD = "TrustStorePassword";
+    public enum SSLProvider {
+        DEFAULT, OPENSSL
+    }
 
     /**
      * Create a self-signed X.509 Certificate.
@@ -153,7 +158,7 @@ public class TestSslUtils {
     }
 
     private static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,
-                                                       File trustStoreFile, Password trustStorePassword) {
+                                                       File trustStoreFile, Password trustStorePassword, SSLProvider provider) {
         Map<String, Object> sslConfigs = new HashMap<>();
         sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
@@ -173,6 +178,11 @@ public class TestSslUtils {
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add("TLSv1.2");
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        if (provider.equals(SSLProvider.OPENSSL)) {
+            sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, BoringSslContextProvider.class.getName());
+        } else {
+            sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SimpleSslContextProvider.class.getName());
+        }
 
         return sslConfigs;
     }
@@ -180,6 +190,7 @@ public class TestSslUtils {
     public static Map<String, Object> createSslConfig(String keyManagerAlgorithm, String trustManagerAlgorithm) {
         Map<String, Object> sslConfigs = new HashMap<>();
         sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
+        sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SimpleSslContextProvider.class.getName());
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
@@ -199,11 +210,11 @@ public class TestSslUtils {
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
             Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder(), SSLProvider.DEFAULT);
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder)
+            Mode mode, File trustStoreFile, String certAlias, String cn, CertificateBuilder certBuilder, SSLProvider provider)
             throws IOException, GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<>();
         File keyStoreFile = null;
@@ -232,7 +243,7 @@ public class TestSslUtils {
             trustStoreFile.deleteOnExit();
         }
 
-        return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword);
+        return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword, provider);
     }
 
     public static class CertificateBuilder {
