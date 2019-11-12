@@ -53,7 +53,7 @@ class ReplicaScaleTest(Test):
         t0 = time.time()
         for i in range(topic_count):
             topic = "100k_replicas_bench%d" % i
-            self.logger.info("Creating topic %s" % topic)
+            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,
@@ -108,7 +108,7 @@ class ReplicaScaleTest(Test):
         t0 = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
-            self.logger.info("Creating topic %s" % topic)
+            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,
