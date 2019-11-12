@@ -31,8 +31,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.InternalProcessorContextMockFactory;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
-import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.TestUtils;
@@ -393,7 +393,7 @@ public class ProcessorStateManagerTest {
         // de-registers the stores, but doesn't re-register them because
         // the context isn't connected to our state manager
         stateMgr.reinitializeStateStoresForPartitions(asList(nonPersistentTopicPartition, persistentTopicPartition),
-                                                      new MockInternalProcessorContext());
+                InternalProcessorContextMockFactory.getInstance());
         // register them in backward order
         stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);

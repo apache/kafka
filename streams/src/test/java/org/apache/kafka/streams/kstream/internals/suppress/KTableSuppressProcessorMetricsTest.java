@@ -26,11 +26,12 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
-import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.InternalProcessorContextMockFactory;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.hamcrest.Matcher;
 import org.junit.Test;
@@ -234,15 +235,17 @@ public class KTableSuppressProcessorMetricsTest {
             ).get();
 
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        final MockInternalProcessorContext context =
-            new MockInternalProcessorContext(streamsConfig, TASK_ID, TestUtils.tempDirectory());
+        final InternalProcessorContext context =
+                InternalProcessorContextMockFactory.getInstance(streamsConfig, TASK_ID);
         context.setCurrentNode(new ProcessorNode("testNode"));
 
         buffer.init(context, buffer);
         processor.init(context);
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        context.setRecordContext(new ProcessorRecordContext(timestamp, 0L, 0, "", null));
+        context.timestamp();
+        assertThat(context.timestamp(), is(timestamp));
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -274,8 +277,7 @@ public class KTableSuppressProcessorMetricsTest {
                 verifyMetric(metrics, bufferCountCurrentMetric, is(1.0));
             }
         }
-
-        context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
+        context.setRecordContext(new ProcessorRecordContext(timestamp + 1, 1L, 0, "", null));
         processor.process("key", value);
 
         {
