@@ -27,7 +27,9 @@ from kafkatest.services.zookeeper import ZookeeperService
 
 class NetworkDegradeTest(Test):
     """
-    This is a sanity test to make sure tc is behaving like we expect in our test environment
+    These tests ensure that the network degrade Trogdor specs (which use "tc") are working as expected in whatever
+    environment the system tests may be running in. The linux tools "ping" and "iperf" are used for validation
+    and need to be available along with "tc" in the test environment.
     """
 
     def __init__(self, test_context):
