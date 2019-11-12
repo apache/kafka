@@ -113,8 +113,8 @@ public class KStreamRepartitionIntegrationTest {
     @Test
     public void shouldChooseMaxNumberOfPartitionedBetweenTwoRepartitionOperationsWhenJoining() throws ExecutionException, InterruptedException {
         final String topicB = "topic-b-" + TEST_NUM.get();
-        final String topicBRepartitionedName = "topic-b-repartitioned";
-        final String inputTopicRepartitionedName = "input-topic-repartition";
+        final String topicBRepartitionedName = "topic-b-scale-up";
+        final String inputTopicRepartitionedName = "input-topic-scale-up";
 
         final long timestamp = System.currentTimeMillis();
 
@@ -417,7 +417,7 @@ public class KStreamRepartitionIntegrationTest {
 
         assertTrue(topicExists(repartitionTopicName));
         assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*" + repartitionedName + "-repartition.*"));
-        assertEquals(1, countOccurrencesInTopology(topology, "<-- " + repartitionedName));
+        assertEquals(1, countOccurrencesInTopology(topology, "<-- " + repartitionedName + "\n"));
     }
 
     @Test

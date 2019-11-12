@@ -203,7 +203,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void initializeMetadata() {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions);
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeCommittedOffsets(offsetsAndMetadata);
             initializeTaskTime(offsetsAndMetadata);
         } catch (final AuthorizationException e) {

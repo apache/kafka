@@ -21,6 +21,8 @@ import org.apache.kafka.streams.kstream._
 import scala.collection.JavaConverters._
 import java.lang.{Iterable => JIterable}
 
+import org.apache.kafka.streams.processor.ProcessorContext
+
 /**
  * Implicit classes that offer conversions of Scala function literals to
  * SAM (Single Abstract Method) objects in Java. These make the Scala APIs much
@@ -119,5 +121,41 @@ private[scala] object FunctionsCompatConversions {
     def asTransformerSupplier: TransformerSupplier[K, V, VO] = new TransformerSupplier[K, V, VO] {
       override def get(): Transformer[K, V, VO] = f()
     }
+  }
+
+  implicit class TransformerSupplierAsJava[K, V, VO](val supplier: TransformerSupplier[K, V, Iterable[VO]])
+      extends AnyVal {
+    def asJava: TransformerSupplier[K, V, JIterable[VO]] = new TransformerSupplier[K, V, JIterable[VO]] {
+      override def get(): Transformer[K, V, JIterable[VO]] =
+        new Transformer[K, V, JIterable[VO]] {
+          override def transform(key: K, value: V): JIterable[VO] = supplier.get().transform(key, value).asJava
+          override def init(context: ProcessorContext): Unit = supplier.get().init(context)
+          override def close(): Unit = supplier.get().close()
+        }
+    }
+  }
+  implicit class ValueTransformerSupplierAsJava[V, VO](val supplier: ValueTransformerSupplier[V, Iterable[VO]])
+      extends AnyVal {
+    def asJava: ValueTransformerSupplier[V, JIterable[VO]] = new ValueTransformerSupplier[V, JIterable[VO]] {
+      override def get(): ValueTransformer[V, JIterable[VO]] =
+        new ValueTransformer[V, JIterable[VO]] {
+          override def transform(value: V): JIterable[VO] = supplier.get().transform(value).asJava
+          override def init(context: ProcessorContext): Unit = supplier.get().init(context)
+          override def close(): Unit = supplier.get().close()
+        }
+    }
+  }
+  implicit class ValueTransformerSupplierWithKeyAsJava[K, V, VO](
+    val supplier: ValueTransformerWithKeySupplier[K, V, Iterable[VO]]
+  ) extends AnyVal {
+    def asJava: ValueTransformerWithKeySupplier[K, V, JIterable[VO]] =
+      new ValueTransformerWithKeySupplier[K, V, JIterable[VO]] {
+        override def get(): ValueTransformerWithKey[K, V, JIterable[VO]] =
+          new ValueTransformerWithKey[K, V, JIterable[VO]] {
+            override def transform(key: K, value: V): JIterable[VO] = supplier.get().transform(key, value).asJava
+            override def init(context: ProcessorContext): Unit = supplier.get().init(context)
+            override def close(): Unit = supplier.get().close()
+          }
+      }
   }
 }

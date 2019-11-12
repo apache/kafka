@@ -35,7 +35,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                                                  final String sinkName,
                                                  final String sourceName,
                                                  final String repartitionTopic,
-                                                 final ProcessorParameters processorParameters) {
+                                                 final ProcessorParameters processorParameters,
+                                                 final InternalTopicProperties internalTopicProperties) {
 
         super(
             nodeName,
@@ -45,7 +46,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             valueSerde,
             sinkName,
             repartitionTopic,
-            null
+            null,
+            internalTopicProperties
         );
     }
 
@@ -104,54 +106,9 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
         return new GroupedTableOperationRepartitionNodeBuilder<>();
     }
 
-    public static final class GroupedTableOperationRepartitionNodeBuilder<K, V> {
+    public static final class GroupedTableOperationRepartitionNodeBuilder<K, V> extends BaseRepartitionNodeBuilder<K, V, GroupedTableOperationRepartitionNode<K, V>> {
 
-        private Serde<K> keySerde;
-        private Serde<V> valueSerde;
-        private String sinkName;
-        private String nodeName;
-        private String sourceName;
-        private String repartitionTopic;
-        private ProcessorParameters processorParameters;
-
-        private GroupedTableOperationRepartitionNodeBuilder() {
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
-            this.keySerde = keySerde;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
-            this.valueSerde = valueSerde;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
-            this.sinkName = sinkName;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
-            this.nodeName = nodeName;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
-            this.sourceName = sourceName;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
-            this.repartitionTopic = repartitionTopic;
-            return this;
-        }
-
-        public GroupedTableOperationRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
-            this.processorParameters = processorParameters;
-            return this;
-        }
-
+        @Override
         public GroupedTableOperationRepartitionNode<K, V> build() {
             return new GroupedTableOperationRepartitionNode<>(
                 nodeName,
@@ -160,7 +117,8 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                 sinkName,
                 sourceName,
                 repartitionTopic,
-                processorParameters
+                processorParameters,
+                internalTopicProperties
             );
         }
     }

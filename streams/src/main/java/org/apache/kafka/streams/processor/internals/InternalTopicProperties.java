@@ -32,4 +32,11 @@ public class InternalTopicProperties {
     public static InternalTopicProperties empty() {
         return new InternalTopicProperties(null);
     }
+
+    @Override
+    public String toString() {
+        return "InternalTopicProperties{" +
+               "numberOfPartitions=" + numberOfPartitions +
+               '}';
+    }
 }

@@ -222,15 +222,9 @@ public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
         try {
-            final Map<TopicPartition, Long> results = consumer.committed(partitions)
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-
             // those do not have a committed offset would default to 0
-            for (final TopicPartition tp : partitions) {
-                results.putIfAbsent(tp, 0L);
-            }
-
-            return results;
+            return consumer.committed(partitions).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
         } catch (final AuthorizationException e) {
             throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
         } catch (final WakeupException e) {

@@ -431,6 +431,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
+                                              null,
                                               repartitionNodeBuilder);
 
         // ensures setting the repartition topic to the name of the

@@ -969,7 +969,8 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} by signaling all the threads to stop, and then wait up to the timeout for the
      * threads to join.
-     * A {@code timeout} of 0 means to wait forever.
+     * A {@code timeout} of Duration.ZERO (or any other zero duration) makes the close operation asynchronous.
+     * Negative-duration timeouts are rejected.
      *
      * @param timeout  how long to wait for the threads to shutdown
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached

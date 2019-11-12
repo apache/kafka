@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
@@ -32,7 +32,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                                        final Serde<V> valueSerde,
                                        final String sinkName,
                                        final String repartitionTopic,
-                                       final StreamPartitioner<K, V> partitioner) {
+                                       final StreamPartitioner<K, V> partitioner,
+                                       final InternalTopicProperties internalTopicProperties) {
         super(
             nodeName,
             sourceName,
@@ -41,7 +42,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             valueSerde,
             sinkName,
             repartitionTopic,
-            partitioner
+            partitioner,
+            internalTopicProperties
         );
     }
 
@@ -97,60 +99,9 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     }
 
 
-    public static final class OptimizableRepartitionNodeBuilder<K, V> {
+    public static final class OptimizableRepartitionNodeBuilder<K, V> extends BaseRepartitionNodeBuilder<K, V, OptimizableRepartitionNode<K, V>> {
 
-        private String nodeName;
-        private ProcessorParameters processorParameters;
-        private Serde<K> keySerde;
-        private Serde<V> valueSerde;
-        private String sinkName;
-        private String sourceName;
-        private String repartitionTopic;
-        private StreamPartitioner<K, V> partitioner;
-
-        private OptimizableRepartitionNodeBuilder() {
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
-            this.processorParameters = processorParameters;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
-            this.keySerde = keySerde;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
-            this.valueSerde = valueSerde;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
-            this.sinkName = sinkName;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
-            this.sourceName = sourceName;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
-            this.repartitionTopic = repartitionTopic;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
-            this.nodeName = nodeName;
-            return this;
-        }
-
-        public OptimizableRepartitionNodeBuilder<K, V> withPartitioner(final StreamPartitioner<K, V> partitioner) {
-            this.partitioner = partitioner;
-            return this;
-        }
-
+        @Override
         public OptimizableRepartitionNode<K, V> build() {
 
             return new OptimizableRepartitionNode<>(
@@ -161,7 +112,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                 valueSerde,
                 sinkName,
                 repartitionTopic,
-                partitioner
+                partitioner,
+                internalTopicProperties
             );
 
         }
