@@ -308,6 +308,63 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.transform(transformerSupplier, stateStoreNames: _*)
 
   /**
+   * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+   * can be altered arbitrarily).
+   * A `Transformer` (provided by the given `TransformerSupplier`) is applied to each input record
+   * and computes zero or more output records.
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `Transformer`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * @param transformerSupplier the `TransformerSuplier` that generates `Transformer`
+   * @param stateStoreNames     the names of the state stores used by the processor
+   * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
+   * @see `org.apache.kafka.streams.kstream.KStream#transform`
+   */
+  def flatTransform[K1, V1](transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
+                            stateStoreNames: String*): KStream[K1, V1] =
+    inner.flatTransform(transformerSupplier.asJava, stateStoreNames: _*)
+
+  /**
+   * Transform the value of each input record into zero or more records (with possible new type) in the
+   * output stream.
+   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+   * record value and computes a new value for it.
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `ValueTransformer`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * @param valueTransformerSupplier a instance of `ValueTransformerSupplier` that generates a `ValueTransformer`
+   * @param stateStoreNames          the names of the state stores used by the processor
+   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+   */
+  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
+                              stateStoreNames: String*): KStream[K, VR] =
+    inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*)
+
+  /**
+   * Transform the value of each input record into zero or more records (with possible new type) in the
+   * output stream.
+   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
+   * record value and computes a new value for it.
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `ValueTransformer`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
+   * @param stateStoreNames          the names of the state stores used by the processor
+   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
+   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
+   */
+  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
+                              stateStoreNames: String*): KStream[K, VR] =
+    inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*)
+
+  /**
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
    * record value and computes a new value for it.
