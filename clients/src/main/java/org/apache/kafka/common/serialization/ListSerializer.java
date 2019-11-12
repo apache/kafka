@@ -27,22 +27,22 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
+public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
-    private Serializer<T> inner;
+    private Serializer<Inner> inner;
     private boolean isFixedLength;
 
     static private List<Class<? extends Serializer>> fixedLengthSerializers = Arrays.asList(
-            ShortSerializer.class,
-            IntegerSerializer.class,
-            FloatSerializer.class,
-            LongSerializer.class,
-            DoubleSerializer.class,
-            UUIDSerializer.class);
+        ShortSerializer.class,
+        IntegerSerializer.class,
+        FloatSerializer.class,
+        LongSerializer.class,
+        DoubleSerializer.class,
+        UUIDSerializer.class);
 
     public ListSerializer() {}
 
-    public ListSerializer(Serializer<T> serializer) {
+    public ListSerializer(Serializer<Inner> serializer) {
         this.inner = serializer;
         this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
     }
@@ -57,7 +57,7 @@ public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
                 if (innerSerde instanceof String) {
                     inner = Utils.newInstance((String) innerSerde, Serde.class).serializer();
                 } else if (innerSerde instanceof Class) {
-                    inner = ((Serde<T>) Utils.newInstance((Class) innerSerde)).serializer();
+                    inner = ((Serde<Inner>) Utils.newInstance((Class) innerSerde)).serializer();
                 } else {
                     throw new ClassNotFoundException();
                 }
@@ -69,7 +69,7 @@ public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
     }
 
     @Override
-    public byte[] serialize(String topic, L data) {
+    public byte[] serialize(String topic, List<Inner> data) {
         if (data == null) {
             return null;
         }
@@ -77,7 +77,7 @@ public class ListSerializer<L extends List<T>, T> implements Serializer<L> {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeInt(size);
-            for (T entry : data) {
+            for (Inner entry : data) {
                 final byte[] bytes = inner.serialize(topic, entry);
                 if (!isFixedLength) {
                     out.writeInt(bytes.length);

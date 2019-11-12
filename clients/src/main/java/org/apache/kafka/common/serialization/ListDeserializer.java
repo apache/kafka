@@ -17,7 +17,6 @@
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -31,27 +30,27 @@ import java.util.Map;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
-public class ListDeserializer<L extends List<T>, T> implements Deserializer<L> {
+public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
-    private Deserializer<T> inner;
-    private Class<L> listClass;
+    private Deserializer<Inner> inner;
+    private Class<?> listClass;
     private Integer primitiveSize;
 
     static private Map<Class<? extends Deserializer>, Integer> fixedLengthDeserializers = mkMap(
-            mkEntry(ShortDeserializer.class, 2),
-            mkEntry(IntegerDeserializer.class, 4),
-            mkEntry(FloatDeserializer.class, 4),
-            mkEntry(LongDeserializer.class, 8),
-            mkEntry(DoubleDeserializer.class, 8),
-            mkEntry(UUIDDeserializer.class, 36)
+        mkEntry(ShortDeserializer.class, 2),
+        mkEntry(IntegerDeserializer.class, 4),
+        mkEntry(FloatDeserializer.class, 4),
+        mkEntry(LongDeserializer.class, 8),
+        mkEntry(DoubleDeserializer.class, 8),
+        mkEntry(UUIDDeserializer.class, 36)
     );
 
     public ListDeserializer() {}
 
-    public ListDeserializer(Class<L> listClass, Deserializer<T> deserializer) {
+    public <L extends List> ListDeserializer(Class<L> listClass, Deserializer<Inner> innerDeserializer) {
         this.listClass = listClass;
-        this.inner = deserializer;
-        this.primitiveSize = fixedLengthDeserializers.get(deserializer.getClass());
+        this.inner = innerDeserializer;
+        this.primitiveSize = fixedLengthDeserializers.get(innerDeserializer.getClass());
     }
 
     @SuppressWarnings(value = "unchecked")
@@ -60,30 +59,22 @@ public class ListDeserializer<L extends List<T>, T> implements Deserializer<L> {
         if (inner == null) {
             String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
             String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-            String listType = (String) configs.get(listTypePropertyName);
-            String innerSerde = (String) configs.get(innerSerdePropertyName);
-            try {
-                listClass = (Class<L>) Class.forName(listType);
-            } catch (ClassNotFoundException e) {
-                throw new ConfigException(listTypePropertyName, listType, "List type class " + listType + " could not be found.");
-            }
-            try {
-                inner = Utils.newInstance(innerSerde, Serde.class).deserializer();
-            } catch (ClassNotFoundException e) {
-                throw new ConfigException(innerSerdePropertyName, innerSerde, "Serde class " + innerSerde + " could not be found.");
-            }
+            listClass = (Class<List<Inner>>) configs.get(listTypePropertyName);
+            Class<Serde> innerSerde = (Class<Serde>) configs.get(innerSerdePropertyName);
+            inner = Utils.newInstance(innerSerde).deserializer();
             inner.configure(configs, isKey);
         }
     }
 
-    private L getListInstance(int listSize) {
+    @SuppressWarnings(value = "unchecked")
+    private List<Inner> getListInstance(int listSize) {
         try {
-            Constructor<L> listConstructor;
+            Constructor<List<Inner>> listConstructor;
             try {
-                listConstructor = listClass.getConstructor(Integer.TYPE);
+                listConstructor = (Constructor<List<Inner>>) listClass.getConstructor(Integer.TYPE);
                 return listConstructor.newInstance(listSize);
             } catch (NoSuchMethodException e) {
-                listConstructor = listClass.getConstructor();
+                listConstructor = (Constructor<List<Inner>>) listClass.getConstructor();
                 return listConstructor.newInstance();
             }
         } catch (Exception e) {
@@ -92,16 +83,15 @@ public class ListDeserializer<L extends List<T>, T> implements Deserializer<L> {
     }
 
     @Override
-    public L deserialize(String topic, byte[] data) {
+    public List<Inner> deserialize(String topic, byte[] data) {
         if (data == null) {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             final int size = dis.readInt();
-            L deserializedList = getListInstance(size);
+            List<Inner> deserializedList = getListInstance(size);
             for (int i = 0; i < size; i++) {
-                byte[] payload;
-                payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
+                byte[] payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
                 if (dis.read(payload) == -1) {
                     throw new SerializationException("End of the stream was reached prematurely");
                 }
