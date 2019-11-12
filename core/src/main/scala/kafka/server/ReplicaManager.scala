@@ -937,8 +937,8 @@ class ReplicaManager(val config: KafkaConfig,
           fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
         })
       }
-      val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
-        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
+      val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit,
+        fetchOnlyFromLeader, fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
         maybeUpdateHwAndSendResponse)
 
@@ -1641,7 +1641,7 @@ class ReplicaManager(val config: KafkaConfig,
   def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
-    info(s"Stopping serving replicas in dir $dir")
+    warn(s"Stopping serving replicas in dir $dir")
     replicaStateChangeLock synchronized {
       val newOfflinePartitions = nonOfflinePartitionsIterator.filter { partition =>
         partition.log.exists { _.dir.getParent == dir }
@@ -1663,14 +1663,14 @@ class ReplicaManager(val config: KafkaConfig,
       }
       highWatermarkCheckpoints = highWatermarkCheckpoints.filter { case (checkpointDir, _) => checkpointDir != dir }
 
-      info(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
+      warn(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
     logManager.handleLogDirFailure(dir)
 
     if (sendZkNotification)
       zkClient.propagateLogDirEvent(localBrokerId)
-    info(s"Stopped serving replicas in dir $dir")
+    warn(s"Stopped serving replicas in dir $dir")
   }
 
   def removeMetrics(): Unit = {

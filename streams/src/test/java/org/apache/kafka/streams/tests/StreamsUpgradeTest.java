@@ -153,14 +153,27 @@ public class StreamsUpgradeTest {
                                                                    topics,
                                                                    standbyTasks,
                                                                    REBALANCE_PROTOCOL);
-            return new FutureSubscriptionInfo(
-                usedSubscriptionMetadataVersion,
-                LATEST_SUPPORTED_VERSION + 1,
-                taskManager.processId(),
-                activeTasks,
-                standbyTasks,
-                userEndPoint())
-                .encode();
+
+
+            if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
+                return new SubscriptionInfo(
+                    usedSubscriptionMetadataVersion,
+                    LATEST_SUPPORTED_VERSION + 1,
+                    taskManager.processId(),
+                    activeTasks,
+                    standbyTasks,
+                    userEndPoint()
+                ).encode();
+            } else {
+                return new FutureSubscriptionInfo(
+                    usedSubscriptionMetadataVersion,
+                    LATEST_SUPPORTED_VERSION + 1,
+                    taskManager.processId(),
+                    activeTasks,
+                    standbyTasks,
+                    userEndPoint())
+                    .encode();
+            }
         }
 
         @Override
@@ -291,7 +304,14 @@ public class StreamsUpgradeTest {
         }
     }
 
-    private static class FutureSubscriptionInfo extends SubscriptionInfo {
+    private static class FutureSubscriptionInfo {
+        private final int version;
+        private final int latestSupportedVersion;
+        private final UUID processId;
+        private final Set<TaskId> prevTasks;
+        private final Set<TaskId> standbyTasks;
+        private final String userEndPoint;
+
         // for testing only; don't apply version checks
         FutureSubscriptionInfo(final int version,
                                final int latestSupportedVersion,
@@ -299,40 +319,40 @@ public class StreamsUpgradeTest {
                                final Set<TaskId> prevTasks,
                                final Set<TaskId> standbyTasks,
                                final String userEndPoint) {
-            super(version, latestSupportedVersion, processId, prevTasks, standbyTasks, userEndPoint);
+            this.version = version;
+            this.latestSupportedVersion = latestSupportedVersion;
+            this.processId = processId;
+            this.prevTasks = prevTasks;
+            this.standbyTasks = standbyTasks;
+            this.userEndPoint = userEndPoint;
+            if (version <= LATEST_SUPPORTED_VERSION) {
+                throw new IllegalArgumentException("this class can't be used with version " + version);
+            }
         }
 
         public ByteBuffer encode() {
-            if (version() <= LATEST_SUPPORTED_VERSION) {
-                final ByteBuffer buf = super.encode();
-                // super.encode() always encodes `LATEST_SUPPORTED_VERSION` as "latest supported version"
-                // need to update to future version
-                buf.putInt(4, latestSupportedVersion());
-                return buf;
-            }
-
             final ByteBuffer buf = encodeFutureVersion();
             buf.rewind();
             return buf;
         }
 
         private ByteBuffer encodeFutureVersion() {
-            final byte[] endPointBytes = LegacySubscriptionInfoSerde.prepareUserEndPoint(userEndPoint());
+            final byte[] endPointBytes = LegacySubscriptionInfoSerde.prepareUserEndPoint(userEndPoint);
 
             final ByteBuffer buf = ByteBuffer.allocate(
                 4 + // used version
                     4 + // latest supported version version
                     16 + // client ID
-                    4 + prevTasks().size() * 8 + // length + prev tasks
-                    4 + standbyTasks().size() * 8 + // length + standby tasks
+                    4 + prevTasks.size() * 8 + // length + prev tasks
+                    4 + standbyTasks.size() * 8 + // length + standby tasks
                     4 + endPointBytes.length
             );
 
-            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
-            buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
-            LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId());
-            LegacySubscriptionInfoSerde.encodeTasks(buf, prevTasks());
-            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks());
+            buf.putInt(version); // used version
+            buf.putInt(version); // supported version
+            LegacySubscriptionInfoSerde.encodeClientUUID(buf, processId);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, prevTasks);
+            LegacySubscriptionInfoSerde.encodeTasks(buf, standbyTasks);
             LegacySubscriptionInfoSerde.encodeUserEndPoint(buf, endPointBytes);
 
             buf.rewind();

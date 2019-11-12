@@ -55,7 +55,7 @@ public class AssignmentInfoTest {
 
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {
-        final AssignmentInfo info = new AssignmentInfo(activeTasks, standbyTasks, globalAssignment);
+        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 0);
         assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 

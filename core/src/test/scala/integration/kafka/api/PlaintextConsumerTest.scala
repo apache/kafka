@@ -622,12 +622,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords = 5, tp)
 
+    val topicPartition = new TopicPartition(topic, 15)
     val consumer = createConsumer()
-    assertTrue(consumer.committed(Set(new TopicPartition(topic, 15)).asJava).isEmpty)
+    assertNull(consumer.committed(Set(topicPartition).asJava).get(topicPartition))
 
     // position() on a partition that we aren't subscribed to throws an exception
     intercept[IllegalStateException] {
-      consumer.position(new TopicPartition(topic, 15))
+      consumer.position(topicPartition)
     }
 
     consumer.assign(List(tp).asJava)
