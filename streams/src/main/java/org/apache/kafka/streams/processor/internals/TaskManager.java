@@ -279,12 +279,15 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
+        log.debug("Shutting down all active tasks {}, standby tasks {}, and suspended tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
+                  active.suspendedTaskIds());
+
         try {
-            active.shutdown(clean);
+            active.close(clean);
         } catch (final RuntimeException fatalException) {
             firstException.compareAndSet(null, fatalException);
         }
-        standby.shutdown(clean);
+        standby.close(clean);
 
         // remove the changelog partitions from restore consumer
         try {

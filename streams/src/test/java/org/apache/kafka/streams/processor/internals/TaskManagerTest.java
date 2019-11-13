@@ -375,7 +375,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseActiveTasksOnShutdown() {
-        active.shutdown(true);
+        active.close(true);
         expectLastCall();
         replay();
 
@@ -385,7 +385,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseStandbyTasksOnShutdown() {
-        standby.shutdown(false);
+        standby.close(false);
         expectLastCall();
         replay();
 

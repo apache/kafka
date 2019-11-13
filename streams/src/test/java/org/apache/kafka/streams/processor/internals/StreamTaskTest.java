@@ -267,9 +267,7 @@ public class StreamTaskTest {
             assertTimeoutErrorLog(appender);
 
             // make sure we report the correct message
-            assertThat(
-                expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
+            assertThat(expected.getMessage(), is("task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);
@@ -328,9 +326,7 @@ public class StreamTaskTest {
             assertTimeoutErrorLog(appender);
 
             // make sure we report the correct message
-            assertThat(
-                expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
+            assertThat(expected.getMessage(), is("task [0_0] Failed to initialize task 0_0 due to timeout."));
 
             // make sure we preserve the cause
             assertEquals(expected.getCause().getClass(), TimeoutException.class);
@@ -342,7 +338,7 @@ public class StreamTaskTest {
     private void assertTimeoutErrorLog(final LogCaptureAppender appender) {
 
         final String expectedErrorLogMessage =
-            "stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Timeout exception caught when initializing transactions for task 0_0. " +
+            "task [0_0] Timeout exception caught when initializing transactions for task 0_0. " +
                 "This might happen if the broker is slow to respond, if the network " +
                 "connection to the broker was interrupted, or if similar circumstances arise. " +
                 "You can increase producer parameter `max.block.ms` to increase this timeout.";
@@ -1762,5 +1758,4 @@ public class StreamTaskTest {
             recordValue
         );
     }
-
 }

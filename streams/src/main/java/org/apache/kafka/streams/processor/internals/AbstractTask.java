@@ -72,8 +72,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        this.logPrefix = threadIdPrefix + String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -198,7 +197,7 @@ public abstract class AbstractTask implements Task {
         log.trace("Initializing state stores");
 
         for (final StateStore store : topology.stateStores()) {
-            log.debug("Initializing store {}", store.name());
+            log.trace("Initializing store {}", store.name());
             processorContext.uninitialize();
             store.init(processorContext, store);
         }
