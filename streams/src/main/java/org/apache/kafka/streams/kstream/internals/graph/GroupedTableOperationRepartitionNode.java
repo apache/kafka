@@ -80,7 +80,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        topologyBuilder.addInternalTopic(repartitionTopic, InternalTopicProperties.empty());
+        topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addSink(
             sinkName,

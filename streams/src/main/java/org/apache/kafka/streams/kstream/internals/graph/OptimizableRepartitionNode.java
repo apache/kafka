@@ -66,7 +66,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        topologyBuilder.addInternalTopic(repartitionTopic, InternalTopicProperties.empty());
+        topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addProcessor(
             processorParameters.processorName(),
