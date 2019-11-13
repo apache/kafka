@@ -34,7 +34,7 @@ class ReplicaScaleTest(Test):
         super(ReplicaScaleTest, self).__init__(test_context=test_context)
         self.test_context = test_context
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk)
+        self.kafka = KafkaService(self.test_context, num_nodes=16, zk=self.zk)
 
     def setUp(self):
         self.zk.start()
@@ -47,8 +47,8 @@ class ReplicaScaleTest(Test):
         self.kafka.stop()
         self.zk.stop()
 
-    @cluster(num_nodes=12)
-    @parametrize(topic_count=1000, partition_count=34, replication_factor=3)
+    @cluster(num_nodes=20)
+    @parametrize(topic_count=250, partition_count=136, replication_factor=3)
     def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
@@ -102,7 +102,7 @@ class ReplicaScaleTest(Test):
 
         trogdor.stop()
 
-    @cluster(num_nodes=12)
+    @cluster(num_nodes=20)
     @parametrize(topic_count=1000, partition_count=34, replication_factor=3)
     def test_100k_clean_bounce(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
