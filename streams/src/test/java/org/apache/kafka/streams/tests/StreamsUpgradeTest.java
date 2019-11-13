@@ -173,6 +173,7 @@ public class StreamsUpgradeTest {
 
             if (super.maybeUpdateSubscriptionVersion(usedVersion, info.commonlySupportedVersion())) {
                 setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+                return;
             }
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());

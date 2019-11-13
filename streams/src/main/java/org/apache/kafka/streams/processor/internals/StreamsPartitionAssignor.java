@@ -1109,6 +1109,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
             setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
+            return;
         }
 
         // version 1 field

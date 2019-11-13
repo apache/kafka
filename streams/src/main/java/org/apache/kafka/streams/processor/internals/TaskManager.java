@@ -467,22 +467,21 @@ public class TaskManager {
         }
 
         log.debug("Assigning metadata with: " +
-                      "\tpreviousAssignedActiveTasks: {},\n" +
-                      "\tpreviousAssignedStandbyTasks: {}\n" +
-                      "The updated task states are: \n" +
+                      "\tactiveTasks: {},\n" +
+                      "\tstandbyTasks: {}\n" +
+                      "The updated active task states are: \n" +
                       "\tassignedActiveTasks {},\n" +
                       "\tassignedStandbyTasks {},\n" +
                       "\taddedActiveTasks {},\n" +
                       "\taddedStandbyTasks {},\n" +
                       "\trevokedActiveTasks {},\n" +
                       "\trevokedStandbyTasks {}",
-                  assignedActiveTasks, assignedStandbyTasks,
                   activeTasks, standbyTasks,
+                  assignedActiveTasks, assignedStandbyTasks,
                   addedActiveTasks, addedStandbyTasks,
                   revokedActiveTasks, revokedStandbyTasks);
-
-        assignedActiveTasks = activeTasks;
-        assignedStandbyTasks = standbyTasks;
+        this.assignedActiveTasks = activeTasks;
+        this.assignedStandbyTasks = standbyTasks;
     }
 
     public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
