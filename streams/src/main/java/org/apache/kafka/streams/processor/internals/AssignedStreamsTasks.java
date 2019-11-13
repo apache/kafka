@@ -346,8 +346,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
-                restoringByPartition.keySet().removeAll(task.partitions());
-                restoringByPartition.keySet().removeAll(task.changelogPartitions());
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());
@@ -363,12 +361,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
         if (allTasksRunning()) {
             restoredPartitions.clear();
-
-            if (!restoringByPartition.isEmpty()) {
-                log.error("Finished restoring all tasks but found leftover partitions in restoringByPartition: {}",
-                    restoringByPartition);
-                throw new IllegalStateException("Restoration is complete but not all partitions were cleared.");
-            }
         }
     }
 
@@ -512,18 +504,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     @Override
-    public boolean isEmpty() throws IllegalStateException {
-        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
-            log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
-                      "restoring by partitions map contained {}", restoringByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
-        } else {
-            return super.isEmpty()
-                       && restoring.isEmpty()
-                       && restoringByPartition.isEmpty()
-                       && restoredPartitions.isEmpty()
-                       && suspended.isEmpty();
-        }
+    public boolean isEmpty() {
+        return super.isEmpty()
+            && restoring.isEmpty()
+            && restoringByPartition.isEmpty()
+            && restoredPartitions.isEmpty()
+            && suspended.isEmpty();
     }
 
     public String toString(final String indent) {

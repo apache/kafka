@@ -182,16 +182,10 @@ abstract class AssignedTasks<T extends Task> {
         created.clear();
     }
 
-    boolean isEmpty() throws IllegalStateException {
-        if (running.isEmpty() && !runningByPartition.isEmpty()) {
-            log.error("Assigned stream tasks in an inconsistent state: the set of running tasks is empty but the " +
-                          "running by partitions map contained {}", runningByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks running but nonempty runningByPartition");
-        } else {
-            return runningByPartition.isEmpty()
-                       && running.isEmpty()
-                       && created.isEmpty();
-        }
+    boolean isEmpty() {
+        return runningByPartition.isEmpty()
+                   && running.isEmpty()
+                   && created.isEmpty();
     }
 
     /**
