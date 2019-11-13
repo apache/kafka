@@ -80,7 +80,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
+    // Note that restoredPartitions may be nonempty even though restoring is, and will not be cleared in
+    // #updateRestored if this returns false, so we should clear any remaining partitions if restoring is empty
     boolean hasRestoringTasks() {
+        if (restoring.isEmpty()) {
+            restoredPartitions.clear();
+            restoringByPartition.clear();
+        }
         return !restoring.isEmpty();
     }
     
@@ -154,6 +160,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             } finally {
                 removeTaskFromRunning(task);
                 taskChangelogs.addAll(task.changelogPartitions());
+
+                // Until KAFKA-9177 is fixed, we need to remove from restoredPartitions when a running task is
+                // suspended/revoked instead of when it finishes restoring since the partitions will just be added
+                // back the next time #updateRestored is called
+                removeFromRestoredPartitions(task);
             }
         }
 
@@ -193,6 +204,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                                           final List<TopicPartition> closedTaskChangelogs) {
         removeTaskFromRunning(task);
         closedTaskChangelogs.addAll(task.changelogPartitions());
+
+        // Until KAFKA-9177 is fixed, we need to remove from restoredPartitions when a running task is
+        // suspended/revoked instead of when it finishes restoring since the partitions will just be added
+        // back the next time #updateRestored is called
+        removeFromRestoredPartitions(task);
 
         try {
             final boolean clean = !isZombie;
@@ -346,8 +362,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
-                restoringByPartition.keySet().removeAll(task.partitions());
-                restoringByPartition.keySet().removeAll(task.changelogPartitions());
+                // Note that because we add back all restored partitions at the top of this loop, clearing them from
+                // restoredPartitions here doesn't really matter. We do it anyway as it is the correct thing to do,
+                // and may matter with future changes.
+                removeFromRestoredPartitions(task);
+                removeFromRestoringByPartition(task);
+
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());
@@ -384,14 +404,18 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     private void removeTaskFromRestoring(final StreamTask task) {
         restoring.remove(task.id());
-        for (final TopicPartition topicPartition : task.partitions()) {
-            restoredPartitions.remove(topicPartition);
-            restoringByPartition.remove(topicPartition);
-        }
-        for (final TopicPartition topicPartition : task.changelogPartitions()) {
-            restoredPartitions.remove(topicPartition);
-            restoringByPartition.remove(topicPartition);
-        }
+        removeFromRestoringByPartition(task);
+        removeFromRestoredPartitions(task);
+    }
+
+    private void removeFromRestoringByPartition(final StreamTask task) {
+        restoringByPartition.keySet().removeAll(task.partitions());
+        restoringByPartition.keySet().removeAll(task.changelogPartitions());
+    }
+
+    private void removeFromRestoredPartitions(final StreamTask task) {
+        restoredPartitions.removeAll(task.partitions());
+        restoredPartitions.removeAll(task.changelogPartitions());
     }
 
     /**
@@ -513,9 +537,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     @Override
     public boolean isEmpty() throws IllegalStateException {
-        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
+        if (restoring.isEmpty() && !(restoringByPartition.isEmpty() && restoredPartitions.isEmpty())) {
             log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
-                      "restoring by partitions map contained {}", restoringByPartition);
+                      "restoring by partitions map contained {}, and the restoredPartitions set contained {}",
+                restoringByPartition, restoredPartitions);
             throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
         } else {
             return super.isEmpty()
