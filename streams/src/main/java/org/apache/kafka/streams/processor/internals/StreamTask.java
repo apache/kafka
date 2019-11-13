@@ -675,17 +675,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw taskMigratedException;
             }
         } else {
-            // In the case of unclean close we still need to make sure all the stores are flushed before closing any
-            super.flushState();
-
-            if (eosEnabled) {
-                maybeAbortTransactionAndCloseRecordCollector(isZombie);
-            }
+            maybeAbortTransactionAndCloseRecordCollector(isZombie);
         }
     }
 
     private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
-        if (!isZombie) {
+        if (eosEnabled && !isZombie) {
             try {
                 if (transactionInFlight) {
                     producer.abortTransaction();
@@ -703,12 +698,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         }
 
-        try {
-            recordCollector.close();
-        } catch (final Throwable e) {
-            log.error("Failed to close producer due to the following error:", e);
-        } finally {
-            producer = null;
+        if (eosEnabled) {
+            try {
+                recordCollector.close();
+            } catch (final Throwable e) {
+                log.error("Failed to close producer due to the following error:", e);
+            } finally {
+                producer = null;
+            }
         }
     }
 
