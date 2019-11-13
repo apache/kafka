@@ -48,7 +48,7 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=20)
-    @parametrize(topic_count=250, partition_count=136, replication_factor=3)
+    @parametrize(topic_count=25, partition_count=100, replication_factor=3)
     def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
@@ -60,7 +60,7 @@ class ReplicaScaleTest(Test):
                 "replication-factor": replication_factor,
                 "configs": {"min.insync.replicas": 1}
             }
-            self.kafka.create_topic(topic_cfg)
+            self.kafka.create_topic(topic_cfg, describe=False)
 
         t1 = time.time()
         self.logger.info("Time to create topics: %d" % (t1-t0))
@@ -68,7 +68,7 @@ class ReplicaScaleTest(Test):
         producer_workload_service = ProduceBenchWorkloadService(self.test_context, self.kafka)
         consumer_workload_service = ConsumeBenchWorkloadService(self.test_context, self.kafka)
         trogdor = TrogdorService(context=self.test_context,
-                              client_services=[self.kafka, producer_workload_service, consumer_workload_service])
+                                 client_services=[self.kafka, producer_workload_service, consumer_workload_service])
         trogdor.start()
 
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
