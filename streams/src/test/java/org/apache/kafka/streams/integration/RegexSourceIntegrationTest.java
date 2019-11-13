@@ -413,9 +413,7 @@ public class RegexSourceIntegrationTest {
 
         @Override
         public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-            for (final TopicPartition partition : partitions) {
-                assignedTopics.remove(partition.topic());
-            }
+            assignedTopics.clear();
             listener.onPartitionsRevoked(partitions);
         }
 
