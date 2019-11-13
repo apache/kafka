@@ -43,7 +43,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import org.junit.function.ThrowingRunnable;
 
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -51,7 +50,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -172,7 +170,7 @@ public class AssignedStreamsTasksTest {
         t1.initializeMetadata();
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).times(2);
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).times(3);
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).times(2);
         t1.closeStateManager(true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -261,17 +259,24 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldNotCloseTaskWithinResumeSuspendedIfTaskMigratedException() {
+    public void shouldCloseTaskOnResumeSuspendedIfTaskMigratedException() {
         mockRunningTaskSuspension();
         t1.resume();
         t1.initializeTopology();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
         assertThat(suspendTask(), nullValue());
 
-        verifyTaskMigratedExceptionDoesNotCloseTask(
-            () -> assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1)));
+        try {
+            assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1));
+            fail("Should have thrown TaskMigratedException.");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
     }
 
     private void mockTaskInitialization() {
@@ -298,16 +303,23 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldNotCloseTaskWithinCommitIfTaskMigratedException() {
+    public void shouldCloseTaskOnCommitIfTaskMigratedException() {
         mockTaskInitialization();
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
 
-        verifyTaskMigratedExceptionDoesNotCloseTask(
-            () -> assignedTasks.commit());
+        try {
+            assignedTasks.commit();
+            fail("Should have thrown TaskMigratedException.");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
     }
 
     @Test
@@ -345,30 +357,44 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldNotCloseTaskWithinMaybeCommitIfTaskMigratedException() {
+    public void shouldCloseTaskOnMaybeCommitIfTaskMigratedException() {
         mockTaskInitialization();
         EasyMock.expect(t1.commitRequested()).andReturn(true);
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
 
-        verifyTaskMigratedExceptionDoesNotCloseTask(
-            () -> assignedTasks.maybeCommitPerUserRequested());
+        try {
+            assignedTasks.maybeCommitPerUserRequested();
+            fail("Should have thrown TaskMigratedException.");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
     }
 
     @Test
-    public void shouldNotCloseTaskWithinProcessIfTaskMigratedException() {
+    public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
         EasyMock.expect(t1.isProcessable(0L)).andReturn(true);
         t1.process();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
 
-        verifyTaskMigratedExceptionDoesNotCloseTask(
-            () -> assignedTasks.process(0L));
+        try {
+            assignedTasks.process(0L);
+            fail("Should have thrown TaskMigratedException.");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
     }
 
     @Test
@@ -412,33 +438,39 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldNotCloseTaskWithinMaybePunctuateStreamTimeIfTaskMigratedException() {
+    public void shouldCloseTaskOnMaybePunctuateStreamTimeIfTaskMigratedException() {
         mockTaskInitialization();
         t1.maybePunctuateStreamTime();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
-        EasyMock.replay(t1);
-        addAndInitTask();
-
-
-        verifyTaskMigratedExceptionDoesNotCloseTask(
-            () -> assignedTasks.punctuate());
-    }
-
-    @Test
-    public void shouldNotloseTaskWithinMaybePunctuateSystemTimeIfTaskMigratedException() {
-        mockTaskInitialization();
-        EasyMock.expect(t1.maybePunctuateStreamTime()).andReturn(true);
-        t1.maybePunctuateSystemTime();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
         addAndInitTask();
 
         try {
             assignedTasks.punctuate();
             fail("Should have thrown TaskMigratedException.");
-        } catch (final TaskMigratedException expected) {
-            assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
-        }
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+
+        assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.EMPTY_SET));
+        EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseTaskOnMaybePunctuateSystemTimeIfTaskMigratedException() {
+        mockTaskInitialization();
+        EasyMock.expect(t1.maybePunctuateStreamTime()).andReturn(true);
+        t1.maybePunctuateSystemTime();
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall();
+        EasyMock.replay(t1);
+        addAndInitTask();
+
+        try {
+            assignedTasks.punctuate();
+            fail("Should have thrown TaskMigratedException.");
+        } catch (final TaskMigratedException expected) { /* ignore */ }
         EasyMock.verify(t1);
     }
 
@@ -539,16 +571,5 @@ public class AssignedStreamsTasksTest {
         EasyMock.expectLastCall();
     }
 
-    private void verifyTaskMigratedExceptionDoesNotCloseTask(final ThrowingRunnable action) {
-        final Set<TaskId> expectedRunningTaskIds = Collections.singleton(taskId1);
-
-        // This action is expected to throw a TaskMigratedException
-        assertThrows(TaskMigratedException.class, action);
-
-        // This task should be closed as a zombie with all the other tasks during onPartitionsLost
-        assertThat(assignedTasks.runningTaskIds(), equalTo(expectedRunningTaskIds));
-
-        EasyMock.verify(t1);
-    }
 
 }

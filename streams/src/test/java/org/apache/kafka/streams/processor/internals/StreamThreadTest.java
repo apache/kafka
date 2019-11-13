@@ -842,7 +842,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
 
@@ -898,16 +898,16 @@ public class StreamThreadTest {
         try {
             thread.runOnce();
             fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
-                        thread.tasks().containsKey(task1));
-        }
+        } catch (final TaskMigratedException expected) { /* ignore */ }
+        TestUtils.waitForCondition(
+            () -> thread.tasks().isEmpty(),
+            "StreamsThread did not remove fenced zombie task.");
 
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() {
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTaks() {
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
