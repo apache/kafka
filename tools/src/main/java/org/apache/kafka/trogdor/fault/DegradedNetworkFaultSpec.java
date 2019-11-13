@@ -56,6 +56,15 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
         public int rateLimitKbit() {
             return rateLimitKbit;
         }
+
+        @Override
+        public String toString() {
+            return "NodeDegradeSpec{" +
+                    "networkDevice='" + networkDevice + '\'' +
+                    ", latencyMs=" + latencyMs +
+                    ", rateLimitKbit=" + rateLimitKbit +
+                    '}';
+        }
     }
 
     private final Map<String, NodeDegradeSpec> nodeSpecs;
