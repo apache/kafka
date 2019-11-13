@@ -408,7 +408,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
-    def create_topic(self, topic_cfg, node=None):
+    def create_topic(self, topic_cfg, node=None, describe=True):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
         and we care where command gets run.
@@ -446,10 +446,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-        time.sleep(1)
-        self.logger.info("Checking to see if topic was properly created...\n%s" % cmd)
-        for line in self.describe_topic(topic_cfg["topic"]).split("\n"):
-            self.logger.info(line)
+        if describe:
+            time.sleep(1)
+            self.logger.info("Checking to see if topic was properly created...\n%s" % cmd)
+            for line in self.describe_topic(topic_cfg["topic"]).split("\n"):
+                self.logger.info(line)
 
     def delete_topic(self, topic, node=None):
         """
