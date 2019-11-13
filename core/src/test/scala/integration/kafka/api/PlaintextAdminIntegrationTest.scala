@@ -25,27 +25,23 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
+import integration.kafka.api.BaseAdminIntegrationTest
 import kafka.log.LogConfig
-import kafka.security.auth.{Cluster, Group, Topic}
+import kafka.security.auth.Group
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
-import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
-import kafka.utils.{Log4jController, Logging, TestUtils}
+import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
-import org.apache.kafka.common.acl._
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
 import org.junit.Assert._
-import org.junit.rules.Timeout
-import org.junit.{After, Before, Ignore, Rule, Test}
+import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
@@ -59,79 +55,27 @@ import scala.util.Random
  *
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
-class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
-
-  import AdminClientIntegrationTest._
-
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
-
-  var client: Admin = null
-  var brokerLoggerConfigResource: ConfigResource = null
-  var changedBrokerLoggers = scala.collection.mutable.Set[String]()
+class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
+  import PlaintextAdminIntegrationTest._
 
   val topic = "topic"
   val partition = 0
   val topicPartition = new TopicPartition(topic, partition)
-  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
 
+  private var brokerLoggerConfigResource: ConfigResource = _
+  private val changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   @Before
   override def setUp(): Unit = {
-    super.setUp
-    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
-    brokerLoggerConfigResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
+    super.setUp()
+    brokerLoggerConfigResource = new ConfigResource(
+      ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
 
   @After
   override def tearDown(): Unit = {
     teardownBrokerLoggers()
-    if (client != null)
-      Utils.closeQuietly(client, "AdminClient")
     super.tearDown()
-  }
-
-  val brokerCount = 3
-  val consumerCount = 1
-  val producerCount = 1
-
-  override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
-    cfgs.foreach { config =>
-      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
-      config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
-      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
-      // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
-      // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
-    }
-    cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
-  }
-
-  def createConfig(): util.Map[String, Object] = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
-    config
-  }
-
-  def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
-    TestUtils.waitUntilTrue(() => {
-        val topics = client.listTopics.names.get()
-        expectedPresent.forall(topicName => topics.contains(topicName)) &&
-          expectedMissing.forall(topicName => !topics.contains(topicName))
-      }, "timed out waiting for topics")
   }
 
   @Test
@@ -270,39 +214,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     controller.awaitShutdown()
     val topicDesc = client.describeTopics(topics.asJava).all.get()
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
-  }
-
-  @Test
-  def testAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
-
-    // without includeAuthorizedOperations flag
-    var result = client.describeCluster
-    assertEquals(Set().asJava, result.authorizedOperations().get())
-
-    //with includeAuthorizedOperations flag
-    result = client.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true))
-    var expectedOperations = configuredClusterPermissions.asJava
-    assertEquals(expectedOperations, result.authorizedOperations().get())
-
-    val topic = "mytopic"
-    val newTopics = Seq(new NewTopic(topic, 3, 3.toShort))
-    client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
-
-    // without includeAuthorizedOperations flag
-    var topicResult = getTopicMetadata(client, topic)
-    assertEquals(Set().asJava, topicResult.authorizedOperations)
-
-    //with includeAuthorizedOperations flag
-    topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
-    expectedOperations = Topic.supportedOperations
-      .map(operation => operation.toJava).asJava
-    assertEquals(expectedOperations, topicResult.authorizedOperations)
-  }
-
-  def configuredClusterPermissions() : Set[AclOperation] = {
-    Cluster.supportedOperations.map(operation => operation.toJava)
   }
 
   /**
@@ -1086,24 +997,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
-  val ACL1 = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
-      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-
-  /**
-   * Test that ACL operations are not possible when the authorizer is disabled.
-   * Also see {@link kafka.api.SaslSslAdminClientIntegrationTest} for tests of ACL operations
-   * when the authorizer is enabled.
-   */
-  @Test
-  def testAclOperations(): Unit = {
-    client = AdminClient.create(createConfig())
-    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).values(), classOf[SecurityDisabledException])
-    assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(ACL1)).all(),
-        classOf[SecurityDisabledException])
-    assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
-      classOf[SecurityDisabledException])
-  }
-
   /**
     * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
     * since they can be done within the timeout.  New calls should receive timeouts.
@@ -1276,7 +1169,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             val part = new TopicPartition(testTopicName, 0)
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
-          
+
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
           var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
@@ -1797,7 +1690,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testListReassignmentsDoesNotShowDeletedPartitions(): Unit = {
     client = AdminClient.create(createConfig())
-    
+
     val topic = "list-reassignments-no-reassignments"
     val tp = new TopicPartition(topic, 0)
 
@@ -2246,12 +2139,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client.describeConfigs(Collections.singletonList(brokerLoggerConfigResource)).values.get(brokerLoggerConfigResource).get()
 
   /**
-    * Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists across test classes.
-    * We need to clean up the changes done while testing.
-    */
-  def teardownBrokerLoggers(): Unit = {
+   * Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists across test classes.
+   * We need to clean up the changes done while testing.
+   */
+  private def teardownBrokerLoggers(): Unit = {
     if (changedBrokerLoggers.nonEmpty) {
-      val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name().equals(Log4jController.ROOT_LOGGER)).map(_.name).toSet
+      val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name.equals(Log4jController.ROOT_LOGGER)).map(_.name).toSet
       val unsetBrokerLoggersEntries = changedBrokerLoggers
         .intersect(validLoggers)
         .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
@@ -2266,9 +2159,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       changedBrokerLoggers.clear()
     }
   }
+
 }
 
-object AdminClientIntegrationTest {
+object PlaintextAdminIntegrationTest {
 
   def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
@@ -2407,22 +2301,4 @@ object AdminClientIntegrationTest {
     assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
   }
 
-  private def getTopicMetadata(client: Admin,
-                               topic: String,
-                               describeOptions: DescribeTopicsOptions = new DescribeTopicsOptions,
-                               expectedNumPartitionsOpt: Option[Int] = None): TopicDescription = {
-    var result: TopicDescription = null
-
-    TestUtils.waitUntilTrue(() => {
-      val topicResult = client.describeTopics(Set(topic).asJava, describeOptions).values.get(topic)
-      try {
-        result = topicResult.get
-        expectedNumPartitionsOpt.map(_ == result.partitions.size).getOrElse(true)
-      } catch {
-        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false  // metadata may not have propagated yet, so retry
-      }
-    }, s"Timed out waiting for metadata for $topic")
-
-    result
-  }
 }
