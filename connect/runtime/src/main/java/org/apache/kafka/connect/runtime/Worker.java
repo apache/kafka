@@ -610,10 +610,13 @@ public class Worker {
         Map<String, Object> adminProps = new HashMap<>();
         // Use the top-level worker configs to retain backwards compatibility with older releases which
         // did not require a prefix for connector admin client configs in the worker configuration file
-        // Only include configs that do not begin with "admin." since those will be added next, but with
-        // the prefix stripped
+        // Ignore configs that begin with "admin." since those will be added next (with the prefix stripped)
+        // and those that begin with "producer." and "consumer.", since we know they aren't intended for
+        // the admin client
         Map<String, Object> nonPrefixedWorkerConfigs = config.originals().entrySet().stream()
-            .filter(e -> !e.getKey().startsWith("admin."))
+            .filter(e -> !e.getKey().startsWith("admin.")
+                && !e.getKey().startsWith("producer.")
+                && !e.getKey().startsWith("consumer."))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
             Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
