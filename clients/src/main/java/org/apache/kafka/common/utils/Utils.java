@@ -617,9 +617,12 @@ public final class Utils {
      * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
     public static String readFileAsString(String path) throws IOException {
-        log.debug("Reading file {}", path);
-        byte[] allBytes = Files.readAllBytes(Paths.get(path));
-        return new String(allBytes, StandardCharsets.UTF_8);
+        try {
+            byte[] allBytes = Files.readAllBytes(Paths.get(path));
+            return new String(allBytes, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IOException("Unable to read file " + path, ex);
+        }
     }
 
     /**
