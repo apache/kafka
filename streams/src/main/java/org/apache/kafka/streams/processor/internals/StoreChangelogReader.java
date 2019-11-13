@@ -79,7 +79,8 @@ public class StoreChangelogReader implements ChangelogReader {
             initialize(active);
         }
 
-        if (checkForCompletedRestoration()) {
+        if (needsRestoring.isEmpty() || restoreConsumer.assignment().isEmpty()) {
+            restoreConsumer.unsubscribe();
             return completedRestorers;
         }
 
@@ -115,7 +116,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
         needsRestoring.removeAll(completedRestorers);
 
-        checkForCompletedRestoration();
+        if (needsRestoring.isEmpty()) {
+            restoreConsumer.unsubscribe();
+        }
 
         return completedRestorers;
     }
@@ -334,14 +337,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return nextPosition;
     }
 
-    private boolean checkForCompletedRestoration() {
-        if (needsRestoring.isEmpty()) {
-            log.info("Finished restoring all active tasks");
-            restoreConsumer.unsubscribe();
-            return true;
-        }
-        return false;
-    }
+
 
     private boolean hasPartition(final TopicPartition topicPartition) {
         final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());

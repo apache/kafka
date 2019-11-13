@@ -228,12 +228,14 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
 
     private void mapPreviousTaskAssignment(final Map<ID, ClientState> clients) {
         for (final Map.Entry<ID, ClientState> clientState : clients.entrySet()) {
-            for (final TaskId activeTask : clientState.getValue().prevActiveTasks()) {
+            for (final TaskId activeTask : clientState.getValue().previousActiveTasks()) {
                 previousActiveTaskAssignment.put(activeTask, clientState.getKey());
             }
 
-            for (final TaskId prevAssignedTask : clientState.getValue().prevStandbyTasks()) {
-                previousStandbyTaskAssignment.computeIfAbsent(prevAssignedTask, t -> new HashSet<>());
+            for (final TaskId prevAssignedTask : clientState.getValue().previousStandbyTasks()) {
+                if (!previousStandbyTaskAssignment.containsKey(prevAssignedTask)) {
+                    previousStandbyTaskAssignment.put(prevAssignedTask, new HashSet<>());
+                }
                 previousStandbyTaskAssignment.get(prevAssignedTask).add(clientState.getKey());
             }
         }

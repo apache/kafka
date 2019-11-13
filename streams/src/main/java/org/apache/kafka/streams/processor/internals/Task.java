@@ -30,7 +30,7 @@ public interface Task {
     void initializeMetadata();
 
     /**
-     * Initialize the task and return {@code true} if the task is ready to run, i.e, it has no state stores
+     * Initialize the task and return {@code true} if the task is ready to run, i.e, it has not state stores
      * @return true if this task has no state stores that may need restoring.
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -43,7 +43,13 @@ public interface Task {
 
     void commit();
 
+    void suspend();
+
     void resume();
+
+    void closeSuspended(final boolean clean,
+                        final boolean isZombie,
+                        final RuntimeException e);
 
     void close(final boolean clean,
                final boolean isZombie);

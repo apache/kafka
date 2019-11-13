@@ -74,14 +74,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     void closeTask(final StreamTask task, final boolean clean) {
         if (suspended.containsKey(task.id())) {
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean, false, null);
         } else {
             task.close(clean, false);
         }
-    }
-
-    boolean hasRestoringTasks() {
-        return !restoring.isEmpty();
     }
     
     Set<TaskId> suspendedTaskIds() {
@@ -111,7 +107,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             } else if (restoring.containsKey(task)) {
                 revokedRestoringTasks.add(task);
             } else if (!suspended.containsKey(task)) {
-                log.warn("Task {} was revoked but cannot be found in the assignment, may have been closed due to error", task);
+                log.warn("Task {} was revoked but cannot be found in the assignment", task);
             }
         }
 
@@ -135,7 +131,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 task.suspend();
                 suspended.put(id, task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
-                // swallow and move on since we are rebalancing
+                // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
                 log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
                     "Closing it as zombie and move on.", taskTypeName, id);
                 firstException.compareAndSet(null, closeZombieTask(task));
@@ -252,7 +248,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
         try {
             final boolean clean = !isZombie;
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean, isZombie, null);
         } catch (final RuntimeException e) {
             log.error("Failed to close suspended {} {} due to the following error:", taskTypeName, task.id(), e);
             return e;
@@ -268,6 +264,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TaskId revokedTask : revokedTasks) {
             final StreamTask suspendedTask = suspended.get(revokedTask);
 
+            // task may not be in the suspended tasks if it was closed due to some error
             if (suspendedTask != null) {
                 firstException.compareAndSet(null, closeSuspended(false, suspendedTask));
             } else {
@@ -338,7 +335,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 return true;
             } else {
                 log.warn("Couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-                task.closeSuspended(true, null);
+                task.closeSuspended(true, false, null);
             }
         }
         return false;

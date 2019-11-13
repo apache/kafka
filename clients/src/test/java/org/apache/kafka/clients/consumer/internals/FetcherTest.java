@@ -849,7 +849,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchDuringEagerRebalance() {
+    public void testFetchDuringRebalance() {
         buildFetcher();
 
         subscriptions.subscribe(singleton(topicName), listener);
@@ -860,40 +860,13 @@ public class FetcherTest {
 
         assertEquals(1, fetcher.sendFetches());
 
-        // Now the eager rebalance happens and fetch positions are cleared
-        subscriptions.assignFromSubscribed(Collections.emptyList());
-
+        // Now the rebalance happens and fetch positions are cleared
         subscriptions.assignFromSubscribed(singleton(tp0));
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // The active fetch should be ignored since its position is no longer valid
         assertTrue(fetcher.fetchedRecords().isEmpty());
-    }
-
-    @Test
-    public void testFetchDuringCooperativeRebalance() {
-        buildFetcher();
-
-        subscriptions.subscribe(singleton(topicName), listener);
-        subscriptions.assignFromSubscribed(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        client.updateMetadata(initialUpdateResponse);
-
-        assertEquals(1, fetcher.sendFetches());
-
-        // Now the cooperative rebalance happens and fetch positions are NOT cleared for unrevoked partitions
-        subscriptions.assignFromSubscribed(singleton(tp0));
-
-        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
-        consumerClient.poll(time.timer(0));
-
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
-
-        // The active fetch should NOT be ignored since the position for tp0 is still valid
-        assertEquals(1, fetchedRecords.size());
-        assertEquals(3, fetchedRecords.get(tp0).size());
     }
 
     @Test
