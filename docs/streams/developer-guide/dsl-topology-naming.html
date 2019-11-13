@@ -31,29 +31,33 @@
         </div>
     </div>
 
-    <div class="section" id="naming">
+	<div class="section" id="naming">
         <span id="streams-developer-guide-dsl-topology-naming"></span>
         <h1>Naming Operators in a Kafka Streams DSL Application<a class="headerlink" href="#naming" title="Permalink to this headline"></a></h1>
 
-       <p>
+        <p>
 		   You now can give names to processors when using the Kafka Streams DSL.
-		   In the PAPI there are <code>Processors</code> and <code>StateStores</code> and
+		   In the PAPI there are <code>Processors</code> and <code>State Stores</code> and
 		   you are required to explicitly name each one.
-
+	    </p>
+		<p>
 		   At the DLS layer, there are operators.  A single DSL operator may
-		   compile down to multiple <code>Processors</code> and <code>StateStores</code>, and
+		   compile down to multiple <code>Processors</code> and <code>State Stores</code>, and
 		   if required <code>repartition topics</code>. But with the Kafka Streams
 		   DSL, all these names are generated for you. There is a relationship between
 		   the generated processor name state store names (hence changelog topic names) and repartition
 		   topic names. Note, that the names of state stores and changelog/repartition topics
-		   are "stateful" while processor names are "stateless".  This distinction
+		   are "stateful" while processor names are "stateless".
+	    </p>
+		<p>
+			This distinction
 		   of stateful vs. stateless names has important implications when updating your topology.
 		   While the internal naming makes creating
 		   a topology with the DSL much more straightforward,
 		   there are a couple of trade-offs.  The first trade-off is what we could
 		   consider a readability issue. The other
 		   more severe trade-off is the shifting of names due to the relationship between the
-		   DSL operator and the generated <code>Processors</code>, <code>StateStores</code> changelog
+		   DSL operator and the generated <code>Processors</code>, <code>State Stores</code> changelog
 		   topics and repartition topics.
 	   </p>
 
@@ -66,20 +70,20 @@
 		 	method, you can see what the processor is, but you don't have any context for its business purpose.
 		 	For example, consider the following simple topology:
 
-
-			<code>
-		  	 builder.&gt;String,String&lt;stream("input")
-		          	.filter((k,v) -> !v.equals("invalid_txn"))
-		          	.mapValues((v) -> v.substring(0,5))
-		          	.to("output")
-			</code>
+			<br/>
+		<pre>
+		KStream&lt;String,String&gt; stream = builder.stream("input");
+		stream.filter((k,v) -> !v.equals("invalid_txn"))
+		      .mapValues((v) -> v.substring(0,5))
+		      .to("output")
+	    </pre>
 
 		</p>
 
 		<p>
 		Running <code>Topology#describe()</code> yields this string:
 
-		<code>
+		<pre>
 		Topologies:
 		   Sub-topology: 0
 		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
@@ -92,7 +96,7 @@
 		      <-- KSTREAM-FILTER-0000000001
 		    Sink: KSTREAM-SINK-0000000003 (topic: output)
 		      <-- KSTREAM-MAPVALUES-0000000002
-		 </code>
+		 </pre>
 
 		 From this report, you can see what the different operators are, but what is the broader context here?
 		 For example, consider <code>KSTREAM-FILTER-0000000001</code>, we can see that it's a
@@ -112,14 +116,15 @@
 		</p>
 		<p>
 		 Now let's take a look at your topology with all the processors named:
-		 <code>
-		     builder.&gt;String,String&lt;stream("input", Consumed.as("Customer_transactions_input_topic"))
-		           .filter((k,v) -> !v.equals("invalid_txn"), Named.as("filter_out_invalid_txns"))
-		           .mapValues((v) -> v.substring(0,5), Named.as("Map_values_to_first_6_characters"))
-		           .to("output", Produced.as("Mapped_transactions_output_topic"));
-		 </code>
+		<pre>
+		KStream&lt;String,String&gt; stream =
+		builder.stream("input", Consumed.as("Customer_transactions_input_topic"));
+		stream.filter((k,v) -> !v.equals("invalid_txn"), Named.as("filter_out_invalid_txns"))
+		      .mapValues((v) -> v.substring(0,5), Named.as("Map_values_to_first_6_characters"))
+		      .to("output", Produced.as("Mapped_transactions_output_topic"));
+	     </pre>
 
-		 <code>
+		 <pre>
 		 Topologies:
 		   Sub-topology: 0
 		    Source: Customer_transactions_input_topic (topics: [input])
@@ -132,7 +137,7 @@
 		      <-- filter_out_invalid_txns
 		    Sink: Mapped_transactions_output_topic (topic: output)
 		      <-- Map_values_to_first_6_characters
-		 </code>
+		 </pre>
 
 		Now you can look at the topology description and easily understand what role each processor
 		plays in the topology. But there's another reason for naming your processor nodes when you
@@ -140,9 +145,8 @@
 		state stores, changelog topics, and repartition topics.
 		</p>
 
-		 <h2>Changing Names</h2>
-
-         <p>
+		<h2>Changing Names</h2>
+		<p>
 		 Generated names are numbered where they are built in the topology.
 		 The name generation strategy is
 		 <code>KSTREAM|KTABLE-&gt;operator name&lt;-&gt;number suffix&lt;</code>. The number is a
@@ -155,61 +159,60 @@
 		 shifting does have implications for topologies with stateful operators or repartition topics. 
 
 		 Here's a different topology with some state:
-		 <code>
-		  builder.&gt;String,String&lt;stream("input")
-			     .groupByKey()
-			     .count()
-			     .toStream()
-			     .to("output");
-		 </code>
-
-		 This topology description yields the following:
-		 <code>
-		     Topologies:
-		   Sub-topology: 0
-		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
-		      --> KSTREAM-AGGREGATE-0000000002
-		    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])
-		      --> KTABLE-TOSTREAM-0000000003
-		      <-- KSTREAM-SOURCE-0000000000
-		    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])
-		      --> KSTREAM-SINK-0000000004
-		      <-- KSTREAM-AGGREGATE-0000000002
-		    Sink: KSTREAM-SINK-0000000004 (topic: output)
-		      <-- KTABLE-TOSTREAM-0000000003
-		  </code>
+		 <pre>
+		 KStream&lt;String,String&gt; stream = builder.stream("input");
+		 stream.groupByKey()
+		       .count()
+		       .toStream()
+		       .to("output");
+		 </pre>
+		This topology description yields the following:
+		 <pre>
+			 Topologies:
+			   Sub-topology: 0
+			    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+			     --> KSTREAM-AGGREGATE-0000000002
+			    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])
+			     --> KTABLE-TOSTREAM-0000000003
+			     <-- KSTREAM-SOURCE-0000000000
+			    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])
+			     --> KSTREAM-SINK-0000000004
+			     <-- KSTREAM-AGGREGATE-0000000002
+			    Sink: KSTREAM-SINK-0000000004 (topic: output)
+			     <-- KTABLE-TOSTREAM-0000000003
+		 </pre>
 		 </p>
 		 <p>
 		  You can see from the topology description above that the state store is named
 		  <code>KSTREAM-AGGREGATE-STATE-STORE-0000000002</code>.  Here's what happens when you
 		  add a filter to keep some of the records out of the aggregation:
-		  <code>
-		    builder.&gt;String, String&lt;stream("input")
-		        .filter((k,v)-> v !=null && v.length() >= 6 )
-		        .groupByKey()
-		        .count()
-		        .toStream()
-		        .to("output"); 
-		  </code>  
+		  <pre>
+		   KStream&lt;String,String&gt; stream = builder.stream("input");
+		   stream.filter((k,v)-> v !=null && v.length() >= 6 )
+		         .groupByKey()
+		         .count()
+		         .toStream()
+		         .to("output");
+		  </pre>
 
 		  And the corresponding topology:
-		  <code>
-		  Topologies:
-		   Sub-topology: 0
-		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
-		      --> KSTREAM-FILTER-0000000001
-		    Processor: KSTREAM-FILTER-0000000001 (stores: [])
-		      --> KSTREAM-AGGREGATE-0000000003
-		      <-- KSTREAM-SOURCE-0000000000
-		    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])
-		      --> KTABLE-TOSTREAM-0000000004
-		      <-- KSTREAM-FILTER-0000000001
-		    Processor: KTABLE-TOSTREAM-0000000004 (stores: [])
-		      --> KSTREAM-SINK-0000000005
-		      <-- KSTREAM-AGGREGATE-0000000003
-		    Sink: KSTREAM-SINK-0000000005 (topic: output)
-		      <-- KTABLE-TOSTREAM-0000000004
-		  </code>
+		  <pre>
+			  Topologies:
+			    Sub-topology: 0
+			     Source: KSTREAM-SOURCE-0000000000 (topics: [input])
+			      --> KSTREAM-FILTER-0000000001
+			     Processor: KSTREAM-FILTER-0000000001 (stores: [])
+			       --> KSTREAM-AGGREGATE-0000000003
+			       <-- KSTREAM-SOURCE-0000000000
+			     Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])
+			       --> KTABLE-TOSTREAM-0000000004
+			       <-- KSTREAM-FILTER-0000000001
+			     Processor: KTABLE-TOSTREAM-0000000004 (stores: [])
+			       --> KSTREAM-SINK-0000000005
+			       <-- KSTREAM-AGGREGATE-0000000003
+			      Sink: KSTREAM-SINK-0000000005 (topic: output)
+			       <-- KTABLE-TOSTREAM-0000000004
+		  </pre>
 		 </p>
 		<p>
 		Notice that since you've added an operation <em>before</em> the <code>count</code> operation, the state
@@ -229,18 +232,18 @@
 		  But it's worth reiterating the importance of naming these DSL topology operations again.
 
 		  Here's how your DSL code looks now giving a specific name to your state store:
-		  <code>
-		    builder.&gt;String, String&lt;stream("input")
-		            .filter((k, v) -> v != null && v.length() >= 6)
-		            .groupByKey()
-		            .count(Materialized.as("Purchase_count_store"))
-		            .toStream()
-		            .to("output");
-		  </code>
+		  <pre>
+		  KStream&lt;String,String&gt; stream = builder.stream("input");
+		  stream.filter((k, v) -> v != null && v.length() >= 6)
+		        .groupByKey()
+		        .count(Materialized.as("Purchase_count_store"))
+		        .toStream()
+		        .to("output");
+		  </pre>
 
 		  And here's the topology 
 
-		  <code>
+		  <pre>
 		  Topologies:
 		   Sub-topology: 0
 		    Source: KSTREAM-SOURCE-0000000000 (topics: [input])
@@ -256,7 +259,7 @@
 		      <-- KSTREAM-AGGREGATE-0000000002
 		    Sink: KSTREAM-SINK-0000000004 (topic: output)
 		      <-- KTABLE-TOSTREAM-0000000003
-		  </code>
+		  </pre>
 		</p>
 		<p>
 		  Now, even though you've added processors before your state store, the store name and its changelog
@@ -267,7 +270,7 @@
 		<h2>Conclusion</h2>
 
 		 It's a good practice to name your processing nodes when using the DSL, and it's even
-		 more important to do this when you have processing that remains when you restart
+		 more important to do this when you have "stateful" processors
 		your application such as repartition
 		 topics and state stores (and the accompanying changelog topics).
         <p>
@@ -319,6 +322,48 @@
 		  </table>
 	</p>
 </div>
+
+</script>
+
+<!--#include virtual="../../../includes/_header.htm" -->
+<!--#include virtual="../../../includes/_top.htm" -->
+<div class="content documentation documentation--current">
+	<!--#include virtual="../../../includes/_nav.htm" -->
+	<div class="right">
+		<!--#include virtual="../../../includes/_docs_banner.htm" -->
+		<ul class="breadcrumbs">
+			<li><a href="/documentation">Documentation</a></li>
+			<li><a href="/documentation/streams">Kafka Streams</a></li>
+			<li><a href="/documentation/streams/developer-guide/">Developer Guide</a></li>
+		</ul>
+		<div class="p-content"></div>
+	</div>
+</div>
+<!--#include virtual="../../../includes/_footer.htm" -->
+<script>
+	$(function () {
+		// Show selected style on nav item
+		$('.b-nav__streams').addClass('selected');
+
+		//sticky secondary nav
+		var $navbar = $(".sub-nav-sticky"),
+				y_pos = $navbar.offset().top,
+				height = $navbar.height();
+
+		$(window).scroll(function () {
+			var scrollTop = $(window).scrollTop();
+
+			if (scrollTop > y_pos - height) {
+				$navbar.addClass("navbar-fixed")
+			} else if (scrollTop <= y_pos) {
+				$navbar.removeClass("navbar-fixed")
+			}
+		});
+
+		// Display docs subnav items
+		$('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+	});
+</script>
 
 
 
