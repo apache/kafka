@@ -226,6 +226,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                                             final List<TopicPartition> closedTaskChangelogs) {
         removeTaskFromRestoring(task);
         closedTaskChangelogs.addAll(task.changelogPartitions());
+        restoredPartitions.removeAll(task.changelogPartitions());
 
         try {
             final boolean clean = !isZombie;
