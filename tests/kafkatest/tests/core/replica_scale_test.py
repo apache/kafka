@@ -34,7 +34,7 @@ class ReplicaScaleTest(Test):
         super(ReplicaScaleTest, self).__init__(test_context=test_context)
         self.test_context = test_context
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=16, zk=self.zk)
+        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk)
 
     def setUp(self):
         self.zk.start()
