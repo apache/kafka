@@ -426,9 +426,14 @@ class KafkaController(val config: KafkaConfig,
     // to see if these brokers can become leaders for some/all of those
     partitionStateMachine.triggerOnlinePartitionStateChange()
     // check if reassignment of some partitions need to be restarted
-    reassignmentsManager.maybeResumeReassignments { (_, assignment) =>
-      assignment.targetReplicas.exists(newBrokersSet.contains)
+    try {
+      reassignmentsManager.maybeResumeReassignments { (_, assignment) =>
+        assignment.targetReplicas.exists(newBrokersSet.contains)
+      }
+    } catch {
+      case e: IllegalStateException => handleIllegalState(e)
     }
+
     // check if topic deletion needs to be resumed. If at least one replica that belongs to the topic being deleted exists
     // on the newly restarted brokers, there is a chance that topic deletion can resume
     val replicasForTopicsToBeDeleted = allReplicasOnNewBrokers.filter(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
@@ -642,8 +647,12 @@ class KafkaController(val config: KafkaConfig,
     // New reassignments may have been submitted through Zookeeper while the controller was failing over
     val zkPartitionsResumed = processZkPartitionReassignment()
     // We may also have some API-based reassignments that need to be restarted
-    reassignmentsManager.maybeResumeReassignments { (tp, _) =>
-      !zkPartitionsResumed.contains(tp)
+    try {
+      reassignmentsManager.maybeResumeReassignments { (tp, _) =>
+        !zkPartitionsResumed.contains(tp)
+      }
+    } catch {
+      case e: IllegalStateException => handleIllegalState(e)
     }
   }
 
@@ -1205,7 +1214,11 @@ class KafkaController(val config: KafkaConfig,
     // We need to register the watcher if the path doesn't exist in order to detect future
     // reassignments and we get the `path exists` check for free
     if (isActive && zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
-      reassignmentsManager.triggerZkReassignment()
+      try {
+        reassignmentsManager.triggerZkReassignment()
+      } catch {
+        case e: IllegalStateException => handleIllegalState(e)
+      }
     } else {
       Set.empty
     }
@@ -1220,7 +1233,12 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) {
       callback(Right(new ApiError(Errors.NOT_CONTROLLER)))
     } else {
-      callback(Left(reassignmentsManager.triggerApiReassignment(reassignments)))
+      try {
+        val results = reassignmentsManager.triggerApiReassignment(reassignments)
+        callback(Left(results))
+      } catch {
+        case e: IllegalStateException => handleIllegalState(e)
+      }
     }
   }
 

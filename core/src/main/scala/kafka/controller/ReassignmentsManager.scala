@@ -42,8 +42,7 @@ class ReassignmentsManager(controllerContext: ControllerContext,
                            partitionStateMachine: PartitionStateMachine,
                            eventManager: ControllerEventManager,
                            brokerRequestBatch: ControllerBrokerRequestBatch,
-                           stateChangeLogger: StateChangeLogger)
-  extends Logging {
+                           stateChangeLogger: StateChangeLogger) extends Logging {
 
   /**
    * If there is an existing reassignment through zookeeper for any of the requested partitions, they will be
@@ -75,6 +74,9 @@ class ReassignmentsManager(controllerContext: ControllerContext,
     reassignmentResults ++= maybeTriggerPartitionReassignment(partitionsToReassign)
   }
 
+  /**
+   * @throws IllegalStateException
+   */
   def triggerZkReassignment(): Set[TopicPartition] = {
     val reassignmentResults = mutable.Map.empty[TopicPartition, ApiError]
     val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
@@ -95,6 +97,9 @@ class ReassignmentsManager(controllerContext: ControllerContext,
     partitionsReassigned.keySet
   }
 
+  /**
+   * @throws IllegalStateException
+   */
   def maybeResumeReassignments(shouldResume: (TopicPartition, ReplicaAssignment) => Boolean): Unit = {
     controllerContext.partitionsBeingReassigned.foreach { tp =>
       val currentAssignment = controllerContext.partitionFullReplicaAssignment(tp)
@@ -357,7 +362,6 @@ class ReassignmentsManager(controllerContext: ControllerContext,
 
     controllerContext.partitionsBeingReassigned.add(topicPartition)
   }
-
 
   private def isReassignmentComplete(partition: TopicPartition, assignment: ReplicaAssignment): Boolean = {
     if (!assignment.isBeingReassigned) {
