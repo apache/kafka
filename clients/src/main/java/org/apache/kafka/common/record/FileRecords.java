@@ -170,7 +170,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Commit all written data to the physical disk
      */
     public void flush() throws IOException {
-        channel.force(true);
+        if(channel.isOpen())
+            channel.force(true);
     }
 
     /**

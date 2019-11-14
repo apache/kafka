@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import java.io.IOException
 import java.util.{Arrays, Base64, UUID}
 import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -43,6 +44,33 @@ class CoreUtilsTest extends Logging {
   @Test
   def testSwallow(): Unit = {
     CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
+  }
+
+  @Test
+  def testRetry(): Unit = {
+    var count = 0
+    try {
+      CoreUtils.retry(3, 20) {
+        count = count + 1
+      }
+    }  catch {
+      case e: IOException => // expected exception
+    }
+    assertEquals(1, count)
+  }
+
+  @Test
+  def testRetryMultiple(): Unit = {
+    var count = 0
+    try {
+      CoreUtils.retry(3, 20) {
+        count = count + 1
+        throw new IOException("Something bad happened")
+      }
+    }  catch {
+      case e: IOException => // expected exception
+    }
+    assertEquals(3, count)
   }
 
   @Test

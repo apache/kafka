@@ -98,6 +98,22 @@ object CoreUtils {
   }
 
   /**
+   * Reties a function
+   *
+   * @param times times to retry.
+   * @param sleepMs time to sleep between each retry.
+   * @param fn function to execute.
+   */
+  def retry[T](times: Int, sleepMs: Long)(fn: => T): T = {
+    try {
+      return fn
+    } catch {
+      case e if times > 1 => Thread.sleep(sleepMs)
+    }
+    retry(times - 1, sleepMs)(fn)
+  }
+
+  /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */

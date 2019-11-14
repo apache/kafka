@@ -197,7 +197,9 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
           /* Windows won't let us modify the file length while the file is mmapped :-( */
           if (OperatingSystem.IS_WINDOWS)
             safeForceUnmap()
-          raf.setLength(roundedNewSize)
+          CoreUtils.retry(3, 200) {
+            raf.setLength(roundedNewSize)
+          }
           _length = roundedNewSize
           mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
           _maxEntries = mmap.limit() / entrySize
