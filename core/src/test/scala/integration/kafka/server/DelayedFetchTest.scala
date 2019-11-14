@@ -164,8 +164,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     val follower = new Replica(replicaId, topicPartition)
     followerHW.foreach(hw => {
-      follower.updateFetchState(LogOffsetMetadata.UnknownOffsetMetadata, 0L, 0L, 0L)
-      follower.updateLastSentHighWatermark(hw)
+      follower.updateFetchState(LogOffsetMetadata.UnknownOffsetMetadata, 0L, 0L, 0L, hw)
     })
     EasyMock.expect(partition.getReplica(replicaId))
         .andReturn(Some(follower))
