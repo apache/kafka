@@ -35,6 +35,7 @@ import org.junit.Assert._
 import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 
+import scala.collection.Seq
 import scala.collection.JavaConverters._
 
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
