@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -200,10 +201,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     private RuntimeException closeRunning(final boolean isZombie,
-                                          final StreamTask task,
-                                          final List<TopicPartition> closedTaskChangelogs) {
+                                          final StreamTask task) {
         removeTaskFromRunning(task);
-        closedTaskChangelogs.addAll(task.changelogPartitions());
 
         // Until KAFKA-9177 is fixed, we need to remove from restoredPartitions when a running task is
         // suspended/revoked instead of when it finishes restoring since the partitions will just be added
@@ -288,18 +287,20 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     RuntimeException closeAllTasksAsZombies() {
         log.debug("Closing all active tasks as zombies, current state of active tasks: {}", toString());
+
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        final List<TopicPartition> changelogs = new ArrayList<>(); // not used, as we clear/unsubscribe all changelogs
 
         for (final TaskId id : allAssignedTaskIds()) {
             if (running.containsKey(id)) {
                 log.debug("Closing the zombie running stream task {}.", id);
-                firstException.compareAndSet(null, closeRunning(true, running.get(id), Collections.emptyList()));
+                firstException.compareAndSet(null, closeRunning(true, running.get(id)));
             } else if (created.containsKey(id)) {
                 log.debug("Closing the zombie created stream task {}.", id);
-                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), Collections.emptyList()));
+                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), changelogs));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), Collections.emptyList()));
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), changelogs));
             } else if (suspended.containsKey(id)) {
                 log.debug("Closing the zombie suspended stream task {}.", id);
                 firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
@@ -527,7 +528,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             shutdownType, created.keySet(), restoring.keySet(), running.keySet(), suspended.keySet());
         super.shutdown(clean);
     }
-    
+
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append(super.toString(indent));
