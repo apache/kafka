@@ -154,7 +154,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             streamThread.setRebalanceException(t);
         } finally {
             log.info("partitions lost took {} ms.\n" +
-                    "\tsuspended lost active tasks: {}\n",
+                    "\tclosed lost active tasks: {}\n",
                 time.milliseconds() - start,
                 lostTasks);
         }

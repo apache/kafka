@@ -654,7 +654,7 @@ public class AssignedStreamsTasksTest {
             final Set<TaskId> ids = new HashSet<>(Collections.singleton(task.id()));
             assertEquals(ids, taskIds());
 
-            assignedTasks.closeZombieTasks(ids, changelogs);
+            assignedTasks.closeAllTasksAsZombies();
             assertEquals(Collections.emptySet(), taskIds());
             assertEquals(expectedLostChangelogs(), changelogs);
         }

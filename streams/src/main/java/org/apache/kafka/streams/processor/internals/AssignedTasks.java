@@ -146,18 +146,30 @@ abstract class AssignedTasks<T extends Task> {
 
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
-        describe(builder, running.values(), indent, "Running:");
-        describe(builder, created.values(), indent, "New:");
+        describeTasks(builder, running.values(), indent, "Running:");
+        describePartitions(builder, runningByPartition.keySet(), indent, "Running Partitions:");
+        describeTasks(builder, created.values(), indent, "New:");
         return builder.toString();
     }
 
-    void describe(final StringBuilder builder,
-                  final Collection<T> tasks,
-                  final String indent,
-                  final String name) {
+    void describeTasks(final StringBuilder builder,
+                       final Collection<T> tasks,
+                       final String indent,
+                       final String name) {
         builder.append(indent).append(name);
         for (final T t : tasks) {
             builder.append(indent).append(t.toString(indent + "\t\t"));
+        }
+        builder.append("\n");
+    }
+
+    void describePartitions(final StringBuilder builder,
+                            final Collection<TopicPartition> partitions,
+                            final String indent,
+                            final String name) {
+        builder.append(indent).append(name);
+        for (final TopicPartition tp : partitions) {
+            builder.append(indent).append(tp.toString());
         }
         builder.append("\n");
     }
@@ -180,18 +192,6 @@ abstract class AssignedTasks<T extends Task> {
         runningByPartition.clear();
         running.clear();
         created.clear();
-    }
-
-    boolean isEmpty() throws IllegalStateException {
-        if (running.isEmpty() && !runningByPartition.isEmpty()) {
-            log.error("Assigned stream tasks in an inconsistent state: the set of running tasks is empty but the " +
-                          "running by partitions map contained {}", runningByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks running but nonempty runningByPartition");
-        } else {
-            return runningByPartition.isEmpty()
-                       && running.isEmpty()
-                       && created.isEmpty();
-        }
     }
 
     /**

@@ -221,6 +221,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
+    // Since a restoring task has not had its topology initialized yet, we need only close the state manager
     private RuntimeException closeRestoring(final boolean isZombie,
                                             final StreamTask task,
                                             final List<TopicPartition> closedTaskChangelogs) {
@@ -269,37 +270,28 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return firstException.get();
     }
 
-    RuntimeException closeZombieTasks(final Set<TaskId> lostTasks, final List<TopicPartition> lostTaskChangelogs) {
+    RuntimeException closeAllTasksAsZombies() {
+        log.debug("Closing all active tasks as zombies, current state of active tasks: {}", toString());
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        for (final TaskId id : lostTasks) {
-            if (suspended.containsKey(id)) {
-                log.debug("Closing the zombie suspended stream task {}.", id);
-                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
+        for (final TaskId id : allAssignedTaskIds()) {
+            if (running.containsKey(id)) {
+                log.debug("Closing the zombie running stream task {}.", id);
+                firstException.compareAndSet(null, closeRunning(true, running.get(id), Collections.emptyList()));
             } else if (created.containsKey(id)) {
                 log.debug("Closing the zombie created stream task {}.", id);
-                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
+                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), Collections.emptyList()));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), lostTaskChangelogs));
-            } else if (running.containsKey(id)) {
-                log.debug("Closing the zombie running stream task {}.", id);
-                firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
-            } else {
-                log.warn("Skipping closing the zombie stream task {} as it was already removed.", id);
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), Collections.emptyList()));
+            } else if (suspended.containsKey(id)) {
+                log.debug("Closing the zombie suspended stream task {}.", id);
+                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
             }
         }
 
-        // We always clear the prevActiveTasks and replace with current set of running tasks to encode in subscription
-        // We should exclude any tasks that were lost however, they will be counted as standbys for assignment purposes
-        prevActiveTasks.clear();
-        prevActiveTasks.addAll(running.keySet());
+        clear();
 
-        // With the current rebalance protocol, there should not be any running tasks left as they were all lost
-        if (!prevActiveTasks.isEmpty()) {
-            log.error("Found the still running stream tasks {} after closing all tasks lost as zombies", prevActiveTasks);
-            firstException.compareAndSet(null, new IllegalStateException("Not all lost tasks were closed as zombies"));
-        }
         return firstException.get();
     }
 
@@ -497,6 +489,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         restoringByPartition.clear();
         restoredPartitions.clear();
         suspended.clear();
+        prevActiveTasks.clear();
     }
 
     @Override
@@ -511,26 +504,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         super.shutdown(clean);
     }
 
-    @Override
-    public boolean isEmpty() throws IllegalStateException {
-        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
-            log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
-                      "restoring by partitions map contained {}", restoringByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
-        } else {
-            return super.isEmpty()
-                       && restoring.isEmpty()
-                       && restoringByPartition.isEmpty()
-                       && restoredPartitions.isEmpty()
-                       && suspended.isEmpty();
-        }
-    }
-
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append(super.toString(indent));
-        describe(builder, restoring.values(), indent, "Restoring:");
-        describe(builder, suspended.values(), indent, "Suspended:");
+        describeTasks(builder, restoring.values(), indent, "Restoring:");
+        describePartitions(builder, restoringByPartition.keySet(), indent, "Restoring Partitions:");
+        describePartitions(builder, restoredPartitions, indent, "Restored Partitions:");
+        describeTasks(builder, suspended.values(), indent, "Suspended:");
         return builder.toString();
     }
 
