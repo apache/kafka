@@ -457,10 +457,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
     executor.submit(CoreUtils.runnable {
       val closeGraceTimeMs = 2000
-      val startNanos = System.nanoTime
+      val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(time.Duration.ofMillis(closeTimeoutMs))
-      val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
+      val timeTakenMs = System.currentTimeMillis() - startMs
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
