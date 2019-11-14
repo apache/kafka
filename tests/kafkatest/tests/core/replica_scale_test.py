@@ -47,8 +47,8 @@ class ReplicaScaleTest(Test):
         self.kafka.stop()
         self.zk.stop()
 
-    @cluster(num_nodes=20)
-    @parametrize(topic_count=25, partition_count=100, replication_factor=3)
+    @cluster(num_nodes=12)
+    @parametrize(topic_count=1000, partition_count=34, replication_factor=3)
     def test_100k_bench(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
@@ -84,7 +84,7 @@ class ReplicaScaleTest(Test):
                                                     "numPartitions": partition_count, "replicationFactor": replication_factor
                                                 }})
         produce_workload = trogdor.create_task("100k-replicas-produce-workload", produce_spec)
-        produce_workload.wait_for_done(timeout_sec=3600)
+        produce_workload.wait_for_done(timeout_sec=600)
         self.logger.info("Completed produce bench")
 
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
@@ -102,7 +102,7 @@ class ReplicaScaleTest(Test):
 
         trogdor.stop()
 
-    @cluster(num_nodes=20)
+    @cluster(num_nodes=12)
     @parametrize(topic_count=1000, partition_count=34, replication_factor=3)
     def test_100k_clean_bounce(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
