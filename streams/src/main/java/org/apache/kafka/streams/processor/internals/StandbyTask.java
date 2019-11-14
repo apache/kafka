@@ -46,7 +46,6 @@ public class StandbyTask extends AbstractTask {
     private boolean updateOffsetLimits;
     private final Sensor closeTaskSensor;
     private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
-    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -86,7 +85,6 @@ public class StandbyTask extends AbstractTask {
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
-        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialize();
         taskInitialized = true;
         return true;
@@ -195,7 +193,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {
-        return checkpointedOffsets;
+        return Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     private long updateOffsetLimits(final TopicPartition partition) {

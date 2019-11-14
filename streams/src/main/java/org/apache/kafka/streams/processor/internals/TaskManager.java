@@ -440,6 +440,7 @@ public class TaskManager {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
         }
 
+        log.debug("Assigning and seeking restoreConsumer to {}", checkpointedOffsets);
         restoreConsumerAssignedStandbys = true;
         restoreConsumer.assign(checkpointedOffsets.keySet());
         for (final Map.Entry<TopicPartition, Long> entry : checkpointedOffsets.entrySet()) {
