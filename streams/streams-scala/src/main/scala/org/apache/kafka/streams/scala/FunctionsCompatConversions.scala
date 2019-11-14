@@ -126,23 +126,27 @@ private[scala] object FunctionsCompatConversions {
   implicit class TransformerSupplierAsJava[K, V, VO](val supplier: TransformerSupplier[K, V, Iterable[VO]])
       extends AnyVal {
     def asJava: TransformerSupplier[K, V, JIterable[VO]] = new TransformerSupplier[K, V, JIterable[VO]] {
-      override def get(): Transformer[K, V, JIterable[VO]] =
+      override def get(): Transformer[K, V, JIterable[VO]] = {
+        val innerTransformer = supplier.get()
         new Transformer[K, V, JIterable[VO]] {
-          override def transform(key: K, value: V): JIterable[VO] = supplier.get().transform(key, value).asJava
-          override def init(context: ProcessorContext): Unit = supplier.get().init(context)
-          override def close(): Unit = supplier.get().close()
+          override def transform(key: K, value: V): JIterable[VO] = innerTransformer.transform(key, value).asJava
+          override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
+          override def close(): Unit = innerTransformer.close()
         }
+      }
     }
   }
   implicit class ValueTransformerSupplierAsJava[V, VO](val supplier: ValueTransformerSupplier[V, Iterable[VO]])
       extends AnyVal {
     def asJava: ValueTransformerSupplier[V, JIterable[VO]] = new ValueTransformerSupplier[V, JIterable[VO]] {
-      override def get(): ValueTransformer[V, JIterable[VO]] =
+      override def get(): ValueTransformer[V, JIterable[VO]] = {
+        val innerTransformer = supplier.get()
         new ValueTransformer[V, JIterable[VO]] {
-          override def transform(value: V): JIterable[VO] = supplier.get().transform(value).asJava
-          override def init(context: ProcessorContext): Unit = supplier.get().init(context)
-          override def close(): Unit = supplier.get().close()
+          override def transform(value: V): JIterable[VO] = innerTransformer.transform(value).asJava
+          override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
+          override def close(): Unit = innerTransformer.close()
         }
+      }
     }
   }
   implicit class ValueTransformerSupplierWithKeyAsJava[K, V, VO](
@@ -150,12 +154,14 @@ private[scala] object FunctionsCompatConversions {
   ) extends AnyVal {
     def asJava: ValueTransformerWithKeySupplier[K, V, JIterable[VO]] =
       new ValueTransformerWithKeySupplier[K, V, JIterable[VO]] {
-        override def get(): ValueTransformerWithKey[K, V, JIterable[VO]] =
+        override def get(): ValueTransformerWithKey[K, V, JIterable[VO]] = {
+          val innerTransformer = supplier.get()
           new ValueTransformerWithKey[K, V, JIterable[VO]] {
-            override def transform(key: K, value: V): JIterable[VO] = supplier.get().transform(key, value).asJava
-            override def init(context: ProcessorContext): Unit = supplier.get().init(context)
-            override def close(): Unit = supplier.get().close()
+            override def transform(key: K, value: V): JIterable[VO] = innerTransformer.transform(key, value).asJava
+            override def init(context: ProcessorContext): Unit = innerTransformer.init(context)
+            override def close(): Unit = innerTransformer.close()
           }
+        }
       }
   }
 }
