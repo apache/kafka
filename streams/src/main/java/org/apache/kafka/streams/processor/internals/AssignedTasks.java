@@ -69,13 +69,17 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 final T task = entry.getValue();
                 task.initializeMetadata();
+
+                // pass in created as the "newState" to avoid ConcurrentModificationException
+                removeTaskFromAllOldMaps(task, created);
+                it.remove();
+
                 if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     ((AssignedStreamsTasks) this).addTaskToRestoring((StreamTask) task);
                 } else {
                     transitionToRunning(task);
                 }
-                it.remove();
             } catch (final LockException e) {
                 // If this is a permanent error, then we could spam the log since this is in the run loop. But, other related
                 // messages show up anyway. So keeping in debug for sake of faster discoverability of problem
@@ -121,10 +125,18 @@ abstract class AssignedTasks<T extends Task> {
         }
     }
 
-    void removeTaskFromRunning(final T task) {
-        running.remove(task.id());
-        runningByPartition.keySet().removeAll(task.partitions());
-        runningByPartition.keySet().removeAll(task.changelogPartitions());
+    void removeTaskFromAllOldMaps(final T task, final Map<TaskId, T> newState) {
+        final TaskId id = task.id();
+        final Set<TopicPartition> taskPartitions = new HashSet<>(task.partitions());
+        taskPartitions.addAll(task.changelogPartitions());
+
+        if (newState != running) {
+            running.remove(id);
+            runningByPartition.keySet().removeAll(taskPartitions);
+        }
+        if (newState != created) {
+            created.remove(id);
+        }
     }
 
     T runningTaskFor(final TopicPartition partition) {

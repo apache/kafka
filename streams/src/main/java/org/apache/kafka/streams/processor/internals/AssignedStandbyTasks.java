@@ -79,7 +79,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             } catch (final RuntimeException e) {
                 log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {
-                removeTaskFromRunning(task);
+                removeTaskFromAllOldMaps(task, null);
                 revokedChangelogs.addAll(task.changelogPartitions());
             }
         }

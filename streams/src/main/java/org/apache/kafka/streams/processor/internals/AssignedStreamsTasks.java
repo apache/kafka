@@ -162,13 +162,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                         id, f);
                 }
             } finally {
-                removeTaskFromRunning(task);
+                removeTaskFromAllOldMaps(task, suspended);
                 taskChangelogs.addAll(task.changelogPartitions());
-
-                // Until KAFKA-9177 is fixed, we need to remove from restoredPartitions when a running task is
-                // suspended/revoked instead of when it finishes restoring since the partitions will just be added
-                // back the next time #updateRestored is called
-                removeFromRestoredPartitions(task);
             }
         }
 
@@ -205,12 +200,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     private RuntimeException closeRunning(final boolean isZombie,
                                           final StreamTask task) {
-        removeTaskFromRunning(task);
-
-        // Until KAFKA-9177 is fixed, we need to remove from restoredPartitions when a running task is
-        // suspended/revoked instead of when it finishes restoring since the partitions will just be added
-        // back the next time #updateRestored is called
-        removeFromRestoredPartitions(task);
+        removeTaskFromAllOldMaps(task, null);
 
         try {
             final boolean clean = !isZombie;
@@ -226,7 +216,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private RuntimeException closeNonRunning(final boolean isZombie,
                                              final StreamTask task,
                                              final List<TopicPartition> closedTaskChangelogs) {
-        created.remove(task.id());
+        removeTaskFromAllOldMaps(task, null);
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
@@ -243,7 +233,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private RuntimeException closeRestoring(final boolean isZombie,
                                             final StreamTask task,
                                             final List<TopicPartition> closedTaskChangelogs) {
-        removeTaskFromRestoring(task);
+        removeTaskFromAllOldMaps(task, null);
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
@@ -259,7 +249,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     private RuntimeException closeSuspended(final boolean isZombie,
                                             final StreamTask task) {
-        suspended.remove(task.id());
+        removeTaskFromAllOldMaps(task, null);
 
         try {
             final boolean clean = !isZombie;
@@ -323,7 +313,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended stream task {}", taskId);
-            suspended.remove(taskId);
+            removeTaskFromAllOldMaps(task, null);
 
             if (task.partitions().equals(partitions)) {
                 task.resume();
@@ -388,6 +378,24 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
+    @Override
+     void removeTaskFromAllOldMaps(final StreamTask task, final Map<TaskId, StreamTask> newState) {
+        super.removeTaskFromAllOldMaps(task, newState);
+
+        final TaskId id = task.id();
+        final Set<TopicPartition> taskPartitions = new HashSet<>(task.partitions());
+        taskPartitions.addAll(task.changelogPartitions());
+
+        if (newState != restoring) {
+            restoring.remove(id);
+            restoringByPartition.keySet().removeAll(taskPartitions);
+            restoredPartitions.removeAll(taskPartitions);
+        }
+        if (newState != suspended) {
+            suspended.remove(id);
+        }
+    }
+
     void addTaskToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (final TopicPartition topicPartition : task.partitions()) {
@@ -396,12 +404,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
         }
-    }
-
-    private void removeTaskFromRestoring(final StreamTask task) {
-        restoring.remove(task.id());
-        removeFromRestoringByPartition(task);
-        removeFromRestoredPartitions(task);
     }
 
     private void removeFromRestoringByPartition(final StreamTask task) {
