@@ -128,7 +128,6 @@ class GroupedStreamAggregateBuilder<K, V> {
                                                      keySerde,
                                                      valueSerde,
                                                      repartitionTopicNamePrefix,
-                                                     null,
                                                      optimizableRepartitionNodeBuilder);
 
     }
