@@ -35,9 +35,11 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition, TopicPartitionInfo, TopicPartitionReplica}
 import org.junit.Assert._
@@ -46,14 +48,14 @@ import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.Random
+
 /**
  * An integration test of the KafkaAdminClient.
  *
- * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
+ * Also see [[org.apache.kafka.clients.admin.KafkaAdminClientTest]] for unit tests of the admin client.
  */
 class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   import PlaintextAdminIntegrationTest._
@@ -95,93 +97,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       nodeStrs = nodes.map ( node => s"${node.host}:${node.port}" ).toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
-  }
-
-  @Test
-  def testCreateDeleteTopics(): Unit = {
-    client = AdminClient.create(createConfig())
-    val topics = Seq("mytopic", "mytopic2", "mytopic3")
-    val newTopics = Seq(
-      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
-      new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
-    )
-    val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
-    validateResult.all.get()
-    waitForTopics(client, List(), topics)
-
-    def validateMetadataAndConfigs(result: CreateTopicsResult): Unit = {
-      assertEquals(2, result.numPartitions("mytopic").get())
-      assertEquals(2, result.replicationFactor("mytopic").get())
-      assertEquals(3, result.numPartitions("mytopic2").get())
-      assertEquals(3, result.replicationFactor("mytopic2").get())
-      assertEquals(configs.head.numPartitions, result.numPartitions("mytopic3").get())
-      assertEquals(configs.head.defaultReplicationFactor, result.replicationFactor("mytopic3").get())
-      assertFalse(result.config("mytopic").get().entries.isEmpty)
-    }
-    validateMetadataAndConfigs(validateResult)
-
-    val createResult = client.createTopics(newTopics.asJava)
-    createResult.all.get()
-    waitForTopics(client, topics, List())
-    validateMetadataAndConfigs(createResult)
-
-    val failedCreateResult = client.createTopics(newTopics.asJava)
-    val results = failedCreateResult.values()
-    assertTrue(results.containsKey("mytopic"))
-    assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
-    assertTrue(results.containsKey("mytopic2"))
-    assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
-    assertTrue(results.containsKey("mytopic3"))
-    assertFutureExceptionTypeEquals(results.get("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
-    assertFutureExceptionTypeEquals(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
-
-    val topicToDescription = client.describeTopics(topics.asJava).all.get()
-    assertEquals(topics.toSet, topicToDescription.keySet.asScala)
-
-    val topic0 = topicToDescription.get("mytopic")
-    assertEquals(false, topic0.isInternal)
-    assertEquals("mytopic", topic0.name)
-    assertEquals(2, topic0.partitions.size)
-    val topic0Partition0 = topic0.partitions.get(0)
-    assertEquals(1, topic0Partition0.leader.id)
-    assertEquals(0, topic0Partition0.partition)
-    assertEquals(Seq(1, 2), topic0Partition0.isr.asScala.map(_.id))
-    assertEquals(Seq(1, 2), topic0Partition0.replicas.asScala.map(_.id))
-    val topic0Partition1 = topic0.partitions.get(1)
-    assertEquals(2, topic0Partition1.leader.id)
-    assertEquals(1, topic0Partition1.partition)
-    assertEquals(Seq(2, 0), topic0Partition1.isr.asScala.map(_.id))
-    assertEquals(Seq(2, 0), topic0Partition1.replicas.asScala.map(_.id))
-
-    val topic1 = topicToDescription.get("mytopic2")
-    assertEquals(false, topic1.isInternal)
-    assertEquals("mytopic2", topic1.name)
-    assertEquals(3, topic1.partitions.size)
-    for (partitionId <- 0 until 3) {
-      val partition = topic1.partitions.get(partitionId)
-      assertEquals(partitionId, partition.partition)
-      assertEquals(3, partition.replicas.size)
-      partition.replicas.asScala.foreach { replica =>
-        assertTrue(replica.id >= 0)
-        assertTrue(replica.id < brokerCount)
-      }
-      assertEquals("No duplicate replica ids", partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size)
-
-      assertEquals(3, partition.isr.size)
-      assertEquals(partition.replicas, partition.isr)
-      assertTrue(partition.replicas.contains(partition.leader))
-    }
-
-    val topic3 = topicToDescription.get("mytopic3")
-    assertEquals("mytopic3", topic3.name)
-    assertEquals(configs.head.numPartitions, topic3.partitions.size)
-    assertEquals(configs.head.defaultReplicationFactor, topic3.partitions.get(0).replicas().size())
-
-    client.deleteTopics(topics.asJava).all.get()
-    waitForTopics(client, List(), topics)
   }
 
   @Test
@@ -995,6 +910,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
     checkInvalidAlterConfigs(zkClient, servers, client)
+  }
+
+  /**
+   * Test that ACL operations are not possible when the authorizer is disabled.
+   * Also see [[kafka.api.SaslSslAdminIntegrationTest.testAclOperations()]] for tests of ACL operations
+   * when the authorizer is enabled.
+   */
+  @Test
+  def testAclOperations(): Unit = {
+    val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+    client = AdminClient.create(createConfig())
+    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).values(), classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(acl)).all(),
+      classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(acl.toFilter())).all(),
+      classOf[SecurityDisabledException])
   }
 
   /**
