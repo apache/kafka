@@ -261,9 +261,9 @@ public class TaskManager {
      * be closed as a zombie.
      * @return list of lost tasks
      */
-    Set<TaskId> closeLostTasks(final Collection<TopicPartition> lostPartitions) {
-        final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
-        log.debug("Closing lost active tasks as zombies: {}", zombieTasks);
+    Set<TaskId> closeLostTasks() {
+        final Set<TaskId> lostTasks = new HashSet<>(assignedActiveTasks.keySet());
+        log.debug("Closing lost active tasks as zombies: {}", lostTasks);
 
         final RuntimeException exception = active.closeAllTasksAsZombies();
 
@@ -282,7 +282,7 @@ public class TaskManager {
             throw exception;
         }
 
-        return zombieTasks;
+        return lostTasks;
     }
 
     void shutdown(final boolean clean) {

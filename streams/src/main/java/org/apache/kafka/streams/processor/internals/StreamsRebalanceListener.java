@@ -143,8 +143,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         Set<TaskId> lostTasks = new HashSet<>();
         final long start = time.milliseconds();
         try {
-            // close lost active tasks but don't try to commit offsets as we no longer own them
-            lostTasks = taskManager.closeLostTasks(lostPartitions);
+            // close all active tasks as lost but don't try to commit offsets as we no longer own them
+            lostTasks = taskManager.closeLostTasks();
         } catch (final Throwable t) {
             log.error(
                 "Error caught during partitions lost, " +
