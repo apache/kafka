@@ -389,6 +389,8 @@ public class TaskManager {
             final Collection<TopicPartition> restored = changelogReader.restore(active);
             active.updateRestored(restored);
             removeChangelogsFromRestoreConsumer(restored, false);
+        } else {
+            active.clearRestoringPartitions();
         }
 
         if (active.allTasksRunning()) {

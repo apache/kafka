@@ -81,14 +81,17 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
-    // Note that restoredPartitions may be nonempty even though restoring is, and will not be cleared in
-    // #updateRestored if this returns false, so we should clear any remaining partitions if restoring is empty
     boolean hasRestoringTasks() {
-        if (restoring.isEmpty()) {
-            restoredPartitions.clear();
-            restoringByPartition.clear();
-        }
         return !restoring.isEmpty();
+    }
+
+    void clearRestoringPartitions() {
+        if (!restoring.isEmpty()) {
+            log.error("Tried to clear restoring partitions but was still restoring the stream tasks {}", restoring);
+            throw new IllegalStateException("Should not clear restoring partitions while set of restoring tasks is non-empty");
+        }
+        restoredPartitions.clear();
+        restoringByPartition.clear();
     }
     
     Set<TaskId> suspendedTaskIds() {
