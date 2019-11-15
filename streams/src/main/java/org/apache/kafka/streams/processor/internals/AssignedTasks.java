@@ -71,7 +71,7 @@ abstract class AssignedTasks<T extends Task> {
                 task.initializeMetadata();
 
                 // pass in created as the "newState" to avoid ConcurrentModificationException
-                removeTaskFromAllOldMaps(task, created);
+                removeTaskFromAllStateMaps(task, created);
                 it.remove();
 
                 if (!task.initializeStateStores()) {
@@ -125,16 +125,23 @@ abstract class AssignedTasks<T extends Task> {
         }
     }
 
-    void removeTaskFromAllOldMaps(final T task, final Map<TaskId, T> newState) {
+    /**
+     * Removes the passed in task (and its corresponding partitions) from all state maps and sets,
+     * except for the one it currently resides in.
+     *
+     * @param task the task to be removed
+     * @param currentStateMap the current state map, which the task should not be removed from
+     */
+    void removeTaskFromAllStateMaps(final T task, final Map<TaskId, T> currentStateMap) {
         final TaskId id = task.id();
         final Set<TopicPartition> taskPartitions = new HashSet<>(task.partitions());
         taskPartitions.addAll(task.changelogPartitions());
 
-        if (newState != running) {
+        if (currentStateMap != running) {
             running.remove(id);
             runningByPartition.keySet().removeAll(taskPartitions);
         }
-        if (newState != created) {
+        if (currentStateMap != created) {
             created.remove(id);
         }
     }

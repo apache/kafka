@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,7 +80,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             } catch (final RuntimeException e) {
                 log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {
-                removeTaskFromAllOldMaps(task, null);
+                removeTaskFromAllStateMaps(task, Collections.emptyMap());
                 revokedChangelogs.addAll(task.changelogPartitions());
             }
         }
