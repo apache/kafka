@@ -71,8 +71,8 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.2.1-test.jar" -o /opt/kafka-2.2.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-2.3.0-test.jar" -o /opt/kafka-2.3.0/libs/kafka-streams-2.3.0-test.jar
 
 # The version of Kibosh to use for testing.
-# If you update this, also update vagrant/base.sy
-ARG KIBOSH_VERSION="d85ac3ec44be0700efe605c16289fd901cfdaa13"
+# If you update this, also update vagrant/base.sh
+ARG KIBOSH_VERSION="8841dd392e6fbf02986e2fb1f1ebf04df344b65a"
 
 # Install Kibosh
 RUN apt-get install fuse
