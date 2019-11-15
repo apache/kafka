@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -53,7 +54,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -110,10 +110,9 @@ public class KStreamRepartitionIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
-        kafkaStreamsInstances
-            .stream()
-            .filter(Objects::nonNull)
-            .forEach(KafkaStreams::close);
+        kafkaStreamsInstances.stream()
+                             .filter(Objects::nonNull)
+                             .forEach(KafkaStreams::close);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         TEST_NUM.incrementAndGet();
@@ -151,20 +150,21 @@ public class KStreamRepartitionIntegrationTest {
 
         startStreams(builder, REBALANCING, ERROR, (t, e) -> throwable.set(e));
 
-        final Map<String, Integer> repartitionTopicsWithNumberOfPartitions = new HashMap<>();
-        repartitionTopicsWithNumberOfPartitions.put(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions);
-        repartitionTopicsWithNumberOfPartitions.put(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions);
+        final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
+            Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
+            Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
+        );
 
         final String expectedErrorMessage = String.format("Following topics do not have the same " +
                                                           "number of partitions: [%s]",
-                                                          new TreeMap<>(repartitionTopicsWithNumberOfPartitions));
+                                                          new TreeMap<>(repartitionTopicsWithNumOfPartitions));
 
         assertNotNull(throwable.get());
         assertTrue(throwable.get().getMessage().contains(expectedErrorMessage));
     }
 
     @Test
-    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws ExecutionException, InterruptedException {
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
         final String topicBMapperName = "topic-b-mapper";
         final String topicB = "topic-b-" + TEST_NUM.get();
         final int topicBNumberOfPartitions = 6;
