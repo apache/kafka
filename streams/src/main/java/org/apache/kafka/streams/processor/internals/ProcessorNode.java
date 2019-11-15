@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,7 +52,6 @@ public class ProcessorNode<K, V> {
     private Sensor punctuateSensor;
     private Sensor destroySensor;
     private Sensor createSensor;
-    private Version builtInMetricsVersion;
 
     public ProcessorNode(final String name) {
         this(name, null, null);
@@ -111,7 +109,6 @@ public class ProcessorNode<K, V> {
         threadId = Thread.currentThread().getName();
         final String taskId = internalProcessorContext.taskId().toString();
         final StreamsMetricsImpl streamsMetrics = internalProcessorContext.metrics();
-        builtInMetricsVersion = streamsMetrics.version();
         processSensor = ProcessorNodeMetrics.processSensor(threadId, taskId, name, streamsMetrics);
         punctuateSensor = ProcessorNodeMetrics.punctuateSensor(threadId, taskId, name, streamsMetrics);
         createSensor = ProcessorNodeMetrics.createSensor(threadId, taskId, name, streamsMetrics);

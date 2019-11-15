@@ -654,6 +654,7 @@ public class StreamsMetricsImplTest {
         final long endTime = 10;
         final Sensor sensor = createMock(Sensor.class);
         expect(sensor.shouldRecord()).andReturn(true);
+        expect(sensor.hasMetrics()).andReturn(true);
         sensor.record(endTime - startTime);
         final Time time = mock(Time.class);
         expect(time.nanoseconds()).andReturn(startTime);
@@ -666,9 +667,22 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldNotMeasureLatency() {
+    public void shouldNotMeasureLatencyDueToRecordingLevel() {
         final Sensor sensor = createMock(Sensor.class);
         expect(sensor.shouldRecord()).andReturn(false);
+        final Time time = mock(Time.class);
+        replay(sensor);
+
+        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
+
+        verify(sensor);
+    }
+
+    @Test
+    public void shouldNotMeasureLatencyBecauseSensorHasNoMetrics() {
+        final Sensor sensor = createMock(Sensor.class);
+        expect(sensor.shouldRecord()).andReturn(true);
+        expect(sensor.hasMetrics()).andReturn(false);
         final Time time = mock(Time.class);
         replay(sensor);
 
