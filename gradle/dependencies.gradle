@@ -63,7 +63,7 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  avro: "1.9.0",
+  avro: "1.9.1",
   avroPlugin: "0.17.0",
   bcpkix: "1.63",
   checkstyle: "8.20",

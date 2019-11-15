@@ -1471,6 +1471,8 @@ project(':support-metrics-common') {
 
   dependencies {
     compile libs.avro
+    // ensure we use the jackson version we define instead of what is defined by `avro`
+    compile libs.jacksonDatabind
     compile libs.httpclient
     compile libs.httpmime
     compile libs.slf4jlog4j
