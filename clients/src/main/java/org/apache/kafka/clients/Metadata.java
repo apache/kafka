@@ -75,6 +75,7 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    private List<Node> bootStrapNodes; // bootStrapNodes holds the list of nodes we used to initially boot
 
     /**
      * Create a new Metadata instance
@@ -109,6 +110,13 @@ public class Metadata implements Closeable {
      */
     public synchronized Cluster fetch() {
         return cache.cluster();
+    }
+
+    /**
+     * @return the list of bootstrap nodes
+     */
+    public synchronized List<Node> getBootStrapNodes() {
+        return this.bootStrapNodes;
     }
 
     /**
@@ -214,6 +222,18 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
+        // Get the bootstrap nodes and save it here.
+        // This initial list is thrown away completely after we get the cluster
+        // view as part of the metadata response. But if the cluster is behind a
+        // LoadBalancer IP, this will be important to make sure we can get the cluster
+        // metadata if we all the backend brokers change at the same time.
+        // Note: we need to save this here because every metadata response creates a new
+        // metadata cache.
+        List<Node> nodes = new ArrayList<>();
+        int nodeId = -1;
+        for (InetSocketAddress address : addresses)
+            nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+        this.bootStrapNodes = nodes;
         this.cache = MetadataCache.bootstrap(addresses);
     }
 
