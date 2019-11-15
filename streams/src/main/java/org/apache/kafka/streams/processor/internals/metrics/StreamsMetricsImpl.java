@@ -771,7 +771,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static void maybeMeasureLatency(final Runnable actionToMeasure,
                                            final Time time,
                                            final Sensor sensor) {
-        if (sensor.shouldRecord()) {
+        if (sensor.shouldRecord() && sensor.hasMetrics()) {
             final long startNs = time.nanoseconds();
             try {
                 actionToMeasure.run();
@@ -786,7 +786,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static <T> T maybeMeasureLatency(final Supplier<T> actionToMeasure,
                                             final Time time,
                                             final Sensor sensor) {
-        if (sensor.shouldRecord()) {
+        if (sensor.shouldRecord() && sensor.hasMetrics()) {
             final long startNs = time.nanoseconds();
             try {
                 return actionToMeasure.get();

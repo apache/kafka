@@ -59,6 +59,7 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -380,13 +381,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode);
-            StreamsMetricsImpl.maybeMeasureLatency(
-                () -> {
-                    currNode.process(record.key(), record.value());
-                },
-                time,
-                processLatencySensor
-            );
+            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -448,13 +443,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(
-                () -> {
-                    node.punctuate(timestamp, punctuator);
-                },
-                time,
-                punctuateLatencySensor
-            );
+            maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         } catch (final KafkaException e) {

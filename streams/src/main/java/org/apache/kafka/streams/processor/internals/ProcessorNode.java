@@ -142,11 +142,7 @@ public class ProcessorNode<K, V> {
 
     public void process(final K key, final V value) {
         try {
-            if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-                maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
-            } else {
-                processor.process(key, value);
-            }
+            maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
@@ -165,11 +161,7 @@ public class ProcessorNode<K, V> {
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
-        } else {
-            punctuator.punctuate(timestamp);
-        }
+        maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateSensor);
     }
 
     /**
