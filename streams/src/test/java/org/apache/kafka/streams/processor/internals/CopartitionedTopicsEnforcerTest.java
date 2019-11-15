@@ -29,13 +29,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class CopartitionedTopicsEnforcerTest {
 
-    private final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer("thread");
+    private final CopartitionedTopicsEnforcer validator = new CopartitionedTopicsEnforcer("thread ");
     private final Map<TopicPartition, PartitionInfo> partitions = new HashMap<>();
     private final Cluster cluster = Cluster.empty();
 
@@ -106,13 +109,85 @@ public class CopartitionedTopicsEnforcerTest {
         assertThat(three.numberOfPartitions(), equalTo(Optional.of(15)));
     }
 
+    @Test
+    public void shouldThrowAnExceptionIfImmutableRepartitionTopicsDoNotHaveSameNumberOfPartitions() {
+        final InternalTopicConfig topic1 = createImmutableTopicConfig("repartitioned-1", 10);
+        final InternalTopicConfig topic2 = createImmutableTopicConfig("repartitioned-2", 5);
+
+        final TopologyException ex = assertThrows(
+            TopologyException.class,
+            () -> validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+                                    Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
+                                                Utils.mkEntry(topic2.name(), topic2)),
+                                    cluster.withPartitions(partitions))
+        );
+
+        final TreeMap<String, Integer> sorted = new TreeMap<>(
+            Utils.mkMap(Utils.mkEntry(topic1.name(), topic1.numberOfPartitions().get()),
+                        Utils.mkEntry(topic2.name(), topic2.numberOfPartitions().get()))
+        );
+
+        assertEquals(String.format("Invalid topology: thread " +
+                                   "Following topics do not have the same number of partitions: " +
+                                   "[%s]", sorted), ex.getMessage());
+    }
+
+    @Test
+    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfImmutableTopicConfigsAreTheSame() {
+        final InternalTopicConfig topic1 = createImmutableTopicConfig("repartitioned-1", 10);
+        final InternalTopicConfig topic2 = createImmutableTopicConfig("repartitioned-2", 10);
+
+        validator.enforce(Utils.mkSet(topic1.name(), topic2.name()),
+                          Utils.mkMap(Utils.mkEntry(topic1.name(), topic1),
+                                      Utils.mkEntry(topic2.name(), topic2)),
+                          cluster.withPartitions(partitions));
+
+        assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(10)));
+        assertThat(topic2.numberOfPartitions(), equalTo(Optional.of(10)));
+    }
+
+    @Test
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndImmutableRepartitionTopicDoNotMatch() {
+        final InternalTopicConfig topic1 = createImmutableTopicConfig("repartitioned-1", 10);
+
+        final TopologyException ex = assertThrows(
+            TopologyException.class,
+            () -> validator.enforce(Utils.mkSet(topic1.name(), "second"),
+                                    Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
+                                    cluster.withPartitions(partitions))
+        );
+
+        assertEquals(String.format("Invalid topology: thread Number of partitions [%s] " +
+                                   "of repartition topic [%s] " +
+                                   "doesn't match number of partitions [%s] of the source topic.",
+                                   topic1.numberOfPartitions().get(), topic1.name(), 2), ex.getMessage());
+    }
+
+    @Test
+    public void shouldNotThrowAnExceptionWhenNumberOfPartitionsOfNonRepartitionTopicAndImmutableRepartitionTopicMatch() {
+        final InternalTopicConfig topic1 = createImmutableTopicConfig("repartitioned-1", 2);
+
+        validator.enforce(Utils.mkSet(topic1.name(), "second"),
+                          Utils.mkMap(Utils.mkEntry(topic1.name(), topic1)),
+                          cluster.withPartitions(partitions));
+
+        assertThat(topic1.numberOfPartitions(), equalTo(Optional.of(2)));
+    }
+
     private InternalTopicConfig createTopicConfig(final String repartitionTopic,
-                                                                               final int partitions) {
+                                                  final int partitions) {
         final InternalTopicConfig repartitionTopicConfig =
             new RepartitionTopicConfig(repartitionTopic, Collections.emptyMap());
 
         repartitionTopicConfig.setNumberOfPartitions(partitions);
         return repartitionTopicConfig;
+    }
+
+    private InternalTopicConfig createImmutableTopicConfig(final String repartitionTopic,
+                                                           final int partitions) {
+        return new ImmutableRepartitionTopicConfig(repartitionTopic,
+                                                   partitions,
+                                                   Collections.emptyMap());
     }
 
 }

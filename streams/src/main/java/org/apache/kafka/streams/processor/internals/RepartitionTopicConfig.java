@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * RepartitionTopicConfig captures the properties required for configuring
@@ -41,12 +40,6 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
 
     RepartitionTopicConfig(final String name, final Map<String, String> topicConfigs) {
         super(name, topicConfigs);
-    }
-
-    RepartitionTopicConfig(final String name,
-                           final Optional<Integer> numberOfPartitions,
-                           final Map<String, String> topicConfigs) {
-        super(name, numberOfPartitions, topicConfigs);
     }
 
     /**
@@ -77,13 +70,12 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         }
         final RepartitionTopicConfig that = (RepartitionTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs) &&
-               Objects.equals(numberOfPartitions, that.numberOfPartitions);
+               Objects.equals(topicConfigs, that.topicConfigs);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs, numberOfPartitions);
+        return Objects.hash(name, topicConfigs);
     }
 
     @Override
@@ -91,7 +83,6 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         return "RepartitionTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
-                ", numberOfPartitions=" + numberOfPartitions +
                 ")";
     }
 }

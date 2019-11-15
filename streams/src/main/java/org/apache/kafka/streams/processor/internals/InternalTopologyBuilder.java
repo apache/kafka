@@ -46,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -615,19 +616,8 @@ public class InternalTopologyBuilder {
         internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
     }
 
-    public final synchronized void copartitionSources(final Collection<String> sourceNodes) {
-        copartitionSourceGroups.add(new HashSet<>(sourceNodes));
-    }
-
-    public final synchronized void maybeUpdateCopartitionSourceGroups(final String oldNodeName,
-                                                                      final String newNodeName) {
-        for (final Set<String> copartitionSourceGroup : copartitionSourceGroups) {
-            if (copartitionSourceGroup.contains(oldNodeName)) {
-                copartitionSourceGroup.remove(oldNodeName);
-                copartitionSourceGroup.add(newNodeName);
-                log.debug("replaced node '{}' with '{}' in copartition source group", oldNodeName, newNodeName);
-            }
-        }
+    public final void copartitionSources(final Collection<String> sourceNodes) {
+        copartitionSourceGroups.add(Collections.unmodifiableSet(new HashSet<>(sourceNodes)));
     }
 
     private void validateGlobalStoreArguments(final String sourceName,
@@ -1014,10 +1004,9 @@ public class InternalTopologyBuilder {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
 
-                            final RepartitionTopicConfig repartitionTopicConfig = new RepartitionTopicConfig(
+                            final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(
                                 internalTopic,
-                                internalTopicNamesWithProperties.get(topic).getNumberOfPartitions(),
-                                Collections.emptyMap()
+                                internalTopicNamesWithProperties.get(topic).getNumberOfPartitions()
                             );
 
                             repartitionTopics.put(repartitionTopicConfig.name(), repartitionTopicConfig);
@@ -1064,6 +1053,15 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
+                                                               final Optional<Integer> numberOfPartitions) {
+        if (numberOfPartitions.isPresent()) {
+            return new ImmutableRepartitionTopicConfig(internalTopic, numberOfPartitions.get(), Collections.emptyMap());
+        } else {
+            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
+        }
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

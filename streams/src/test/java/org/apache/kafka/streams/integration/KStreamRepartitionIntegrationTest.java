@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -47,24 +48,31 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.lang.Thread.UncaughtExceptionHandler;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
 import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
@@ -97,6 +105,7 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
     }
 
     @After
@@ -111,7 +120,90 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldChooseMaxNumberOfPartitionedBetweenTwoRepartitionOperationsWhenJoining() throws ExecutionException, InterruptedException {
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationsDoNotMatchWhenJoining() throws InterruptedException {
+        final String topicB = "topic-b-" + TEST_NUM.get();
+        final String topicBRepartitionedName = "topic-b-scale-up";
+        final String inputTopicRepartitionedName = "input-topic-scale-up";
+        final int topicBNumberOfPartitions = 2;
+        final int inputTopicNumberOfPartitions = 4;
+        final AtomicReference<Throwable> throwable = new AtomicReference<>();
+
+        CLUSTER.createTopic(topicB, 1, 1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
+            .<Integer, String>as(inputTopicRepartitionedName)
+            .withNumberOfPartitions(inputTopicNumberOfPartitions);
+
+        final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
+            .<Integer, String>as(topicBRepartitionedName)
+            .withNumberOfPartitions(topicBNumberOfPartitions);
+
+        final KStream<Integer, String> topicBStream = builder
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(topicBRepartitioned);
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+               .repartition(inputTopicRepartitioned)
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .to(outputTopic);
+
+        startStreams(builder, REBALANCING, ERROR, (t, e) -> throwable.set(e));
+
+        final Map<String, Integer> repartitionTopicsWithNumberOfPartitions = new HashMap<>();
+        repartitionTopicsWithNumberOfPartitions.put(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions);
+        repartitionTopicsWithNumberOfPartitions.put(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions);
+
+        final String expectedErrorMessage = String.format("Following topics do not have the same " +
+                                                          "number of partitions: [%s]",
+                                                          new TreeMap<>(repartitionTopicsWithNumberOfPartitions));
+
+        assertNotNull(throwable.get());
+        assertTrue(throwable.get().getMessage().contains(expectedErrorMessage));
+    }
+
+    @Test
+    public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws ExecutionException, InterruptedException {
+        final String topicBMapperName = "topic-b-mapper";
+        final String topicB = "topic-b-" + TEST_NUM.get();
+        final int topicBNumberOfPartitions = 6;
+        final String inputTopicRepartitionName = "join-repartition-test";
+        final AtomicReference<Throwable> expectedThrowable = new AtomicReference<>();
+        final int inputTopicRepartitionedNumOfPartitions = 2;
+
+        CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
+            .<Integer, String>as(inputTopicRepartitionName)
+            .withNumberOfPartitions(inputTopicRepartitionedNumOfPartitions);
+
+        final KStream<Integer, String> topicBStream = builder
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .map(KeyValue::new, Named.as(topicBMapperName));
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+               .repartition(inputTopicRepartitioned)
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .to(outputTopic);
+
+        builder.build(streamsConfiguration);
+
+        startStreams(builder, REBALANCING, ERROR, (t, e) -> expectedThrowable.set(e));
+
+        final String expectedMsg = String.format("Number of partitions [%s] of repartition topic [%s] " +
+                                                 "doesn't match number of partitions [%s] of the source topic.",
+                                                 inputTopicRepartitionedNumOfPartitions,
+                                                 toRepartitionTopicName(inputTopicRepartitionName),
+                                                 topicBNumberOfPartitions);
+        assertNotNull(expectedThrowable.get());
+        assertTrue(expectedThrowable.get().getMessage().contains(expectedMsg));
+    }
+
+    @Test
+    public void shouldDoProperJoiningWhenNumberOfPartitionsAreValidWhenUsingRepartitionOperation() throws ExecutionException, InterruptedException {
         final String topicB = "topic-b-" + TEST_NUM.get();
         final String topicBRepartitionedName = "topic-b-scale-up";
         final String inputTopicRepartitionedName = "input-topic-scale-up";
@@ -136,16 +228,16 @@ public class KStreamRepartitionIntegrationTest {
 
         final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
             .<Integer, String>as(topicBRepartitionedName)
-            .withNumberOfPartitions(2);
+            .withNumberOfPartitions(4);
 
         final KStream<Integer, String> topicBStream = builder
             .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
             .repartition(topicBRepartitioned);
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(inputTopicRepartitioned)
-            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-            .to(outputTopic);
+               .repartition(inputTopicRepartitioned)
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -160,7 +252,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldChooseMaxPartitionNumberFromSourceTopicsForJoinOperation() throws ExecutionException, InterruptedException {
+    public void shouldDoJoiningWhenNumberOfPartitionsOfRepartitionOperationMatchesNumberOfPartitionsOfSourceTopic() throws ExecutionException, InterruptedException {
         final String topicBMapperName = "topic-b-mapper";
         final String topicB = "topic-b-" + TEST_NUM.get();
         final int topicBNumberOfPartitions = 6;
@@ -182,70 +274,16 @@ public class KStreamRepartitionIntegrationTest {
 
         final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
             .<Integer, String>as(inputTopicRepartitionName)
-            .withNumberOfPartitions(2);
+            .withNumberOfPartitions(6);
 
         final KStream<Integer, String> topicBStream = builder
             .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
             .map(KeyValue::new, Named.as(topicBMapperName));
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(inputTopicRepartitioned)
-            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-            .to(outputTopic);
-
-        startStreams(builder);
-
-        final String repartitionTopicName = toRepartitionTopicName(inputTopicRepartitionName);
-        final String mapperRepartitionTopicName = toRepartitionTopicName(topicBMapperName);
-
-        final int mapperNumOfPartitions = getNumberOfPartitionsForTopic(mapperRepartitionTopicName);
-        final int repartitionTopicNumOfPartitions = getNumberOfPartitionsForTopic(repartitionTopicName);
-
-        validateReceivedMessages(
-            new IntegerDeserializer(),
-            new StringDeserializer(),
-            expectedRecords
-        );
-
-        assertEquals(topicBNumberOfPartitions, mapperNumOfPartitions);
-        assertEquals(topicBNumberOfPartitions, repartitionTopicNumOfPartitions);
-    }
-
-    @Test
-    public void shouldChooseMaxPartitionNumberFromSourceTopicsForJoinOperationWhenTopologyOptimizationIsSpecified() throws ExecutionException, InterruptedException {
-        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-
-        final String topicBMapperName = "topic-b-mapper";
-        final String topicB = "topic-b-" + TEST_NUM.get();
-        final int topicBNumberOfPartitions = 6;
-        final String inputTopicRepartitionName = "join-repartition-test";
-
-        final long timestamp = System.currentTimeMillis();
-
-        CLUSTER.createTopic(topicB, topicBNumberOfPartitions, 1);
-
-        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
-            new KeyValue<>(1, "A"),
-            new KeyValue<>(2, "B")
-        );
-
-        sendEvents(inputTopic, timestamp, expectedRecords);
-        sendEvents(topicB, timestamp, expectedRecords);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-            .<Integer, String>as(inputTopicRepartitionName)
-            .withNumberOfPartitions(2);
-
-        final KStream<Integer, String> topicBStream = builder
-            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .map(KeyValue::new, Named.as(topicBMapperName));
-
-        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(inputTopicRepartitioned)
-            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-            .to(outputTopic);
+               .repartition(inputTopicRepartitioned)
+               .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -289,8 +327,8 @@ public class KStreamRepartitionIntegrationTest {
             });
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(repartitioned)
-            .to(outputTopic);
+               .repartition(repartitioned)
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -321,8 +359,8 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition((key, value) -> Integer.valueOf(value))
-            .to(outputTopic);
+               .repartition((key, value) -> Integer.valueOf(value))
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -356,8 +394,8 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.as(repartitionName))
-            .to(outputTopic);
+               .repartition(Repartitioned.as(repartitionName))
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -395,11 +433,11 @@ public class KStreamRepartitionIntegrationTest {
             .withKeySerde(Serdes.String());
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition((key, value) -> key.toString(), repartitioned)
-            .groupByKey()
-            .count()
-            .toStream()
-            .to(outputTopic);
+               .repartition((key, value) -> key.toString(), repartitioned)
+               .groupByKey()
+               .count()
+               .toStream()
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -436,11 +474,11 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(2))
-            .groupByKey()
-            .count()
-            .toStream()
-            .to(outputTopic);
+               .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(2))
+               .groupByKey()
+               .count()
+               .toStream()
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -475,11 +513,11 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.as(repartitionName))
-            .groupByKey()
-            .count()
-            .toStream()
-            .to(outputTopic);
+               .repartition(Repartitioned.as(repartitionName))
+               .groupByKey()
+               .count()
+               .toStream()
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -519,12 +557,12 @@ public class KStreamRepartitionIntegrationTest {
             .withNumberOfPartitions(1);
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .selectKey((key, value) -> key.toString())
-            .repartition(repartitioned)
-            .groupByKey()
-            .count()
-            .toStream()
-            .to(outputTopic);
+               .selectKey((key, value) -> key.toString())
+               .repartition(repartitioned)
+               .groupByKey()
+               .count()
+               .toStream()
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -558,9 +596,9 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .selectKey((key, value) -> key.toString())
-            .repartition(Repartitioned.with(Serdes.String(), Serdes.String()))
-            .to(outputTopic);
+               .selectKey((key, value) -> key.toString())
+               .repartition(Repartitioned.with(Serdes.String(), Serdes.String()))
+               .to(outputTopic);
 
         startStreams(builder);
 
@@ -599,12 +637,12 @@ public class KStreamRepartitionIntegrationTest {
             .withNumberOfPartitions(2);
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .selectKey((key, value) -> key.toString())
-            .repartition(repartitioned)
-            .groupByKey()
-            .count()
-            .toStream()
-            .to(outputTopic);
+               .selectKey((key, value) -> key.toString())
+               .repartition(repartitioned)
+               .groupByKey()
+               .count()
+               .toStream()
+               .to(outputTopic);
 
         startStreams(builder);
         final KafkaStreams kafkaStreamsToClose = startStreams(builder);
@@ -646,9 +684,9 @@ public class KStreamRepartitionIntegrationTest {
     private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
         try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
-                .values()
-                .get(topic)
-                .get();
+                                                                 .values()
+                                                                 .get(topic)
+                                                                 .get();
 
             return topicDescription.partitions().size();
         }
@@ -657,8 +695,8 @@ public class KStreamRepartitionIntegrationTest {
     private boolean topicExists(final String topic) throws InterruptedException, ExecutionException {
         try (final AdminClient adminClient = createAdminClient()) {
             final Set<String> topics = adminClient.listTopics()
-                .names()
-                .get();
+                                                  .names()
+                                                  .get();
 
             return topics.contains(topic);
         }
@@ -709,11 +747,28 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder) throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(1);
+        return startStreams(builder, REBALANCING, RUNNING, null);
+    }
+
+    private KafkaStreams startStreams(final StreamsBuilder builder,
+                                      final State expectedOldState,
+                                      final State expectedNewState,
+                                      final UncaughtExceptionHandler uncaughtExceptionHandler) throws InterruptedException {
+        final CountDownLatch latch;
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
 
+        if (uncaughtExceptionHandler == null) {
+            latch = new CountDownLatch(1);
+        } else {
+            latch = new CountDownLatch(2);
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> {
+                uncaughtExceptionHandler.uncaughtException(t, e);
+                latch.countDown();
+            });
+        }
+
         kafkaStreams.setStateListener((newState, oldState) -> {
-            if (REBALANCING == oldState && RUNNING == newState) {
+            if (expectedOldState == oldState && expectedNewState == newState) {
                 latch.countDown();
             }
         });
@@ -722,6 +777,7 @@ public class KStreamRepartitionIntegrationTest {
 
         latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
         kafkaStreamsInstances.add(kafkaStreams);
+
         return kafkaStreams;
     }
 

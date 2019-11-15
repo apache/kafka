@@ -19,9 +19,11 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.internals.ImmutableRepartitionTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -64,20 +66,70 @@ public class CopartitionedTopicsEnforcer {
                             }));
 
         final int numPartitionsToUseForRepartitionTopics;
+        final Collection<InternalTopicConfig> internalTopicConfigs = repartitionTopicConfigs.values();
+
         if (copartitionGroup.equals(repartitionTopicConfigs.keySet())) {
-            // If all topics for this co-partition group is repartition topics,
-            // then set the number of partitions to be the maximum of the number of partitions.
-            numPartitionsToUseForRepartitionTopics = getMaxPartitions(repartitionTopicConfigs);
+            if (internalTopicConfigs.stream().anyMatch(this::isMutableRepartitionTopicConfig)) {
+                // If all topics for this co-partition group is repartition topics,
+                // then set the number of partitions to be the maximum of the number of partitions.
+                numPartitionsToUseForRepartitionTopics = getMaxPartitions(repartitionTopicConfigs);
+            } else {
+                // if all repartition topics are immutable repartition topics,
+                // we must ensure that they all have same number of partitions.
+                numPartitionsToUseForRepartitionTopics = validateAndGetNumOfPartitionsOfImmutableTopics(repartitionTopicConfigs,
+                                                                                                        internalTopicConfigs);
+            }
         } else {
             // Otherwise, use the number of partitions from external topics (which must all be the same)
             numPartitionsToUseForRepartitionTopics = getSamePartitions(nonRepartitionTopicPartitions);
-
         }
 
         // coerce all the repartition topics to use the decided number of partitions.
-        for (final InternalTopicConfig config : repartitionTopicConfigs.values()) {
-            config.setNumberOfPartitions(numPartitionsToUseForRepartitionTopics);
+        for (final InternalTopicConfig config : internalTopicConfigs) {
+            if (isMutableRepartitionTopicConfig(config)) {
+                config.setNumberOfPartitions(numPartitionsToUseForRepartitionTopics);
+            } else {
+                final int numberOfPartitionsOfInternalTopic = config.numberOfPartitions().get();
+
+                if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
+                    final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
+                                                     "doesn't match number of partitions [%s] of the source topic.",
+                                                     logPrefix,
+                                                     numberOfPartitionsOfInternalTopic,
+                                                     config.name(),
+                                                     numPartitionsToUseForRepartitionTopics);
+                    throw new TopologyException(msg);
+                }
+            }
         }
+    }
+
+    private int validateAndGetNumOfPartitionsOfImmutableTopics(final Map<Object, InternalTopicConfig> repartitionTopicConfigs,
+                                                               final Collection<InternalTopicConfig> internalTopicConfigs) {
+        final int numberOfPartitionsOfInternalTopic = internalTopicConfigs.iterator()
+                                                                          .next()
+                                                                          .numberOfPartitions()
+                                                                          .get();
+
+        for (final InternalTopicConfig internalTopicConfig : internalTopicConfigs) {
+            if (internalTopicConfig.numberOfPartitions().get() != numberOfPartitionsOfInternalTopic) {
+                final Map<Object, Integer> repartitionTopics = repartitionTopicConfigs
+                    .entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().numberOfPartitions().get()));
+
+                final String msg = String.format("%sFollowing topics do not have the same number of partitions: [%s]",
+                                                 logPrefix,
+                                                 new TreeMap<>(repartitionTopics));
+                throw new TopologyException(msg);
+            }
+        }
+
+        return numberOfPartitionsOfInternalTopic;
+    }
+
+    private boolean isMutableRepartitionTopicConfig(final InternalTopicConfig internalTopicConfig) {
+        return !(internalTopicConfig instanceof ImmutableRepartitionTopicConfig);
     }
 
     private int getSamePartitions(final Map<String, Integer> nonRepartitionTopicsInCopartitionGroup) {

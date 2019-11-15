@@ -30,21 +30,15 @@ public abstract class InternalTopicConfig {
     final String name;
     final Map<String, String> topicConfigs;
 
-    Optional<Integer> numberOfPartitions;
+    private Optional<Integer> numberOfPartitions = Optional.empty();
 
     InternalTopicConfig(final String name,
-                        final Optional<Integer> numberOfPartitions,
                         final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
         this.name = name;
         this.topicConfigs = topicConfigs;
-        this.numberOfPartitions = numberOfPartitions;
-    }
-
-    InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
-        this(name, Optional.empty(), topicConfigs);
     }
 
     /**
@@ -65,10 +59,14 @@ public abstract class InternalTopicConfig {
     }
 
     public void setNumberOfPartitions(final int numberOfPartitions) {
+        validateNumberOfPartitions(numberOfPartitions);
+        this.numberOfPartitions = Optional.of(numberOfPartitions);
+    }
+
+    protected void validateNumberOfPartitions(final int numberOfPartitions) {
         if (numberOfPartitions < 1) {
             throw new IllegalArgumentException("Number of partitions must be at least 1.");
         }
-        this.numberOfPartitions = Optional.of(numberOfPartitions);
     }
 
     @Override

@@ -42,7 +42,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -886,9 +885,9 @@ public class InternalTopologyBuilderTest {
 
         assertEquals(
             repartitionSourceTopics.get("Z-topic-1z"),
-            new RepartitionTopicConfig(
+            new ImmutableRepartitionTopicConfig(
                 "Z-topic-1z",
-                Optional.of(numberOfPartitions),
+                numberOfPartitions,
                 Collections.emptyMap()
             )
         );
@@ -927,20 +926,5 @@ public class InternalTopologyBuilderTest {
             repartitionSourceTopics.get("Y-topic-1y"),
             new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
         );
-    }
-
-    @Test
-    public void shouldUpdateCopartitionGroups() {
-        builder.copartitionSources(mkSet("SOURCE-NODE-1", "SOURCE-NODE-2", "SOURCE-NODE-3"));
-
-        builder.addSource(null, "SOURCE-NODE-1", null, null, null, "topic-1");
-        builder.addSource(null, "OPTIMIZED-SOURCE-NODE-2", null, null, null, "topic-2");
-        builder.addSource(null, "SOURCE-NODE-3", null, null, null, "topic-3");
-
-        builder.maybeUpdateCopartitionSourceGroups("SOURCE-NODE-2", "OPTIMIZED-SOURCE-NODE-2");
-
-        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
-
-        assertEquals(copartitionGroups, Collections.singletonList(mkSet("topic-1", "topic-2", "topic-3")));
     }
 }
