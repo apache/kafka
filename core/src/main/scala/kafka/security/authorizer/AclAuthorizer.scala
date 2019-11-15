@@ -61,6 +61,23 @@ object AclAuthorizer {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
+
+  // Orders by resource type, then resource pattern type and finally reverse ordering by name.
+  private object ResourceOrdering extends Ordering[Resource] {
+
+    def compare(a: Resource, b: Resource): Int = {
+      val rt = a.resourceType compare b.resourceType
+      if (rt != 0)
+        rt
+      else {
+        val rnt = a.patternType compareTo b.patternType
+        if (rnt != 0)
+          rnt
+        else
+          (a.name compare b.name) * -1
+      }
+    }
+  }
 }
 
 class AclAuthorizer extends Authorizer with Logging {
@@ -72,7 +89,7 @@ class AclAuthorizer extends Authorizer with Logging {
   private var extendedAclSupport: Boolean = _
 
   @volatile
-  private var aclCache = new scala.collection.immutable.TreeMap[Resource, VersionedAcls]()(ResourceOrdering)
+  private var aclCache = new scala.collection.immutable.TreeMap[Resource, VersionedAcls]()(AclAuthorizer.ResourceOrdering)
   private val lock = new ReentrantReadWriteLock()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
@@ -476,23 +493,6 @@ class AclAuthorizer extends Authorizer with Logging {
       inWriteLock(lock) {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)
-      }
-    }
-  }
-
-  // Orders by resource type, then resource pattern type and finally reverse ordering by name.
-  private object ResourceOrdering extends Ordering[Resource] {
-
-    def compare(a: Resource, b: Resource): Int = {
-      val rt = a.resourceType compare b.resourceType
-      if (rt != 0)
-        rt
-      else {
-        val rnt = a.patternType compareTo b.patternType
-        if (rnt != 0)
-          rnt
-        else
-          (a.name compare b.name) * -1
       }
     }
   }

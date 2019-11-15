@@ -32,7 +32,7 @@ import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.{Endpoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
@@ -202,6 +202,10 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startupProcessors = false)
+    val updatedEndPoints = config.advertisedListeners.map { endpoint =>
+      endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
+    }.map(_.toJava)
+
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
 
@@ -221,7 +225,7 @@ class SocketServerTest {
       sendAndReceiveControllerRequest(socket1, testableServer)
 
       val externalListener = new ListenerName("EXTERNAL")
-      val externalEndpoint = new Endpoint(externalListener.value, SecurityProtocol.PLAINTEXT, "localhost", 0)
+      val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
       val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
@@ -506,7 +510,7 @@ class SocketServerTest {
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -521,7 +525,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted after sending out the response.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -533,7 +537,7 @@ class SocketServerTest {
 
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -546,7 +550,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test

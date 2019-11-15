@@ -59,7 +59,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaOffsetBackingStore.class)
-@PowerMockIgnore("javax.management.*")
+@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";

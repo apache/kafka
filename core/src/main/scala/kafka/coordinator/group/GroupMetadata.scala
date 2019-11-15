@@ -16,17 +16,21 @@
  */
 package kafka.coordinator.group
 
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
+import scala.collection.JavaConverters._
 
 private[group] sealed trait GroupState
 
@@ -136,6 +140,7 @@ private object GroupMetadata {
         group.addStaticMember(member.groupInstanceId, member.memberId)
       }
     })
+    group.subscribedTopics = group.computeSubscribedTopics()
     group
   }
 
@@ -204,6 +209,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false
 
+  // When protocolType == `consumer`, a set of subscribed topics is maintained. The set is
+  // computed when a new generation is created or when the group is restored from the log.
+  private var subscribedTopics: Option[Set[String]] = None
+
   var newMemberAdded: Boolean = false
 
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
@@ -218,6 +227,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def leaderOrNull: String = leaderId.orNull
   def protocolOrNull: String = protocol.orNull
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
+
+  def isConsumerGroup: Boolean = protocolType.contains(ConsumerProtocol.PROTOCOL_TYPE)
 
   def add(member: MemberMetadata, callback: JoinCallback = null): Unit = {
     if (members.isEmpty)
@@ -423,6 +434,54 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       protocolType.contains(memberProtocolType) && memberProtocols.exists(supportedProtocols(_) == members.size)
   }
 
+  def getSubscribedTopics: Option[Set[String]] = subscribedTopics
+
+  /**
+   * Returns true if the consumer group is actively subscribed to the topic. When the consumer
+   * group does not know, because the information is not available yet or because the it has
+   * failed to parse the Consumer Protocol, it returns true to be safe.
+   */
+  def isSubscribedToTopic(topic: String): Boolean = subscribedTopics match {
+    case Some(topics) => topics.contains(topic)
+    case None => true
+  }
+
+  /**
+   * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
+   * to 'consumer'. None is returned if
+   * - the protocol type is not equal to 'consumer';
+   * - the protocol is not defined yet; or
+   * - the protocol metadata does not comply with the schema.
+   */
+  private[group] def computeSubscribedTopics(): Option[Set[String]] = {
+    protocolType match {
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.nonEmpty && protocol.isDefined =>
+        try {
+          Some(
+            members.map { case (_, member) =>
+              // The consumer protocol is parsed with V0 which is the based prefix of all versions.
+              // This way the consumer group manager does not depend on any specific existing or
+              // future versions of the consumer protocol. VO must prefix all new versions.
+              val buffer = ByteBuffer.wrap(member.metadata(protocol.get))
+              ConsumerProtocol.deserializeVersion(buffer)
+              ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
+            }.reduceLeft(_ ++ _)
+          )
+        } catch {
+          case e: SchemaException => {
+            warn(s"Failed to parse Consumer Protocol ${ConsumerProtocol.PROTOCOL_TYPE}:${protocol.get} " +
+              s"of group $groupId. Consumer group coordinator is not aware of the subscribed topics.", e)
+            None
+          }
+        }
+
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.isEmpty =>
+        Option(Set.empty)
+
+      case _ => None
+    }
+  }
+
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
                    callback: JoinCallback) = {
@@ -465,10 +524,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (members.nonEmpty) {
       generationId += 1
       protocol = Some(selectProtocol)
+      subscribedTopics = computeSubscribedTopics()
       transitionTo(CompletingRebalance)
     } else {
       generationId += 1
       protocol = None
+      subscribedTopics = computeSubscribedTopics()
       transitionTo(Empty)
     }
     receivedConsumerOffsetCommits = false
@@ -630,9 +691,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long): Map[TopicPartition, OffsetAndMetadata] = {
 
-    def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long): Map[TopicPartition, OffsetAndMetadata] = {
+    def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long,
+                          subscribedTopics: Set[String] = Set.empty): Map[TopicPartition, OffsetAndMetadata] = {
       offsets.filter {
         case (topicPartition, commitRecordMetadataAndOffset) =>
+          !subscribedTopics.contains(topicPartition.topic()) &&
           !pendingOffsetCommits.contains(topicPartition) && {
             commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
               case None =>
@@ -656,8 +719,20 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         //   expire all offsets with no pending offset commit;
         // - if there is no current state timestamp (old group metadata schema) and retention period has passed
         //   since the last commit timestamp, expire the offset
-        getExpiredOffsets(commitRecordMetadataAndOffset =>
-          currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp))
+        getExpiredOffsets(
+          commitRecordMetadataAndOffset => currentStateTimestamp
+            .getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp)
+        )
+
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined =>
+        // consumers exist in the group =>
+        // - if the group is aware of the subscribed topics and retention period had passed since the
+        //   the last commit timestamp, expire the offset. offset with pending offset commit are not
+        //   expired
+        getExpiredOffsets(
+          _.offsetAndMetadata.commitTimestamp,
+          subscribedTopics.get
+        )
 
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only

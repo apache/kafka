@@ -25,15 +25,16 @@ import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.util.Random
 
 /**
@@ -43,6 +44,10 @@ import scala.util.Random
 class FetchRequestTest extends BaseRequestTest {
 
   private var producer: KafkaProducer[String, String] = null
+
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
+  }
 
   override def tearDown(): Unit = {
     if (producer != null)
@@ -279,7 +284,7 @@ class FetchRequestTest extends BaseRequestTest {
 
       val socket = connect(brokerSocketServer(leaderId))
       try {
-        send(fetchRequest, ApiKeys.FETCH, socket)
+        send(fetchRequest, ApiKeys.FETCH, socket, fetchRequest.version())
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
           val size = new DataInputStream(socket.getInputStream).readInt()
@@ -290,7 +295,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(FetchResponse.parse(receive(socket), version))
+          Some(FetchResponse.parse(receive(socket, ApiKeys.FETCH.responseHeaderVersion(version)), version))
         }
       } finally {
         socket.close()
@@ -556,7 +561,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
-    partitionData.records.records.asScala.toIndexedSeq
+    partitionData.records.records.asScala.toBuffer
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
@@ -574,7 +579,7 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val batches = records.batches.asScala.toIndexedSeq
+      val batches = records.batches.asScala.toBuffer
       assertTrue(batches.size < numMessagesPerPartition)
       val batchesSize = batches.map(_.sizeInBytes).sum
       responseSize += batchesSize

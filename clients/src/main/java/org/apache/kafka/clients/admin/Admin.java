@@ -25,6 +25,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -437,7 +439,7 @@ public interface Admin extends AutoCloseable {
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
      * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
      * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
-     * log directory if it is not already there.
+     * log directory if it is not already there. For detailed result, inspect the returned {@link AlterReplicaLogDirsResult} instance.
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
@@ -446,8 +448,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
      *
-     * @param replicaAssignment The replicas with their log directory absolute path
-     * @return The AlterReplicaLogDirsResult
+     * @param replicaAssignment     The replicas with their log directory absolute path
+     * @return                      The AlterReplicaLogDirsResult
+     * @throws InterruptedException Interrupted while joining I/O thread
      */
     default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
@@ -457,15 +460,16 @@ public interface Admin extends AutoCloseable {
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
      * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
      * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
-     * log directory if it is not already there.
+     * log directory if it is not already there. For detailed result, inspect the returned {@link AlterReplicaLogDirsResult} instance.
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
      *
-     * @param replicaAssignment The replicas with their log directory absolute path
-     * @param options           The options to use when changing replica dir
-     * @return The AlterReplicaLogDirsResult
+     * @param replicaAssignment     The replicas with their log directory absolute path
+     * @param options               The options to use when changing replica dir
+     * @return                      The AlterReplicaLogDirsResult
+     * @throws InterruptedException Interrupted while joining I/O thread
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
                                                   AlterReplicaLogDirsOptions options);
@@ -838,6 +842,29 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * Delete committed offsets for a set of partitions in a consumer group. This will
+     * succeed at the partition level only if the group is not actively subscribed
+     * to the corresponding topic.
+     *
+     * @param options The options to use when deleting offsets in a consumer group.
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId,
+        Set<TopicPartition> partitions,
+        DeleteConsumerGroupOffsetsOptions options);
+
+    /**
+     * Delete committed offsets for a set of partitions in a consumer group with the default
+     * options. This will succeed at the partition level only if the group is not actively
+     * subscribed to the corresponding topic.
+     *
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+        return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
+    }
+
+    /**
      * Elect the preferred replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -1055,7 +1082,56 @@ public interface Admin extends AutoCloseable {
      * @param options The options to carry removing members' information.
      * @return The MembershipChangeResult.
      */
-    MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
+    RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options);
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata.
+     * @return The AlterOffsetsResult.
+     */
+    default AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
+        return alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata. Partitions not specified in the map are ignored.
+     * @param options The options to use when altering the offsets.
+     * @return The AlterOffsetsResult.
+     */
+    AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
+
+    /**
+     * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
+     * the beginning offset, end offset as well as the offset matching a timestamp in partitions.
+     *
+     * <p>This is a convenience method for {@link #listOffsets(Map, ListOffsetsOptions)}
+     *
+     * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
+     * @return The ListOffsetsResult.
+     */
+    default ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+        return listOffsets(topicPartitionOffsets, new ListOffsetsOptions());
+    }
+
+    /**
+     * <p>List offset for the specified partitions. This operation enables to find
+     * the beginning offset, end offset as well as the offset matching a timestamp in partitions.
+     *
+     * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
+     * @param options The options to use when retrieving the offsets
+     * @return The ListOffsetsResult.
+     */
+    ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
 
     /**
      * Get the metrics kept by the adminClient

@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedList;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -34,6 +35,7 @@ import java.util.TreeMap;
  * An internal class which represents the API versions supported by a particular node.
  */
 public class NodeApiVersions {
+
     // A map of the usable versions of each API, keyed by the ApiKeys instance
     private final Map<ApiKeys, ApiVersion> supportedVersions = new EnumMap<>(ApiKeys.class);
 
@@ -71,6 +73,31 @@ public class NodeApiVersions {
             }
         }
         return new NodeApiVersions(apiVersions);
+    }
+
+
+    /**
+     * Create a NodeApiVersions object with a single ApiKey. It is mainly used in tests.
+     *
+     * @param apiKey ApiKey's id.
+     * @param minVersion ApiKey's minimum version.
+     * @param maxVersion ApiKey's maximum version.
+     * @return A new NodeApiVersions object.
+     */
+    public static NodeApiVersions create(short apiKey, short minVersion, short maxVersion) {
+        return create(Collections.singleton(new ApiVersion(apiKey, minVersion, maxVersion)));
+    }
+
+    public NodeApiVersions(ApiVersionsResponseKeyCollection nodeApiVersions) {
+        for (ApiVersionsResponseKey nodeApiVersion : nodeApiVersions) {
+            if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
+                ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
+                supportedVersions.put(nodeApiKey, new ApiVersion(nodeApiVersion));
+            } else {
+                // Newer brokers may support ApiKeys we don't know about
+                unknownApis.add(new ApiVersion(nodeApiVersion));
+            }
+        }
     }
 
     public NodeApiVersions(Collection<ApiVersion> nodeApiVersions) {

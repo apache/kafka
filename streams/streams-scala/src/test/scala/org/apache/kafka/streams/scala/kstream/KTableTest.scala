@@ -42,26 +42,28 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.filter((_, value) => value > 1).toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
-      testDriver.pipeRecord(sourceTopic, ("1", "value1"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("1", "value1")
+      val record = testOutput.readKeyValue
       record.key shouldBe "1"
       record.value shouldBe (null: java.lang.Long)
     }
     {
-      testDriver.pipeRecord(sourceTopic, ("1", "value2"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("1", "value2")
+      val record = testOutput.readKeyValue
       record.key shouldBe "1"
       record.value shouldBe 2
     }
     {
-      testDriver.pipeRecord(sourceTopic, ("2", "value1"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("2", "value1")
+      val record = testOutput.readKeyValue
       record.key shouldBe "2"
       record.value shouldBe (null: java.lang.Long)
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -75,26 +77,28 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.filterNot((_, value) => value > 1).toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
-      testDriver.pipeRecord(sourceTopic, ("1", "value1"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("1", "value1")
+      val record = testOutput.readKeyValue
       record.key shouldBe "1"
       record.value shouldBe 1
     }
     {
-      testDriver.pipeRecord(sourceTopic, ("1", "value2"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("1", "value2")
+      val record = testOutput.readKeyValue
       record.key shouldBe "1"
       record.value shouldBe (null: java.lang.Long)
     }
     {
-      testDriver.pipeRecord(sourceTopic, ("2", "value1"))
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("2", "value1")
+      val record = testOutput.readKeyValue
       record.key shouldBe "2"
       record.value shouldBe 1
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -110,12 +114,15 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table1.join(table2)((a, b) => a + b).toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"))
-    testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"))
-    testDriver.readRecord[String, Long](sinkTopic).value shouldBe 2
+    testInput1.pipeInput("1", "topic1value1")
+    testInput2.pipeInput("1", "topic2value1")
+    testOutput.readValue shouldBe 2
 
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -133,13 +140,16 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table1.join(table2, materialized)((a, b) => a + b).toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"))
-    testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"))
-    testDriver.readRecord[String, Long](sinkTopic).value shouldBe 2
+    testInput1.pipeInput("1", "topic1value1")
+    testInput2.pipeInput("1", "topic2value1")
+    testOutput.readValue shouldBe 2
     testDriver.getKeyValueStore[String, Long](stateStore).get("1") shouldBe 2
 
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -161,40 +171,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
       // publish key=1 @ time 0 => count==1
-      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value1", 0L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish key=1 @ time 1 => count==2
-      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value2", 1L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time past the first window, but before the suppression window
-      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("2", "value1", 1001L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time riiiight before suppression window ends
-      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("2", "value2", 1999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish a late event before suppression window terminates => count==3
-      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value3", 999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time right past the suppression window of the first window.
-      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("2", "value3", 2001L)
+      val record = testOutput.readKeyValue
       record.key shouldBe "0:1000:1"
       record.value shouldBe 3L
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -216,40 +228,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
       // publish key=1 @ time 0 => count==1
-      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value1", 0L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish key=1 @ time 1 => count==2
-      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value2", 1L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time past the window, but before the grace period
-      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("2", "value1", 1001L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time riiiight before grace period ends
-      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("2", "value2", 1999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish a late event before grace period terminates => count==3
-      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value3", 999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time right past the grace period of the first window.
-      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("2", "value3", 2001L)
+      val record = testOutput.readKeyValue
       record.key shouldBe "0:1000:1"
       record.value shouldBe 3L
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -272,53 +286,55 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
       // first window
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 0L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 0L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // first window
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 1L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 1L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // new window, but grace period hasn't ended for first window
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 8L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 8L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // out-of-order event for first window, included since grade period hasn't passed
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 2L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 2L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // add to second window
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 13L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 13L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // add out-of-order to second window
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 10L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("k1", "v1", 10L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // push stream time forward to flush other events through
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 30L)
+      testInput.pipeInput("k1", "v1", 30L)
       // late event should get dropped from the stream
-      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 3L)
+      testInput.pipeInput("k1", "v1", 3L)
       // should now have to results
-      val r1 = testDriver.readRecord[String, Long](sinkTopic)
+      val r1 = testOutput.readRecord
       r1.key shouldBe "0:2:k1"
       r1.value shouldBe 3L
       r1.timestamp shouldBe 2L
-      val r2 = testDriver.readRecord[String, Long](sinkTopic)
+      val r2 = testOutput.readRecord
       r2.key shouldBe "8:13:k1"
       r2.value shouldBe 3L
       r2.timestamp shouldBe 13L
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -338,40 +354,42 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     table.toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
       // publish key=1 @ time 0 => count==1
-      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value1", 0L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish key=1 @ time 1 => count==2
-      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value2", 1L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time past the window, but before the grace period
-      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("2", "value1", 1001L)
+      testOutput.isEmpty shouldBe true
     }
     {
-      // move event time riiiight before grace period ends
-      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      // move event time right before grace period ends
+      testInput.pipeInput("2", "value2", 1999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // publish a late event before grace period terminates => count==3
-      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
-      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+      testInput.pipeInput("1", "value3", 999L)
+      testOutput.isEmpty shouldBe true
     }
     {
       // move event time right past the grace period of the first window.
-      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
-      val record = testDriver.readRecord[String, Long](sinkTopic)
+      testInput.pipeInput("2", "value3", 2001L)
+      val record = testOutput.readKeyValue
       record.key shouldBe "1"
       record.value shouldBe 3L
     }
-    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }

@@ -61,11 +61,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see UnlimitedWindows
  * @see SessionWindows
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
- * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+ * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
 public final class JoinWindows extends Windows<Window> {
@@ -215,12 +215,12 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
      * after the end of its window.
+     * <p>
+     * Delay is defined as (stream_time - record_timestamp).
      *
-     * Lateness is defined as (stream_time - record_timestamp).
-     *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */

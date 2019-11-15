@@ -12,30 +12,30 @@
   */
 package kafka.admin
 
-import java.util.{Collections, Properties}
-
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
-import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer}
+import kafka.controller.ReplicaAssignment
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, NewPartitionReassignment, PartitionReassignment, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment, AdminClient => JAdminClient}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 import scala.util.Random
 import java.io.File
+import java.util.{Collections, Optional, Properties}
+import java.util.concurrent.ExecutionException
 
-import kafka.controller.PartitionReplicaAssignment
-import kafka.log.LogConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.NoReassignmentInProgressException
+import org.apache.kafka.common.errors.{NoReassignmentInProgressException, ReassignmentInProgressException}
+import org.scalatest.Assertions.intercept
+
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = null
@@ -138,6 +138,25 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
+  }
+
+  @Test
+  def testReassignmentMatchesCurrentAssignment(): Unit = {
+    // Given a single replica on server 100
+    startBrokers(Seq(100))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
+
+    // Execute no-op reassignment
+    val topicJson = executeAssignmentJson(Seq(
+      PartitionAssignmentJson(tp0, replicas = Seq(100), logDirectories = None)
+    ))
+    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
+    waitForZkReassignmentToComplete()
+
+    // The replica should remain on 100
+    val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)(tp0.partition)
+    assertMoveForPartitionOccurred(Seq(100), partitionAssignment)
   }
 
   @Test
@@ -657,11 +676,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     adminClient.close()
 
     zkClient.setTopicAssignment("orders", Map(
-      new TopicPartition("orders", 0) -> PartitionReplicaAssignment(List(0, 1), List(2), List(0)), // should be overwritten
-      new TopicPartition("orders", 1) -> PartitionReplicaAssignment(List(1, 2), List(3), List(1)), // should be overwritten
+      new TopicPartition("orders", 0) -> ReplicaAssignment(List(0, 1), List(2), List(0)), // should be overwritten
+      new TopicPartition("orders", 1) -> ReplicaAssignment(List(1, 2), List(3), List(1)), // should be overwritten
       // should be overwritten (so we know to remove it from ZK) even though we do the exact same move
-      sameMoveTp -> PartitionReplicaAssignment(List(0, 1, 2), List(2), List(0)),
-      new TopicPartition("orders", 3) -> PartitionReplicaAssignment(List(0, 1, 2), List(2), List(0)) // moves
+      sameMoveTp -> ReplicaAssignment(List(0, 1, 2), List(2), List(0)),
+      new TopicPartition("orders", 3) -> ReplicaAssignment(List(0, 1, 2), List(2), List(0)) // moves
     ))
     val move = Map(
       new TopicPartition("orders", 0) -> Seq(2, 1), // moves
@@ -677,13 +696,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     servers.foreach(_.startup())
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     adminClient = createAdminClient(servers)
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
 
     waitForZkReassignmentToComplete()
 
     assertEquals(Seq(2, 1), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
     assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
     assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(sameMoveTp))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 3)))
     assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
 
@@ -761,7 +781,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertIsReassigning(from = Seq(100), to = Seq(101), reassignmentsInProgress.get(tp0))
     assertIsReassigning(from = Seq(100), to = Seq(101), reassignmentsInProgress.get(tp2))
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tp0))
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tp2))
@@ -800,7 +820,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertIsReassigning(from = Seq(100, 101), to = Seq(100, 101, 102), apiReassignmentsInProgress2.get(tp0))
     assertIsReassigning(from = Seq(100, 101), to = Seq(100, 101, 102), apiReassignmentsInProgress2.get(tp1))
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
 
     //Check move occurred
@@ -853,7 +873,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertIsReassigning(from = Seq(100), to = Seq(102), zkReassignmentsInProgress.get(tp0))
     assertIsReassigning(from = Seq(100), to = Seq(102), zkReassignmentsInProgress.get(tp1))
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForZkReassignmentToComplete()
     assertTrue(adminClient.listPartitionReassignments(Set(tp0, tp1).asJava).reassignments().get().isEmpty)
     assertEquals(Seq(102), zkClient.getReplicasForPartition(tp0))
@@ -911,15 +931,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertIsReassigning(from = Seq(100), to = Seq(102), apiReassignmentsInProgress.get(tpB0))
 
     // 3. Unthrottle topic A
-    removePartitionReplicaThrottles(Set(tpA0, tpA1))
+    TestUtils.removePartitionReplicaThrottles(adminClient, Set(tpA0, tpA1))
     waitForZkReassignmentToComplete()
     // 4. Ensure the API reassignment not part of the znode is still in progress
     val leftoverReassignments = adminClient.listPartitionReassignments(Set(tpA0, tpA1, tpB0).asJava).reassignments().get()
-    assertEquals(1, leftoverReassignments.size())
-    val tpB0LeftoverReassignment = leftoverReassignments.get(tpB0)
-    assertIsReassigning(from = Seq(100), to = Seq(102), tpB0LeftoverReassignment)
+    assertTrue(leftoverReassignments.keySet().asScala.subsetOf(Set(tpA1, tpB0)))
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tpA0))
     assertEquals(Seq(102), zkClient.getReplicasForPartition(tpA1))
@@ -948,7 +966,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       Map(cancelReassignmentEntry(tp0)).asJava
     ).all().get()
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
     assertEquals(Seq(100, 101), zkClient.getReplicasForPartition(tp0).sorted) // revert ordering is not guaranteed
   }
@@ -983,7 +1001,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       Map(cancelReassignmentEntry(tp0), cancelReassignmentEntry(tp1)).asJava
     ).all().get()
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForZkReassignmentToComplete()
     reassignmentIsOngoing = adminClient.listPartitionReassignments().reassignments().get().size() > 0
     assertFalse(reassignmentIsOngoing)
@@ -1034,7 +1052,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
         assertEquals(exception.getCause.getClass, classOf[NoReassignmentInProgressException])
     }
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
     assertEquals(Seq(100), zkClient.getReplicasForPartition(tp0))
     assertEquals(Seq(102), zkClient.getReplicasForPartition(tp1))
@@ -1095,11 +1113,72 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       apiReassignmentsInProgress3.get(tpB0)
     )
 
-    resetBrokersThrottle()
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
     waitForAllReassignmentsToComplete()
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tpA0))
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tpA1))
     assertEquals(Seq(101), zkClient.getReplicasForPartition(tpB0))
+  }
+
+  /**
+   * Verifies that partitions can be created for topics not in reassignment and for the topics that are in reassignment
+   * an ReassignmentInProgressException should be thrown. The test creates two topics `topicName` and `otherTopicName`,
+   * the `topicName` topic undergoes partition reassignment and the test validates that during reassignment createPartitions
+   * call throws ReassignmentInProgressException `topicName` topic and for topic `otherTopicName` which is not being reassigned
+   * successfully creates partitions. Further validates that after the reassignment is complete for topic `topicName`
+   * createPartition is successful for that topic.
+   */
+  @Test
+  def shouldCreatePartitionsForTopicNotInReassignment(): Unit = {
+    startBrokers(Seq(100, 101))
+    val otherTopicName = "anyTopic"
+    val otp0 = new TopicPartition(otherTopicName, 0)
+    val otp1 = new TopicPartition(otherTopicName, 1)
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName,
+      Map(otp0.partition() -> Seq(100),
+          otp1.partition() -> Seq(100)),
+      servers = servers)
+    createTopic(zkClient, otherTopicName,
+      Map(tp0.partition() -> Seq(100),
+          tp1.partition() -> Seq(100)),
+      servers = servers)
+
+    // Throttle to avoid race conditions
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
+      tp0 -> Seq(100, 101),
+      tp1 -> Seq(100, 101)
+    ))
+
+    // Alter `topicName` partition reassignment
+    adminClient.alterPartitionReassignments(
+      Map(reassignmentEntry(tp0, Seq(101)),
+        reassignmentEntry(tp1, Seq(101))).asJava
+    ).all().get()
+    waitUntilTrue(() => {
+      !adminClient.listPartitionReassignments().reassignments().get().isEmpty
+    }, "Controller should have picked up reassignment", 1000)
+
+    def testCreatePartitions(topicName: String, isTopicBeingReassigned: Boolean): Unit = {
+      if (isTopicBeingReassigned)
+        assertTrue("createPartitions for topic under reassignment should throw an exception", intercept[ExecutionException](
+          adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()).
+          getCause.isInstanceOf[ReassignmentInProgressException])
+      else
+        adminClient.createPartitions(Map(topicName -> NewPartitions.increaseTo(4)).asJava).values.get(topicName).get()
+    }
+
+    // Test case: createPartitions throws ReassignmentInProgressException Topics with partitions in reassignment.
+    testCreatePartitions(topicName, true)
+    // Test case: createPartitions is successful for Topics with partitions NOT in reassignment.
+    testCreatePartitions(otherTopicName, false)
+
+    // complete reassignment
+    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
+    waitForAllReassignmentsToComplete()
+
+    // Test case: createPartitions is successful for Topics with partitions after reassignment has completed.
+    testCreatePartitions(topicName, false)
   }
 
   /**
@@ -1115,7 +1194,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
    * Asserts that a topic's reassignments completed and span across the expected replicas
    */
   def assertMoveForTopicOccurred(expectedReplicas: Seq[Int],
-                                 partitionAssignments: Map[Int, PartitionReplicaAssignment]): Unit = {
+                                 partitionAssignments: Map[Int, ReplicaAssignment]): Unit = {
     assertEquals(expectedReplicas, partitionAssignments.values.flatMap(_.replicas).toSeq.distinct.sorted)
     assertTrue(partitionAssignments.values.flatMap(_.addingReplicas).isEmpty)
     assertTrue(partitionAssignments.values.flatMap(_.removingReplicas).isEmpty)
@@ -1125,7 +1204,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
    * Asserts that a partition moved to the exact expected replicas in the specific order
    */
   def assertMoveForPartitionOccurred(expectedReplicas: Seq[Int],
-                                     partitionAssignment: PartitionReplicaAssignment): Unit = {
+                                     partitionAssignment: ReplicaAssignment): Unit = {
     assertEquals(expectedReplicas, partitionAssignment.replicas)
     assertTrue(partitionAssignment.addingReplicas.isEmpty)
     assertTrue(partitionAssignment.removingReplicas.isEmpty)
@@ -1138,50 +1217,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(expectedReplicas.sorted, receivedReplicas.asScala.map(_.toInt).sorted)
   }
 
-  def throttleAllBrokersReplication(throttleBytes: String): Unit = {
-    val throttleConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttleBytes), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttleBytes), AlterConfigOp.OpType.SET)
-    ).asJavaCollection
-
-    adminClient.incrementalAlterConfigs(
-      brokerIds.map { brokerId =>
-        new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString) -> throttleConfigs
-      }.toMap.asJava
-    ).all().get()
-  }
-
-  def resetBrokersThrottle(): Unit = throttleAllBrokersReplication(Int.MaxValue.toString)
-
-  def assignThrottledPartitionReplicas(allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
-    val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
-      case (topic, replicasByPartition) =>
-        new ConfigResource(ConfigResource.Type.TOPIC, topic) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
-        ).asJavaCollection
-    }
-    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
-  }
-
-  def removePartitionReplicaThrottles(partitions: Set[TopicPartition]): Unit = {
-    val throttles = partitions.map {
-      tp =>
-        new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()) -> Seq(
-          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
-          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
-        ).asJavaCollection
-    }.toMap
-    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
-  }
-
-  def formatReplicaThrottles(moves: Map[TopicPartition, Seq[Int]]): String =
-    moves.flatMap { case (tp, assignment) =>
-      assignment.map(replicaId => s"${tp.partition}:$replicaId")
-    }.mkString(",")
-
   def reassignmentEntry(tp: TopicPartition, replicas: Seq[Int]): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
-    tp -> java.util.Optional.of(new NewPartitionReassignment(replicas.map(_.asInstanceOf[Integer]).asJava))
+    tp -> Optional.of(new NewPartitionReassignment((replicas.map(_.asInstanceOf[Integer]).asJava)))
 
   def cancelReassignmentEntry(tp: TopicPartition): (TopicPartition, java.util.Optional[NewPartitionReassignment]) =
     tp -> java.util.Optional.empty()
@@ -1231,8 +1268,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     for (topic <- topics) {
       produceMessages(topic, numMessages = messagesPerTopic, acks = 0, valueLength = throttle.messageSizeBytes)
     }
-    throttleAllBrokersReplication(throttle.throttleBytes)
-    assignThrottledPartitionReplicas(replicasToThrottle)
+    TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttle.throttleBytes.toInt)
+    TestUtils.assignThrottledPartitionReplicas(adminClient, replicasToThrottle)
   }
 
   private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {

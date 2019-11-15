@@ -19,6 +19,7 @@
   "name": "SaslAuthenticateResponse",
   // Version 1 adds the session lifetime.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },

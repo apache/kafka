@@ -84,6 +84,26 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
+    // visible for testing
+    long partitionTimestamp(final TopicPartition partition) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new NullPointerException("Partition " + partition + " not found.");
+        }
+        return queue.partitionTime();
+    }
+
+    void setPartitionTime(final TopicPartition partition, final long partitionTime) {
+        final RecordQueue queue = partitionQueues.get(partition);
+        if (queue == null) {
+            throw new NullPointerException("Partition " + partition + " not found.");
+        }
+        if (streamTime < partitionTime) {
+            streamTime = partitionTime;
+        }
+        queue.setPartitionTime(partitionTime);
+    }
+
     /**
      * Get the next record and queue
      *

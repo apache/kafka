@@ -51,7 +51,7 @@ import java.util.Map;
 public class RecordCollectorImpl implements RecordCollector {
     private final Logger log;
     private final String logPrefix;
-    private final Sensor skippedRecordsSensor;
+    private final Sensor droppedRecordsSensor;
     private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
@@ -68,12 +68,12 @@ public class RecordCollectorImpl implements RecordCollector {
     public RecordCollectorImpl(final String streamTaskId,
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final Sensor skippedRecordsSensor) {
+                               final Sensor droppedRecordsSensor) {
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
-        this.skippedRecordsSensor = skippedRecordsSensor;
+        this.droppedRecordsSensor = droppedRecordsSensor;
     }
 
     @Override
@@ -211,7 +211,7 @@ public class RecordCollectorImpl implements RecordCollector {
                                     // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
                                     log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
 
-                                    skippedRecordsSensor.record();
+                                    droppedRecordsSensor.record();
                                 }
                             }
                         }

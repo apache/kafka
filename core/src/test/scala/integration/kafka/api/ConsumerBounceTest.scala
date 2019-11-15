@@ -108,7 +108,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
       if (records.nonEmpty) {
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
 
         if (consumer.position(tp) == numRecords) {
           consumer.seekToBeginning(Collections.emptyList())
@@ -153,7 +153,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       } else if (coin == 2) {
         info("Committing offset.")
         consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(tp).offset)
+        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
       }
     }
   }
@@ -457,10 +457,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
     executor.submit(CoreUtils.runnable {
       val closeGraceTimeMs = 2000
-      val startNanos = System.nanoTime
+      val startMs = System.currentTimeMillis()
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(time.Duration.ofMillis(closeTimeoutMs))
-      val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
+      val timeTakenMs = System.currentTimeMillis() - startMs
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
@@ -485,7 +485,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     consumer.poll(time.Duration.ofSeconds(3L))
     assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
-      assertEquals(committedRecords, consumer.committed(tp).offset)
+      assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     consumer.close()
   }
 

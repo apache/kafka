@@ -131,6 +131,8 @@ public class PluginUtils {
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
+            + "|mirror\\..*"
+            + "|mirror-client\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
             + "|storage\\.SimpleHeaderConverter"

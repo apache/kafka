@@ -409,6 +409,6 @@ class ReplicaStateMachineTest {
     assertEquals(fromState, replicaState(replica))
   }
 
-  private def replicaAssignment(replicas: Seq[Int]): PartitionReplicaAssignment = PartitionReplicaAssignment(replicas, Seq(), Seq())
+  private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())
 
 }

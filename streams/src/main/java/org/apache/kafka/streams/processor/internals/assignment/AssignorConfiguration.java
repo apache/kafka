@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
@@ -33,20 +33,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_ONE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
 
 public final class AssignorConfiguration {
     private final String logPrefix;
     private final Logger log;
     private final Integer numStandbyReplicas;
-    private final PartitionGrouper partitionGrouper;
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private final String userEndPoint;
     private final TaskManager taskManager;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
 
+    @SuppressWarnings("deprecation")
     public AssignorConfiguration(final Map<String, ?> configs) {
         streamsConfig = new QuietStreamsConfig(configs);
 
@@ -59,7 +59,7 @@ public final class AssignorConfiguration {
 
         partitionGrouper = streamsConfig.getConfiguredInstance(
             StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            PartitionGrouper.class
+            org.apache.kafka.streams.processor.PartitionGrouper.class
         );
 
         final String configuredUserEndpoint = streamsConfig.getString(StreamsConfig.APPLICATION_SERVER_CONFIG);
@@ -131,6 +131,30 @@ public final class AssignorConfiguration {
         return taskManager;
     }
 
+    public RebalanceProtocol rebalanceProtocol() {
+        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (upgradeFrom != null) {
+            switch (upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
+                    return RebalanceProtocol.EAGER;
+                default:
+                    throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
+            }
+        }
+        log.info("Cooperative rebalancing enabled now");
+        return RebalanceProtocol.COOPERATIVE;
+    }
+
     public String logPrefix() {
         return logPrefix;
     }
@@ -144,7 +168,7 @@ public final class AssignorConfiguration {
                         "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
-                    return VERSION_ONE;
+                    return 1;
                 case StreamsConfig.UPGRADE_FROM_0101:
                 case StreamsConfig.UPGRADE_FROM_0102:
                 case StreamsConfig.UPGRADE_FROM_0110:
@@ -155,22 +179,28 @@ public final class AssignorConfiguration {
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );
-                    return VERSION_TWO;
+                    return 2;
+                case StreamsConfig.UPGRADE_FROM_20:
+                case StreamsConfig.UPGRADE_FROM_21:
+                case StreamsConfig.UPGRADE_FROM_22:
+                case StreamsConfig.UPGRADE_FROM_23:
+                    // These configs are for cooperative rebalancing and should not affect the metadata version
+                    break;
                 default:
                     throw new IllegalArgumentException(
                         "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
                     );
             }
-        } else {
-            return priorVersion;
         }
+        return priorVersion;
     }
 
     public int getNumStandbyReplicas() {
         return numStandbyReplicas;
     }
 
-    public PartitionGrouper getPartitionGrouper() {
+    @SuppressWarnings("deprecation")
+    public org.apache.kafka.streams.processor.PartitionGrouper getPartitionGrouper() {
         return partitionGrouper;
     }
 

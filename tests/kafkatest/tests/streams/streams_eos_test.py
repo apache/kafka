@@ -14,8 +14,6 @@
 # limitations under the License.
 
 from ducktape.mark.resource import cluster
-from ducktape.mark import ignore
-
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
@@ -159,7 +157,7 @@ class StreamsEosTest(KafkaTest):
 
     def wait_for_startup(self, monitor, processor):
         self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
-        self.wait_for(monitor, processor, "processed 500 records from topic")
+        self.wait_for(monitor, processor, "processed [0-9]* records from topic")
 
     def wait_for(self, monitor, processor, output):
         monitor.wait_until(output,
