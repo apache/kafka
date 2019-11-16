@@ -83,13 +83,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2, 1, 1)
 
-    AdminClientIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
+    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
   }
 
   @Test
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
-    AdminClientIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
+    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
   @Test
