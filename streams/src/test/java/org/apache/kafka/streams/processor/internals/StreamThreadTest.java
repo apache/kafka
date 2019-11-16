@@ -1690,7 +1690,7 @@ public class StreamThreadTest {
             null,
             new MockTime());
 
-        EasyMock.expect(taskManager.getAdminClient()).andReturn(adminClient);
+        EasyMock.expect(taskManager.adminClient()).andReturn(adminClient);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
