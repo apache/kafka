@@ -687,6 +687,11 @@ private[log] class Cleaner(val id: Int,
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
         if (batch.isDeleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
+
+        // check that the control batch has been emptied of records
+        // if not, then we do not set a delete horizon until that is true
+        if (batch.isControlBatch() && transactionMetadata.onControlBatchRead(batch))
+          return -1L
         return time.milliseconds() + tombstoneRetentionMs;
       }
     }
@@ -793,7 +798,8 @@ private[log] class Cleaner(val id: Int,
        */
       val latestOffsetForKey = record.offset() >= foundOffset
       val isRetainedValue = record.hasValue || retainDeletes
-      latestOffsetForKey && isRetainedValue
+      val tombstoneRetention = !batch.isDeleteHorizonSet() || time.milliseconds() < batch.deleteHorizonMs
+      latestOffsetForKey && isRetainedValue && tombstoneRetention
     } else {
       stats.invalidMessage()
       false

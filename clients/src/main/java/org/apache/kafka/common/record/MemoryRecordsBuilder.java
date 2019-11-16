@@ -95,8 +95,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 boolean isTransactional,
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
-                                int writeLimit,
-                                long deleteHorizonMs) {
+                                int writeLimit) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
@@ -122,7 +121,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
         this.isControlBatch = isControlBatch;
-        this.deleteHorizonMs = deleteHorizonMs;
+        this.deleteHorizonMs = -1L;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
@@ -164,12 +163,15 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 int baseSequence,
                                 boolean isTransactional,
                                 boolean isControlBatch,
-                                long deleteHorizonMs,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
         this(new ByteBufferOutputStream(buffer), magic, compressionType, timestampType, baseOffset, logAppendTime,
                 producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
-                writeLimit, deleteHorizonMs);
+                writeLimit);
+    }
+
+    public void setDeleteHorizonMs(final long deleteHorizonMs) {
+        this.deleteHorizonMs = deleteHorizonMs;
     }
 
     public ByteBuffer buffer() {

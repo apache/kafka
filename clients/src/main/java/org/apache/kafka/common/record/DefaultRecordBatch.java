@@ -156,10 +156,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Get the timestamp of the first record in this batch. It is always the create time of the record even if the
+     * Get the timestamp of the first record in this batch. It is usually the create time of the record even if the
      * timestamp type of the batch is log append time.
      *
-     * @return The first timestamp or {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
+     * There is the possibility that the first timestamp had been set to the delete horizon of the batch, 
+     * in which case, the delete horizon will be returned instead.
+     * 
+     * @return The first timestamp if the batch's delete horizon has not been set
+     *         The delete horizon if the batch's delete horizon has been set
+     *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
     public long firstTimestamp() {
         return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
