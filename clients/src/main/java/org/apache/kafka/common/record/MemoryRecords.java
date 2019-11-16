@@ -173,7 +173,7 @@ public class MemoryRecords extends AbstractRecords {
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
-            boolean shouldSetDeleteHorizon = (!batch.isDeleteHorizonSet() && firstTimestamp != RecordBatch.NO_TIMESTAMP);
+            boolean shouldSetDeleteHorizon = !batch.isDeleteHorizonSet() && firstTimestamp != RecordBatch.NO_TIMESTAMP;
             List<Record> retainedRecords = new ArrayList<>();
 
             try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
