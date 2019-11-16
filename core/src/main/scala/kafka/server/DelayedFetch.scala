@@ -29,8 +29,11 @@ import scala.collection._
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
-  override def toString = "[startOffsetMetadata: " + startOffsetMetadata + ", " +
-                          "fetchInfo: " + fetchInfo + "]"
+  override def toString: String = {
+    "[startOffsetMetadata: " + startOffsetMetadata +
+      ", fetchInfo: " + fetchInfo +
+      "]"
+  }
 }
 
 /**
