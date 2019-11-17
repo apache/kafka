@@ -354,49 +354,51 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
    * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
    */
   protected def largestLowerBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
-    indexSlotRangeFor(idx, target, searchEntity)._1
+    indexSlotRangeFor(idx, target, searchEntity, lowerBound = true)
 
   /**
    * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
    */
   protected def smallestUpperBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
-    indexSlotRangeFor(idx, target, searchEntity)._2
+    indexSlotRangeFor(idx, target, searchEntity, lowerBound = false)
 
   /**
-   * Lookup lower and upper bounds for the given target.
+   * Lookup lower or upper bounds for the given target.
    */
-  private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
+  private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity, lowerBound: Boolean): Int = {
     // check if the index is empty
-    if(_entries == 0)
-      return (-1, -1)
+    if (_entries == 0)
+      return -1
 
-    def binarySearch(begin: Int, end: Int) : (Int, Int) = {
+    def binarySearch(begin: Int, end: Int): Int = {
       // binary search for the entry
       var lo = begin
       var hi = end
-      while(lo < hi) {
-        val mid = (lo + hi + 1) >>> 1
+      while (lo < hi) {
+        val mid = (lo + hi) >>> 1
         val found = parseEntry(idx, mid)
         val compareResult = compareIndexEntry(found, target, searchEntity)
-        if(compareResult > 0)
+        if (compareResult > 0)
           hi = mid - 1
-        else if(compareResult < 0)
-          lo = mid
+        else if (compareResult < 0)
+          lo = mid + 1
         else
-          return (mid, mid)
+          return mid
       }
-      (lo, if (lo == _entries - 1) -1 else lo + 1)
+      if (lowerBound) lo
+      else if (lo == _entries - 1) -1
+      else lo + 1
     }
 
     val firstHotEntry = Math.max(0, _entries - 1 - _warmEntries)
     // check if the target offset is in the warm section of the index
-    if(compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
+    if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
       return binarySearch(firstHotEntry, _entries - 1)
     }
 
     // check if the target offset is smaller than the least offset
-    if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
-      return (-1, 0)
+    if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
+      return if (lowerBound) -1 else 0
 
     binarySearch(0, firstHotEntry)
   }
