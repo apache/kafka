@@ -377,7 +377,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       var lo = begin
       var hi = end
       while(lo < hi) {
-        val mid = (lo + hi) >>> 1
+        val mid = (lo + hi + 1) >>> 1
         val found = parseEntry(idx, mid)
         val compareResult = compareIndexEntry(found, target, searchEntity)
         if(compareResult > 0)
