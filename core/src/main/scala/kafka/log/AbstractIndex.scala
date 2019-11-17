@@ -29,8 +29,6 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
 
-import scala.math.ceil
-
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
