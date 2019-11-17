@@ -86,14 +86,14 @@ public class DescribeAclsRequest extends AbstractRequest {
     private final AclBindingFilter filter;
 
     DescribeAclsRequest(AclBindingFilter filter, short version) {
-        super(ApiKeys.DELETE_ACLS, version);
+        super(ApiKeys.DESCRIBE_ACLS, version);
         this.filter = filter;
 
         validate(filter, version);
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_ACLS, version);
+        super(ApiKeys.DESCRIBE_ACLS, version);
         ResourcePatternFilter resourceFilter = RequestUtils.resourcePatternFilterFromStructFields(struct);
         AccessControlEntryFilter entryFilter = RequestUtils.aceFilterFromStructFields(struct);
         this.filter = new AclBindingFilter(resourceFilter, entryFilter);

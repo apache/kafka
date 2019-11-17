@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -28,11 +29,11 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.StreamJoined;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -100,7 +101,7 @@ public class StreamsOptimizedTest {
 
         mappedStream.join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
             JoinWindows.of(ofMillis(500)),
-            Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .peek((k, v) -> System.out.println(String.format("JOINED key=%s value=%s", k, v)))
             .to(joinTopic, Produced.with(Serdes.String(), Serdes.String()));
 
@@ -111,6 +112,7 @@ public class StreamsOptimizedTest {
         config.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), "100");
 
 
         config.putAll(streamsProperties);
@@ -119,7 +121,7 @@ public class StreamsOptimizedTest {
         final KafkaStreams streams = new KafkaStreams(topology, config);
 
 
-        streams.setStateListener((oldState, newState) -> {
+        streams.setStateListener((newState, oldState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 final int repartitionTopicCount = getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern);
                 System.out.println(String.format("REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%d", repartitionTopicCount));

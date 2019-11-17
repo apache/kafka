@@ -23,7 +23,6 @@ import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -52,14 +51,8 @@ public class SourceNodeTest {
         }
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) { }
-
-        @Override
         public String deserialize(final String topic, final byte[] data) {
             return deserialize(topic, null, data);
         }
-
-        @Override
-        public void close() { }
     }
 }

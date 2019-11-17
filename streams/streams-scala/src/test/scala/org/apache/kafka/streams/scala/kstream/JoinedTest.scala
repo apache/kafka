@@ -42,6 +42,5 @@ class JoinedTest extends FlatSpec with Matchers {
     joined.keySerde.getClass shouldBe Serdes.String.getClass
     joined.valueSerde.getClass shouldBe Serdes.Long.getClass
     joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
-    joined.name() shouldBe repartitionTopicName
   }
 }

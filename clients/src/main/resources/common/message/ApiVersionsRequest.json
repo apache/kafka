@@ -1,0 +1,31 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 18,
+  "type": "request",
+  "name": "ApiVersionsRequest",
+  // Versions 0 through 2 of ApiVersionsRequest are the same.
+  //
+  // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
+  "fields": [
+    { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
+      "about": "The name of the client." },
+    { "name": "ClientSoftwareVersion", "type": "string", "versions": "3+",
+      "about": "The version of the client." }
+  ]
+}

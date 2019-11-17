@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -120,9 +120,15 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
 
+    /**
+     * V8 bumped up to add two new fields record_errors offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
+     * (See KIP-467)
+     */
+    private static final Schema PRODUCE_REQUEST_V8 = PRODUCE_REQUEST_V7;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7, PRODUCE_REQUEST_V8};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -214,8 +220,8 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
-    private boolean transactional = false;
-    private boolean idempotent = false;
+    private boolean hasTransactionalRecords = false;
+    private boolean hasIdempotentRecords = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(ApiKeys.PRODUCE, version);
@@ -261,8 +267,8 @@ public class ProduceRequest extends AbstractRequest {
     private void setFlags(MemoryRecords records) {
         Iterator<MutableRecordBatch> iterator = records.batches().iterator();
         MutableRecordBatch entry = iterator.next();
-        idempotent = entry.hasProducerId();
-        transactional = entry.isTransactional();
+        hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
+        hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
     }
 
     /**
@@ -337,6 +343,7 @@ public class ProduceRequest extends AbstractRequest {
             case 5:
             case 6:
             case 7:
+            case 8:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -366,12 +373,12 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
-    public boolean isTransactional() {
-        return transactional;
+    public boolean hasTransactionalRecords() {
+        return hasTransactionalRecords;
     }
 
-    public boolean isIdempotent() {
-        return idempotent;
+    public boolean hasIdempotentRecords() {
+        return hasIdempotentRecords;
     }
 
     /**
@@ -402,7 +409,7 @@ public class ProduceRequest extends AbstractRequest {
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                     "contain record batches with magic version 2");
             if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
-                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are note allowed to " +
+                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
                     "use ZStandard compression");
             }
 
@@ -434,6 +441,7 @@ public class ProduceRequest extends AbstractRequest {
             case 5:
             case 6:
             case 7:
+            case 8:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

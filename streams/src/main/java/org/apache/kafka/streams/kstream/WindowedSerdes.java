@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 
 public class WindowedSerdes {
 
@@ -29,6 +31,18 @@ public class WindowedSerdes {
 
         public TimeWindowedSerde(final Serde<T> inner) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
+        }
+
+        // This constructor can be used for serialize/deserialize a windowed topic
+        public TimeWindowedSerde(final Serde<T> inner, final long windowSize) {
+            super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer(), windowSize));
+        }
+
+        // Helper method for users to specify whether the input topic is a changelog topic for deserializing the key properly.
+        public TimeWindowedSerde<T> forChangelog(final boolean isChangelogTopic) {
+            final TimeWindowedDeserializer deserializer = (TimeWindowedDeserializer) this.deserializer();
+            deserializer.setIsChangelogTopic(isChangelogTopic);
+            return this;
         }
     }
 
@@ -51,9 +65,35 @@ public class WindowedSerdes {
     }
 
     /**
+     * Construct a {@code TimeWindowedSerde} object to deserialize changelog topic
+     * for the specified inner class type and window size.
+     */
+    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
+        return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize);
+    }
+
+    /**
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
     static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
+    }
+
+    static void verifyInnerSerializerNotNull(final Serializer inner,
+                                             final Serializer wrapper) {
+        if (inner == null) {
+            throw new NullPointerException("Inner serializer is `null`. " +
+                "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Serializer<T> inner)` " +
+                "instead of the no-arg constructor.");
+        }
+    }
+
+    static void verifyInnerDeserializerNotNull(final Deserializer inner,
+                                               final Deserializer wrapper) {
+        if (inner == null) {
+            throw new NullPointerException("Inner deserializer is `null`. " +
+                "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Deserializer<T> inner)` " +
+                "instead of the no-arg constructor.");
+        }
     }
 }

@@ -22,20 +22,18 @@ package org.apache.kafka.streams.scala
 import java.util.Properties
 import java.util.regex.Pattern
 
-import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
-import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams._
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import ImplicitConversions._
+import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
 import org.junit.experimental.categories.Category
 
 /**
@@ -48,7 +46,7 @@ import org.junit.experimental.categories.Category
  * Hence the native Java API based version is more verbose.
  */
 @Category(Array(classOf[IntegrationTest]))
-class WordCountTest extends JUnitSuite with WordCountTestData {
+class WordCountTest extends WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 

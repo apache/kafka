@@ -23,6 +23,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 public class ConsumedInternal<K, V> extends Consumed<K, V> {
+
     public ConsumedInternal(final Consumed<K, V> consumed) {
         super(consumed);
     }
@@ -61,5 +62,9 @@ public class ConsumedInternal<K, V> extends Consumed<K, V> {
 
     public Topology.AutoOffsetReset offsetResetPolicy() {
         return resetPolicy;
+    }
+
+    public String name() {
+        return processorName;
     }
 }

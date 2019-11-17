@@ -32,7 +32,7 @@ import org.junit.Test
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
 
   override def setUp(): Unit = {
     super.setUp()
@@ -45,8 +45,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  override protected def propertyOverrides(properties: Properties): Unit = {
-    super.propertyOverrides(properties)
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
   }
 

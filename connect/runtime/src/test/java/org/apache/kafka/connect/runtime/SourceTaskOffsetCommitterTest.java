@@ -147,6 +147,8 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
         EasyMock.expect(taskFuture.isDone()).andReturn(false);
         EasyMock.expect(taskFuture.get()).andReturn(null);
+        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
+        EasyMock.expect(taskId.task()).andReturn(1);
         PowerMock.replayAll();
 
         committers.put(taskId, taskFuture);
@@ -160,6 +162,8 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
         EasyMock.expect(taskFuture.isDone()).andReturn(false);
         EasyMock.expect(taskFuture.get()).andThrow(new CancellationException());
+        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
+        EasyMock.expect(taskId.task()).andReturn(1);
         mockLog.trace(EasyMock.anyString(), EasyMock.<Object>anyObject());
         PowerMock.expectLastCall();
         PowerMock.replayAll();
@@ -175,6 +179,8 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
         EasyMock.expect(taskFuture.isDone()).andReturn(false);
         EasyMock.expect(taskFuture.get()).andThrow(new InterruptedException());
+        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
+        EasyMock.expect(taskId.task()).andReturn(1);
         PowerMock.replayAll();
 
         try {

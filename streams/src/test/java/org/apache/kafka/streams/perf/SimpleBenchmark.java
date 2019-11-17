@@ -431,8 +431,8 @@ public class SimpleBenchmark {
         setStreamProperties("simple-benchmark-streams-with-store");
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final StoreBuilder<KeyValueStore<Integer, byte[]>> storeBuilder
-                = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), INTEGER_SERDE, BYTE_SERDE);
+        final StoreBuilder<KeyValueStore<Integer, byte[]>> storeBuilder =
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("store"), INTEGER_SERDE, BYTE_SERDE);
         builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
@@ -506,7 +506,7 @@ public class SimpleBenchmark {
                         }
                         iter.close();
 
-                        store.put(key, value);
+                        store.put(key, value, timestamp);
                     }
                 };
             }

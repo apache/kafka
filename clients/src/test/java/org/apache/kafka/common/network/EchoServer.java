@@ -50,7 +50,7 @@ class EchoServer extends Thread {
             case SSL:
                 this.sslFactory = new SslFactory(Mode.SERVER);
                 this.sslFactory.configure(configs);
-                SSLContext sslContext = this.sslFactory.sslContext();
+                SSLContext sslContext = this.sslFactory.sslEngineBuilder().sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
                 break;
             case PLAINTEXT:

@@ -24,10 +24,11 @@ import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
 
+import com.typesafe.scalalogging.Logger
 import javax.management._
 
 import scala.collection._
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -45,13 +46,14 @@ import org.slf4j.event.Level
  * 2. It is the most general possible utility, not just the thing you needed in one particular place
  * 3. You have tests for it if it is nontrivial in any way
  */
-object CoreUtils extends Logging {
+object CoreUtils {
+  private val logger = Logger(getClass)
 
   /**
-   * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
+   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
    */
-  def min[A, B >: A](traversable: TraversableOnce[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
-    if (traversable.isEmpty) ifEmpty else traversable.min(cmp)
+  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
 
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -81,7 +83,7 @@ object CoreUtils extends Logging {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
-  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN) {
+  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
@@ -147,7 +149,7 @@ object CoreUtils extends Logging {
       }
     } catch {
       case e: Exception => {
-        error(s"Failed to register Mbean $name", e)
+        logger.error(s"Failed to register Mbean $name", e)
         false
       }
     }
@@ -157,7 +159,7 @@ object CoreUtils extends Logging {
    * Unregister the mbean with the given name, if there is one registered
    * @param name The mbean name to unregister
    */
-  def unregisterMBean(name: String) {
+  def unregisterMBean(name: String): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     mbs synchronized {
       val objName = new ObjectName(name)
@@ -257,31 +259,6 @@ object CoreUtils extends Logging {
   def inReadLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.readLock)(fun)
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
-
-
-  //JSON strings need to be escaped based on ECMA-404 standard http://json.org
-  def JSONEscapeString (s : String) : String = {
-    s.map {
-      case '"'  => "\\\""
-      case '\\' => "\\\\"
-      case '/'  => "\\/"
-      case '\b' => "\\b"
-      case '\f' => "\\f"
-      case '\n' => "\\n"
-      case '\r' => "\\r"
-      case '\t' => "\\t"
-      /* We'll unicode escape any control characters. These include:
-       * 0x0 -> 0x1f  : ASCII Control (C0 Control Codes)
-       * 0x7f         : ASCII DELETE
-       * 0x80 -> 0x9f : C1 Control Codes
-       *
-       * Per RFC4627, section 2.5, we're not technically required to
-       * encode the C1 codes, but we do to be safe.
-       */
-      case c if (c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f') => "\\u%04x".format(c: Int)
-      case c => c
-    }.mkString
-  }
 
   /**
    * Returns a list of duplicated items

@@ -31,12 +31,12 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -88,7 +88,7 @@ public class GlobalStreamThreadTest {
             );
 
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
             null,
             null,
@@ -102,15 +102,17 @@ public class GlobalStreamThreadTest {
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         config = new StreamsConfig(properties);
-        globalStreamThread = new GlobalStreamThread(builder.rewriteTopology(config).buildGlobalStateTopology(),
-                                                    config,
-                                                    mockConsumer,
-                                                    new StateDirectory(config, time, true),
-                                                    0,
-                                                    new Metrics(),
-                                                    new MockTime(),
-                                                    "clientId",
-                                                     stateRestoreListener);
+        globalStreamThread = new GlobalStreamThread(
+            builder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            mockConsumer,
+            new StateDirectory(config, time, true),
+            0,
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
+            new MockTime(),
+            "clientId",
+            stateRestoreListener
+        );
     }
 
     @Test
@@ -135,15 +137,17 @@ public class GlobalStreamThreadTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
-                                                    config,
-                                                    mockConsumer,
-                                                    new StateDirectory(config, time, true),
-                                                    0,
-                                                    new Metrics(),
-                                                    new MockTime(),
-                                                    "clientId",
-                                                    stateRestoreListener);
+        globalStreamThread = new GlobalStreamThread(
+            builder.buildGlobalStateTopology(),
+            config,
+            mockConsumer,
+            new StateDirectory(config, time, true),
+            0,
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
+            new MockTime(),
+            "clientId",
+            stateRestoreListener
+        );
 
         try {
             globalStreamThread.start();
@@ -163,7 +167,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test(timeout = 30000)
-    public void shouldStopRunningWhenClosedByUser() throws InterruptedException {
+    public void shouldStopRunningWhenClosedByUser() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.shutdown();
@@ -172,7 +176,7 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldCloseStateStoresOnClose() throws InterruptedException {
+    public void shouldCloseStateStoresOnClose() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
@@ -184,7 +188,7 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldTransitionToDeadOnClose() throws InterruptedException {
+    public void shouldTransitionToDeadOnClose() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.shutdown();
@@ -195,7 +199,7 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldStayDeadAfterTwoCloses() throws InterruptedException {
+    public void shouldStayDeadAfterTwoCloses() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.shutdown();
@@ -207,15 +211,15 @@ public class GlobalStreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldTransitionToRunningOnStart() throws InterruptedException {
+    public void shouldTransitionToRunningOnStart() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == RUNNING,
+            10 * 1000,
+            "Thread never started.");
+
         globalStreamThread.shutdown();
     }
 
@@ -223,24 +227,21 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetException() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == RUNNING,
+            10 * 1000,
+            "Thread never started.");
 
         mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1L));
         mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return mockConsumer.position(topicPartition) == 1L;
-            }
-        }, 10 * 1000, "Input record never consumed");
+        TestUtils.waitForCondition(
+            () -> mockConsumer.position(topicPartition) == 1L,
+            10 * 1000,
+            "Input record never consumed");
 
-        mockConsumer.setException(new InvalidOffsetException("Try Again!") {
+        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(topicPartition);
@@ -249,20 +250,21 @@ public class GlobalStreamThreadTest {
         // feed first record for recovery
         mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == DEAD;
-            }
-        }, 10 * 1000, "GlobalStreamThread should have died.");
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == DEAD,
+            10 * 1000,
+            "GlobalStreamThread should have died.");
     }
 
     private void initializeConsumer() {
-        mockConsumer.updatePartitions(GLOBAL_STORE_TOPIC_NAME, Collections.singletonList(new PartitionInfo(GLOBAL_STORE_TOPIC_NAME,
-            0,
-            null,
-            new Node[0],
-            new Node[0])));
+        mockConsumer.updatePartitions(
+            GLOBAL_STORE_TOPIC_NAME,
+            Collections.singletonList(new PartitionInfo(
+                GLOBAL_STORE_TOPIC_NAME,
+                0,
+                null,
+                new Node[0],
+                new Node[0])));
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
         mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
         mockConsumer.assign(Collections.singleton(topicPartition));

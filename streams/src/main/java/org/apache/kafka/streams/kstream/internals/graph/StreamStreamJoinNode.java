@@ -35,16 +35,16 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final Joined<K, V1, V2> joined;
 
 
-    StreamStreamJoinNode(final String nodeName,
-                         final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                         final ProcessorParameters<K, V1> joinThisProcessorParameters,
-                         final ProcessorParameters<K, V2> joinOtherProcessParameters,
-                         final ProcessorParameters<K, VR> joinMergeProcessorParameters,
-                         final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
-                         final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
-                         final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
-                         final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
-                         final Joined<K, V1, V2> joined) {
+    private StreamStreamJoinNode(final String nodeName,
+                                 final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                                 final ProcessorParameters<K, V1> joinThisProcessorParameters,
+                                 final ProcessorParameters<K, V2> joinOtherProcessParameters,
+                                 final ProcessorParameters<K, VR> joinMergeProcessorParameters,
+                                 final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
+                                 final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
+                                 final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
+                                 final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
+                                 final Joined<K, V1, V2> joined) {
 
         super(nodeName,
               valueJoiner,
@@ -89,7 +89,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         topologyBuilder.addStateStore(otherWindowStoreBuilder, otherWindowedStreamProcessorName, thisProcessorName);
     }
 
-    public static <K, V, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {
+    public static <K, V1, V2, VR> StreamStreamJoinNodeBuilder<K, V1, V2, VR> streamStreamJoinNodeBuilder() {
         return new StreamStreamJoinNodeBuilder<>();
     }
 

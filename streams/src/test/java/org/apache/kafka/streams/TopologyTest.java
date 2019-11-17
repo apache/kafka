@@ -374,8 +374,8 @@ public class TopologyTest {
 
     @Test
     public void sinkShouldReturnNullTopicWithDynamicRouting() {
-        final TopologyDescription.Sink expectedSinkNode
-                = new InternalTopologyBuilder.Sink("sink", (key, value, record) -> record.topic() + "-" + key);
+        final TopologyDescription.Sink expectedSinkNode =
+            new InternalTopologyBuilder.Sink("sink", (key, value, record) -> record.topic() + "-" + key);
 
         assertThat(expectedSinkNode.topic(), equalTo(null));
     }
@@ -383,8 +383,8 @@ public class TopologyTest {
     @Test
     public void sinkShouldReturnTopicNameExtractorWithDynamicRouting() {
         final TopicNameExtractor topicNameExtractor = (key, value, record) -> record.topic() + "-" + key;
-        final TopologyDescription.Sink expectedSinkNode
-                = new InternalTopologyBuilder.Sink("sink", topicNameExtractor);
+        final TopologyDescription.Sink expectedSinkNode =
+            new InternalTopologyBuilder.Sink("sink", topicNameExtractor);
 
         assertThat(expectedSinkNode.topicNameExtractor(), equalTo(topicNameExtractor));
     }
@@ -459,8 +459,8 @@ public class TopologyTest {
     public void sourceAndProcessorWithStateShouldHaveSingleSubtopology() {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic");
         final String[] store = new String[] {"store"};
-        final TopologyDescription.Processor expectedProcessorNode
-            = addProcessorWithNewStore("processor", store, expectedSourceNode);
+        final TopologyDescription.Processor expectedProcessorNode =
+            addProcessorWithNewStore("processor", store, expectedSourceNode);
 
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode);
@@ -475,8 +475,8 @@ public class TopologyTest {
     public void sourceAndProcessorWithMultipleStatesShouldHaveSingleSubtopology() {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic");
         final String[] stores = new String[] {"store1", "store2"};
-        final TopologyDescription.Processor expectedProcessorNode
-            = addProcessorWithNewStore("processor", stores, expectedSourceNode);
+        final TopologyDescription.Processor expectedProcessorNode =
+            addProcessorWithNewStore("processor", stores, expectedSourceNode);
 
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode);
@@ -612,16 +612,16 @@ public class TopologyTest {
         final String[] bothStores = new String[] {store1[0], store2[0]};
 
         final TopologyDescription.Source expectedSourceNode1 = addSource("source", "topic");
-        final TopologyDescription.Processor expectedProcessorNode1
-            = addProcessorWithNewStore("processor1", store1, expectedSourceNode1);
+        final TopologyDescription.Processor expectedProcessorNode1 =
+            addProcessorWithNewStore("processor1", store1, expectedSourceNode1);
 
         final TopologyDescription.Source expectedSourceNode2 = addSource("source2", "topic2");
-        final TopologyDescription.Processor expectedProcessorNode2
-            = addProcessorWithNewStore("processor2", store2, expectedSourceNode2);
+        final TopologyDescription.Processor expectedProcessorNode2 =
+            addProcessorWithNewStore("processor2", store2, expectedSourceNode2);
 
         final TopologyDescription.Source expectedSourceNode3 = addSource("source3", "topic3");
-        final TopologyDescription.Processor expectedProcessorNode3
-            = addProcessorWithExistingStore("processor3", bothStores, expectedSourceNode3);
+        final TopologyDescription.Processor expectedProcessorNode3 =
+            addProcessorWithExistingStore("processor3", bothStores, expectedSourceNode3);
 
         final Set<TopologyDescription.Node> allNodes = new HashSet<>();
         allNodes.add(expectedSourceNode1);
@@ -1138,8 +1138,8 @@ public class TopologyTest {
         } else {
             topology.connectProcessorAndStateStores(processorName, storeNames);
         }
-        final TopologyDescription.Processor expectedProcessorNode
-            = new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
+        final TopologyDescription.Processor expectedProcessorNode =
+            new InternalTopologyBuilder.Processor(processorName, new HashSet<>(Arrays.asList(storeNames)));
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedProcessorNode);
@@ -1158,8 +1158,8 @@ public class TopologyTest {
         }
 
         topology.addSink(sinkName, sinkTopic, null, null, null, parentNames);
-        final TopologyDescription.Sink expectedSinkNode
-            = new InternalTopologyBuilder.Sink(sinkName, sinkTopic);
+        final TopologyDescription.Sink expectedSinkNode =
+            new InternalTopologyBuilder.Sink(sinkName, sinkTopic);
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedSinkNode);

@@ -102,7 +102,7 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     }
 
-    public static class Builder extends AbstractRequest.Builder {
+    public static class Builder extends AbstractRequest.Builder<AlterConfigsRequest> {
 
         private final Map<ConfigResource, Config> configs;
         private final boolean validateOnly;

@@ -142,6 +142,12 @@ public class PluginUtilsTest {
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.file.FileStreamSinkConnector")
         );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.mirror.MirrorSourceTask")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.mirror.MirrorSourceConnector")
+        );
         assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.converters."));
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.converters.ByteArrayConverter")
@@ -182,6 +188,25 @@ public class PluginUtilsTest {
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.common.config.provider.FutureConfigProvider")
+        );
+    }
+
+    @Test
+    public void testConnectorClientConfigOverridePolicy() {
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy")
         );
     }
 

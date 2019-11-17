@@ -36,8 +36,7 @@ public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
                                final ProcessorParameters<K, V> processorParameters,
                                final String[] storeNames,
                                final String otherJoinSideNodeName) {
-        super(nodeName,
-              false);
+        super(nodeName);
 
         // in the case of Stream-Table join the state stores associated with the KTable
         this.storeNames = storeNames;

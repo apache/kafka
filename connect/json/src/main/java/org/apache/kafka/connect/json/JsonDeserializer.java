@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.json;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.Set;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
-
-import java.util.Map;
 
 /**
  * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily
@@ -34,10 +35,17 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
+        this(Collections.emptySet());
     }
 
-    @Override
-    public void configure(Map<String, ?> props, boolean isKey) {
+    /**
+     * A constructor that additionally specifies some {@link DeserializationFeature}
+     * for the deserializer
+     *
+     * @param deserializationFeatures the specified deserialization features
+     */
+    JsonDeserializer(final Set<DeserializationFeature> deserializationFeatures) {
+        deserializationFeatures.forEach(objectMapper::enable);
     }
 
     @Override
@@ -53,10 +61,5 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
         }
 
         return data;
-    }
-
-    @Override
-    public void close() {
-
     }
 }

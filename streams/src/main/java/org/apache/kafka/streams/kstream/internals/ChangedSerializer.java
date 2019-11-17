@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
@@ -39,11 +38,6 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
 
     public void setInner(final Serializer<T> inner) {
         this.inner = inner;
-    }
-
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
-        // do nothing
     }
 
     /**

@@ -45,7 +45,7 @@ object OffsetCheckpointFile {
 }
 
 trait OffsetCheckpoint {
-  def write(epochs: Seq[EpochEntry])
+  def write(epochs: Seq[EpochEntry]): Unit
   def read(): Seq[EpochEntry]
 }
 
@@ -56,8 +56,36 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   val checkpoint = new CheckpointFile[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq)
+  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets)
 
   def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
+
+}
+
+trait OffsetCheckpoints {
+  def fetch(logDir: String, topicPartition: TopicPartition): Option[Long]
+}
+
+/**
+ * Loads checkpoint files on demand and caches the offsets for reuse.
+ */
+class LazyOffsetCheckpoints(checkpointsByLogDir: Map[String, OffsetCheckpointFile]) extends OffsetCheckpoints {
+  private val lazyCheckpointsByLogDir = checkpointsByLogDir.map { case (logDir, checkpointFile) =>
+    logDir -> new LazyOffsetCheckpointMap(checkpointFile)
+  }.toMap
+
+  override def fetch(logDir: String, topicPartition: TopicPartition): Option[Long] = {
+    val offsetCheckpointFile = lazyCheckpointsByLogDir.getOrElse(logDir,
+      throw new IllegalArgumentException(s"No checkpoint file for log dir $logDir"))
+    offsetCheckpointFile.fetch(topicPartition)
+  }
+}
+
+class LazyOffsetCheckpointMap(checkpoint: OffsetCheckpointFile) {
+  private lazy val offsets: Map[TopicPartition, Long] = checkpoint.read()
+
+  def fetch(topicPartition: TopicPartition): Option[Long] = {
+    offsets.get(topicPartition)
+  }
 
 }

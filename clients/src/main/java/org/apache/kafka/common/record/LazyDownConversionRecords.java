@@ -100,10 +100,19 @@ public class LazyDownConversionRecords implements BaseRecords {
     @Override
     public int hashCode() {
         int result = toMagic;
-        result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+        result = 31 * result + Long.hashCode(firstOffset);
         result = 31 * result + topicPartition.hashCode();
         result = 31 * result + records.hashCode();
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "LazyDownConversionRecords(size=" + sizeInBytes +
+                ", underlying=" + records +
+                ", toMagic=" + toMagic +
+                ", firstOffset=" + firstOffset +
+                ")";
     }
 
     public java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {

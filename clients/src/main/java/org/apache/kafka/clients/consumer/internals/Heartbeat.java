@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
@@ -23,32 +24,24 @@ import org.apache.kafka.common.utils.Timer;
  * A helper class for managing the heartbeat to the coordinator
  */
 public final class Heartbeat {
-    private final int sessionTimeoutMs;
-    private final int heartbeatIntervalMs;
     private final int maxPollIntervalMs;
-    private final long retryBackoffMs;
+    private final GroupRebalanceConfig rebalanceConfig;
     private final Time time;
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
     private final Timer pollTimer;
 
-    private volatile long lastHeartbeatSend;
+    private volatile long lastHeartbeatSend = 0L;
 
-    public Heartbeat(Time time,
-                     int sessionTimeoutMs,
-                     int heartbeatIntervalMs,
-                     int maxPollIntervalMs,
-                     long retryBackoffMs) {
-        if (heartbeatIntervalMs >= sessionTimeoutMs)
+    public Heartbeat(GroupRebalanceConfig config,
+                     Time time) {
+        if (config.heartbeatIntervalMs >= config.sessionTimeoutMs)
             throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
-
+        this.rebalanceConfig = config;
         this.time = time;
-        this.sessionTimeoutMs = sessionTimeoutMs;
-        this.heartbeatIntervalMs = heartbeatIntervalMs;
-        this.maxPollIntervalMs = maxPollIntervalMs;
-        this.retryBackoffMs = retryBackoffMs;
-        this.heartbeatTimer = time.timer(heartbeatIntervalMs);
-        this.sessionTimer = time.timer(sessionTimeoutMs);
+        this.heartbeatTimer = time.timer(config.heartbeatIntervalMs);
+        this.sessionTimer = time.timer(config.sessionTimeoutMs);
+        this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
     }
 
@@ -66,17 +59,17 @@ public final class Heartbeat {
     public void sentHeartbeat(long now) {
         this.lastHeartbeatSend = now;
         update(now);
-        heartbeatTimer.reset(heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
     public void failHeartbeat() {
         update(time.milliseconds());
-        heartbeatTimer.reset(retryBackoffMs);
+        heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
     }
 
     public void receiveHeartbeat() {
         update(time.milliseconds());
-        sessionTimer.reset(sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
     public boolean shouldHeartbeat(long now) {
@@ -100,14 +93,14 @@ public final class Heartbeat {
 
     public void resetTimeouts() {
         update(time.milliseconds());
-        sessionTimer.reset(sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
-        heartbeatTimer.reset(heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
     public void resetSessionTimeout() {
         update(time.milliseconds());
-        sessionTimer.reset(sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
     public boolean pollTimeoutExpired(long now) {

@@ -59,6 +59,12 @@ public class Serdes {
         }
     }
 
+    static public final class VoidSerde extends WrapperSerde<Void> {
+        public VoidSerde() {
+            super(new VoidSerializer(), new VoidDeserializer());
+        }
+    }
+
     static public final class LongSerde extends WrapperSerde<Long> {
         public LongSerde() {
             super(new LongSerializer(), new LongDeserializer());
@@ -251,5 +257,12 @@ public class Serdes {
      */
     static public Serde<byte[]> ByteArray() {
         return new ByteArraySerde();
+    }
+
+    /*
+     * A serde for {@code Void} type.
+     */
+    static public Serde<Void> Void() {
+        return new VoidSerde();
     }
 }

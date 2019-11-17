@@ -27,9 +27,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
 
 public class MockConsumerTest {
     
@@ -55,9 +55,10 @@ public class MockConsumerTest {
         assertEquals(rec1, iter.next());
         assertEquals(rec2, iter.next());
         assertFalse(iter.hasNext());
-        assertEquals(2L, consumer.position(new TopicPartition("test", 0)));
+        final TopicPartition tp = new TopicPartition("test", 0);
+        assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
-        assertEquals(2L, consumer.committed(new TopicPartition("test", 0)).offset());
+        assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
     }
 
     @SuppressWarnings("deprecation")
@@ -81,9 +82,10 @@ public class MockConsumerTest {
         assertEquals(rec1, iter.next());
         assertEquals(rec2, iter.next());
         assertFalse(iter.hasNext());
-        assertEquals(2L, consumer.position(new TopicPartition("test", 0)));
+        final TopicPartition tp = new TopicPartition("test", 0);
+        assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
-        assertEquals(2L, consumer.committed(new TopicPartition("test", 0)).offset());
+        assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
     }
 
     @Test

@@ -28,15 +28,33 @@ public class Schema extends Type {
 
     private final BoundField[] fields;
     private final Map<String, BoundField> fieldsByName;
+    private final boolean tolerateMissingFieldsWithDefaults;
 
     /**
      * Construct the schema with a given list of its field values
      *
+     * @param fs the fields of this schema
+     *
      * @throws SchemaException If the given list have duplicate fields
      */
     public Schema(Field... fs) {
+        this(false, fs);
+    }
+
+    /**
+     * Construct the schema with a given list of its field values and the ability to tolerate
+     * missing optional fields with defaults at the end of the schema definition.
+     *
+     * @param tolerateMissingFieldsWithDefaults whether to accept records with missing optional
+     * fields the end of the schema
+     * @param fs the fields of this schema
+     *
+     * @throws SchemaException If the given list have duplicate fields
+     */
+    public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();
+        this.tolerateMissingFieldsWithDefaults = tolerateMissingFieldsWithDefaults;
         for (int i = 0; i < this.fields.length; i++) {
             Field def = fs[i];
             if (fieldsByName.containsKey(def.name))
@@ -64,14 +82,29 @@ public class Schema extends Type {
     }
 
     /**
-     * Read a struct from the buffer
+     * Read a struct from the buffer. If this schema is configured to tolerate missing
+     * optional fields at the end of the buffer, these fields are replaced with their default
+     * values; otherwise, if the schema does not tolerate missing fields, or if missing fields
+     * don't have a default value, a {@code SchemaException} is thrown to signify that mandatory
+     * fields are missing.
      */
     @Override
     public Struct read(ByteBuffer buffer) {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
-                objects[i] = fields[i].def.type.read(buffer);
+                if (tolerateMissingFieldsWithDefaults) {
+                    if (buffer.hasRemaining()) {
+                        objects[i] = fields[i].def.type.read(buffer);
+                    } else if (fields[i].def.hasDefaultValue) {
+                        objects[i] = fields[i].def.defaultValue;
+                    } else {
+                        throw new SchemaException("Missing value for field '" + fields[i].def.name +
+                                "' which has no default value.");
+                    }
+                } else {
+                    objects[i] = fields[i].def.type.read(buffer);
+                }
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
@@ -176,10 +209,9 @@ public class Schema extends Type {
             visitor.visit(schema);
             for (BoundField f : schema.fields())
                 handleNode(f.def.type, visitor);
-        } else if (node instanceof ArrayOf) {
-            ArrayOf array = (ArrayOf) node;
-            visitor.visit(array);
-            handleNode(array.type(), visitor);
+        } else if (node.isArray()) {
+            visitor.visit(node);
+            handleNode(node.arrayElementType().get(), visitor);
         } else {
             visitor.visit(node);
         }
@@ -190,7 +222,6 @@ public class Schema extends Type {
      */
     public static abstract class Visitor {
         public void visit(Schema schema) {}
-        public void visit(ArrayOf array) {}
         public void visit(Type field) {}
     }
 }

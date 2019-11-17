@@ -28,6 +28,7 @@ import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -44,7 +45,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   var staleControllerEpochDetected = false
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     val configProps1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, enableControlledShutdown = false)
@@ -60,7 +61,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
@@ -71,47 +72,42 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val topic = "new-topic"
     val partitionId = 0
 
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+
     // create topic with 1 partition, 2 replicas, one on each broker
     val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
     val leaderEpoch1 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
-    debug("leader Epoch: " + leaderEpoch1)
-    debug("Leader is elected to be: %s".format(leader1))
-    // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", leader1 == 0 || leader1 == 1)
+    assertTrue("Leader should be broker 0", leader1 == 0)
     assertEquals("First epoch value should be 0", 0, leaderEpoch1)
 
-    // kill the server hosting the preferred replica
-    servers.last.shutdown()
-    // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
-                                                    oldLeaderOpt = if (leader1 == 0) None else Some(leader1))
-    val leaderEpoch2 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
-    debug("Leader is elected to be: %s".format(leader1))
-    debug("leader Epoch: " + leaderEpoch2)
-    assertEquals("Leader must move to broker 0", 0, leader2)
-    if (leader1 == leader2)
-      assertEquals("Second epoch value should be " + leaderEpoch1+1, leaderEpoch1+1, leaderEpoch2)
-    else
-      assertEquals("Second epoch value should be %d".format(leaderEpoch1+1) , leaderEpoch1+1, leaderEpoch2)
-
-    servers.last.startup()
+    // kill the server hosting the preferred replica/initial leader
     servers.head.shutdown()
+    // check if leader moves to the other server
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader1))
+    val leaderEpoch2 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
+    assertEquals("Leader must move to broker 1", 1, leader2)
+    // new leaderEpoch will be leaderEpoch1+2, one increment during ReplicaStateMachine.startup()-> handleStateChanges
+    // for offline replica and one increment during PartitionStateMachine.triggerOnlinePartitionStateChange()
+    assertEquals("Second epoch value should be %d".format(leaderEpoch1 + 2) , leaderEpoch1 + 2, leaderEpoch2)
+
+    servers.head.startup()
+    //make sure second server joins the ISR
+    TestUtils.waitUntilTrue(() => {
+      servers.last.metadataCache.getPartitionInfo(topic, partitionId).exists(_.isr.size == 2)
+    }, "Inconsistent metadata after second broker startup")
+
+    servers.last.shutdown()
+
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
-                                                    oldLeaderOpt = if (leader2 == 1) None else Some(leader2))
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader2))
     val leaderEpoch3 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
-    debug("leader Epoch: " + leaderEpoch3)
-    debug("Leader is elected to be: %s".format(leader3))
-    assertEquals("Leader must return to 1", 1, leader3)
-    if (leader2 == leader3)
-      assertEquals("Second epoch value should be " + leaderEpoch2, leaderEpoch2, leaderEpoch3)
-    else
-      assertEquals("Second epoch value should be %d".format(leaderEpoch2+1) , leaderEpoch2+1, leaderEpoch3)
+    assertEquals("Leader must return to 0", 0, leader3)
+    assertEquals("Second epoch value should be %d".format(leaderEpoch2 + 2) , leaderEpoch2 + 2, leaderEpoch3)
   }
 
   @Test
-  def testLeaderElectionWithStaleControllerEpoch() {
+  def testLeaderElectionWithStaleControllerEpoch(): Unit = {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
@@ -145,16 +141,23 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     controllerChannelManager.startup()
     try {
       val staleControllerEpoch = 0
-      val partitionStates = Map(
-        new TopicPartition(topic, partitionId) -> new LeaderAndIsrRequest.PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
-          Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
-          Seq(0, 1).map(Integer.valueOf).asJava, false)
+      val partitionStates = Seq(
+        new LeaderAndIsrPartitionState()
+          .setTopicName(topic)
+          .setPartitionIndex(partitionId)
+          .setControllerEpoch(2)
+          .setLeader(brokerId2)
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch)
+          .setIsr(Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava)
+          .setZkVersion(LeaderAndIsr.initialZKVersion)
+          .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
+          .setIsNew(false)
       )
       val requestBuilder = new LeaderAndIsrRequest.Builder(
-        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, servers(brokerId2).kafkaController.brokerEpoch ,partitionStates.asJava, nodes.toSet.asJava)
+        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch,
+        servers(brokerId2).kafkaController.brokerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
-      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
-        staleControllerEpochCallback)
+      controllerChannelManager.sendRequest(brokerId2, requestBuilder, staleControllerEpochCallback)
       TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
     } finally {

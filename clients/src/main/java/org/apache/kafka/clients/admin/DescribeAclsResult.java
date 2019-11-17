@@ -27,7 +27,7 @@ import java.util.Collection;
 /**
  * The result of the {@link KafkaAdminClient#describeAcls(AclBindingFilter)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeAclsResult {

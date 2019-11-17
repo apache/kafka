@@ -16,121 +16,82 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-
+/**
+ * Possible error codes:
+ *
+ * COORDINATOR_LOAD_IN_PROGRESS (14)
+ * COORDINATOR_NOT_AVAILABLE(15)
+ * NOT_COORDINATOR (16)
+ * INVALID_GROUP_ID(24)
+ * GROUP_AUTHORIZATION_FAILED(30)
+ * NON_EMPTY_GROUP(68)
+ * GROUP_ID_NOT_FOUND(69)
+ */
 public class DeleteGroupsResponse extends AbstractResponse {
-    private static final String GROUP_ERROR_CODES_KEY_NAME = "group_error_codes";
 
-    private static final Schema GROUP_ERROR_CODE = new Schema(
-            GROUP_ID,
-            ERROR_CODE);
+    public final DeleteGroupsResponseData data;
 
-    private static final Schema DELETE_GROUPS_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(GROUP_ERROR_CODES_KEY_NAME, new ArrayOf(GROUP_ERROR_CODE), "An array of per group error codes."));
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DELETE_GROUPS_RESPONSE_V1 = DELETE_GROUPS_RESPONSE_V0;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_GROUPS_RESPONSE_V0, DELETE_GROUPS_RESPONSE_V1};
-    }
-
-
-    /**
-     * Possible error codes:
-     *
-     * COORDINATOR_LOAD_IN_PROGRESS (14)
-     * COORDINATOR_NOT_AVAILABLE(15)
-     * NOT_COORDINATOR (16)
-     * INVALID_GROUP_ID(24)
-     * GROUP_AUTHORIZATION_FAILED(30)
-     * NON_EMPTY_GROUP(68)
-     * GROUP_ID_NOT_FOUND(69)
-     */
-
-    private final Map<String, Errors> errors;
-    private final int throttleTimeMs;
-
-    public DeleteGroupsResponse(Map<String, Errors> errors) {
-        this(DEFAULT_THROTTLE_TIME, errors);
-    }
-
-    public DeleteGroupsResponse(int throttleTimeMs, Map<String, Errors> errors) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
+    public DeleteGroupsResponse(DeleteGroupsResponseData data) {
+        this.data = data;
     }
 
     public DeleteGroupsResponse(Struct struct) {
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        Object[] groupErrorCodesStructs = struct.getArray(GROUP_ERROR_CODES_KEY_NAME);
-        Map<String, Errors> errors = new HashMap<>();
-        for (Object groupErrorCodeStructObj : groupErrorCodesStructs) {
-            Struct groupErrorCodeStruct = (Struct) groupErrorCodeStructObj;
-            String group = groupErrorCodeStruct.get(GROUP_ID);
-            Errors error = Errors.forCode(groupErrorCodeStruct.get(ERROR_CODE));
-            errors.put(group, error);
-        }
+        short latestVersion = (short) (DeleteGroupsResponseData.SCHEMAS.length - 1);
+        this.data = new DeleteGroupsResponseData(struct, latestVersion);
+    }
 
-        this.errors = errors;
+    public DeleteGroupsResponse(Struct struct, short version) {
+        this.data = new DeleteGroupsResponseData(struct, version);
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DELETE_GROUPS.responseSchema(version));
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-        List<Struct> groupErrorCodeStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, Errors> groupError : errors.entrySet()) {
-            Struct groupErrorCodeStruct = struct.instance(GROUP_ERROR_CODES_KEY_NAME);
-            groupErrorCodeStruct.set(GROUP_ID, groupError.getKey());
-            groupErrorCodeStruct.set(ERROR_CODE, groupError.getValue().code());
-            groupErrorCodeStructs.add(groupErrorCodeStruct);
-        }
-        struct.set(GROUP_ERROR_CODES_KEY_NAME, groupErrorCodeStructs.toArray());
-        return struct;
-    }
-
-    @Override
-    public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.toStruct(version);
     }
 
     public Map<String, Errors> errors() {
-        return errors;
+        Map<String, Errors> errorMap = new HashMap<>();
+        for (DeletableGroupResult result : data.results()) {
+            errorMap.put(result.groupId(), Errors.forCode(result.errorCode()));
+        }
+        return errorMap;
     }
 
-    public boolean hasError(String group) {
-        return errors.containsKey(group) && errors.get(group) != Errors.NONE;
-    }
-
-    public Errors get(String group) {
-        return errors.get(group);
+    public Errors get(String group) throws IllegalArgumentException {
+        DeletableGroupResult result = data.results().find(group);
+        if (result == null) {
+            throw new IllegalArgumentException("could not find group " + group + " in the delete group response");
+        }
+        return Errors.forCode(result.errorCode());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors);
+        Map<Errors, Integer> counts = new HashMap<>();
+        for (DeletableGroupResult result : data.results()) {
+            Errors error = Errors.forCode(result.errorCode());
+            counts.put(error, counts.getOrDefault(error, 0) + 1);
+        }
+        return counts;
     }
 
     public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.responseSchema(version).read(buffer));
+        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer), version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     @Override

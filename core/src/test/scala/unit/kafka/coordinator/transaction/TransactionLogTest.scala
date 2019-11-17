@@ -22,11 +22,11 @@ import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryReco
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 
-class TransactionLogTest extends JUnitSuite {
+class TransactionLogTest {
 
   val producerEpoch: Short = 0
   val transactionTimeoutMs: Int = 1000
@@ -38,7 +38,7 @@ class TransactionLogTest extends JUnitSuite {
     new TopicPartition("topic2", 2))
 
   @Test
-  def shouldThrowExceptionWriteInvalidTxn() {
+  def shouldThrowExceptionWriteInvalidTxn(): Unit = {
     val transactionalId = "transactionalId"
     val producerId = 23423L
 
@@ -51,7 +51,7 @@ class TransactionLogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldReadWriteMessages() {
+  def shouldReadWriteMessages(): Unit = {
     val pidMappings = Map[String, Long]("zero" -> 0L,
       "one" -> 1L,
       "two" -> 2L,
