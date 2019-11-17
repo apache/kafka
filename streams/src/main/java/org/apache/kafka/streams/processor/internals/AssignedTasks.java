@@ -70,9 +70,8 @@ abstract class AssignedTasks<T extends Task> {
                 final T task = entry.getValue();
                 task.initializeMetadata();
 
-                // pass in created as the "newState" to avoid ConcurrentModificationException
+                // don't remove from created until the task has been successfully initialized
                 removeTaskFromAllStateMaps(task, created);
-                it.remove();
 
                 if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
@@ -80,6 +79,8 @@ abstract class AssignedTasks<T extends Task> {
                 } else {
                     transitionToRunning(task);
                 }
+
+                it.remove();
             } catch (final LockException e) {
                 // If this is a permanent error, then we could spam the log since this is in the run loop. But, other related
                 // messages show up anyway. So keeping in debug for sake of faster discoverability of problem
