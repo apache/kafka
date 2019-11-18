@@ -25,7 +25,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
-import integration.kafka.api.BaseAdminIntegrationTest
 import kafka.log.LogConfig
 import kafka.security.auth.Group
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}

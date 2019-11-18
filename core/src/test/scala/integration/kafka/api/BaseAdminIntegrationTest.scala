@@ -14,16 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.api
+package kafka.api
 
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import kafka.api.IntegrationTestHarness
 import kafka.security.auth.{Cluster, Topic}
 import kafka.server.KafkaConfig
-import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
