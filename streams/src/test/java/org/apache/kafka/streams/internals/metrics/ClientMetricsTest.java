@@ -28,7 +28,7 @@ import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
 public class ClientMetricsTest {
-    private static final String COMMIT_ID = "t35tc0441t";
+    private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
