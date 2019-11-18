@@ -358,10 +358,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
   }
 
-  def lookupLastOffset(tp: TopicPartition): Option[Long] = {
-    rlmIndexer.lookupLastOffset(tp)
-  }
-
   def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
     val offset = fetchInfo.fetchOffset
     val entry = rlmIndexer.lookupEntryForOffset(tp, offset)

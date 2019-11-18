@@ -326,20 +326,12 @@ abstract class AbstractFetcherThread(name: String,
                       fetcherLagStats.getAndMaybePut(topicPartition).lag = lag
 
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
-                      if (partitionStates.contains(topicPartition)) {
-                        // check the response indicates to ignore the current payload and fetch the
-                        // nextoffset available in the local log.
-                        if (partitionData.isValidNextLocalOffset) {
-                          val newFetchState = PartitionFetchState(partitionData.nextLocalOffset, Some(lag),
-                            currentFetchState.currentLeaderEpoch, state = Fetching)
-                          partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
-                        } else  if (validBytes > 0 && partitionStates.contains(topicPartition)) {
+                      if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState(nextOffset, Some(lag),
                             currentFetchState.currentLeaderEpoch, state = Fetching)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                           fetcherStats.byteRate.mark(validBytes)
-                        }
                       }
                     }
                   } catch {

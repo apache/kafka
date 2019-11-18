@@ -1600,7 +1600,9 @@ class Log(@volatile var dir: File,
 
       if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
         targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
-        targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP)
+        targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP &&
+        targetTimestamp != ListOffsetRequest.NEXT_LOCAL_TIMESTAMP
+      )
         throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $KAFKA_0_10_0_IV0")
@@ -1608,8 +1610,11 @@ class Log(@volatile var dir: File,
       // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
       // constant time access while being safe to use with concurrent collections unlike `toArray`.
       val segmentsCopy = logSegments.toBuffer
+
       // For the earliest and latest, we do not need to return the timestamp.
-      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP) {
+      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP ||
+        (!remoteLogEnabled && targetTimestamp == ListOffsetRequest.NEXT_LOCAL_TIMESTAMP)) {
+        // If remote log is not enabled, NEXT_LOCAL_TIMESTAMP is same with EARLIEST_TIMESTAMP
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
@@ -1619,6 +1624,11 @@ class Log(@volatile var dir: File,
           case _ => Optional.empty[Integer]()
         }
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
+      } else if (targetTimestamp == ListOffsetRequest.NEXT_LOCAL_TIMESTAMP) {
+        // NEXT_LOCAL_TIMESTAMP is only used by follower brokers, to find out the offset that they
+        // should start fetching from. Since the followers do not need the epoch, we can return
+        // an empty epoch here to keep things simple.
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, highestOffsetWithRemoteIndex, Optional.empty[Integer]()))
       } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)

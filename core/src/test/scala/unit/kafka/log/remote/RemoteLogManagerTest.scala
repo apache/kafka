@@ -118,7 +118,7 @@ class RemoteLogManagerTest {
     def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
 
     // this should initialize RSM
-    val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time)
+    new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time)
 
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
     assertEquals(MockRemoteStorageManager.configs.get(KafkaConfig.RemoteLogRetentionBytesProp),
@@ -131,7 +131,6 @@ class RemoteLogManagerTest {
   def testRemoteLogRecordsFetch() {
     val lastOffset = 5
     // return the lastOffset to verify when out of range offsets are requested.
-    EasyMock.expect(rlmMock.lookupLastOffset(EasyMock.anyObject())).andReturn(Some(lastOffset)).anyTimes()
     EasyMock.expect(rlmMock.close()).anyTimes()
     EasyMock.replay(rlmMock)
 
@@ -169,8 +168,6 @@ class RemoteLogManagerTest {
     }
 
     val logReadResult_0 = logReadResultFor(0L)
-    // check that for local records retrieved, nextLocalOffset should be none.
-    assertTrue(logReadResult_0.nextLocalOffset.isEmpty)
     val receivedRecords = logReadResult_0.info.records
     // check the records are same
     val result = new util.ArrayList[SimpleRecord]()
@@ -184,7 +181,6 @@ class RemoteLogManagerTest {
     // fetching offsets beyond local log would result in fetching from remote log, it is mocked to return lastOffset,
     //nextLocalOffset should be lastOffset +1
     val logReadResult = logReadResultFor(outOfRangeOffset)
-    assertEquals(logReadResult.nextLocalOffset, Some(lastOffset + 1))
     // fetch response should have no records as it is to indicate that the requested fetch messages are in
     // remote tier and the next offset available locally is sent as `nextLocalOffset` so that follower replica can
     // start fetching that for local storage.

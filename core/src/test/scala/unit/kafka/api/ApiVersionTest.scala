@@ -96,6 +96,9 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4"))
     assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4-IV0"))
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4-IV1"))
+
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5"))
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5-IV0"))
   }
 
   @Test
@@ -140,6 +143,7 @@ class ApiVersionTest {
     assertEquals("2.3", KAFKA_2_3_IV0.shortVersion)
     assertEquals("2.3", KAFKA_2_3_IV1.shortVersion)
     assertEquals("2.4", KAFKA_2_4_IV0.shortVersion)
+    assertEquals("2.5", KAFKA_2_5_IV0.shortVersion)
   }
 
   @Test

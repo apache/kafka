@@ -39,6 +39,7 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class ListOffsetRequest extends AbstractRequest {
+    public static final long NEXT_LOCAL_TIMESTAMP = -3L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
 
@@ -121,9 +122,12 @@ public class ListOffsetRequest extends AbstractRequest {
     // V5 bump to include new possible error code (OFFSET_NOT_AVAILABLE)
     private static final Schema LIST_OFFSET_REQUEST_V5 = LIST_OFFSET_REQUEST_V4;
 
+    // V6 bump to include supporting NEXT_LOCAL_TIMESTAMP
+    private static final Schema LIST_OFFSET_REQUEST_V6 = LIST_OFFSET_REQUEST_V5;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
-            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5};
+            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5, LIST_OFFSET_REQUEST_V6};
     }
 
     private final int replicaId;

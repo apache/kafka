@@ -42,7 +42,6 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.requests.FetchMetadata.FINAL_EPOCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.apache.kafka.common.requests.FetchResponse.INVALID_NEXT_LOCAL_OFFSET;
 
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
@@ -209,13 +208,10 @@ public class FetchRequest extends AbstractRequest {
             FORGOTTEN_TOPIC_DATA_V7,
             RACK_ID);
 
-    // V12 bumpedup to support next local offset in fetch protocol
-    private static final Schema FETCH_REQUEST_V12 = FETCH_REQUEST_V11;
-
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
             FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7, FETCH_REQUEST_V8, FETCH_REQUEST_V9,
-            FETCH_REQUEST_V10, FETCH_REQUEST_V11, FETCH_REQUEST_V12};
+            FETCH_REQUEST_V10, FETCH_REQUEST_V11};
     }
 
     // default values for older versions where a request level limit did not exist
@@ -465,7 +461,7 @@ public class FetchRequest extends AbstractRequest {
             FetchResponse.PartitionData<MemoryRecords> partitionResponse = new FetchResponse.PartitionData<>(error,
                     FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
                     FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null,
-                    MemoryRecords.EMPTY, INVALID_NEXT_LOCAL_OFFSET);
+                    MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
         return new FetchResponse<>(error, responseData, throttleTimeMs, metadata.sessionId());

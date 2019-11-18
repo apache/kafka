@@ -44,7 +44,7 @@
   // Version 10 indicates that we can use the ZStd compression algorithm, as
   // described in KIP-110.
   //
-  "validVersions": "0-12",
+  "validVersions": "0-11",
   "flexibleVersions": "none",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+",

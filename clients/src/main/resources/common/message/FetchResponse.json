@@ -38,7 +38,7 @@
   // Version 10 indicates that the response data can use the ZStd compression
   // algorithm, as described in KIP-110.
   //
-  "validVersions": "0-12",
+  "validVersions": "0-11",
   "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -63,8 +63,6 @@
           "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The current log start offset." },
-        {"name":  "NextLocalOffset", "type": "int64", "versions": "12+", "default": "-1", "ignorable": true,
-          "about":  "Next local offset available on leader when tiered storage is enabled for a topic."},
         { "name": "Aborted", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": false,
           "about": "The aborted transactions.",  "fields": [
           { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",

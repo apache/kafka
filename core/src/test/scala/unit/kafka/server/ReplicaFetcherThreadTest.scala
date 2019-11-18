@@ -812,7 +812,7 @@ class ReplicaFetcherThreadTest {
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
 
     val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
-      Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records, FetchResponse.INVALID_NEXT_LOCAL_OFFSET)
+      Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
     thread.processPartitionData(t1p0, 0, partitionData)
 
     if (isReassigning)

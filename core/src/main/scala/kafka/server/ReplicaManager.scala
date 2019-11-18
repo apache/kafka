@@ -97,7 +97,6 @@ case class LogReadResult(info: FetchDataInfo,
                          fetchTimeMs: Long,
                          readSize: Int,
                          lastStableOffset: Option[Long],
-                         nextLocalOffset: Option[Long] = None,
                          preferredReadReplica: Option[Int] = None,
                          followerNeedsHwUpdate: Boolean = false,
                          exception: Option[Throwable] = None) {
@@ -121,7 +120,6 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               logStartOffset: Long,
                               records: Records,
                               lastStableOffset: Option[Long],
-                              nextLocalOffset: Option[Long] = None,
                               abortedTransactions: Option[List[AbortedTransaction]],
                               preferredReadReplica: Option[Int],
                               isReassignmentFetch: Boolean)
@@ -937,7 +935,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.nextLocalOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
       }
       maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {
@@ -974,7 +972,7 @@ class ReplicaManager(val config: KafkaConfig,
                   result
               }
               tp -> FetchPartitionData(r.error, r.highWatermark, r.leaderLogStartOffset, r.info.records,
-                r.lastStableOffset, r.nextLocalOffset, r.info.abortedTransactions, r.preferredReadReplica, false)
+                r.lastStableOffset, r.info.abortedTransactions, r.preferredReadReplica, false)
             }
             responseCallback(fetchPartitionData)
             return
@@ -1126,7 +1124,7 @@ class ReplicaManager(val config: KafkaConfig,
           // NotLeaderForPartitionException or ReplicaNotAvailableException.
           // If it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
-          if (remoteLogManager.isDefined && log != null && !log.config.compact) {
+          if (remoteLogManager.isDefined && log != null && !log.config.compact && !Request.isValidBrokerId(replicaId)) {
             val rlm = remoteLogManager.get
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
@@ -1134,21 +1132,7 @@ class ReplicaManager(val config: KafkaConfig,
             val fetchTimeMs = time.milliseconds
             val readSize = adjustedMaxBytes
             val lastStableOffset = Some(log.lastStableOffset)
-            var error: Option[Throwable] = None
-            var nextLocalOffset: Option[Long] = None
-            val isFollowerRequest = Request.isValidBrokerId(replicaId)
-            val fetchDataInfo = if (isFollowerRequest) {
-              // send the offset to follower broker
-              val mayBeLastOffset = rlm.lookupLastOffset(tp)
-              if (mayBeLastOffset.isEmpty) {
-                error = Some(new OffsetOutOfRangeException(
-                  s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
-              } else {
-                nextLocalOffset = Some(mayBeLastOffset.get + 1)
-              }
-
-              FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset, -1L, -1), MemoryRecords.EMPTY)
-            } else {
+            val fetchDataInfo = {
               // create a dummy FetchDataInfo with the remote storage fetch information
               // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
               // For the following topic-partitions, we return an empty record set
@@ -1159,20 +1143,15 @@ class ReplicaManager(val config: KafkaConfig,
                   RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo)))
             }
 
-            if (error.isDefined) {
-              createLogReadResult(error.get)
-            } else {
-              LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
-                highWatermark,
-                leaderLogStartOffset,
-                leaderLogEndOffset,
-                followerLogStartOffset,
-                fetchTimeMs,
-                readSize,
-                lastStableOffset,
-                nextLocalOffset,
-                exception = None)
-            }
+            LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
+              highWatermark,
+              leaderLogStartOffset,
+              leaderLogEndOffset,
+              followerLogStartOffset,
+              fetchTimeMs,
+              readSize,
+              lastStableOffset,
+              exception = None)
           } else {
             createLogReadResult(e)
           }
