@@ -29,14 +29,14 @@ import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{AppendOrigin, Log, LogAppendInfo}
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
+import kafka.server._
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -57,7 +57,7 @@ class GroupMetadataManagerTest {
   var replicaManager: ReplicaManager = null
   var groupMetadataManager: GroupMetadataManager = null
   var scheduler: KafkaScheduler = null
-  var zkClient: KafkaZkClient = null
+  var controllerChannel: BrokerToControllerChannelManager = _
   var partition: Partition = null
   var defaultOffsetRetentionMs = Long.MaxValue
   var metrics: kMetrics = null
@@ -89,14 +89,16 @@ class GroupMetadataManagerTest {
     defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
+    controllerChannel = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
+    val result = new KafkaFutureImpl[Int]()
+    result.complete(2)
+    EasyMock.expect(controllerChannel.getPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(result)
+    EasyMock.replay(controllerChannel)
 
     metrics = new kMetrics()
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time, metrics)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, controllerChannel, time, metrics)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 

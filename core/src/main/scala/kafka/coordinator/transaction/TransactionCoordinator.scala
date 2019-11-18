@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
+import kafka.server._
 import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -36,6 +36,7 @@ object TransactionCoordinator {
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
             zkClient: KafkaZkClient,
+            controllerChannel: BrokerToControllerChannelManager,
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
@@ -52,7 +53,7 @@ object TransactionCoordinator {
       config.requestTimeoutMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkClient)
-    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
+    val txnStateManager = new TransactionStateManager(config.brokerId, controllerChannel, scheduler, replicaManager, txnConfig,
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")

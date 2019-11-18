@@ -25,7 +25,7 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
@@ -72,10 +72,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
+    val result = new KafkaFutureImpl[Int]()
+    result.complete(2)
+    EasyMock.expect(controllerChannel.getPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
+      .andReturn(result)
       .anyTimes()
-    EasyMock.replay(zkClient)
+    EasyMock.replay(controllerChannel)
 
     serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
@@ -86,7 +88,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator = GroupCoordinator(config, controllerChannel, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
   }
 

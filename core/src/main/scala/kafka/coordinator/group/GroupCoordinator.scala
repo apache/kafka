@@ -1241,13 +1241,13 @@ object GroupCoordinator {
   val NewMemberJoinTimeoutMs: Int = 5 * 60 * 1000
 
   def apply(config: KafkaConfig,
-            zkClient: KafkaZkClient,
+            controllerChannel: BrokerToControllerChannelManager,
             replicaManager: ReplicaManager,
             time: Time,
             metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    apply(config, controllerChannel, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1264,7 +1264,7 @@ object GroupCoordinator {
   )
 
   def apply(config: KafkaConfig,
-            zkClient: KafkaZkClient,
+            controllerChannel: BrokerToControllerChannelManager,
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
@@ -1277,7 +1277,7 @@ object GroupCoordinator {
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, zkClient, time, metrics)
+      offsetConfig, replicaManager, controllerChannel, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 

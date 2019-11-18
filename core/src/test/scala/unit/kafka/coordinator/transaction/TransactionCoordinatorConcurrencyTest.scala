@@ -26,13 +26,14 @@ import kafka.log.Log
 import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -66,12 +67,14 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    val result = new KafkaFutureImpl[Int]()
+    result.complete(numPartitions)
+    EasyMock.expect(controllerChannel.getPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+        .andReturn(result)
+        .anyTimes()
+    EasyMock.replay(controllerChannel)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
+    txnStateManager = new TransactionStateManager(0, controllerChannel, scheduler, replicaManager, txnConfig, time,
       new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())

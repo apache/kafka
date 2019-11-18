@@ -35,6 +35,24 @@ class BrokerToControllerChannelManager(metadataCache: MetadataCache,
     requestThread.awaitShutdown()
   }
 
+  def getPartitionCount(topicName: String): KafkaFuture[Int] = {
+    val topic = new MetadataRequestTopic().setName(Topic.GROUP_METADATA_TOPIC_NAME)
+    val completionFuture = new KafkaFutureImpl[Int]
+    sendRequest(new MetadataRequest.Builder(
+      new MetadataRequestData().setTopics(Collections.singletonList(topic))), response => {
+      val metadataResponse = response.asInstanceOf[MetadataResponse]
+      val topicOpt = metadataResponse.topicMetadata().asScala.find(t => topicName.equals(t.topic))
+      if (topicOpt.isEmpty) {
+        completionFuture.completeExceptionally(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception)
+      } else if (topicOpt.get.error != Errors.NONE) {
+        completionFuture.completeExceptionally(topicOpt.get.error.exception)
+      } else {
+        completionFuture.complete(topicOpt.get.partitionMetadata.size)
+      }
+    })
+    completionFuture
+  }
+
   private[server] def newRequestThread = {
     val brokerToControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
     val brokerToControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)

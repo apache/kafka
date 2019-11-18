@@ -30,10 +30,9 @@ import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KA
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchLogEnd, ReplicaManager}
+import kafka.server.{BrokerToControllerChannelManager, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -57,7 +56,7 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            replicaManager: ReplicaManager,
-                           zkClient: KafkaZkClient,
+                           controllerChannel: BrokerToControllerChannelManager,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
@@ -78,7 +77,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  private lazy val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -922,11 +921,11 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   /**
-   * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
+   * Gets the partition count of the group metadata topic from the active controller.
+   * The topic will be created if it doesn't exist yet based on the broker settings.
    */
   private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
+    controllerChannel.getPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).get
   }
 
   /**

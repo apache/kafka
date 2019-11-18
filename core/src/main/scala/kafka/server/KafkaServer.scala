@@ -298,12 +298,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* start group coordinator */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-        groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, Time.SYSTEM, metrics)
+        groupCoordinator = GroupCoordinator(config, controllerChannel, replicaManager, Time.SYSTEM, metrics)
         groupCoordinator.startup()
 
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
-        transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"), zkClient, metrics, metadataCache, Time.SYSTEM)
+        transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1,
+          threadNamePrefix = "transaction-log-manager-"), zkClient, controllerChannel, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/

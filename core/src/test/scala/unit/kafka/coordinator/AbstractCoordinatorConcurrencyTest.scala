@@ -48,6 +48,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val scheduler = new MockScheduler(time)
   var replicaManager: TestReplicaManager = _
   var zkClient: KafkaZkClient = _
+  var controllerChannel: BrokerToControllerChannelManager = _
   val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
   val random = new Random
 
@@ -58,6 +59,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     replicaManager.createDelayedProducePurgatory(timer)
 
     zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    controllerChannel = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
   }
 
   @After

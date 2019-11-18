@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.UncompressedCodec
-import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
+import kafka.server.{BrokerToControllerChannelManager, Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
@@ -68,7 +68,7 @@ object TransactionStateManager {
  * </ul>
  */
 class TransactionStateManager(brokerId: Int,
-                              zkClient: KafkaZkClient,
+                              controllerChannel: BrokerToControllerChannelManager,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
@@ -92,7 +92,7 @@ class TransactionStateManager(brokerId: Int,
   private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
-  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+  private lazy val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
   /** setup metrics*/
   private val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
@@ -277,7 +277,7 @@ class TransactionStateManager(brokerId: Int,
    * If the topic does not exist, the default partition count is returned.
    */
   private def getTransactionTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
+    controllerChannel.getPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).get
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
