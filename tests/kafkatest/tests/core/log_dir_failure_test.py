@@ -76,7 +76,8 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
                                       [config_property.OFFSETS_TOPIC_NUM_PARTITIONS, "1"],
                                       [config_property.LOG_FLUSH_INTERVAL_MESSAGE, "5"],
                                       [config_property.REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS, "60000"],
-                                      [config_property.LOG_ROLL_TIME_MS, "3000"]
+                                      [config_property.LOG_ROLL_TIME_MS, "3000"],
+                                      ["confluent.support.metrics.enable", "false"]
                                   ])
 
         self.producer_throughput = 1000
