@@ -56,6 +56,9 @@ object AclAuthorizer {
   val SuperUsersProp = "super.users"
   // If set to true when no acls are found for a resource, authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
+  //If you just run AclCommand,use this switch to avoid loading all ACL cache
+  val LoadAclCacheSwitchProp = "load.cache.switch"
+  val DefaultLoadAclCache = "true"
 
   case class VersionedAcls(acls: Set[Acl], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
@@ -112,10 +115,13 @@ class AclAuthorizer extends Authorizer with Logging {
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
 
+    /** ********* If you just run AclCommand,use this switch to avoid loading all ACL cache ********* */
+    val loadCacheSwitch =configs.getOrElse(AclAuthorizer.LoadAclCacheSwitchProp,AclAuthorizer.DefaultLoadAclCache)
+
     // Start change listeners first and then populate the cache so that there is no timing window
     // between loading cache and processing change notifications.
     startZkChangeListeners()
-    loadCache()
+    if (AclAuthorizer.DefaultLoadAclCache.equals(loadCacheSwitch)) loadCache()
   }
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {

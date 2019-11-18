@@ -22,7 +22,7 @@ import java.util.Properties
 import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.auth._
-import kafka.security.authorizer.AuthorizerUtils
+import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AdminClient => JAdminClient}
@@ -195,13 +195,16 @@ object AclCommand extends Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
-      val authorizerProperties =
+      var authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
           defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
         } else {
           defaultProps
         }
+
+      val loadAclCache = opts.options.valueOf(opts.loadAclCacheOpt)
+      authorizerProperties += (AclAuthorizer.LoadAclCacheSwitchProp->loadAclCache)
 
       val authZ = Utils.newInstance(authorizerClass)
       try {
@@ -584,6 +587,12 @@ object AclCommand extends Logging {
       .withOptionalArg()
       .describedAs("command-config")
       .ofType(classOf[String])
+
+    val loadAclCacheOpt = parser.accepts("load-acl-cache", "If you just run AclCommand,use this switch to avoid loading all ACL cache.")
+      .withRequiredArg
+      .describedAs("load-acl-cache")
+      .ofType(classOf[String])
+      .defaultsTo("true")
 
     val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.auth.SimpleAclAuthorizer.")
       .withRequiredArg
