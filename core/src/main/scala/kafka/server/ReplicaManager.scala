@@ -466,7 +466,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getPartitionOrException(topicPartition: TopicPartition, expectLeader: Boolean): Partition = {
     getPartitionOrError(topicPartition, expectLeader) match {
-      case Left(error) => throw error.exception(s"Failed to get Partition $topicPartition")
+      case Left(Errors.KAFKA_STORAGE_ERROR) =>
+        throw new KafkaStorageException(s"Partition $topicPartition is in an offline log directory")
+
+      case Left(error) =>
+        throw error.exception(s"Error while fetching partition state for $topicPartition")
+
       case Right(partition) => partition
     }
   }
