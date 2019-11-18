@@ -17,6 +17,7 @@
 package integration.kafka.api
 
 import java.util
+import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import kafka.api.IntegrationTestHarness
@@ -45,9 +46,8 @@ import scala.compat.java8.OptionConverters._
  * authentication/authorization layers, we may add the test case here.
  */
 abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logging {
-  val brokerCount = 3
-  val consumerCount = 1
-  val producerCount = 1
+  def brokerCount = 3
+  override def logDirCount = 2
 
   var client: Admin = _
 
@@ -187,14 +187,9 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     Cluster.supportedOperations.map(operation => operation.toJava)
   }
 
-  override def generateConfigs: Seq[KafkaConfig] = {
-    val cfgs = createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
-    cfgs.foreach { config =>
-      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:$RandomPort")
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+  override def modifyConfigs(configs: Seq[Properties]): Unit = {
+    super.modifyConfigs(configs)
+    configs.foreach { config =>
       config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
@@ -204,8 +199,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
         config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
     }
-    cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
   }
 
   def createConfig(): util.Map[String, Object] = {
