@@ -27,7 +27,9 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.InternalProcessorContextMock;
+import org.apache.kafka.test.MockInternalProcessorContext;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -43,49 +45,55 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, ValueAndTimestamp<String>> logged = new HashMap<>();
     private final Map<Integer, Headers> loggedHeaders = new HashMap<>();
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
-        StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-        new RecordCollectorImpl(
-            "StoreChangeLoggerTest",
-            new LogContext("StoreChangeLoggerTest "),
-            new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("dropped-records")
-        ) {
-            @Override
-            public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Integer partition,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer) {
-                logged.put((Integer) key, ValueAndTimestamp.make((String) value, timestamp));
-                loggedHeaders.put((Integer) key, headers);
-            }
+    private InternalProcessorContextMock context;
 
-            @Override
-            public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer,
-                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
-                throw new UnsupportedOperationException();
-            }
-        }
-    );
+    private StoreChangeLogger<Integer, String> changeLogger;
 
-    private final StoreChangeLogger<Integer, String> changeLogger =
-        new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    @Before
+    public void setUp() {
+        context = MockInternalProcessorContext.builder(
+                StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
+                new RecordCollectorImpl(
+                        "StoreChangeLoggerTest",
+                        new LogContext("StoreChangeLoggerTest "),
+                        new DefaultProductionExceptionHandler(),
+                        new Metrics().sensor("dropped-records")
+                ) {
+                    @Override
+                    public <K1, V1> void send(final String topic,
+                                              final K1 key,
+                                              final V1 value,
+                                              final Headers headers,
+                                              final Integer partition,
+                                              final Long timestamp,
+                                              final Serializer<K1> keySerializer,
+                                              final Serializer<V1> valueSerializer) {
+                        logged.put((Integer) key, ValueAndTimestamp.make((String) value, timestamp));
+                        loggedHeaders.put((Integer) key, headers);
+                    }
+
+                    @Override
+                    public <K1, V1> void send(final String topic,
+                                              final K1 key,
+                                              final V1 value,
+                                              final Headers headers,
+                                              final Long timestamp,
+                                              final Serializer<K1> keySerializer,
+                                              final Serializer<V1> valueSerializer,
+                                              final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                        throw new UnsupportedOperationException();
+                    }
+                }
+        ).build();
+        changeLogger = new StoreChangeLogger<>(topic, context,
+                StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    }
 
     @Test
     public void testAddRemove() {
-        context.setTime(1);
+        context.setTimestamp(1);
         changeLogger.logChange(0, "zero");
-        context.setTime(5);
+        context.setTimestamp(5);
         changeLogger.logChange(1, "one");
         changeLogger.logChange(2, "two");
         changeLogger.logChange(3, "three", 42L);

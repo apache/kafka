@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
@@ -58,36 +58,40 @@ public class RecordQueueTest {
 
     private final Sensor droppedRecordsSensor = new Metrics().sensor("skipped-records");
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
-        StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
-        new RecordCollectorImpl(
-            null,
-            new LogContext("record-queue-test "),
-            new DefaultProductionExceptionHandler(),
-            droppedRecordsSensor
-        )
-    );
+    InternalProcessorContext context;
+
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
-    private final RecordQueue queue = new RecordQueue(
-        new TopicPartition(topics[0], 1),
-        mockSourceNodeWithMetrics,
-        timestampExtractor,
-        new LogAndFailExceptionHandler(),
-        context,
-        new LogContext());
-    private final RecordQueue queueThatSkipsDeserializeErrors = new RecordQueue(
-        new TopicPartition(topics[0], 1),
-        mockSourceNodeWithMetrics,
-        timestampExtractor,
-        new LogAndContinueExceptionHandler(),
-        context,
-        new LogContext());
+    private RecordQueue queue;
+    private RecordQueue queueThatSkipsDeserializeErrors;
 
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     @Before
     public void before() {
+        context = MockInternalProcessorContext.builder(
+                StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
+                new RecordCollectorImpl(
+                        null,
+                        new LogContext("record-queue-test "),
+                        new DefaultProductionExceptionHandler(),
+                        droppedRecordsSensor
+                )
+        ).build();
+        queue = new RecordQueue(
+                new TopicPartition(topics[0], 1),
+                mockSourceNodeWithMetrics,
+                timestampExtractor,
+                new LogAndFailExceptionHandler(),
+                context,
+                new LogContext());
+        queueThatSkipsDeserializeErrors = new RecordQueue(
+                new TopicPartition(topics[0], 1),
+                mockSourceNodeWithMetrics,
+                timestampExtractor,
+                new LogAndContinueExceptionHandler(),
+                context,
+                new LogContext());
         mockSourceNodeWithMetrics.init(context);
     }
 
@@ -285,7 +289,7 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new FailOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+            MockInternalProcessorContext.builder().build(),
             new LogContext());
 
         queue.addRawRecords(records);
@@ -301,7 +305,7 @@ public class RecordQueueTest {
             new MockSourceNode<>(topics, intDeserializer, intDeserializer),
             new LogAndSkipOnInvalidTimestamp(),
             new LogAndContinueExceptionHandler(),
-            new InternalMockProcessorContext(),
+                MockInternalProcessorContext.builder().build(),
             new LogContext());
         queue.addRawRecords(records);
 

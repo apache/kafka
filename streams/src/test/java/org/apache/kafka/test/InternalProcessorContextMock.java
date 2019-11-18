@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.util.List;
 
-/**
- * InternalProcessorContextMock interface contains methods useful in testing
- */
 public interface InternalProcessorContextMock extends InternalProcessorContext, RecordCollector.Supplier {
 
     void setRecordCollector(final RecordCollector recordCollector);
@@ -33,4 +33,15 @@ public interface InternalProcessorContextMock extends InternalProcessorContext, 
     StateRestoreCallback stateRestoreCallback(final String storeName);
 
     List<MockProcessorContext.CapturedForward> forwarded();
+
+    void setTimestamp(final long timestamp);
+
+    void setKeySerde(final Serde<?> keySerde);
+
+    void setValueSerde(final Serde<?> valSerde);
+
+    StateRestoreListener getRestoreListener(final String storeName);
+
+    void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog);
+
 }

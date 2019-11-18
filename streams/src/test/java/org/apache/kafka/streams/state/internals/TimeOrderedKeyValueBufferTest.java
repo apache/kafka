@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.InternalProcessorContextMock;
-import org.apache.kafka.test.InternalProcessorContextMockFactory;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -103,9 +103,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 
-        final InternalProcessorContextMock context = InternalProcessorContextMockFactory.getInstance(properties);
+        final InternalProcessorContextMock context = MockInternalProcessorContext
+                .builder(properties)
+                .build();
         context.setRecordCollector(new MockRecordCollector());
-
         return context;
     }
 

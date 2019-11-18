@@ -46,7 +46,6 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingT
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,7 +82,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             stateDir,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            new StreamsMetricsImpl(new Metrics(), "mock",
+                    config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
             config,
             null,
             null
@@ -249,14 +249,14 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @SuppressWarnings("unchecked")
     @Override
-    @Deprecated
+    @Deprecated // Yes but deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    @Deprecated
+    @Deprecated // Yes but deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value, To.child(childName));
     }
@@ -266,7 +266,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     public <K, V> void forward(final K key, final V value, final To to) {
         toInternal.update(to);
         if (toInternal.hasTimestamp()) {
-            setTime(toInternal.timestamp());
+            setTimestamp(toInternal.timestamp());
         }
         final ProcessorNode thisNode = currentNode;
         try {
@@ -284,7 +284,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     // allow only setting time but not other fields in for record context,
     // and also not throwing exceptions if record context is not available.
-    public void setTime(final long timestamp) {
+    public void setTimestamp(final long timestamp) {
         if (recordContext != null) {
             recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic(), recordContext.headers());
         }
@@ -331,10 +331,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return recordContext.headers();
     }
 
-    Map<String, StateStore> allStateStores() {
-        return Collections.unmodifiableMap(storeMap);
-    }
-
+    // TODO(pierdipi)
     public StateRestoreListener getRestoreListener(final String storeName) {
         return getStateRestoreListener(restoreFuncs.get(storeName));
     }

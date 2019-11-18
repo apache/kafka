@@ -28,23 +28,26 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.ToInternal;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.InternalProcessorContextMock;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.Capture;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -87,7 +90,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final List<KeyValueTimestamp> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
-    private InternalMockProcessorContext context;
+    private InternalProcessorContextMock context;
     private Metrics metrics;
 
     @Before
@@ -95,25 +98,36 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final File stateDir = TestUtils.tempDirectory();
         metrics = new Metrics();
         final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
-
-        context = new InternalMockProcessorContext(
-            stateDir,
-            Serdes.String(),
-            Serdes.String(),
-            metrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
-        ) {
-            @Override
-            public <K, V> void forward(final K key, final V value, final To to) {
-                toInternal.update(to);
-                results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
-            }
-        };
-
+        context = getInternalProcessorContext(stateDir, metrics);
         initStore(true);
         processor.init(context);
+    }
+
+    private InternalProcessorContextMock getInternalProcessorContext(final File stateDir, final StreamsMetricsImpl metrics) {
+        final MockInternalProcessorContext.Builder contextBuilder = MockInternalProcessorContext.builder(
+                stateDir,
+                Serdes.String(),
+                Serdes.String(),
+                metrics,
+                new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+                NoOpRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 100000, metrics)
+        );
+        final MockInternalProcessorContext.ExpectedAnswers expectedAnswers = contextBuilder.expectedAnswers();
+        expectedAnswers.setForwardKeyValueTo(internalProcessorContext -> {
+            final Capture<?> keyCapture = expectedAnswers.getCaptures().getKey();
+            final Capture<?> valueCapture = expectedAnswers.getCaptures().getValue();
+            final Capture<To> toCapture = expectedAnswers.getCaptures().getTo();
+            return () -> {
+                toInternal.update(toCapture.getValue());
+                results.add(new KeyValueTimestamp<>(
+                        keyCapture.getValue(),
+                        valueCapture.getValue(),
+                        toInternal.timestamp()));
+                return null;
+            };
+        });
+        return contextBuilder.build();
     }
 
     private void initStore(final boolean enableCaching) {
@@ -139,9 +153,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldCreateSingleSessionWhenWithinGap() {
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("john", "first");
-        context.setTime(500);
+        context.setTimestamp(500);
         processor.process("john", "second");
 
         final KeyValueIterator<Windowed<String>, Long> values =
@@ -152,19 +166,19 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldMergeSessions() {
-        context.setTime(0);
+        context.setTimestamp(0);
         final String sessionId = "mel";
         processor.process(sessionId, "first");
         assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
 
         // move time beyond gap
-        context.setTime(GAP_MS + 1);
+        context.setTimestamp(GAP_MS + 1);
         processor.process(sessionId, "second");
         assertTrue(sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1).hasNext());
         // should still exist as not within gap
         assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
         // move time back
-        context.setTime(GAP_MS / 2);
+        context.setTimestamp(GAP_MS / 2);
         processor.process(sessionId, "third");
 
         final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -177,7 +191,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldUpdateSessionIfTheSameTime() {
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("mel", "first");
         processor.process("mel", "second");
         final KeyValueIterator<Windowed<String>, Long> iterator =
@@ -190,12 +204,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldHaveMultipleSessionsForSameIdWhenTimestampApartBySessionGap() {
         final String sessionId = "mel";
         long time = 0;
-        context.setTime(time);
+        context.setTimestamp(time);
         processor.process(sessionId, "first");
-        context.setTime(time += GAP_MS + 1);
+        context.setTimestamp(time += GAP_MS + 1);
         processor.process(sessionId, "second");
         processor.process(sessionId, "second");
-        context.setTime(time += GAP_MS + 1);
+        context.setTimestamp(time += GAP_MS + 1);
         processor.process(sessionId, "third");
         processor.process(sessionId, "third");
         processor.process(sessionId, "third");
@@ -223,7 +237,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldRemoveMergedSessionsFromStateStore() {
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("a", "1");
 
         // first ensure it is in the store
@@ -231,7 +245,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionStore.findSessions("a", 0, 0);
         assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a1.next());
 
-        context.setTime(100);
+        context.setTimestamp(100);
         processor.process("a", "2");
         // a1 from above should have been removed
         // should have merged session in store
@@ -243,17 +257,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @Test
     public void shouldHandleMultipleSessionsAndMerging() {
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("a", "1");
         processor.process("b", "1");
         processor.process("c", "1");
         processor.process("d", "1");
-        context.setTime(GAP_MS / 2);
+        context.setTimestamp(GAP_MS / 2);
         processor.process("d", "2");
-        context.setTime(GAP_MS + 1);
+        context.setTimestamp(GAP_MS + 1);
         processor.process("a", "2");
         processor.process("b", "2");
-        context.setTime(GAP_MS + 1 + GAP_MS / 2);
+        context.setTimestamp(GAP_MS + 1 + GAP_MS / 2);
         processor.process("a", "3");
         processor.process("c", "3");
 
@@ -298,9 +312,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldGetAggregatedValuesFromValueGetter() {
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
         getter.init(context);
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("a", "1");
-        context.setTime(GAP_MS + 1);
+        context.setTimestamp(GAP_MS + 1);
         processor.process("a", "1");
         processor.process("a", "2");
         final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0))).value();
@@ -314,7 +328,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         initStore(false);
         processor.init(context);
 
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("a", "1");
         processor.process("b", "1");
         processor.process("c", "1");
@@ -343,9 +357,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
         initStore(false);
         processor.init(context);
 
-        context.setTime(0);
+        context.setTimestamp(0);
         processor.process("a", "1");
-        context.setTime(5);
+        context.setTimestamp(5);
         processor.process("a", "1");
         assertEquals(
             Arrays.asList(
@@ -378,7 +392,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final String builtInMetricsVersion) {
-        final InternalMockProcessorContext context =
+        final InternalProcessorContext context =
             createInternalMockProcessorContext(builtInMetricsVersion);
         processor.init(context);
         context.setRecordContext(
@@ -405,23 +419,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         );
     }
 
-    private InternalMockProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
+    private InternalProcessorContext createInternalMockProcessorContext(final String builtInMetricsVersion) {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.String(),
-            streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
-        ) {
-            @Override
-            public <K, V> void forward(final K key, final V value, final To to) {
-                toInternal.update(to);
-                results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
-            }
-        };
+        final File stateDir = TestUtils.tempDirectory();
+        final InternalProcessorContext context = getInternalProcessorContext(stateDir, streamsMetrics);
         TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
         final StoreBuilder<SessionStore<String, Long>> storeBuilder =
             Stores.sessionStoreBuilder(

@@ -35,7 +35,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.InternalProcessorContextMock;
-import org.apache.kafka.test.InternalProcessorContextMockFactory;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
@@ -84,7 +84,8 @@ public class KTableSuppressProcessorTest {
             final Processor<K, Change<V>> processor =
                 new KTableSuppressProcessorSupplier<>((SuppressedInternal<K>) suppressed, storeName, parent).get();
 
-            final InternalProcessorContextMock context = InternalProcessorContextMockFactory.getInstance();
+            final InternalProcessorContextMock context = MockInternalProcessorContext
+                    .builder().build();
             context.setCurrentNode(new ProcessorNode("testNode"));
 
             buffer.init(context, buffer);

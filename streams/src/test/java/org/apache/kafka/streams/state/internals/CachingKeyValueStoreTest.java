@@ -26,13 +26,14 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -57,7 +58,7 @@ import static org.junit.Assert.fail;
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private final int maxCacheSizeBytes = 150;
-    private InternalMockProcessorContext context;
+    private InternalProcessorContext context;
     private CachingKeyValueStore store;
     private InMemoryKeyValueStore underlyingStore;
     private ThreadCache cache;
@@ -72,7 +73,9 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store = new CachingKeyValueStore(underlyingStore);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
-        context = new InternalMockProcessorContext(null, null, null, null, cache);
+        context = MockInternalProcessorContext
+                .builder(null, null, null, null, cache)
+                .build();
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
         store.init(context, null);
@@ -124,7 +127,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldCloseAfterErrorWithFlush() {
         try {
             cache = EasyMock.niceMock(ThreadCache.class);
-            context = new InternalMockProcessorContext(null, null, null, null, cache);
+            context = MockInternalProcessorContext.builder(cache).build();
             context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
             store.init(context, null);
             cache.flush("0_0-store");

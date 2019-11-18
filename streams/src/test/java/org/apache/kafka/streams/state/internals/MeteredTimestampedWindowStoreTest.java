@@ -25,10 +25,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -40,7 +41,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class MeteredTimestampedWindowStoreTest {
-    private InternalMockProcessorContext context;
+    private InternalProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
@@ -62,7 +63,7 @@ public class MeteredTimestampedWindowStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
 
-        context = new InternalMockProcessorContext(
+        context = MockInternalProcessorContext.builder(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -70,7 +71,7 @@ public class MeteredTimestampedWindowStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
-        );
+        ).build();
     }
 
     @Test

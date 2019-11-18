@@ -30,7 +30,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.InternalProcessorContextMock;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -73,7 +74,7 @@ public class MeteredWindowStoreTest {
     private static final String STORE_NAME = "mocked-store";
 
     private final String threadId = Thread.currentThread().getName();
-    private InternalMockProcessorContext context;
+    private InternalProcessorContextMock context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
@@ -108,7 +109,7 @@ public class MeteredWindowStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
 
-        context = new InternalMockProcessorContext(
+        context = MockInternalProcessorContext.builder(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -116,7 +117,7 @@ public class MeteredWindowStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
-        );
+        ).build();
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
         threadIdTagKey =
