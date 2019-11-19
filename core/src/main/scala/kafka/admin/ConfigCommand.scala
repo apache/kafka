@@ -452,8 +452,7 @@ object ConfigCommand extends Config {
       // Exactly one entity type and at-most one entity name expected for other entities
       val name = entityNames.headOption match {
         case Some("") => Some(ConfigEntityName.Default)
-        case Some(name) => Some(name)
-        case None => None
+        case v => v
       }
       ConfigEntity(Entity(entityTypes.head, name), None)
     }
