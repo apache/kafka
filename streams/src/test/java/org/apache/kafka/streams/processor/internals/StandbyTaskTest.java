@@ -255,6 +255,8 @@ public class StandbyTaskTest {
                                streamsMetrics,
                                stateDirectory);
         task.initializeStateStores();
+        assertThat(task.checkpointedOffsets(),
+                   equalTo(mkMap(mkEntry(partition1, -1L), mkEntry(partition2, -1L))));
         final Set<TopicPartition> partition = Collections.singleton(partition2);
         restoreStateConsumer.assign(partition);
 
@@ -293,7 +295,15 @@ public class StandbyTaskTest {
 
         restoreStateConsumer.seekToBeginning(partition);
         task.update(partition2, restoreStateConsumer.poll(ofMillis(100)).records(partition2));
-
+        assertThat(
+            task.checkpointedOffsets(),
+            equalTo(
+                mkMap(
+                    mkEntry(partition1, -1L),
+                    mkEntry(partition2, 31L /*the checkpoint should be 1+ the highest consumed offset*/)
+                )
+            )
+        );
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
         final MockKeyValueStore store1 = (MockKeyValueStore) context.getStateMgr().getStore(storeName1);
         final MockKeyValueStore store2 = (MockKeyValueStore) context.getStateMgr().getStore(storeName2);
@@ -416,8 +426,8 @@ public class StandbyTaskTest {
 
         final InternalStreamsBuilder builder = new InternalStreamsBuilder(internalTopologyBuilder);
         builder.stream(Collections.singleton("topic"), new ConsumedInternal<>())
-            .groupByKey()
-            .count(Materialized.as(storeName));
+               .groupByKey()
+               .count(Materialized.as(storeName));
 
         builder.buildAndOptimizeTopology();
 
@@ -719,7 +729,7 @@ public class StandbyTaskTest {
             globalTopicPartition,
             singletonList(new ConsumerRecord<>(globalTopicPartition.topic(),
                                                globalTopicPartition.partition(),
-                                        50L,
+                                               50L,
                                                serializedValue,
                                                serializedValue))
         );

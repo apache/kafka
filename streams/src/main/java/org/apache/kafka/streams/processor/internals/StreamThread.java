@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -602,8 +603,10 @@ public class StreamThread extends Thread {
         // tasks would never be added to the metrics.
         ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
-        ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
-        ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
+            ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
+        }
 
         this.time = time;
         this.builder = builder;

@@ -14,28 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer.internals;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
+package org.apache.kafka.common.utils;
 
-class ProducerIdAndEpoch {
-    static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+import org.apache.kafka.test.TestUtils;
+import org.junit.Test;
 
-    public final long producerId;
-    public final short epoch;
+import java.io.File;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
-    ProducerIdAndEpoch(long producerId, short epoch) {
-        this.producerId = producerId;
-        this.epoch = epoch;
+public class ByteBufferUnmapperTest {
+
+    /**
+     * Checks that unmap doesn't throw exceptions.
+     */
+    @Test
+    public void testUnmap() throws Exception {
+        File file = TestUtils.tempFile();
+        try (FileChannel channel = FileChannel.open(file.toPath())) {
+            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
+            ByteBufferUnmapper.unmap(file.getAbsolutePath(), map);
+        }
     }
 
-    public boolean isValid() {
-        return NO_PRODUCER_ID < producerId;
-    }
-
-    @Override
-    public String toString() {
-        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
-    }
 }

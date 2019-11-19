@@ -90,6 +90,18 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         );
     }
 
+    public InternalMockProcessorContext(final StreamsMetricsImpl streamsMetrics) {
+        this(
+            null,
+            null,
+            null,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            null,
+            null
+        );
+    }
+
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config,
                                         final RecordCollector collector) {

@@ -21,7 +21,7 @@
   //
   // Version 2 is the first flexible version.
   //
-  // Version 2 is the same as version 1.
+  // Version 3 is the same as version 2.
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [

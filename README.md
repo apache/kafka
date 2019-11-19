@@ -200,6 +200,18 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 
+### Dependency Analysis ###
+
+The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
+
+Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
+
+    ./gradlew allDeps
+
+    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+
+These take the same arguments as the builtin variants.
+
 ### Running system tests ###
 
 See [tests/README.md](tests/README.md).

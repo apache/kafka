@@ -73,7 +73,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.server.authorizer._
 
@@ -795,6 +795,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    val fetchMaxBytes = Math.min(fetchRequest.maxBytes, config.fetchMaxBytes)
+    val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
     if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
     else {
@@ -802,8 +804,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
         fetchRequest.replicaId,
-        fetchRequest.minBytes,
-        fetchRequest.maxBytes,
+        fetchMinBytes,
+        fetchMaxBytes,
         versionId <= 2,
         interesting,
         replicationQuota(fetchRequest),
@@ -1323,7 +1325,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setClientId(member.clientId)
             .setClientHost(member.clientHost)
             .setMemberAssignment(member.assignment)
-            .setMemberMetadata(member.assignment)
+            .setMemberMetadata(member.metadata)
         }
 
         val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
@@ -1878,7 +1880,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
-    txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.data.transactionTimeoutMs, sendResponseCallback)
+
+    val producerIdAndEpoch = (initProducerIdRequest.data.producerId, initProducerIdRequest.data.producerEpoch) match {
+      case (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH) => Right(None)
+      case (RecordBatch.NO_PRODUCER_ID, _) | (_, RecordBatch.NO_PRODUCER_EPOCH) => Left(Errors.INVALID_REQUEST)
+      case (_, _) => Right(Some(new ProducerIdAndEpoch(initProducerIdRequest.data.producerId, initProducerIdRequest.data.producerEpoch)))
+    }
+
+    producerIdAndEpoch match {
+      case Right(producerIdAndEpoch) => txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.data.transactionTimeoutMs,
+        producerIdAndEpoch, sendResponseCallback)
+      case Left(error) => sendErrorResponseMaybeThrottle(request, error.exception)
+    }
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {

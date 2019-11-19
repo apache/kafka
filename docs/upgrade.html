@@ -68,6 +68,15 @@
     </li>
 </ol>
 
+<p><b>Additional Upgrade Notes:</b></p>
+
+<ol>
+    <li>ZooKeeper has been upgraded to 3.5.6. Set <code>snapshot.trust.empty=true</code> in <code>zookeeper.properties</code> before the upgrade
+        to avoid <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>. After the new version starts successfully, it is safe to remove this config.
+        See <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_advancedConfiguration">ZooKeeper advanced configuration</a> for more details.
+    </li>
+</ol>
+
 <h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
 <ul>
     <li>A new Admin API has been added for partition reassignments. Due to changing the way Kafka propagates reassignment information,
