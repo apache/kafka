@@ -407,6 +407,7 @@ public final class ProducerBatch {
                                                        recordsBuilder.compressionType(),
                                                        (float) recordsBuilder.compressionRatio());
         }
+        reopened = false;
     }
 
     /**
@@ -458,5 +459,9 @@ public final class ProducerBatch {
 
     public boolean isTransactional() {
         return recordsBuilder.isTransactional();
+    }
+
+    public boolean sequenceHasBeenReset() {
+        return reopened;
     }
 }
