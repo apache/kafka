@@ -175,6 +175,11 @@ public class MockAdminClient extends AdminClient {
                 continue;
             }
             int replicationFactor = newTopic.replicationFactor();
+            if (replicationFactor > brokers.size())
+                throw new IllegalArgumentException(
+                    String.format("NewTopic %s cannot have a replication factor of %d that is larger than the number of brokers %s",
+                        newTopic, replicationFactor, brokers));
+
             List<Node> replicas = new ArrayList<>(replicationFactor);
             for (int i = 0; i < replicationFactor; ++i) {
                 replicas.add(brokers.get(i));
