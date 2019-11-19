@@ -257,56 +257,32 @@ public class TaskManager {
 
     /**
      * Closes active tasks as zombies, as these partitions have been lost and are no longer owned.
+     * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
+     * be closed as a zombie.
      * @return list of lost tasks
      */
-    Set<TaskId> closeLostTasks(final Collection<TopicPartition> lostPartitions) {
-        final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
-        log.debug("Closing lost tasks as zombies: {}", zombieTasks);
+    Set<TaskId> closeLostTasks() {
+        final Set<TaskId> lostTasks = new HashSet<>(assignedActiveTasks.keySet());
+        log.debug("Closing lost active tasks as zombies: {}", lostTasks);
 
-        final List<TopicPartition> lostTaskChangelogs = new ArrayList<>();
+        final RuntimeException exception = active.closeAllTasksAsZombies();
 
-        final RuntimeException exception = active.closeZombieTasks(zombieTasks, lostTaskChangelogs);
+        log.debug("Clearing assigned active tasks: {}", assignedActiveTasks);
+        assignedActiveTasks.clear();
 
-        assignedActiveTasks.keySet().removeAll(zombieTasks);
-        changelogReader.remove(lostTaskChangelogs);
-        removeChangelogsFromRestoreConsumer(lostTaskChangelogs, false);
+        log.debug("Clearing the store changelog reader: {}", changelogReader);
+        changelogReader.clear();
+
+        if (!restoreConsumerAssignedStandbys) {
+            log.debug("Clearing the restore consumer's assignment: {}", restoreConsumer.assignment());
+            restoreConsumer.unsubscribe();
+        }
 
         if (exception != null) {
             throw exception;
         }
 
-        verifyActiveTaskStateIsEmpty();
-
-        return zombieTasks;
-    }
-
-    private void verifyActiveTaskStateIsEmpty() throws RuntimeException {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
-        // Verify active has no remaining state, and catch if active.isEmpty throws so we can log any non-empty state
-        try {
-            if (!(active.isEmpty())) {
-                log.error("The set of active tasks was non-empty: {}", active);
-                firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover active task state after closing all zombies"));
-            }
-        } catch (final IllegalStateException e) {
-            firstException.compareAndSet(null, e);
-        }
-
-        if (!(assignedActiveTasks.isEmpty())) {
-            log.error("The set assignedActiveTasks was non-empty: {}", assignedActiveTasks);
-            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover assignedActiveTasks after closing all zombies"));
-        }
-
-        if (!(changelogReader.isEmpty())) {
-            log.error("The changelog-reader's internal state was non-empty: {}", changelogReader);
-            firstException.compareAndSet(null, new IllegalStateException("TaskManager found leftover changelog reader state after closing all zombies"));
-        }
-
-        final RuntimeException fatalException = firstException.get();
-        if (fatalException != null) {
-            throw fatalException;
-        }
+        return lostTasks;
     }
 
     void shutdown(final boolean clean) {
@@ -413,6 +389,8 @@ public class TaskManager {
             final Collection<TopicPartition> restored = changelogReader.restore(active);
             active.updateRestored(restored);
             removeChangelogsFromRestoreConsumer(restored, false);
+        } else {
+            active.clearRestoringPartitions();
         }
 
         if (active.allTasksRunning()) {
