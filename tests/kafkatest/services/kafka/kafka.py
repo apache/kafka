@@ -96,7 +96,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
-                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides={}, extra_kafka_opts=""):
+                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None, extra_kafka_opts=""):
         """
         :param context: test context
         :param ZookeeperService zk:
@@ -329,7 +329,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
         security_kafka_opts = self.security_config.kafka_opts.strip('\"')
-        cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, security_kafka_opts, extra_kafka_opts)
+        cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, security_kafka_opts, self.extra_kafka_opts)
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
                 KafkaService.CONFIG_FILE,
