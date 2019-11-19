@@ -15,6 +15,7 @@ package kafka.api
 import java.io.File
 import java.util
 
+import integration.kafka.api.BaseAdminIntegrationTest
 import kafka.log.LogConfig
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
 import kafka.security.authorizer.AuthorizerWrapper
@@ -36,7 +37,7 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
 import scala.util.{Failure, Success, Try}
 
-class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
+class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   // This tests the old SimpleAclAuthorizer, we have another test for the new AclAuthorizer
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
@@ -117,8 +118,10 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     new AccessControlEntry("User:*", "*", AclOperation.ALL, AclPermissionType.ALLOW))
 
   @Test
-  override def testAclOperations(): Unit = {
+  def testAclOperations(): Unit = {
     client = AdminClient.create(createConfig())
+    val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     assertEquals(7, getAcls(AclBindingFilter.ANY).size)
     val results = client.createAcls(List(acl2, acl3).asJava)
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
@@ -128,9 +131,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     val results2 = client.createAcls(List(aclUnknown).asJava)
     assertEquals(Set(aclUnknown), results2.values.keySet().asScala)
     assertFutureExceptionTypeEquals(results2.all, classOf[InvalidRequestException])
-    val results3 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
-    assertEquals(Set(ACL1.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
-    assertEquals(0, results3.get(ACL1.toFilter).get.values.size())
+    val results3 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
+    assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
+    assertEquals(0, results3.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results3.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl3), results3.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
   }

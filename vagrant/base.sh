@@ -18,7 +18,7 @@ set -ex
 
 # The version of Kibosh to use for testing.
 # If you update this, also update tests/docker/Dockerfile
-export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+export KIBOSH_VERSION=8841dd392e6fbf02986e2fb1f1ebf04df344b65a
 
 path_to_jdk_cache() {
   jdk_version=$1
@@ -106,6 +106,9 @@ pushd "/opt/kibosh/build"
 popd
 popd
 popd
+
+# Install iperf
+apt-get install -y iperf traceroute
 
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
