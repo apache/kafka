@@ -84,8 +84,8 @@ public class AssignedStreamsTasksTest {
     public void shouldInitializeNewTasks() {
         t1.initializeMetadata();
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.replay(t1);
 
         addAndInitTask();
@@ -99,15 +99,15 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         t2.initializeMetadata();
         EasyMock.expect(t2.initializeStateStores()).andReturn(true);
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
         final Set<TopicPartition> t2partitions = Collections.singleton(tp2);
-        EasyMock.expect(t2.partitions()).andReturn(t2partitions);
-        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
+        EasyMock.expect(t2.partitions()).andReturn(t2partitions).anyTimes();
+        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList()).anyTimes();
 
         EasyMock.replay(t1, t2);
 
@@ -127,8 +127,8 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t2.initializeStateStores()).andReturn(true);
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
-        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
-        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
+        EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2)).anyTimes();
+        EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList()).anyTimes();
 
         EasyMock.replay(t2);
 
@@ -173,8 +173,8 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseRestoringTasks() {
         t1.initializeMetadata();
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).times(2);
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).times(3);
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         t1.closeStateManager(true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -186,8 +186,9 @@ public class AssignedStreamsTasksTest {
     }
 
     @Test
-    public void shouldClosedUnInitializedTasksOnSuspend() {
-        EasyMock.expect(t1.changelogPartitions()).andAnswer(Collections::emptyList);
+    public void shouldCloseUnInitializedTasksOnSuspend() {
+        EasyMock.expect(t1.partitions()).andAnswer(Collections::emptySet).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andAnswer(Collections::emptyList).anyTimes();
 
         t1.close(false, false);
         EasyMock.expectLastCall();
@@ -213,8 +214,6 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnSuspendWhenRuntimeException() {
         mockTaskInitialization();
-        EasyMock.expect(t1.partitions()).andReturn(Collections.emptySet()).anyTimes();
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
 
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!"));
@@ -232,8 +231,6 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldCloseTaskOnSuspendIfTaskMigratedException() {
         mockTaskInitialization();
-        EasyMock.expect(t1.partitions()).andReturn(Collections.emptySet()).anyTimes();
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
 
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
@@ -281,8 +278,8 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.initializeStateStores()).andReturn(true);
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
-        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
-        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptyList());
+        EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1)).anyTimes();
+        EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptyList()).anyTimes();
     }
 
     @Test
@@ -537,10 +534,6 @@ public class AssignedStreamsTasksTest {
                 return assignedTasks.created.keySet();
             }
 
-            @Override
-            public List<TopicPartition> expectedLostChangelogs() {
-                return clearingPartitions;
-            }
         }.createTaskAndClear();
     }
 
@@ -549,7 +542,6 @@ public class AssignedStreamsTasksTest {
         new TaskTestSuite() {
             @Override
             public void additionalSetup(final StreamTask task) {
-                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
                 task.closeStateManager(false);
             }
 
@@ -563,10 +555,6 @@ public class AssignedStreamsTasksTest {
                 return assignedTasks.restoringTaskIds();
             }
 
-            @Override
-            public List<TopicPartition> expectedLostChangelogs() {
-                return clearingPartitions;
-            }
         }.createTaskAndClear();
     }
 
@@ -576,7 +564,6 @@ public class AssignedStreamsTasksTest {
             @Override
             public void additionalSetup(final StreamTask task) {
                 task.initializeTopology();
-                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
                 task.close(false, true);
             }
 
@@ -590,10 +577,6 @@ public class AssignedStreamsTasksTest {
                 return assignedTasks.runningTaskIds();
             }
 
-            @Override
-            public List<TopicPartition> expectedLostChangelogs() {
-                return clearingPartitions;
-            }
         }.createTaskAndClear();
     }
 
@@ -603,7 +586,6 @@ public class AssignedStreamsTasksTest {
             @Override
             public void additionalSetup(final StreamTask task) {
                 task.initializeTopology();
-                EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
                 task.suspend();
                 task.closeSuspended(false, null);
             }
@@ -621,11 +603,7 @@ public class AssignedStreamsTasksTest {
             public Set<TaskId> taskIds() {
                 return assignedTasks.suspendedTaskIds();
             }
-
-            @Override
-            public List<TopicPartition> expectedLostChangelogs() {
-                return Collections.emptyList();
-            }
+            
         }.createTaskAndClear();
     }
 
@@ -640,23 +618,21 @@ public class AssignedStreamsTasksTest {
 
         abstract Set<TaskId> taskIds();
 
-        abstract List<TopicPartition> expectedLostChangelogs();
-
         void createTaskAndClear() {
             final StreamTask task = EasyMock.createMock(StreamTask.class);
             EasyMock.expect(task.id()).andReturn(clearingTaskId).anyTimes();
+            EasyMock.expect(task.partitions()).andReturn(Collections.emptySet()).anyTimes();
             EasyMock.expect(task.changelogPartitions()).andReturn(clearingPartitions).anyTimes();
+            EasyMock.expect(task.toString(EasyMock.anyString())).andReturn("task").anyTimes();
             additionalSetup(task);
             EasyMock.replay(task);
 
             action(task);
-            final List<TopicPartition> changelogs = new ArrayList<>();
             final Set<TaskId> ids = new HashSet<>(Collections.singleton(task.id()));
             assertEquals(ids, taskIds());
 
-            assignedTasks.closeZombieTasks(ids, changelogs);
+            assignedTasks.closeAllTasksAsZombies();
             assertEquals(Collections.emptySet(), taskIds());
-            assertEquals(expectedLostChangelogs(), changelogs);
         }
     }
 
