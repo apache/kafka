@@ -232,7 +232,7 @@ public class MetadataResponse extends AbstractResponse {
                              String topic,
                              boolean isInternal,
                              List<PartitionMetadata> partitionMetadata) {
-            this(error, topic, isInternal, partitionMetadata, 0);
+            this(error, topic, isInternal, partitionMetadata, AUTHORIZED_OPERATIONS_OMITTED);
         }
 
         public Errors error() {
