@@ -107,6 +107,9 @@ popd
 popd
 popd
 
+# Install iperf
+apt-get install -y iperf traceroute
+
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
