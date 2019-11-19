@@ -19,6 +19,7 @@ package kafka.controller
 
 import java.util.Properties
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -28,6 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.log4j.Logger
 import org.junit.{After, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -43,7 +45,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     super.tearDown()
     this.metrics.close()
   }
@@ -53,7 +55,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * for the background of this test case
    */
   @Test
-  def testHandleIllegalStateException() {
+  def testHandleIllegalStateException(): Unit = {
     val initialController = servers.find(_.kafkaController.isActive).map(_.kafkaController).getOrElse {
       fail("Could not find controller")
     }
@@ -62,25 +64,27 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     createTopic(topic, 1, 1)
     val topicPartition = new TopicPartition("topic1", 0)
     TestUtils.waitUntilTrue(() =>
-      initialController.partitionStateMachine.partitionsInState(OnlinePartition).contains(topicPartition),
+      initialController.controllerContext.partitionsInState(OnlinePartition).contains(topicPartition),
       s"Partition $topicPartition did not transition to online state")
 
     // Wait until we have verified that we have resigned
     val latch = new CountDownLatch(1)
-    @volatile var exceptionThrown: Option[Throwable] = None
-    val illegalStateEvent = ControllerTestUtils.createMockControllerEvent(ControllerState.BrokerChange, { () =>
-      try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
-      catch {
-        case t: Throwable => exceptionThrown = Some(t)
+    val exceptionThrown = new AtomicReference[Throwable]()
+    val illegalStateEvent = new MockEvent(ControllerState.BrokerChange) {
+      override def process(): Unit = {
+        try initialController.handleIllegalState(new IllegalStateException("Thrown for test purposes"))
+        catch {
+          case t: Throwable => exceptionThrown.set(t)
+        }
+        latch.await()
       }
-      latch.await()
-    })
+    }
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
-    TestUtils.waitUntilTrue(() => exceptionThrown.isDefined, "handleIllegalState did not throw an exception")
+    TestUtils.waitUntilTrue(() => Option(exceptionThrown.get()).isDefined, "handleIllegalState did not throw an exception")
     assertTrue(s"handleIllegalState should throw an IllegalStateException, but $exceptionThrown was thrown",
       exceptionThrown.get.isInstanceOf[IllegalStateException])
 

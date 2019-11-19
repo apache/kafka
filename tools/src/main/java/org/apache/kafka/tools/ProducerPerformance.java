@@ -247,7 +247,7 @@ public class ProducerPerformance {
                 .required(true)
                 .type(Integer.class)
                 .metavar("THROUGHPUT")
-                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
+                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 
         parser.addArgument("--producer-props")
                  .nargs("+")
@@ -359,7 +359,7 @@ public class ProducerPerformance {
             long ellapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
+            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,
                               mbPerSec,

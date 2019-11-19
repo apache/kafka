@@ -20,6 +20,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -47,7 +49,7 @@ public class FilteredCacheIteratorTest {
     };
 
     @SuppressWarnings("unchecked")
-    private final InMemoryKeyValueStore<Bytes, LRUCacheEntry> store = new InMemoryKeyValueStore("name", null, null);
+    private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
     private final List<KeyValue<Bytes, LRUCacheEntry>> entries = asList(

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -63,6 +65,7 @@ public class StreamsNamedRepartitionTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        sourceStream.peek((k, v) -> System.out.println(String.format("input data key=%s, value=%s", k, v)));
 
         final KStream<String, String> mappedStream = sourceStream.selectKey((k, v) -> keyFunction.apply(v));
 
@@ -75,7 +78,7 @@ public class StreamsNamedRepartitionTest {
         }
 
         maybeUpdatedStream.groupByKey(Grouped.with("grouped-stream", Serdes.String(), Serdes.String()))
-            .aggregate(initializer, aggregator, Materialized.with(Serdes.String(), Serdes.Integer()))
+            .aggregate(initializer, aggregator, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("count-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.Integer()))
             .toStream()
             .peek((k, v) -> System.out.println(String.format("AGGREGATED key=%s value=%s", k, v)))
             .to(aggregationTopic, Produced.with(Serdes.String(), Serdes.Integer()));
@@ -94,7 +97,7 @@ public class StreamsNamedRepartitionTest {
         final KafkaStreams streams = new KafkaStreams(topology, config);
 
 
-        streams.setStateListener((oldState, newState) -> {
+        streams.setStateListener((newState, oldState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 if (addOperators) {
                     System.out.println("UPDATED Topology");
@@ -114,7 +117,5 @@ public class StreamsNamedRepartitionTest {
             System.out.println("NAMED_REPARTITION_TEST Streams Stopped");
             System.out.flush();
         }));
-
     }
-
 }

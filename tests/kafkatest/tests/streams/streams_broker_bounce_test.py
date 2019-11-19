@@ -19,7 +19,6 @@ from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
 from ducktape.mark import parametrize, ignore
 from kafkatest.services.kafka import KafkaService
-from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 import time
@@ -133,17 +132,39 @@ class StreamsBrokerBounceTest(Test):
         for num in range(0, num_failures - 1):
             signal_node(self, self.kafka.nodes[num], sig)
 
+    def confirm_topics_on_all_brokers(self, expected_topic_set):
+        for node in self.kafka.nodes:
+            match_count = 0
+            # need to iterate over topic_list_generator as kafka.list_topics()
+            # returns a python generator so values are fetched lazily
+            # so we can't just compare directly we must iterate over what's returned
+            topic_list_generator = self.kafka.list_topics(node=node)
+            for topic in topic_list_generator:
+                if topic in expected_topic_set:
+                    match_count += 1
+
+            if len(expected_topic_set) != match_count:
+                return False
+
+        return True
+
         
-    def setup_system(self, start_processor=True):
+    def setup_system(self, start_processor=True, num_threads=3):
         # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
 
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=self.zk, topics=self.topics)
         self.kafka.start()
+
+        # allow some time for topics to be created
+        wait_until(lambda: self.confirm_topics_on_all_brokers(set(self.topics.keys())),
+                   timeout_sec=60,
+                   err_msg="Broker did not create all topics in 60 seconds ")
+
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads)
 
         self.driver.start()
 
@@ -186,13 +207,16 @@ class StreamsBrokerBounceTest(Test):
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader", "controller"],
+            num_threads=[1, 3],
             sleep_time_secs=[120])
-    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs):
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
-        Record if records are delivered. 
+        Record if records are delivered.
+        We also add a single thread stream client to make sure we could get all partitions reassigned in
+        next generation so to verify the partition lost is correctly triggered.
         """
-        self.setup_system() 
+        self.setup_system(num_threads=num_threads)
 
         # Sleep to allow test to run for a bit
         time.sleep(sleep_time_secs)

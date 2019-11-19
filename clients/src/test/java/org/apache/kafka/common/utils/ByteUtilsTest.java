@@ -33,11 +33,17 @@ public class ByteUtilsTest {
     private final byte x01 = 0x01;
     private final byte x02 = 0x02;
     private final byte x0F = 0x0f;
+    private final byte x07 = 0x07;
+    private final byte x08 = 0x08;
+    private final byte x3F = 0x3f;
+    private final byte x40 = 0x40;
     private final byte x7E = 0x7E;
     private final byte x7F = 0x7F;
     private final byte xFF = (byte) 0xff;
     private final byte x80 = (byte) 0x80;
     private final byte x81 = (byte) 0x81;
+    private final byte xBF = (byte) 0xbf;
+    private final byte xC0 = (byte) 0xc0;
     private final byte xFE = (byte) 0xfe;
 
     @Test
@@ -109,6 +115,24 @@ public class ByteUtilsTest {
         ByteArrayOutputStream os2 = new ByteArrayOutputStream();
         ByteUtils.writeUnsignedIntLE(os2, value2);
         assertArrayEquals(new byte[] {(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4}, os2.toByteArray());
+    }
+
+    @Test
+    public void testUnsignedVarintSerde() throws Exception {
+        assertUnsignedVarintSerde(0, new byte[] {x00});
+        assertUnsignedVarintSerde(-1, new byte[] {xFF, xFF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(1, new byte[] {x01});
+        assertUnsignedVarintSerde(63, new byte[] {x3F});
+        assertUnsignedVarintSerde(-64, new byte[] {xC0, xFF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(64, new byte[] {x40});
+        assertUnsignedVarintSerde(8191, new byte[] {xFF, x3F});
+        assertUnsignedVarintSerde(-8192, new byte[] {x80, xC0, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(8192, new byte[] {x80, x40});
+        assertUnsignedVarintSerde(-8193, new byte[] {xFF, xBF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(1048575, new byte[] {xFF, xFF, x3F});
+        assertUnsignedVarintSerde(1048576, new byte[] {x80, x80, x40});
+        assertUnsignedVarintSerde(Integer.MAX_VALUE, new byte[] {xFF, xFF, xFF, xFF, x07});
+        assertUnsignedVarintSerde(Integer.MIN_VALUE, new byte[] {x80, x80, x80, x80, x08});
     }
 
     @Test
@@ -195,6 +219,22 @@ public class ByteUtilsTest {
         // varlong encoding has one overflow byte
         ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
         ByteUtils.readVarlong(buf);
+    }
+
+    private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(32);
+        ByteUtils.writeUnsignedVarint(value, buf);
+        buf.flip();
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        assertEquals(value, ByteUtils.readUnsignedVarint(buf.duplicate()));
+
+        buf.rewind();
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        ByteUtils.writeUnsignedVarint(value, out);
+        buf.flip();
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        assertEquals(value, ByteUtils.readUnsignedVarint(in));
     }
 
     private void assertVarintSerde(int value, byte[] expectedEncoding) throws IOException {

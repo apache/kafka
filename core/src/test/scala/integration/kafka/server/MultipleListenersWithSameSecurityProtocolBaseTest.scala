@@ -38,6 +38,7 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.Seq
 
 object MultipleListenersWithSameSecurityProtocolBaseTest {
   val SecureInternal = "SECURE_INTERNAL"
@@ -147,7 +148,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
     TestUtils.shutdownServers(servers)

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -118,9 +119,12 @@ public class ListOffsetRequest extends AbstractRequest {
             ISOLATION_LEVEL,
             TOPICS_V4);
 
+    // V5 bump to include new possible error code (OFFSET_NOT_AVAILABLE)
+    private static final Schema LIST_OFFSET_REQUEST_V5 = LIST_OFFSET_REQUEST_V4;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
-            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4};
+            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5};
     }
 
     private final int replicaId;
@@ -214,7 +218,6 @@ public class ListOffsetRequest extends AbstractRequest {
     /**
      * Private constructor with a specified version.
      */
-    @SuppressWarnings("unchecked")
     private ListOffsetRequest(int replicaId,
                               Map<TopicPartition, PartitionData> targetTimes,
                               IsolationLevel isolationLevel,
@@ -266,17 +269,7 @@ public class ListOffsetRequest extends AbstractRequest {
             responseData.put(partition, partitionError);
         }
 
-        switch (version()) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-                return new ListOffsetResponse(throttleTimeMs, responseData);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
-        }
+        return new ListOffsetResponse(throttleTimeMs, responseData);
     }
 
     public int replicaId() {

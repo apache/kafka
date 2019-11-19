@@ -57,7 +57,7 @@ object StateChangeLogMerger extends Logging {
   var startDate: Date = null
   var endDate: Date = null
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     // Parse input arguments.
     val parser = new OptionParser(false)
@@ -137,7 +137,7 @@ object StateChangeLogMerger extends Logging {
      */
     val pqueue = new mutable.PriorityQueue[LineIterator]()(dateBasedOrdering)
     val output: OutputStream = new BufferedOutputStream(System.out, 1024*1024)
-    val lineIterators = files.map(io.Source.fromFile(_).getLines)
+    val lineIterators = files.map(scala.io.Source.fromFile(_).getLines)
     var lines: List[LineIterator] = List()
 
     for (itr <- lineIterators) {

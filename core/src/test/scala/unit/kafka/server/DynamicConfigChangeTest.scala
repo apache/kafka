@@ -31,14 +31,14 @@ import kafka.admin.AdminOperationException
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.Map
+import scala.collection.{Map, Seq}
 import scala.collection.JavaConverters._
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
-  def testConfigChange() {
+  def testConfigChange(): Unit = {
     assertTrue("Should contain a ConfigHandler for topics",
       this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
     val oldVal: java.lang.Long = 100000L
@@ -60,7 +60,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testDynamicTopicConfigChange() {
+  def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 1000
     val logProps = new Properties()
@@ -86,14 +86,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertTrue("Log segment size change not applied", log.logSegments.forall(_.size > 1000))
   }
 
-  private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String) {
+  private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String): Unit = {
     assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
                this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
 
-    val quotaManagers = servers.head.apis.quotas
+    val quotaManagers = servers.head.dataPlaneRequestProcessor.quotas
     rootEntityType match {
       case ConfigType.Client => adminZkClient.changeClientIdConfig(configEntityName, props)
       case _ => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, props)
@@ -129,37 +129,37 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testClientIdQuotaConfigChange() {
+  def testClientIdQuotaConfigChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.Client, "testClient")
   }
 
   @Test
-  def testUserQuotaConfigChange() {
+  def testUserQuotaConfigChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "ANONYMOUS")
   }
 
   @Test
-  def testUserClientIdQuotaChange() {
+  def testUserClientIdQuotaChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "ANONYMOUS/clients/testClient")
   }
 
   @Test
-  def testDefaultClientIdQuotaConfigChange() {
+  def testDefaultClientIdQuotaConfigChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.Client, "<default>")
   }
 
   @Test
-  def testDefaultUserQuotaConfigChange() {
+  def testDefaultUserQuotaConfigChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "<default>")
   }
 
   @Test
-  def testDefaultUserClientIdQuotaConfigChange() {
+  def testDefaultUserClientIdQuotaConfigChange(): Unit = {
     testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "<default>/clients/<default>")
   }
 
   @Test
-  def testQuotaInitialization() {
+  def testQuotaInitialization(): Unit = {
     val server = servers.head
     val clientIdProps = new Properties()
     server.shutdown()
@@ -179,7 +179,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Remove config change znodes to force quota initialization only through loading of user/client quotas
     zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p => zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p) }
     server.startup()
-    val quotaManagers = server.apis.quotas
+    val quotaManagers = server.dataPlaneRequestProcessor.quotas
 
     assertEquals(Quota.upperBound(1000),  quotaManagers.produce.quota("someuser", "overriddenClientId"))
     assertEquals(Quota.upperBound(2000),  quotaManagers.fetch.quota("someuser", "overriddenClientId"))
@@ -190,7 +190,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testConfigChangeOnNonExistingTopic() {
+  def testConfigChangeOnNonExistingTopic(): Unit = {
     val topic = TestUtils.tempTopic
     try {
       val logProps = new Properties()
@@ -302,7 +302,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def shouldParseRegardlessOfWhitespaceAroundValues() {
+  def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
     assertEquals(AllReplicas, parse(configHandler, "* "))
     assertEquals(Seq(), parse(configHandler, " "))

@@ -28,18 +28,12 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -48,18 +42,20 @@ public class NamedCacheTest {
 
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private NamedCache cache;
+    private Metrics innerMetrics;
     private StreamsMetricsImpl metrics;
     private final String taskIDString = "0.0";
     private final String underlyingStoreName = "storeName";
 
     @Before
     public void setUp() {
-        metrics = new MockStreamsMetrics(new Metrics());
+        innerMetrics = new Metrics();
+        metrics = new MockStreamsMetrics(innerMetrics);
         cache = new NamedCache(taskIDString + "-" + underlyingStoreName, metrics);
     }
 
     @Test
-    public void shouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed() throws IOException {
+    public void shouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
@@ -79,24 +75,6 @@ public class NamedCacheTest {
             assertEquals(cache.misses(), 0);
             assertEquals(cache.overwrites(), 0);
         }
-    }
-
-    @Test
-    public void testMetrics() {
-        final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("record-cache-id", underlyingStoreName);
-        metricTags.put("task-id", taskIDString);
-        metricTags.put("client-id", "test");
-
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
-
-        // test "all"
-        metricTags.put("record-cache-id", "all");
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
     }
 
     @Test
@@ -195,31 +173,6 @@ public class NamedCacheTest {
         assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
         assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());
         assertEquals(cache.flushes(), 1);
-    }
-
-    @Test
-    public void shouldGetRangeIteratorOverKeys() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
-        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
-        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, null, true, 0, 0, 0, ""));
-
-        final Iterator<Bytes> iterator = cache.keyRange(Bytes.wrap(new byte[]{1}), Bytes.wrap(new byte[]{2}));
-        assertEquals(Bytes.wrap(new byte[]{1}), iterator.next());
-        assertEquals(Bytes.wrap(new byte[]{2}), iterator.next());
-        assertFalse(iterator.hasNext());
-    }
-
-    @Test
-    public void shouldGetIteratorOverAllKeys() {
-        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
-        cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
-        cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, null, true, 0, 0, 0, ""));
-
-        final Iterator<Bytes> iterator = cache.allKeys();
-        assertEquals(Bytes.wrap(new byte[]{0}), iterator.next());
-        assertEquals(Bytes.wrap(new byte[]{1}), iterator.next());
-        assertEquals(Bytes.wrap(new byte[]{2}), iterator.next());
-        assertFalse(iterator.hasNext());
     }
 
     @Test

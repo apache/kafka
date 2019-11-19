@@ -17,30 +17,26 @@
 
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -48,21 +44,31 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-
-import kafka.utils.MockTime;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
+/**
+ * This test asserts that when Kafka Streams is closing and shuts
+ * down a StreamThread the closing of the GlobalStreamThread happens
+ * after all the StreamThreads are completely stopped.
+ *
+ * The test validates the Processor still has access to the GlobalStateStore while closing.
+ * Otherwise if the GlobalStreamThread were to close underneath the StreamThread
+ * an exception would be thrown as the GlobalStreamThread closes all global stores on closing.
+ */
 @Category({IntegrationTest.class})
 public class GlobalThreadShutDownOrderTest {
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
+    private final AtomicInteger closeCounter = new AtomicInteger(0);
+    private final int expectedCloseCount = 1;
 
     static {
         BROKER_CONFIG = new Properties();
@@ -71,8 +77,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     private final MockTime mockTime = CLUSTER.time;
     private final String globalStore = "globalStore";
@@ -81,51 +86,44 @@ public class GlobalThreadShutDownOrderTest {
     private KafkaStreams kafkaStreams;
     private String globalStoreTopic;
     private String streamTopic;
-    private KStream<String, Long> stream;
-    private List<Long> retrievedValuesList = new ArrayList<>();
+    private final List<Long> retrievedValuesList = new ArrayList<>();
     private boolean firstRecordProcessed;
 
     @Before
-    public void before() throws InterruptedException {
-
+    public void before() throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         final String applicationId = "global-thread-shutdown-test";
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(Stores.persistentKeyValueStore(globalStore),
-                                                                                           Serdes.String(),
-                                                                                           Serdes.Long(),
-                                                                                           mockTime);
+        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
+            Stores.persistentKeyValueStore(globalStore),
+            Serdes.String(),
+            Serdes.Long(),
+            mockTime);
 
-        builder.addGlobalStore(storeBuilder,
-                               globalStoreTopic,
-                               Consumed.with(Serdes.String(), Serdes.Long()),
-                               new MockProcessorSupplier());
+        builder.addGlobalStore(
+            storeBuilder,
+            globalStoreTopic,
+            Consumed.with(Serdes.String(), Serdes.Long()),
+            new MockProcessorSupplier());
 
-        stream = builder.stream(streamTopic, stringLongConsumed);
-
-        stream.process(new ProcessorSupplier<String, Long>() {
-            @Override
-            public Processor<String, Long> get() {
-                return new GlobalStoreProcessor(globalStore);
-            }
-        });
+        builder
+            .stream(streamTopic, stringLongConsumed)
+            .process(() -> new GlobalStoreProcessor(globalStore));
 
     }
 
     @After
-    public void whenShuttingDown() throws IOException {
+    public void whenShuttingDown() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
@@ -141,21 +139,20 @@ public class GlobalThreadShutDownOrderTest {
 
         kafkaStreams.start();
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return firstRecordProcessed;
-            }
-        }, 30000, "Has not processed record within 30 seconds");
+        TestUtils.waitForCondition(
+            () -> firstRecordProcessed,
+            30000,
+            "Has not processed record within 30 seconds");
 
         kafkaStreams.close(Duration.ofSeconds(30));
 
         final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);
+        assertEquals(expectedCloseCount, closeCounter.get());
     }
 
 
-    private void createTopics() throws InterruptedException {
+    private void createTopics() throws Exception {
         streamTopic = "stream-topic";
         globalStoreTopic = "global-store-topic";
         CLUSTER.createTopics(streamTopic);
@@ -186,7 +183,6 @@ public class GlobalThreadShutDownOrderTest {
         private final String storeName;
 
         GlobalStoreProcessor(final String storeName) {
-
             this.storeName = storeName;
         }
 
@@ -205,6 +201,7 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void close() {
+            closeCounter.getAndIncrement();
             final List<String> keys = Arrays.asList("A", "B", "C", "D");
             for (final String key : keys) {
                 // need to simulate thread slow in closing

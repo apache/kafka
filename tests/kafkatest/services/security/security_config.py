@@ -19,6 +19,7 @@ from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
+from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 import itertools
 
 
@@ -112,7 +113,8 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None):
+                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
+                 listener_security_config=ListenerSecurityConfig()):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -144,6 +146,7 @@ class SecurityConfig(TemplateRenderer):
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.zk_sasl = zk_sasl
         self.static_jaas_conf = static_jaas_conf
+        self.listener_security_config = listener_security_config
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -156,6 +159,7 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+        self.properties.update(self.listener_security_config.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None):
@@ -169,7 +173,8 @@ class SecurityConfig(TemplateRenderer):
                               client_sasl_mechanism=self.client_sasl_mechanism,
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
-                              jaas_override_variables=jaas_override_variables)
+                              jaas_override_variables=jaas_override_variables,
+                              listener_security_config=self.listener_security_config)
 
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
@@ -185,20 +190,24 @@ class SecurityConfig(TemplateRenderer):
         jaas_conf_file = "jaas.conf"
         java_version = node.account.ssh_capture("java -version")
 
-        jaas_conf = self.render_jaas_config(
-            jaas_conf_file,
-            {
-                'node': node,
-                'is_ibm_jdk': any('IBM' in line for line in java_version),
-                'SecurityConfig': SecurityConfig,
-                'client_sasl_mechanism': self.client_sasl_mechanism,
-                'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
-            }
-        )
+        jaas_conf = None
+        if 'sasl.jaas.config' not in self.properties:
+            jaas_conf = self.render_jaas_config(
+                jaas_conf_file,
+                {
+                    'node': node,
+                    'is_ibm_jdk': any('IBM' in line for line in java_version),
+                    'SecurityConfig': SecurityConfig,
+                    'client_sasl_mechanism': self.client_sasl_mechanism,
+                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                }
+            )
+        else:
+            jaas_conf = self.properties['sasl.jaas.config']
 
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
-        else:
+        elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)

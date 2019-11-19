@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -50,6 +52,7 @@ import java.util.regex.Pattern;
  *   separated by spaces.
  */
 public class OffsetCheckpoint {
+    private static final Logger LOG = LoggerFactory.getLogger(OffsetCheckpoint.class);
 
     private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 
@@ -75,6 +78,7 @@ public class OffsetCheckpoint {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
             final File temp = new File(file.getAbsolutePath() + ".tmp");
+            LOG.trace("Writing tmp checkpoint file {}", temp.getAbsolutePath());
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
             try (final BufferedWriter writer = new BufferedWriter(
@@ -90,6 +94,7 @@ public class OffsetCheckpoint {
                 fileOutputStream.getFD().sync();
             }
 
+            LOG.trace("Swapping tmp checkpoint file {} {}", temp.toPath(), file.toPath());
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }

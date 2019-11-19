@@ -22,11 +22,11 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
     public void bufferShouldAllowCacheEnablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder(null).withCachingEnabled();
+        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingEnabled();
     }
 
     @Test
     public void bufferShouldAllowCacheDisablement() {
-        new InMemoryTimeOrderedKeyValueBuffer.Builder(null).withCachingDisabled();
+        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingDisabled();
     }
 }

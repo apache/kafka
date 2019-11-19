@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 
+import java.util.Objects;
+
 
 public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, SessionStore<K, V>> {
 
@@ -31,27 +33,25 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final Time time) {
-        super(storeSupplier.name(), keySerde, valueSerde, time);
+        super(Objects.requireNonNull(storeSupplier, "supplier cannot be null").name(), keySerde, valueSerde, time);
         this.storeSupplier = storeSupplier;
     }
 
     @Override
     public SessionStore<K, V> build() {
-        return new MeteredSessionStore<>(maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-                                         storeSupplier.metricsScope(),
-                                         keySerde,
-                                         valueSerde,
-                                         time);
+        return new MeteredSessionStore<>(
+            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
+            storeSupplier.metricsScope(),
+            keySerde,
+            valueSerde,
+            time);
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapCaching(final SessionStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return new CachingSessionStore<>(inner,
-                                         keySerde,
-                                         valueSerde,
-                                         storeSupplier.segmentIntervalMs());
+        return new CachingSessionStore(inner, storeSupplier.segmentIntervalMs());
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {

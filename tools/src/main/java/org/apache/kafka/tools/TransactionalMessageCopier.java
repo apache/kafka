@@ -195,13 +195,14 @@ public class TransactionalMessageCopier {
     }
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
-        for (TopicPartition topicPartition : consumer.assignment()) {
-            OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition);
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
+        consumer.assignment().forEach(tp -> {
+            OffsetAndMetadata offsetAndMetadata = committed.get(tp);
             if (offsetAndMetadata != null)
-                consumer.seek(topicPartition, offsetAndMetadata.offset());
+                consumer.seek(tp, offsetAndMetadata.offset());
             else
-                consumer.seekToBeginning(singleton(topicPartition));
-        }
+                consumer.seekToBeginning(singleton(tp));
+        });
     }
 
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
@@ -263,18 +264,15 @@ public class TransactionalMessageCopier {
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                isShuttingDown.set(true);
-                // Flush any remaining messages
-                producer.close();
-                synchronized (consumer) {
-                    consumer.close();
-                }
-                System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            isShuttingDown.set(true);
+            // Flush any remaining messages
+            producer.close();
+            synchronized (consumer) {
+                consumer.close();
             }
-        });
+            System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        }));
 
         try {
             Random random = new Random();

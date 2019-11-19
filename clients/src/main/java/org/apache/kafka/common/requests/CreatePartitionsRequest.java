@@ -231,16 +231,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         for (String topic : newPartitions.keySet()) {
             topicErrors.put(topic, ApiError.fromThrowable(e));
         }
-
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new CreatePartitionsResponse(throttleTimeMs, topicErrors);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_PARTITIONS.latestVersion()));
-        }
+        return new CreatePartitionsResponse(throttleTimeMs, topicErrors);
     }
 
     public static CreatePartitionsRequest parse(ByteBuffer buffer, short version) {

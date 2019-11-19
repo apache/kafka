@@ -33,7 +33,7 @@ import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
 class LogAppendTimeTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
-  val serverCount: Int = 2
+  val brokerCount: Int = 2
 
   // This will be used for the offsets topic as well
   serverConfig.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.name)
@@ -42,13 +42,13 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   private val topic = "topic"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic)
   }
 
   @Test
-  def testProduceConsume() {
+  def testProduceConsume(): Unit = {
     val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)

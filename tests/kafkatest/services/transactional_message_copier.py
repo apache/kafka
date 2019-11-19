@@ -63,7 +63,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         self.stop_timeout_sec = 60
         self.enable_random_aborts = enable_random_aborts
         self.loggers = {
-            "org.apache.kafka.clients.producer.internals": "TRACE"
+            "org.apache.kafka.clients.producer": "TRACE",
+            "org.apache.kafka.clients.consumer": "TRACE"
         }
 
     def _worker(self, idx, node):
@@ -135,7 +136,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def pids(self, node):
         try:
-            cmd = "ps ax | grep -i TransactionalMessageCopier | grep java | grep -v grep | awk '{print $1}'"
+            cmd = "jps | grep -i TransactionalMessageCopier | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:

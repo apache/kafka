@@ -23,7 +23,13 @@ import java.util.Map;
 
 public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
+    private final List<RebalanceProtocol> supportedProtocols;
+
     private Map<String, List<TopicPartition>> result = null;
+
+    MockPartitionAssignor(final List<RebalanceProtocol> supportedProtocols) {
+        this.supportedProtocols = supportedProtocols;
+    }
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
@@ -36,6 +42,11 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
     @Override
     public String name() {
         return "consumer-mock-assignor";
+    }
+
+    @Override
+    public List<RebalanceProtocol> supportedProtocols() {
+        return supportedProtocols;
     }
 
     public void clear() {

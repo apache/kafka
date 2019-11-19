@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -100,7 +99,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given storeName
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> as(final String storeName) {
-        Topic.validate(storeName);
+        Named.validate(storeName);
         return new Materialized<>(storeName);
     }
 

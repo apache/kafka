@@ -24,9 +24,11 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,6 +41,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
@@ -166,28 +169,77 @@ public class InternalTopicManagerTest {
             mockAdminClient,
             new StreamsConfig(config));
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         internalTopicManager2.makeReady(Collections.singletonMap(topic, internalTopicConfig));
     }
 
     @Test
     public void shouldNotThrowExceptionForEmptyTopicMap() {
-        internalTopicManager.makeReady(Collections.<String, InternalTopicConfig>emptyMap());
+        internalTopicManager.makeReady(Collections.emptyMap());
     }
 
     @Test
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
-        mockAdminClient.timeoutNextRequest(4);
+        mockAdminClient.timeoutNextRequest(1);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+        try {
+            internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
+            fail("Should have thrown StreamsException.");
+        } catch (final StreamsException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
+    }
+
+    @Test
+    public void shouldLogWhenTopicNotFoundAndNotThrowException() {
+        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+
+        final InternalTopicConfig internalTopicConfigII = new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
+        internalTopicConfigII.setNumberOfPartitions(1);
+
+        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
+        topicConfigMap.put(topic, internalTopicConfig);
+        topicConfigMap.put("internal-topic", internalTopicConfigII);
+
+
+        internalTopicManager.makeReady(topicConfigMap);
+        boolean foundExpectedMessage = false;
+        for (final String message : appender.getMessages()) {
+            foundExpectedMessage |= message.contains("Topic internal-topic is unknown or not found, hence not existed yet.");
+        }
+        assertTrue(foundExpectedMessage);
+
+    }
+
+    @Test
+    public void shouldExhaustRetriesOnMarkedForDeletionTopic() {
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
             internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
             fail("Should have thrown StreamsException.");
         } catch (final StreamsException expected) {
             assertNull(expected.getCause());
-            assertEquals("Could not create topics. This can happen if the Kafka cluster is temporary not available. You can increase admin client config `retries` to be resilient against this error.", expected.getMessage());
+            assertTrue(expected.getMessage().startsWith("Could not create topics after 1 retries"));
         }
     }
 

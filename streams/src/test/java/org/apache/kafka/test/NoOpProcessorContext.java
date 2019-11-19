@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.time.Duration;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -29,19 +28,21 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
+    @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();
 
     public NoOpProcessorContext() {
         super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
     }
 
-    static StreamsConfig streamsConfig() {
+    private static StreamsConfig streamsConfig() {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "boot");
@@ -53,9 +54,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+    @Deprecated
+    public Cancellable schedule(final long interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         return null;
     }
 
@@ -76,21 +79,20 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         forwardedValues.put(key, value);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         forward(key, value);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
     }
 
     @Override
-    public void commit() {
-    }
+    public void commit() {}
 
     @Override
     public void initialize() {
@@ -98,13 +100,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public long streamTime() {
-        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
-    }
-
-    @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        // no-op
-    }
+                         final StateRestoreCallback stateRestoreCallback) {}
 }

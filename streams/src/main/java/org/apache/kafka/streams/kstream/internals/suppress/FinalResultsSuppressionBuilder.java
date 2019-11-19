@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.time.Duration;
 import java.util.Objects;
 
-public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppressed<K> {
+public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppressed<K>, NamedSuppressed<K> {
     private final String name;
     private final StrictBufferConfig bufferConfig;
 
@@ -57,6 +57,11 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
         final FinalResultsSuppressionBuilder<?> that = (FinalResultsSuppressionBuilder<?>) o;
         return Objects.equals(name, that.name) &&
             Objects.equals(bufferConfig, that.bufferConfig);
+    }
+
+    @Override
+    public String name() {
+        return name;
     }
 
     @Override

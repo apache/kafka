@@ -20,9 +20,14 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+
+import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
+import static org.apache.kafka.streams.tests.SmokeTestDriver.generatePerpetually;
 
 public class StreamsSmokeTest {
 
@@ -32,7 +37,7 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
-    public static void main(final String[] args) throws InterruptedException, IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsSmokeTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
             System.exit(1);
@@ -56,24 +61,28 @@ public class StreamsSmokeTest {
         System.out.println("disableAutoTerminate=" + disableAutoTerminate);
 
         switch (command) {
-            case "standalone":
-                SmokeTestDriver.main(args);
-                break;
             case "run":
                 // this starts the driver (data generation and result verification)
                 final int numKeys = 10;
                 final int maxRecordsPerKey = 500;
                 if (disableAutoTerminate) {
-                    SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, false);
+                    generatePerpetually(kafka, numKeys, maxRecordsPerKey);
                 } else {
-                    final Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
+                    // slow down data production to span 30 seconds so that system tests have time to
+                    // do their bounces, etc.
+                    final Map<String, Set<Integer>> allData =
+                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(30));
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;
             case "process":
-                // this starts a KafkaStreams client
-                final SmokeTestClient client = new SmokeTestClient(streamsProperties);
-                client.start();
+                // this starts the stream processing app
+                new SmokeTestClient(UUID.randomUUID().toString()).start(streamsProperties);
+                break;
+            case "process-eos":
+                // this starts the stream processing app with EOS
+                streamsProperties.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+                new SmokeTestClient(UUID.randomUUID().toString()).start(streamsProperties);
                 break;
             case "close-deadlock-test":
                 final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka);

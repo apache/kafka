@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
@@ -26,6 +27,7 @@ import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> registered = new HashSet<>();
+    private Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
 
     @Override
     public void register(final StateRestorer restorer) {
@@ -39,12 +41,28 @@ public class MockChangelogReader implements ChangelogReader {
 
     @Override
     public Map<TopicPartition, Long> restoredOffsets() {
-        return Collections.emptyMap();
+        return restoredOffsets;
+    }
+
+    void setRestoredOffsets(final Map<TopicPartition, Long> restoredOffsets) {
+        this.restoredOffsets = restoredOffsets;
     }
 
     @Override
-    public void reset() {
+    public void clear() {
         registered.clear();
+    }
+
+    @Override
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            restoredOffsets.remove(partition);
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return restoredOffsets.isEmpty() && registered.isEmpty();
     }
 
     public boolean wasRegistered(final TopicPartition partition) {

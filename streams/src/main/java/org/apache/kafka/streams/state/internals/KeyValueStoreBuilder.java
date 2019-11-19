@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+
 import java.util.Objects;
 
 public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
@@ -50,7 +51,7 @@ public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyVa
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore<>(inner, keySerde, valueSerde);
+        return new CachingKeyValueStore(inner);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {

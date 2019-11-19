@@ -19,7 +19,6 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
@@ -27,7 +26,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
@@ -73,6 +71,8 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final TopicsSpec activeTopics;
     private final TopicsSpec inactiveTopics;
+    private final boolean useConfiguredPartitioner;
+    private final boolean skipFlush;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -88,7 +88,9 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
-                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
+                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
+                         @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner, 
+                         @JsonProperty("skipFlush") boolean skipFlush) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -106,6 +108,8 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : activeTopics.immutableCopy();
         this.inactiveTopics = (inactiveTopics == null) ?
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
+        this.useConfiguredPartitioner = useConfiguredPartitioner;
+        this.skipFlush = skipFlush;
     }
 
     @JsonProperty
@@ -168,14 +172,19 @@ public class ProduceBenchSpec extends TaskSpec {
         return inactiveTopics;
     }
 
+    @JsonProperty
+    public boolean useConfiguredPartitioner() {
+        return useConfiguredPartitioner;
+    }
+
+    @JsonProperty
+    public boolean skipFlush() {
+        return skipFlush;
+    }
+
     @Override
     public TaskController newController(String id) {
-        return new TaskController() {
-            @Override
-            public Set<String> targetNodes(Topology topology) {
-                return Collections.singleton(producerNode);
-            }
-        };
+        return topology -> Collections.singleton(producerNode);
     }
 
     @Override

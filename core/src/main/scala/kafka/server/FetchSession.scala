@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.utils.{ImplicitLinkedHashSet, Time, Utils}
+import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
 import scala.collection.{mutable, _}
@@ -38,7 +38,7 @@ import scala.collection.JavaConverters._
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
   type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
-  type CACHE_MAP = ImplicitLinkedHashSet[CachedPartition]
+  type CACHE_MAP = ImplicitLinkedHashCollection[CachedPartition]
   type RESP_MAP_ITER = util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]]]
 
   val NUM_INCREMENTAL_FETCH_SESSISONS = "NumIncrementalFetchSessions"
@@ -79,10 +79,10 @@ class CachedPartition(val topic: String,
                       var highWatermark: Long,
                       var fetcherLogStartOffset: Long,
                       var localLogStartOffset: Long)
-    extends ImplicitLinkedHashSet.Element {
+    extends ImplicitLinkedHashCollection.Element {
 
-  var cachedNext: Int = ImplicitLinkedHashSet.INVALID_INDEX
-  var cachedPrev: Int = ImplicitLinkedHashSet.INVALID_INDEX
+  var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
+  var cachedPrev: Int = ImplicitLinkedHashCollection.INVALID_INDEX
 
   override def next = cachedNext
   override def setNext(next: Int) = this.cachedNext = next
@@ -143,6 +143,10 @@ class CachedPartition(val topic: String,
       mustRespond = true
       if (updateResponseData)
         localLogStartOffset = respData.logStartOffset
+    }
+    if (respData.preferredReadReplica.isPresent) {
+      // If the broker computed a preferred read replica, we need to include it in the response
+      mustRespond = true
     }
     if (respData.error.code != 0) {
       // Partitions with errors are always included in the response.
@@ -261,7 +265,7 @@ case class FetchSession(val id: Int,
       ", privileged=" + privileged +
       ", partitionMap.size=" + partitionMap.size +
       ", creationMs=" + creationMs +
-      ", creationMs=" + lastUsedMs +
+      ", lastUsedMs=" + lastUsedMs +
       ", epoch=" + epoch + ")"
   }
 }
@@ -777,11 +781,7 @@ class FetchManager(private val time: Time,
                 cache.remove(session)
                 new SessionlessFetchContext(fetchData)
               } else {
-                if (session.size != session.cachedSize) {
-                  // If the number of partitions in the session changed, update the session's
-                  // position in the cache.
-                  cache.touch(session, session.lastUsedMs)
-                }
+                cache.touch(session, time.milliseconds())
                 session.epoch = JFetchMetadata.nextEpoch(session.epoch)
                 debug(s"Created a new incremental FetchContext for session id ${session.id}, " +
                   s"epoch ${session.epoch}: added ${partitionsToLogString(added)}, " +

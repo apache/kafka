@@ -33,9 +33,9 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.{assertThrows, fail}
 
-class ProducerStateManagerTest extends JUnitSuite {
+class ProducerStateManagerTest {
   var logDir: File = null
   var stateManager: ProducerStateManager = null
   val partition = new TopicPartition("test", 0)
@@ -99,8 +99,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     }
 
     // If the transaction marker is the only thing left in the log, then an attempt to write using a
-    // non-zero sequence number should cause an UnknownProducerId, so that the producer can reset its state
-    assertThrows[UnknownProducerIdException] {
+    // non-zero sequence number should cause an OutOfOrderSequenceException, so that the producer can reset its state
+    assertThrows[OutOfOrderSequenceException] {
       append(stateManager, producerId, producerEpoch, 17, 0L, 4L)
     }
 
@@ -129,6 +129,25 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     assertEquals(Int.MaxValue, lastEntry.firstSeq)
     assertEquals(0, lastEntry.lastSeq)
+  }
+
+  @Test
+  def testProducerSequenceWithWrapAroundBatchRecord(): Unit = {
+    val epoch = 15.toShort
+
+    val appendInfo = stateManager.prepareUpdate(producerId, isFromClient = false)
+    // Sequence number wrap around
+    appendInfo.append(epoch, Int.MaxValue - 10, 9, time.milliseconds(),
+      LogOffsetMetadata(2000L), 2020L, isTransactional = false)
+    assertEquals(None, stateManager.lastEntry(producerId))
+    stateManager.update(appendInfo)
+    assertTrue(stateManager.lastEntry(producerId).isDefined)
+
+    val lastEntry = stateManager.lastEntry(producerId).get
+    assertEquals(Int.MaxValue-10, lastEntry.firstSeq)
+    assertEquals(9, lastEntry.lastSeq)
+    assertEquals(2000L, lastEntry.firstOffset)
+    assertEquals(2020L, lastEntry.lastDataOffset)
   }
 
   @Test(expected = classOf[OutOfOrderSequenceException])
@@ -190,33 +209,69 @@ class ProducerStateManagerTest extends JUnitSuite {
     val producerEpoch = 0.toShort
     val offset = 992342L
     val seq = 0
-    val producerAppendInfo = new ProducerAppendInfo(producerId, ProducerStateEntry.empty(producerId), ValidationType.Full)
-    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(), offset, isTransactional = true)
+    val producerAppendInfo = new ProducerAppendInfo(partition, producerId, ProducerStateEntry.empty(producerId), ValidationType.Full)
 
-    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
+    val firstOffsetMetadata = LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
       relativePositionInSegment = 234224)
-    producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
+    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(),
+      firstOffsetMetadata, offset, isTransactional = true)
     stateManager.update(producerAppendInfo)
 
-    assertEquals(Some(logOffsetMetadata), stateManager.firstUnstableOffset)
+    assertEquals(Some(firstOffsetMetadata), stateManager.firstUnstableOffset)
   }
 
   @Test
-  def testNonMatchingTxnFirstOffsetMetadataNotCached(): Unit = {
+  def testLastStableOffsetCompletedTxn(): Unit = {
     val producerEpoch = 0.toShort
-    val offset = 992342L
-    val seq = 0
-    val producerAppendInfo = new ProducerAppendInfo(producerId, ProducerStateEntry.empty(producerId), ValidationType.Full)
-    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(), offset, isTransactional = true)
+    val segmentBaseOffset = 990000L
 
-    // use some other offset to simulate a follower append where the log offset metadata won't typically
-    // match any of the transaction first offsets
-    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset - 23429, segmentBaseOffset = 990000L,
-      relativePositionInSegment = 234224)
-    producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
-    stateManager.update(producerAppendInfo)
+    def beginTxn(producerId: Long, startOffset: Long): Unit = {
+      val relativeOffset = (startOffset - segmentBaseOffset).toInt
+      val producerAppendInfo = new ProducerAppendInfo(
+        partition,
+        producerId,
+        ProducerStateEntry.empty(producerId),
+        ValidationType.Full
+      )
+      val firstOffsetMetadata = LogOffsetMetadata(messageOffset = startOffset, segmentBaseOffset = segmentBaseOffset,
+        relativePositionInSegment = 50 * relativeOffset)
+      producerAppendInfo.append(producerEpoch, 0, 0, time.milliseconds(),
+        firstOffsetMetadata, startOffset, isTransactional = true)
+      stateManager.update(producerAppendInfo)
+    }
 
-    assertEquals(Some(LogOffsetMetadata(offset)), stateManager.firstUnstableOffset)
+    val producerId1 = producerId
+    val startOffset1 = 992342L
+    beginTxn(producerId1, startOffset1)
+
+    val producerId2 = producerId + 1
+    val startOffset2 = startOffset1 + 25
+    beginTxn(producerId2, startOffset2)
+
+    val producerId3 = producerId + 2
+    val startOffset3 = startOffset1 + 57
+    beginTxn(producerId3, startOffset3)
+
+    val lastOffset1 = startOffset3 + 15
+    val completedTxn1 = CompletedTxn(producerId1, startOffset1, lastOffset1, isAborted = false)
+    assertEquals(startOffset2, stateManager.lastStableOffset(completedTxn1))
+    stateManager.completeTxn(completedTxn1)
+    stateManager.onHighWatermarkUpdated(lastOffset1 + 1)
+    assertEquals(Some(startOffset2), stateManager.firstUnstableOffset.map(_.messageOffset))
+
+    val lastOffset3 = lastOffset1 + 20
+    val completedTxn3 = CompletedTxn(producerId3, startOffset3, lastOffset3, isAborted = false)
+    assertEquals(startOffset2, stateManager.lastStableOffset(completedTxn3))
+    stateManager.completeTxn(completedTxn3)
+    stateManager.onHighWatermarkUpdated(lastOffset3 + 1)
+    assertEquals(Some(startOffset2), stateManager.firstUnstableOffset.map(_.messageOffset))
+
+    val lastOffset2 = lastOffset3 + 78
+    val completedTxn2 = CompletedTxn(producerId2, startOffset2, lastOffset2, isAborted = false)
+    assertEquals(lastOffset2 + 1, stateManager.lastStableOffset(completedTxn2))
+    stateManager.completeTxn(completedTxn2)
+    stateManager.onHighWatermarkUpdated(lastOffset2 + 1)
+    assertEquals(None, stateManager.firstUnstableOffset)
   }
 
   @Test
@@ -224,13 +279,15 @@ class ProducerStateManagerTest extends JUnitSuite {
     val producerEpoch = 0.toShort
 
     val appendInfo = stateManager.prepareUpdate(producerId, isFromClient = true)
-    appendInfo.append(producerEpoch, 0, 5, time.milliseconds(), 20L, isTransactional = false)
+    appendInfo.append(producerEpoch, 0, 5, time.milliseconds(),
+      LogOffsetMetadata(15L), 20L, isTransactional = false)
     assertEquals(None, stateManager.lastEntry(producerId))
     stateManager.update(appendInfo)
     assertTrue(stateManager.lastEntry(producerId).isDefined)
 
     val nextAppendInfo = stateManager.prepareUpdate(producerId, isFromClient = true)
-    nextAppendInfo.append(producerEpoch, 6, 10, time.milliseconds(), 30L, isTransactional = false)
+    nextAppendInfo.append(producerEpoch, 6, 10, time.milliseconds(),
+      LogOffsetMetadata(26L), 30L, isTransactional = false)
     assertTrue(stateManager.lastEntry(producerId).isDefined)
 
     var lastEntry = stateManager.lastEntry(producerId).get
@@ -253,7 +310,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, producerEpoch, 0, offset)
 
     val appendInfo = stateManager.prepareUpdate(producerId, isFromClient = true)
-    appendInfo.append(producerEpoch, 1, 5, time.milliseconds(), 20L, isTransactional = true)
+    appendInfo.append(producerEpoch, 1, 5, time.milliseconds(),
+      LogOffsetMetadata(16L), 20L, isTransactional = true)
     var lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
     assertEquals(1, lastEntry.firstSeq)
@@ -263,7 +321,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
-    appendInfo.append(producerEpoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
+    appendInfo.append(producerEpoch, 6, 10, time.milliseconds(),
+      LogOffsetMetadata(26L), 30L, isTransactional = true)
     lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
     assertEquals(1, lastEntry.firstSeq)
@@ -371,7 +430,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(recoveredMapping, producerId, epoch, 2, 2L)
   }
 
-  @Test(expected = classOf[UnknownProducerIdException])
+  @Test
   def testRemoveExpiredPidsOnReload(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, 0)
@@ -382,8 +441,12 @@ class ProducerStateManagerTest extends JUnitSuite {
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
-    // we should get an out of order sequence exception.
+    // we should accept the append and add the pid back in
     append(recoveredMapping, producerId, epoch, 2, 2L, 70001)
+
+    assertEquals(1, recoveredMapping.activeProducers.size)
+    assertEquals(2, recoveredMapping.activeProducers.head._2.lastSeq)
+    assertEquals(3L, recoveredMapping.mapEndOffset)
   }
 
   @Test
@@ -502,52 +565,7 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
-  def testFirstUnstableOffsetAfterEviction(): Unit = {
-    val epoch = 0.toShort
-    val sequence = 0
-    append(stateManager, producerId, epoch, sequence, offset = 99, isTransactional = true)
-    assertEquals(Some(99), stateManager.firstUnstableOffset.map(_.messageOffset))
-    append(stateManager, 2L, epoch, 0, offset = 106, isTransactional = true)
-    stateManager.truncateHead(100)
-    assertEquals(Some(106), stateManager.firstUnstableOffset.map(_.messageOffset))
-  }
-
-  @Test
-  def testTruncateHead(): Unit = {
-    val epoch = 0.toShort
-
-    append(stateManager, producerId, epoch, 0, 0L)
-    append(stateManager, producerId, epoch, 1, 1L)
-    stateManager.takeSnapshot()
-
-    val anotherPid = 2L
-    append(stateManager, anotherPid, epoch, 0, 2L)
-    append(stateManager, anotherPid, epoch, 1, 3L)
-    stateManager.takeSnapshot()
-    assertEquals(Set(2, 4), currentSnapshotOffsets)
-
-    stateManager.truncateHead(2)
-    assertEquals(Set(2, 4), currentSnapshotOffsets)
-    assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
-    assertEquals(None, stateManager.lastEntry(producerId))
-
-    val maybeEntry = stateManager.lastEntry(anotherPid)
-    assertTrue(maybeEntry.isDefined)
-    assertEquals(3L, maybeEntry.get.lastDataOffset)
-
-    stateManager.truncateHead(3)
-    assertEquals(Set(anotherPid), stateManager.activeProducers.keySet)
-    assertEquals(Set(4), currentSnapshotOffsets)
-    assertEquals(4, stateManager.mapEndOffset)
-
-    stateManager.truncateHead(5)
-    assertEquals(Set(), stateManager.activeProducers.keySet)
-    assertEquals(Set(), currentSnapshotOffsets)
-    assertEquals(5, stateManager.mapEndOffset)
-  }
-
-  @Test
-  def testLoadFromSnapshotRemovesNonRetainedProducers(): Unit = {
+  def testLoadFromSnapshotRetainsNonExpiredProducers(): Unit = {
     val epoch = 0.toShort
     val pid1 = 1L
     val pid2 = 2L
@@ -558,13 +576,17 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(2, stateManager.activeProducers.size)
 
     stateManager.truncateAndReload(1L, 2L, time.milliseconds())
-    assertEquals(1, stateManager.activeProducers.size)
-    assertEquals(None, stateManager.lastEntry(pid1))
+    assertEquals(2, stateManager.activeProducers.size)
 
-    val entry = stateManager.lastEntry(pid2)
-    assertTrue(entry.isDefined)
-    assertEquals(0, entry.get.lastSeq)
-    assertEquals(1L, entry.get.lastDataOffset)
+    val entry1 = stateManager.lastEntry(pid1)
+    assertTrue(entry1.isDefined)
+    assertEquals(0, entry1.get.lastSeq)
+    assertEquals(0L, entry1.get.lastDataOffset)
+
+    val entry2 = stateManager.lastEntry(pid2)
+    assertTrue(entry2.isDefined)
+    assertEquals(0, entry2.get.lastSeq)
+    assertEquals(1L, entry2.get.lastDataOffset)
   }
 
   @Test
@@ -583,34 +605,20 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
-  def testStartOffset(): Unit = {
-    val epoch = 0.toShort
-    val pid2 = 2L
-    append(stateManager, pid2, epoch, 0, 0L, 1L)
-    append(stateManager, producerId, epoch, 0, 1L, 2L)
-    append(stateManager, producerId, epoch, 1, 2L, 3L)
-    append(stateManager, producerId, epoch, 2, 3L, 4L)
-    stateManager.takeSnapshot()
-
-    assertThrows[UnknownProducerIdException] {
-      val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
-      recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
-      append(recoveredMapping, pid2, epoch, 1, 4L, 5L)
-    }
-  }
-
-  @Test(expected = classOf[UnknownProducerIdException])
-  def testPidExpirationTimeout() {
+  def testPidExpirationTimeout(): Unit = {
     val epoch = 5.toShort
     val sequence = 37
     append(stateManager, producerId, epoch, sequence, 1L)
     time.sleep(maxPidExpirationMs + 1)
     stateManager.removeExpiredProducers(time.milliseconds)
-    append(stateManager, producerId, epoch, sequence + 1, 1L)
+    append(stateManager, producerId, epoch, sequence + 1, 2L)
+    assertEquals(1, stateManager.activeProducers.size)
+    assertEquals(sequence + 1, stateManager.activeProducers.head._2.lastSeq)
+    assertEquals(3L, stateManager.mapEndOffset)
   }
 
   @Test
-  def testFirstUnstableOffset() {
+  def testFirstUnstableOffset(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
 
@@ -644,7 +652,7 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
-  def testProducersWithOngoingTransactionsDontExpire() {
+  def testProducersWithOngoingTransactionsDontExpire(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
 
@@ -805,7 +813,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     val endTxnMarker = new EndTransactionMarker(controlType, coordinatorEpoch)
     val completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp)
     mapping.update(producerAppendInfo)
-    val lastStableOffset = mapping.completeTxn(completedTxn)
+    val lastStableOffset = mapping.lastStableOffset(completedTxn)
+    mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)
     (completedTxn, lastStableOffset)
   }
@@ -819,7 +828,8 @@ class ProducerStateManagerTest extends JUnitSuite {
                      isTransactional: Boolean = false,
                      isFromClient : Boolean = true): Unit = {
     val producerAppendInfo = stateManager.prepareUpdate(producerId, isFromClient)
-    producerAppendInfo.append(producerEpoch, seq, seq, timestamp, offset, isTransactional)
+    producerAppendInfo.append(producerEpoch, seq, seq, timestamp,
+      LogOffsetMetadata(offset), offset, isTransactional)
     stateManager.update(producerAppendInfo)
     stateManager.updateMapEndOffset(offset + 1)
   }
@@ -831,7 +841,7 @@ class ProducerStateManagerTest extends JUnitSuite {
                      batch: RecordBatch,
                      isFromClient : Boolean): Unit = {
     val producerAppendInfo = stateManager.prepareUpdate(producerId, isFromClient)
-    producerAppendInfo.append(batch)
+    producerAppendInfo.append(batch, firstOffsetMetadataOpt = None)
     stateManager.update(producerAppendInfo)
     stateManager.updateMapEndOffset(offset + 1)
   }

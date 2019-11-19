@@ -21,6 +21,8 @@ import java.io.File
 import java.util.Properties
 import javax.security.auth.login.Configuration
 
+import scala.collection.Seq
+
 import kafka.admin.ConfigCommand
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
@@ -51,7 +53,7 @@ trait SaslSetup {
   private var serverKeytabFile: Option[File] = None
   private var clientKeytabFile: Option[File] = None
 
-  def startSasl(jaasSections: Seq[JaasSection]) {
+  def startSasl(jaasSections: Seq[JaasSection]): Unit = {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
     val hasKerberos = jaasSections.exists(_.modules.exists {
@@ -106,14 +108,14 @@ trait SaslSetup {
     }
   }
 
-  private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]) {
+  private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]): Unit = {
     val file = JaasTestUtils.writeJaasContextsToFile(jaasSections)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
   }
 
-  def closeSasl() {
+  def closeSasl(): Unit = {
     if (kdc != null)
       kdc.stop()
     // Important if tests leak consumers, producers or brokers

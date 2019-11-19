@@ -41,7 +41,7 @@ public class SinkNodeTest {
         null,
         new LogContext("sinknode-test "),
         new DefaultProductionExceptionHandler(),
-        new Metrics().sensor("skipped-records")
+        new Metrics().sensor("dropped-records")
     );
 
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(

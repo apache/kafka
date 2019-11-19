@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -31,9 +32,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serdes;
@@ -54,28 +55,32 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
 
 import java.io.File;
-import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -91,21 +96,29 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.startsWith;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
-    private final String clientId = "clientId";
-    private final String applicationId = "stream-thread-test";
+    private final static String APPLICATION_ID = "stream-thread-test";
+    private final static UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
+    private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
+
+    private final int threadIdx = 1;
     private final MockTime mockTime = new MockTime();
     private final Metrics metrics = new Metrics();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -115,16 +128,14 @@ public class StreamThreadTest {
     private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 
-    private UUID processId = UUID.randomUUID();
     private InternalTopologyBuilder internalTopologyBuilder;
     private StreamsMetadataState streamsMetadataState;
 
     @Before
     public void setUp() {
-        processId = UUID.randomUUID();
-
+        Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
         internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(internalStreamsBuilder);
-        internalTopologyBuilder.setApplicationId(applicationId);
+        internalTopologyBuilder.setApplicationId(APPLICATION_ID);
         streamsMetadataState = new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST);
     }
 
@@ -142,7 +153,7 @@ public class StreamThreadTest {
 
     private Properties configProps(final boolean enableEoS) {
         return mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName()),
@@ -155,19 +166,19 @@ public class StreamThreadTest {
     public void testPartitionAssignmentChangeForSingleGroup() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
         assertEquals(thread.state(), StreamThread.State.CREATED);
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-        thread.setState(StreamThread.State.RUNNING);
 
         final List<TopicPartition> revokedPartitions;
         final List<TopicPartition> assignedPartitions;
 
         // revoke nothing
+        thread.setState(StreamThread.State.STARTING);
         revokedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
 
@@ -175,7 +186,7 @@ public class StreamThreadTest {
 
         // assign single partition
         assignedPartitions = singletonList(t1p1);
-        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -191,40 +202,36 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void testStateChangeStartClose() throws InterruptedException {
-        final StreamThread thread = createStreamThread(clientId, config, false);
+    public void testStateChangeStartClose() throws Exception {
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
 
         thread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return thread.state() == StreamThread.State.RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.STARTING,
+            10 * 1000,
+            "Thread never started.");
 
         thread.shutdown();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return thread.state() == StreamThread.State.DEAD;
-            }
-        }, 10 * 1000, "Thread never shut down.");
+        TestUtils.waitForCondition(
+            () -> thread.state() == StreamThread.State.DEAD,
+            10 * 1000,
+            "Thread never shut down.");
 
         thread.shutdown();
         assertEquals(thread.state(), StreamThread.State.DEAD);
     }
 
     private Cluster createCluster() {
-        final Node node = new Node(0, "localhost", 8121);
+        final Node node = new Node(-1, "localhost", 8121);
         return new Cluster(
             "mockClusterId",
             singletonList(node),
-            Collections.<PartitionInfo>emptySet(),
-            Collections.<String>emptySet(),
-            Collections.<String>emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
             node
         );
     }
@@ -233,58 +240,157 @@ public class StreamThreadTest {
                                             final StreamsConfig config,
                                             final boolean eosEnabled) {
         if (eosEnabled) {
-            clientSupplier.setApplicationIdForProducer(applicationId);
+            clientSupplier.setApplicationIdForProducer(APPLICATION_ID);
         }
 
         clientSupplier.setClusterForAdminClient(createCluster());
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
 
         return StreamThread.create(
             internalTopologyBuilder,
             config,
             clientSupplier,
-            clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
-            processId,
+            clientSupplier.getAdmin(config.getAdminConfigs(clientId)),
+            PROCESS_ID,
             clientId,
-            metrics,
+            streamsMetrics,
             mockTime,
             streamsMetadataState,
             0,
             stateDirectory,
-            new MockStateRestoreListener());
+            new MockStateRestoreListener(),
+            threadIdx
+        );
     }
 
     @Test
-    public void testMetricsCreatedAtStartup() {
-        final StreamThread thread = createStreamThread(clientId, config, false);
-        final String defaultGroupName = "stream-metrics";
-        final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
-
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", defaultGroupName, "The total number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", defaultGroupName, "The total number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", defaultGroupName, "The total number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", defaultGroupName, "The total number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", defaultGroupName, "The total number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
+    public void testMetricsCreatedAtStartupWithBuiltInMetricsVersionLatest() {
+        testMetricsCreatedAtStartup(StreamsConfig.METRICS_LATEST);
     }
 
+    @Test
+    public void testMetricsCreatedAtStartupWithBuiltInMetricsVersion0100To24() {
+        testMetricsCreatedAtStartup(StreamsConfig.METRICS_0100_TO_24);
+    }
 
-    @SuppressWarnings({"unchecked", "ThrowableNotThrown"})
+    private void testMetricsCreatedAtStartup(final String builtInMetricsVersion) {
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+        final String defaultGroupName = getGroupName(builtInMetricsVersion);
+        final Map<String, String> defaultTags = Collections.singletonMap(
+            getThreadTagKey(builtInMetricsVersion),
+            thread.getName()
+        );
+        final String descriptionIsNotVerified = "";
+
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-created-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-created-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(
+                "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(
+                "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        } else {
+            assertNull(metrics.metrics().get(metrics.metricName(
+                "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+            assertNull(metrics.metrics().get(metrics.metricName(
+                "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        }
+
+        final String taskGroupName = "stream-task-metrics";
+        final Map<String, String> taskTags =
+            mkMap(mkEntry("task-id", "all"), mkEntry(getThreadTagKey(builtInMetricsVersion), thread.getName()));
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+            assertNotNull(metrics.metrics().get(metrics.metricName(
+                "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(
+                "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
+            assertNotNull(metrics.metrics().get(metrics.metricName(
+                "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
+        } else {
+            assertNull(metrics.metrics().get(metrics.metricName(
+                "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
+            assertNull(metrics.metrics().get(metrics.metricName(
+                "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
+            assertNull(metrics.metrics().get(metrics.metricName(
+                "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
+        }
+
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertEquals(CLIENT_ID + "-StreamThread-1", thread.getName());
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,%s=%s",
+            defaultGroupName,
+            getThreadTagKey(builtInMetricsVersion),
+            thread.getName())
+        ));
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
+            assertTrue(reporter.containsMbean(String.format(
+                "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
+                getThreadTagKey(builtInMetricsVersion),
+                thread.getName())));
+        } else {
+            assertFalse(reporter.containsMbean(String.format(
+                "kafka.streams:type=stream-task-metrics,%s=%s,task-id=all",
+                getThreadTagKey(builtInMetricsVersion),
+                thread.getName())));
+        }
+    }
+
+    private String getGroupName(final String builtInMetricsVersion) {
+        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "stream-metrics"
+            : "stream-thread-metrics";
+    }
+
+    private String getThreadTagKey(final String builtInMetricsVersion) {
+        return builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24) ? "client-id" : "thread-id";
+    }
+
     @Test
     public void shouldNotCommitBeforeTheCommitInterval() {
         final long commitInterval = 1000L;
@@ -296,7 +402,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 1);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -307,7 +413,7 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
         );
@@ -329,22 +435,24 @@ public class StreamThreadTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(applicationId,
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(APPLICATION_ID,
             "localhost:2171",
             Serdes.ByteArraySerde.class.getName(),
             Serdes.ByteArraySerde.class.getName(),
             properties));
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
+        final TaskId task1 = new TaskId(0, t1p1.partition());
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
         thread.taskManager().setAssignmentMetadata(
             Collections.singletonMap(
-                new TaskId(0, t1p1.partition()),
+                task1,
                 assignedPartitions),
-            Collections.<TaskId, Set<TopicPartition>>emptyMap());
+            Collections.emptyMap());
+        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
@@ -354,13 +462,13 @@ public class StreamThreadTest {
 
         // processed one record, punctuated after the first record, and hence num.iterations is still 1
         long offset = -1;
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 0, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 0L);
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(1));
 
         // processed one more record without punctuation, and bump num.iterations to 2
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 1L);
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(2));
@@ -376,28 +484,28 @@ public class StreamThreadTest {
         assertThat(thread.currentNumIterations(), equalTo(1));
 
         // processed two records, bumping up iterations to 2
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 5, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 6, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 5L);
+        addRecord(mockConsumer, ++offset, 6L);
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(2));
 
         // stream time based punctutation halves to 1
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 11, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 11L);
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(1));
 
         // processed three records, bumping up iterations to 3 (1 + 2)
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 12, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 13, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 14, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 12L);
+        addRecord(mockConsumer, ++offset, 13L);
+        addRecord(mockConsumer, ++offset, 14L);
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(3));
 
         mockProcessor.requestCommit();
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 15, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        addRecord(mockConsumer, ++offset, 15L);
         thread.runOnce();
 
         // user requested commit should not impact on iteration adjustment
@@ -411,7 +519,6 @@ public class StreamThreadTest {
 
     }
 
-    @SuppressWarnings({"unchecked", "ThrowableNotThrown"})
     @Test
     public void shouldNotCauseExceptionIfNothingCommitted() {
         final long commitInterval = 1000L;
@@ -423,7 +530,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -434,7 +541,7 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
         );
@@ -447,8 +554,6 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager);
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCommitAfterTheCommitInterval() {
         final long commitInterval = 1000L;
@@ -460,7 +565,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 2, 1);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -471,7 +576,7 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
         );
@@ -484,8 +589,9 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager);
     }
 
-    @SuppressWarnings({"ThrowableNotThrown", "unchecked"})
-    private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer, final int numberOfCommits, final int commits) {
+    private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,
+                                              final int numberOfCommits,
+                                              final int commits) {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.commitAll()).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, consumer);
@@ -497,10 +603,10 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -511,7 +617,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         activeTasks.put(task2, Collections.singleton(t1p2));
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -534,21 +640,25 @@ public class StreamThreadTest {
     public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
         activeTasks.put(task1, Collections.singleton(t1p1));
         activeTasks.put(task2, Collections.singleton(t1p2));
+        partitionsToTaskId.put(t1p1, task1);
+        partitionsToTaskId.put(t1p2, task2);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -569,10 +679,10 @@ public class StreamThreadTest {
     public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -583,7 +693,7 @@ public class StreamThreadTest {
         activeTasks.put(task1, Collections.singleton(t1p1));
         activeTasks.put(task2, Collections.singleton(t1p2));
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
         final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
@@ -601,18 +711,16 @@ public class StreamThreadTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldShutdownTaskManagerOnClose() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.activeTasks()).andReturn(Collections.<TaskId, StreamTask>emptyMap());
-        EasyMock.expect(taskManager.standbyTasks()).andReturn(Collections.<TaskId, StandbyTask>emptyMap());
         taskManager.shutdown(true);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -623,24 +731,20 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.setStateListener(
-            new StreamThread.StateListener() {
-                @Override
-                public void onChange(final Thread t, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState) {
-                    if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.RUNNING) {
-                        thread.shutdown();
-                    }
+            (t, newState, oldState) -> {
+                if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
+                    thread.shutdown();
                 }
             });
         thread.run();
         EasyMock.verify(taskManager);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldShutdownTaskManagerOnCloseWithoutStart() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
@@ -649,7 +753,8 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -660,15 +765,99 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         EasyMock.verify(taskManager);
     }
 
-    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotThrowWhenPendingShutdownInRunOnce() {
+        mockRunOnce(true);
+    }
+
+    @Test
+    public void shouldNotThrowWithoutPendingShutdownInRunOnce() {
+        // A reference test to verify that without intermediate shutdown the runOnce should pass
+        // without any exception.
+        mockRunOnce(false);
+    }
+
+    private void mockRunOnce(final boolean shutdownOnPoll) {
+        final Collection<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        final Map<TopicPartition, TaskId> partitionsToTaskId = Collections.singletonMap(t1p1, new TaskId(0, 1));
+        class MockStreamThreadConsumer<K, V> extends MockConsumer<K, V> {
+
+            private StreamThread streamThread;
+
+            private MockStreamThreadConsumer(final OffsetResetStrategy offsetResetStrategy) {
+                super(offsetResetStrategy);
+            }
+
+            @Override
+            public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
+                assertNotNull(streamThread);
+                if (shutdownOnPoll) {
+                    streamThread.shutdown();
+                }
+                streamThread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+                streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+                return super.poll(timeout);
+            }
+
+            private void setStreamThread(final StreamThread streamThread) {
+                this.streamThread = streamThread;
+            }
+        }
+
+        final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
+            new MockStreamThreadConsumer<>(OffsetResetStrategy.EARLIEST);
+
+        final TaskManager taskManager = new TaskManager(
+            new MockChangelogReader(),
+            PROCESS_ID,
+            "log-prefix",
+            mockStreamThreadConsumer,
+            streamsMetadataState,
+            null,
+            null,
+            null,
+            new AssignedStreamsTasks(new LogContext()),
+            new AssignedStandbyTasks(new LogContext())
+        );
+        taskManager.setConsumer(mockStreamThreadConsumer);
+        taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
+        taskManager.setPartitionsToTaskId(Collections.emptyMap());
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            mockStreamThreadConsumer,
+            mockStreamThreadConsumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+
+        mockStreamThreadConsumer.setStreamThread(thread);
+        mockStreamThreadConsumer.assign(assignedPartitions);
+        mockStreamThreadConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+
+        addRecord(mockStreamThreadConsumer, 1L, 0L);
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.runOnce();
+    }
+
     @Test
     public void shouldOnlyShutdownOnce() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
@@ -677,7 +866,8 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -688,10 +878,10 @@ public class StreamThreadTest {
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
-            clientId,
+            CLIENT_ID,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -703,44 +893,47 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, "topic");
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
 
-        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks);
-        thread.taskManager().createTasks(Collections.<TopicPartition>emptyList());
+        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), standbyTasks);
+        thread.taskManager().createTasks(Collections.emptyList());
 
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
+    public void shouldNotCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerWasFencedWhileProcessing() throws Exception {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
 
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
 
         consumer.updatePartitions(topic1, singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         activeTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -764,12 +957,7 @@ public class StreamThreadTest {
         assertFalse(producer.transactionCommitted());
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         TestUtils.waitForCondition(
-            new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return producer.commitCount() == 1;
-                }
-            },
+            () -> producer.commitCount() == 1,
             "StreamsThread did not commit transaction.");
 
         producer.fenceProducer();
@@ -778,37 +966,35 @@ public class StreamThreadTest {
         try {
             thread.runOnce();
             fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
-        TestUtils.waitForCondition(
-            new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return thread.tasks().isEmpty();
-                }
-            },
-            "StreamsThread did not remove fenced zombie task.");
+        } catch (final TaskMigratedException expected) {
+            assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
+                        thread.tasks().containsKey(task1));
+        }
 
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
     @Test
-    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTaks() {
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+    public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() {
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         activeTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -820,7 +1006,7 @@ public class StreamThreadTest {
         assertThat(thread.tasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).fenceProducer();
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertTrue(clientSupplier.producers.get(0).transactionInFlight());
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertTrue(clientSupplier.producers.get(0).closed());
@@ -829,22 +1015,25 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedInCloseTransactionWhenSuspendingTasks() {
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         activeTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -856,7 +1045,7 @@ public class StreamThreadTest {
         assertThat(thread.tasks().size(), equalTo(1));
 
         clientSupplier.producers.get(0).fenceProducerOnClose();
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
 
         assertFalse(clientSupplier.producers.get(0).transactionInFlight());
         assertTrue(clientSupplier.producers.get(0).transactionCommitted());
@@ -888,20 +1077,22 @@ public class StreamThreadTest {
     public void shouldReturnActiveTaskMetadataWhileRunningState() {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         activeTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(assignedPartitions);
@@ -910,19 +1101,28 @@ public class StreamThreadTest {
 
         thread.runOnce();
 
-        final ThreadMetadata threadMetadata = thread.threadMetadata();
-        assertEquals(StreamThread.State.RUNNING.name(), threadMetadata.threadState());
-        assertTrue(threadMetadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
-        assertTrue(threadMetadata.standbyTasks().isEmpty());
+        final ThreadMetadata metadata = thread.threadMetadata();
+        assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
+        assertTrue(metadata.activeTasks().contains(new TaskMetadata(task1.toString(), Utils.mkSet(t1p1))));
+        assertTrue(metadata.standbyTasks().isEmpty());
+
+        assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
+            Arrays.asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
+        final String threadName = metadata.threadName();
+        assertThat(threadName, startsWith(CLIENT_ID + "-StreamThread-" + threadIdx));
+        assertEquals(threadName + "-consumer", metadata.consumerClientId());
+        assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
+        assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
+        assertEquals(CLIENT_ID + "-admin", metadata.adminClientId());
     }
 
     @Test
     public void shouldReturnStandbyTaskMetadataWhileRunningState() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
+            .groupByKey().count(Materialized.as("count-one"));
 
         internalStreamsBuilder.buildAndOptimizeTopology();
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
             "stream-thread-test-count-one-changelog",
@@ -940,18 +1140,20 @@ public class StreamThreadTest {
         restoreConsumer.updateEndOffsets(offsets);
         restoreConsumer.updateBeginningOffsets(offsets);
 
-        thread.setState(StreamThread.State.RUNNING);
-
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks);
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), standbyTasks);
 
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
 
         thread.runOnce();
 
@@ -963,20 +1165,23 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldUpdateStandbyTask() throws IOException {
+    public void shouldUpdateStandbyTask() throws Exception {
         final String storeName1 = "count-one";
         final String storeName2 = "table-two";
-        final String changelogName1 = applicationId + "-" + storeName1 + "-changelog";
-        final String changelogName2 = applicationId + "-" + storeName2 + "-changelog";
+        final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
+        final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
-        internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
-        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, "");
-        internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
+        internalStreamsBuilder
+            .stream(Collections.singleton(topic1), consumed)
+            .groupByKey()
+            .count(Materialized.as(storeName1));
+        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized
+            = new MaterializedInternal<>(Materialized.as(storeName2), internalStreamsBuilder, "");
+        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName1,
             singletonList(
@@ -996,27 +1201,40 @@ public class StreamThreadTest {
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition2, 10L));
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition2, 0L));
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint
+            = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
         checkpoint.write(Collections.singletonMap(partition2, 5L));
 
         for (long i = 0L; i < 10L; i++) {
-            restoreConsumer.addRecord(new ConsumerRecord<>(changelogName1, 1, i, ("K" + i).getBytes(), ("V" + i).getBytes()));
-            restoreConsumer.addRecord(new ConsumerRecord<>(changelogName2, 1, i, ("K" + i).getBytes(), ("V" + i).getBytes()));
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                changelogName1,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                changelogName2,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
         }
 
-        thread.setState(StreamThread.State.RUNNING);
-
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
         standbyTasks.put(task3, Collections.singleton(t2p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), standbyTasks);
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(Collections.emptyMap(), standbyTasks);
 
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+        thread.rebalanceListener.onPartitionsAssigned(Collections.emptyList());
 
         thread.runOnce();
 
@@ -1031,55 +1249,100 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldCreateStandbyTask() {
+        setupInternalTopologyWithoutState();
+        internalTopologyBuilder.addStateStore(new MockKeyValueStoreBuilder("myStore", true), "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, not(nullValue()));
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskWithoutStateStores() {
+        setupInternalTopologyWithoutState();
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled() {
+        setupInternalTopologyWithoutState();
+        final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("myStore", true);
+        storeBuilder.withLoggingDisabled();
+        internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    private void setupInternalTopologyWithoutState() {
+        final MockProcessor mockProcessor = new MockProcessor();
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+    }
+
+    private StandbyTask createStandbyTask() {
+        final LogContext logContext = new LogContext("test");
+        final Logger log = logContext.logger(StreamThreadTest.class);
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
+        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
+            internalTopologyBuilder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            new MockChangelogReader(),
+            mockTime,
+            CLIENT_ID,
+            log);
+        return standbyTaskCreator.createTask(
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new TaskId(1, 2),
+            Collections.emptySet());
+    }
+
+    @Test
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final ProcessorSupplier<Object, Object> punctuateProcessor = new ProcessorSupplier<Object, Object>() {
+        final ProcessorSupplier<Object, Object> punctuateProcessor = () -> new Processor<Object, Object>() {
             @Override
-            public Processor<Object, Object> get() {
-                return new Processor<Object, Object>() {
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, new Punctuator() {
-                            @Override
-                            public void punctuate(final long timestamp) {
-                                punctuatedStreamTime.add(timestamp);
-                            }
-                        });
-                        context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-                            @Override
-                            public void punctuate(final long timestamp) {
-                                punctuatedWallClockTime.add(timestamp);
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void process(final Object key, final Object value) {}
-
-                    @Override
-                    public void close() {}
-                };
+            public void init(final ProcessorContext context) {
+                context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
+                context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
             }
+
+            @Override
+            public void process(final Object key,
+                                final Object value) {}
+
+            @Override
+            public void close() {}
         };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-
-        thread.rebalanceListener.onPartitionsRevoked(null);
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptySet());
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         // assign single partition
         assignedPartitions.add(t1p1);
         activeTasks.put(task1, Collections.singleton(t1p1));
+        partitionsToTaskId.put(t1p1, task1);
 
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        thread.taskManager().setPartitionsToTaskId(partitionsToTaskId);
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         clientSupplier.consumer.assign(assignedPartitions);
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
@@ -1092,7 +1355,17 @@ public class StreamThreadTest {
 
         mockTime.sleep(100L);
         for (long i = 0L; i < 10L; i++) {
-            clientSupplier.consumer.addRecord(new ConsumerRecord<>(topic1, 1, i, i * 100L, TimestampType.CREATE_TIME, ConsumerRecord.NULL_CHECKSUM, ("K" + i).getBytes().length, ("V" + i).getBytes().length, ("K" + i).getBytes(), ("V" + i).getBytes()));
+            clientSupplier.consumer.addRecord(new ConsumerRecord<>(
+                topic1,
+                1,
+                i,
+                i * 100L,
+                TimestampType.CREATE_TIME,
+                ConsumerRecord.NULL_CHECKSUM,
+                ("K" + i).getBytes().length,
+                ("V" + i).getBytes().length,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
         }
 
         thread.runOnce();
@@ -1111,10 +1384,13 @@ public class StreamThreadTest {
 
     @Test
     public void shouldAlwaysUpdateTasksMetadataAfterChangingState() {
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.CREATED.name(), metadata.threadState());
 
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
         thread.setState(StreamThread.State.RUNNING);
         metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
@@ -1123,10 +1399,10 @@ public class StreamThreadTest {
     @Test
     public void shouldAlwaysReturnEmptyTasksMetadataWhileRebalancingStateAndTasksNotRunning() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
+            .groupByKey().count(Materialized.as("count-one"));
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        final StreamThread thread = createStreamThread(clientId, config, false);
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
             asList(
@@ -1149,10 +1425,9 @@ public class StreamThreadTest {
 
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
-        thread.setState(StreamThread.State.RUNNING);
-
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_REVOKED);
 
@@ -1174,7 +1449,7 @@ public class StreamThreadTest {
     @Test
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
-            .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+            .groupByKey().count(Materialized.as("count"));
         internalStreamsBuilder.buildAndOptimizeTopology();
 
         final StreamThread thread = createStreamThread("clientId", config, false);
@@ -1185,8 +1460,10 @@ public class StreamThreadTest {
         final Set<TopicPartition> topicPartitionSet = Collections.singleton(topicPartition);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        activeTasks.put(new TaskId(0, 0), topicPartitionSet);
-        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        final TaskId task0 = new TaskId(0, 0);
+        activeTasks.put(task0, topicPartitionSet);
+        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(topicPartition, task0));
+        thread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
 
         mockConsumer.updatePartitions(
             "topic",
@@ -1220,50 +1497,55 @@ public class StreamThreadTest {
         mockRestoreConsumer.updateBeginningOffsets(Collections.singletonMap(changelogPartition, 0L));
         mockRestoreConsumer.updateEndOffsets(Collections.singletonMap(changelogPartition, 2L));
 
-        mockConsumer.schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-                thread.rebalanceListener.onPartitionsAssigned(topicPartitionSet);
-            }
+        mockConsumer.schedulePollTask(() -> {
+            thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+            thread.rebalanceListener.onPartitionsAssigned(topicPartitionSet);
         });
 
         try {
             thread.start();
 
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return mockRestoreConsumer.assignment().size() == 1;
-                }
-            }, "Never restore first record");
+            TestUtils.waitForCondition(
+                () -> mockRestoreConsumer.assignment().size() == 1,
+                "Never restore first record");
 
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 0L, "K1".getBytes(), "V1".getBytes()));
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
+                "stream-thread-test-count-changelog",
+                0,
+                0L,
+                "K1".getBytes(),
+                "V1".getBytes()));
 
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return mockRestoreConsumer.position(changelogPartition) == 1L;
-                }
-            }, "Never restore first record");
+            TestUtils.waitForCondition(
+                () -> mockRestoreConsumer.position(changelogPartition) == 1L,
+                "Never restore first record");
 
-            mockRestoreConsumer.setException(new InvalidOffsetException("Try Again!") {
+            mockRestoreConsumer.setPollException(new InvalidOffsetException("Try Again!") {
                 @Override
                 public Set<TopicPartition> partitions() {
                     return changelogPartitionSet;
                 }
             });
 
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 0L, "K1".getBytes(), "V1".getBytes()));
-            mockRestoreConsumer.addRecord(new ConsumerRecord<>("stream-thread-test-count-changelog", 0, 1L, "K2".getBytes(), "V2".getBytes()));
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
+                "stream-thread-test-count-changelog",
+                0,
+                0L,
+                "K1".getBytes(),
+                "V1".getBytes()));
+            mockRestoreConsumer.addRecord(new ConsumerRecord<>(
+                "stream-thread-test-count-changelog",
+                0,
+                1L,
+                "K2".getBytes(),
+                "V2".getBytes()));
 
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
+            TestUtils.waitForCondition(
+                () -> {
                     mockRestoreConsumer.assign(changelogPartitionSet);
                     return mockRestoreConsumer.position(changelogPartition) == 2L;
-                }
-            }, "Never finished restore");
+                },
+                "Never finished restore");
         } finally {
             thread.shutdown();
             thread.join(10000);
@@ -1271,69 +1553,41 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldRecordSkippedMetricForDeserializationException() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        final Properties config = configProps(false);
-        config.setProperty(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class.getName());
-        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(config), false);
-
-        thread.setState(StreamThread.State.RUNNING);
-        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
-
-        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
-        thread.taskManager().setAssignmentMetadata(
-            Collections.singletonMap(
-                new TaskId(0, t1p1.partition()),
-                assignedPartitions),
-            Collections.<TaskId, Set<TopicPartition>>emptyMap());
-
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
-        mockConsumer.assign(Collections.singleton(t1p1));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
-        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        thread.runOnce();
-
-        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
-        long offset = -1;
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], "I am not an integer.".getBytes()));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], "I am not an integer.".getBytes()));
-        thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
-        LogCaptureAppender.unregister(appender);
-        final List<String> strings = appender.getMessages();
-        assertTrue(strings.contains("task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
-        assertTrue(strings.contains("task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+    public void shouldLogAndNotRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersionLatest() {
+        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_LATEST);
     }
 
     @Test
-    public void shouldReportSkippedRecordsForInvalidTimestamps() {
+    public void shouldLogAndRecordSkippedMetricForDeserializationExceptionWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndRecordSkippedMetricForDeserializationException(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndRecordSkippedMetricForDeserializationException(final String builtInMetricsVersion) {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties config = configProps(false);
-        config.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, LogAndSkipOnInvalidTimestamp.class.getName());
-        final StreamThread thread = createStreamThread(clientId, new StreamsConfig(config), false);
+        config.setProperty(
+            StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+            LogAndContinueExceptionHandler.class.getName()
+        );
+        config.setProperty(
+            StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG,
+            builtInMetricsVersion
+        );
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
+        final TaskId task1 = new TaskId(0, t1p1.partition());
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
         thread.taskManager().setAssignmentMetadata(
-            Collections.singletonMap(
-                new TaskId(0, t1p1.partition()),
-                assignedPartitions),
-            Collections.<TaskId, Set<TopicPartition>>emptyMap());
+            Collections.singletonMap(task1, assignedPartitions),
+            Collections.emptyMap());
 
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
         mockConsumer.assign(Collections.singleton(t1p1));
@@ -1341,61 +1595,176 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            final MetricName skippedTotalMetric = metrics.metricName(
+                "skipped-records-total",
+                "stream-metrics",
+                Collections.singletonMap("client-id", thread.getName())
+            );
+            final MetricName skippedRateMetric = metrics.metricName(
+                "skipped-records-rate",
+                "stream-metrics",
+                Collections.singletonMap("client-id", thread.getName())
+            );
+            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
 
         long offset = -1;
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
+        mockConsumer.addRecord(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            ++offset, -1,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            -1,
+            -1,
+            new byte[0],
+            "I am not an integer.".getBytes()));
+        mockConsumer.addRecord(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            ++offset,
+            -1,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            -1,
+            -1,
+            new byte[0],
+            "I am not an integer.".getBytes()));
         thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, -1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        verifyLogMessagesSkippedRecordsForDeserializationException(appender);
+    }
 
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
-        thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
-
+    private void verifyLogMessagesSkippedRecordsForDeserializationException(final LogCaptureAppender appender) {
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();
+        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[0]"));
+        assertTrue(strings.contains("stream-thread [" + Thread.currentThread().getName() + "] task [0_1] Skipping record due to deserialization error. topic=[topic1] partition=[1] offset=[1]"));
+    }
+
+    @Test
+    public void shouldLogAndRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    @Test
+    public void shouldLogAndNotRecordSkippedRecordsForInvalidTimestampsWithBuiltInMetricsVersionLatest() {
+        shouldLogAndRecordSkippedRecordsForInvalidTimestamps(StreamsConfig.METRICS_LATEST);
+    }
+
+    private void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(final String builtInMetricsVersion) {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final Properties config = configProps(false);
+        config.setProperty(
+            StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+            LogAndSkipOnInvalidTimestamp.class.getName()
+        );
+        config.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(config), false);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+
+        final TaskId task1 = new TaskId(0, t1p1.partition());
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+        thread.taskManager().setAssignmentMetadata(
+            Collections.singletonMap(
+                task1,
+                assignedPartitions),
+            Collections.emptyMap());
+        thread.taskManager().setPartitionsToTaskId(Collections.singletonMap(t1p1, task1));
+
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
+        mockConsumer.assign(Collections.singleton(t1p1));
+        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce();
+
+        final MetricName skippedTotalMetric = metrics.metricName(
+            "skipped-records-total",
+            "stream-metrics",
+            Collections.singletonMap("client-id", thread.getName())
+        );
+        final MetricName skippedRateMetric = metrics.metricName(
+            "skipped-records-rate",
+            "stream-metrics",
+            Collections.singletonMap("client-id", thread.getName())
+        );
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+
+        long offset = -1;
+        addRecord(mockConsumer, ++offset);
+        addRecord(mockConsumer, ++offset);
+        thread.runOnce();
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+
+        addRecord(mockConsumer, ++offset);
+        addRecord(mockConsumer, ++offset);
+        addRecord(mockConsumer, ++offset);
+        addRecord(mockConsumer, ++offset);
+        thread.runOnce();
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+
+        addRecord(mockConsumer, ++offset, 1L);
+        addRecord(mockConsumer, ++offset, 1L);
+        thread.runOnce();
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+            assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        }
+        verifyLogMessagesForSkippedRecordsForInvalidTimestamps(appender);
+    }
+
+    private void verifyLogMessagesForSkippedRecordsForInvalidTimestamps(final LogCaptureAppender appender) {
+        LogCaptureAppender.unregister(appender);
+        final List<String> strings = appender.getMessages();
+
+        final String threadTaskPrefix = "stream-thread [" + Thread.currentThread().getName() + "] task [0_1] ";
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[0] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[1] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[2] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[3] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[4] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
         assertTrue(strings.contains(
-            "task [0_1] Skipping record due to negative extracted timestamp. " +
+            threadTaskPrefix + "Skipping record due to negative extracted timestamp. " +
                 "topic=[topic1] partition=[1] offset=[5] extractedTimestamp=[-1] " +
                 "extractor=[org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp]"
         ));
@@ -1415,33 +1784,29 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
-                mockTime,
-                config,
-                producer,
-                consumer,
-                consumer,
-                null,
-                taskManager,
-                streamsMetrics,
-                internalTopologyBuilder,
-                clientId,
-                new LogContext(""),
-                new AtomicInteger()
-                );
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
+            mockTime,
+            config,
+            producer,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        );
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
-                new Object(),
-                testMetricName,
-                new Measurable() {
-                    @Override
-                    public double measure(final MetricConfig config, final long now) {
-                        return 0;
-                    }
-                },
-                null,
-                new MockTime());
+            new Object(),
+            testMetricName,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
         producer.setMockMetrics(testMetricName, testMetric);
         final Map<MetricName, Metric> producerMetrics = thread.producerMetrics();
         assertEquals(testMetricName, producerMetrics.get(testMetricName).metricName());
@@ -1459,41 +1824,57 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST);
         final StreamThread thread = new StreamThread(
-                mockTime,
-                config,
-                producer,
-                consumer,
-                consumer,
-                null,
-                taskManager,
-                streamsMetrics,
-                internalTopologyBuilder,
-                clientId,
-                new LogContext(""),
-                new AtomicInteger()
-                );
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
+            mockTime,
+            config,
+            producer,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger()
+        );
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
-                new Object(),
-                testMetricName,
-                new Measurable() {
-                    @Override
-                    public double measure(final MetricConfig config, final long now) {
-                        return 0;
-                    }
-                },
-                null,
-                new MockTime());
+            new Object(),
+            testMetricName,
+            (Measurable) (config, now) -> 0,
+            null,
+            new MockTime());
 
-
-        EasyMock.expect(taskManager.getAdminClient()).andReturn(adminClient);
+        EasyMock.expect(taskManager.adminClient()).andReturn(adminClient);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
         adminClient.setMockMetrics(testMetricName, testMetric);
         final Map<MetricName, Metric> adminClientMetrics = thread.adminClientMetrics();
         assertEquals(testMetricName, adminClientMetrics.get(testMetricName).metricName());
+
+    }
+
+    private void addRecord(final MockConsumer<byte[], byte[]> mockConsumer,
+                           final long offset) {
+        addRecord(mockConsumer, offset, -1L);
+    }
+
+    private void addRecord(final MockConsumer<byte[], byte[]> mockConsumer,
+                           final long offset,
+                           final long timestamp) {
+        mockConsumer.addRecord(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            offset,
+            timestamp,
+            TimestampType.CREATE_TIME,
+            ConsumerRecord.NULL_CHECKSUM,
+            -1,
+            -1,
+            new byte[0],
+            new byte[0]));
     }
 }

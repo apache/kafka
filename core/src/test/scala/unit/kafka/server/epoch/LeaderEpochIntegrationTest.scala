@@ -52,7 +52,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
     TestUtils.shutdownServers(brokers)
@@ -60,7 +60,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader() {
+  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
     brokers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     // Given two topics with replication of a single partition
@@ -145,7 +145,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     brokers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
 
-    def leo() = brokers(1).replicaManager.localReplica(tp).get.logEndOffset.messageOffset
+    def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
     TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
@@ -231,10 +231,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.basePartitionState.leaderEpoch == epoch
-        case None => false
-      }
+      brokers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
     }, "Epoch didn't change")
   }
 
@@ -245,10 +242,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
       val leo = broker.getLogManager().getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
         broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
-          if (segment.read(minOffset, None, Integer.MAX_VALUE) == null) {
+          if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {
-            segment.read(minOffset, None, Integer.MAX_VALUE)
+            segment.read(minOffset, Integer.MAX_VALUE)
               .records.batches().iterator().asScala.forall(
               expectedLeaderEpoch == _.partitionLeaderEpoch()
             )
@@ -278,9 +275,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val partitionData = partitions.mapValues(
-        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
-      val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion,
-        partitionData.asJava)
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _)).toMap
+
+      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
+        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
     }

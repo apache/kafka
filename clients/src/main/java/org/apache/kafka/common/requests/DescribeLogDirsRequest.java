@@ -139,16 +139,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
-            default:
-                throw new IllegalArgumentException(
-                    String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,
-                        this.getClass().getSimpleName(), ApiKeys.DESCRIBE_LOG_DIRS.latestVersion()));
-        }
+        return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
     }
 
     public boolean isAllTopicPartitions() {

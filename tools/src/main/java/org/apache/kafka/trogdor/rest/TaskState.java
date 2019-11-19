@@ -55,4 +55,6 @@ public abstract class TaskState extends Message {
     public JsonNode status() {
         return status;
     }
+
+    public abstract TaskStateType stateType();
 }

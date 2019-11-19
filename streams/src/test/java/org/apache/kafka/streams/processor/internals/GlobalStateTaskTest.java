@@ -84,7 +84,7 @@ public class GlobalStateTaskTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", topic1);
         storeToTopic.put("t2-store", topic2);
-        topology = ProcessorTopology.with(
+        topology = ProcessorTopologyFactories.with(
             asList(sourceOne, sourceTwo, processorOne, processorTwo),
             sourceByTopics,
             Collections.<StateStore>emptyList(),
@@ -204,15 +204,14 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldCloseStateManagerWithOffsets() throws IOException {
+    public void shouldFlushStateManagerWithOffsets() throws IOException {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
-        globalStateTask.close();
+        globalStateTask.flushState();
         assertEquals(expectedOffsets, stateMgr.checkpointed());
-        assertTrue(stateMgr.closed);
     }
 
     @Test

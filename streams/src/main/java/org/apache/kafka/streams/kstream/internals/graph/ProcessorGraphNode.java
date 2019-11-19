@@ -28,22 +28,19 @@ public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
 
-    public ProcessorGraphNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
-                              final boolean repartitionRequired) {
+    public ProcessorGraphNode(final ProcessorParameters<K, V> processorParameters) {
 
-        super(nodeName, repartitionRequired);
+        super(processorParameters.processorName());
 
         this.processorParameters = processorParameters;
     }
 
     public ProcessorGraphNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters) {
-        this(
-            nodeName,
-            processorParameters,
-            false
-        );
+
+        super(nodeName);
+
+        this.processorParameters = processorParameters;
     }
 
     public ProcessorParameters processorParameters() {

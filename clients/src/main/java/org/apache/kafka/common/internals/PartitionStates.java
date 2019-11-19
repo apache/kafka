@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * This class is a useful building block for doing fetch requests where topic partitions have to be rotated via
@@ -84,19 +85,12 @@ public class PartitionStates<S> {
         return map.containsKey(topicPartition);
     }
 
-    /**
-     * Returns the partition states in order.
-     */
-    public List<PartitionState<S>> partitionStates() {
-        List<PartitionState<S>> result = new ArrayList<>();
-        for (Map.Entry<TopicPartition, S> entry : map.entrySet()) {
-            result.add(new PartitionState<>(entry.getKey(), entry.getValue()));
-        }
-        return result;
+    public Stream<PartitionState<S>> stream() {
+        return map.entrySet().stream().map(entry -> new PartitionState<>(entry.getKey(), entry.getValue()));
     }
 
     public LinkedHashMap<TopicPartition, S> partitionStateMap() {
-        return new LinkedHashMap<>(map);
+        return map;
     }
 
     /**

@@ -86,14 +86,14 @@ public class DescribeAclsRequest extends AbstractRequest {
     private final AclBindingFilter filter;
 
     DescribeAclsRequest(AclBindingFilter filter, short version) {
-        super(ApiKeys.DELETE_ACLS, version);
+        super(ApiKeys.DESCRIBE_ACLS, version);
         this.filter = filter;
 
         validate(filter, version);
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_ACLS, version);
+        super(ApiKeys.DESCRIBE_ACLS, version);
         ResourcePatternFilter resourceFilter = RequestUtils.resourcePatternFilterFromStructFields(struct);
         AccessControlEntryFilter entryFilter = RequestUtils.aceFilterFromStructFields(struct);
         this.filter = new AclBindingFilter(resourceFilter, entryFilter);
@@ -109,16 +109,7 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable),
-                        Collections.emptySet());
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_ACLS.latestVersion()));
-        }
+        return new DescribeAclsResponse(throttleTimeMs, ApiError.fromThrowable(throwable), Collections.emptySet());
     }
 
     public static DescribeAclsRequest parse(ByteBuffer buffer, short version) {

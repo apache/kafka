@@ -28,6 +28,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.ResourceType;
 
+import java.nio.ByteBuffer;
 import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.HOST;
@@ -42,7 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYP
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE_FILTER;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 
-final class RequestUtils {
+public final class RequestUtils {
 
     private RequestUtils() {}
 
@@ -117,4 +118,17 @@ final class RequestUtils {
         return leaderEpochOpt;
     }
 
+    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+        Optional<Integer> leaderEpochOpt = leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+            Optional.empty() : Optional.of(leaderEpoch);
+        return leaderEpochOpt;
+    }
+
+    public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {
+        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + bodyStruct.sizeOf());
+        headerStruct.writeTo(buffer);
+        bodyStruct.writeTo(buffer);
+        buffer.rewind();
+        return buffer;
+    }
 }
