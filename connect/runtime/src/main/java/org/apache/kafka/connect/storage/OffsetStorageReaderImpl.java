@@ -142,12 +142,17 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     }
 
     public void close() {
-        synchronized (offsetReadFutures) {
-            closed.set(true);
-            for (Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture : offsetReadFutures) {
-                offsetReadFuture.cancel(true);
+        if (!closed.getAndSet(true)) {
+            synchronized (offsetReadFutures) {
+                for (Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture : offsetReadFutures) {
+                    try {
+                        offsetReadFuture.cancel(true);
+                    } catch (Throwable t) {
+                        log.error("Failed to cancel offset read future", t);
+                    }
+                }
+                offsetReadFutures.clear();
             }
-            offsetReadFutures.clear();
         }
     }
 }
