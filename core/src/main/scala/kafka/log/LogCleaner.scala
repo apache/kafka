@@ -797,9 +797,10 @@ private[log] class Cleaner(val id: Int,
        *   2) The message doesn't has value but it can't be deleted now.
        */
       val latestOffsetForKey = record.offset() >= foundOffset
-      val isRetainedValue = record.hasValue || retainDeletes
-      val tombstoneRetention = !batch.isDeleteHorizonSet() || time.milliseconds() < batch.deleteHorizonMs
-      latestOffsetForKey && isRetainedValue && tombstoneRetention
+      val isRetainedValue = record.hasValue ||
+                            (!batch.isDeleteHorizonSet() ||
+                             time.milliseconds() < batch.deleteHorizonMs)
+      latestOffsetForKey && isRetainedValue
     } else {
       stats.invalidMessage()
       false
