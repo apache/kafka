@@ -177,13 +177,13 @@ public class Selector implements Selectable, AutoCloseable {
         this.connected = new ArrayList<>();
         this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
+        this.log = logContext.logger(Selector.class);
         this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
         this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
-        this.log = logContext.logger(Selector.class);
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
     }
@@ -1196,7 +1196,7 @@ public class Selector implements Selectable, AutoCloseable {
                     tags.put("cipher", sslInformation.cipher());
                     tags.put("protocol", sslInformation.protocol());
                     tags.putAll(metricTags);
-                    return metrics.metricName("connections", metricGrpName, "The ssl ciphers in use by clients.", tags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this SSL cipher and protocol.", tags);
                 }, 100);
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);

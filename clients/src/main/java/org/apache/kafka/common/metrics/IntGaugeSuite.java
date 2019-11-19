@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -35,7 +36,7 @@ public class IntGaugeSuite<K> implements AutoCloseable {
     private final Map<K, StoredIntGauge> map;
     private boolean closed;
 
-    private class StoredIntGauge implements Gauge<Integer> {
+    class StoredIntGauge implements Gauge<Integer> {
         private final MetricName metricName;
         int value;
 
@@ -64,6 +65,8 @@ public class IntGaugeSuite<K> implements AutoCloseable {
         this.maxEntries = maxEntries;
         this.map = new HashMap<>(1);
         this.closed = false;
+        log.trace("{}: created new gauge suite with maxEntries = {}.",
+            suiteName, maxEntries);
     }
 
     public synchronized void increment(K shortName) {
@@ -82,6 +85,7 @@ public class IntGaugeSuite<K> implements AutoCloseable {
             MetricName metricName = metricNameCalculator.apply(shortName);
             gauge = new StoredIntGauge(metricName);
             metrics.addMetric(metricName, gauge);
+            log.trace("{}: Added a new metric {}", suiteName, shortName.toString());
             map.put(shortName, gauge);
         }
         gauge.value++;
@@ -89,7 +93,7 @@ public class IntGaugeSuite<K> implements AutoCloseable {
 
     public synchronized void decrement(K shortName) {
         if (closed) {
-            log.warn("{}: Attempted to decrement {}, but the GaugeSuite was closed.",
+            log.warn("{}: Attempted to decrement {}, but the gauge suite was closed.",
                 suiteName, shortName.toString());
             return;
         }
@@ -100,8 +104,12 @@ public class IntGaugeSuite<K> implements AutoCloseable {
         } else {
             gauge.value--;
             if (gauge.value == 0) {
+                log.trace("{}: Removing {}.", suiteName, shortName.toString());
                 metrics.removeMetric(gauge.metricName);
                 map.remove(shortName);
+            } else {
+                log.trace("{}: Removed a reference to {}.  {} reference(s) remaining.",
+                    suiteName, shortName.toString(), gauge.value);
             }
         }
     }
@@ -110,10 +118,23 @@ public class IntGaugeSuite<K> implements AutoCloseable {
     public synchronized void close() {
         if (!closed) {
             closed = true;
+            int prevSize = map.values().size();
             for (StoredIntGauge gauge : map.values()) {
                 metrics.removeMetric(gauge.metricName);
             }
+            log.trace("{}: closed {} metric(s).", suiteName, prevSize);
             map.clear();
+        } else {
+            log.trace("{}: gauge suite is already closed.", suiteName);
         }
+    }
+
+    public int maxEntries() {
+        return maxEntries;
+    }
+
+    // visible for testing only
+    synchronized void visit(Consumer<Map<K, StoredIntGauge>> visitor) {
+        visitor.accept(map);
     }
 }

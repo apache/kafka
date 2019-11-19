@@ -36,6 +36,7 @@ import java.util.Optional;
 import org.apache.kafka.common.errors.AuthenticationException;
 
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
+
     /**
      * Returns true if the channel has handshake and authentication done.
      */

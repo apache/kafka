@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import java.util.Objects;
+
 public class SslInformation {
     private final String cipher;
     private final String protocol;
@@ -31,5 +33,29 @@ public class SslInformation {
 
     public String protocol() {
         return protocol;
+    }
+
+    @Override
+    public String toString() {
+        return "SslInformation(cipher=" + cipher +
+            ", protocol=" + protocol + ")";
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(cipher, protocol);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null) {
+            return false;
+        }
+        if (!(o instanceof SslInformation)) {
+            return false;
+        }
+        SslInformation other = (SslInformation) o;
+        return other.cipher.equals(cipher) &&
+            other.protocol.equals(protocol);
     }
 }

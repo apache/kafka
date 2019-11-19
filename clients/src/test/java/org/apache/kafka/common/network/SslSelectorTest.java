@@ -125,9 +125,16 @@ public class SslSelectorTest extends SelectorTest {
         selector.send(createSend(node, request));
 
         waitForBytesBuffered(selector, node);
+        assertEquals(1, metrics.metrics().keySet().stream().
+            filter(n -> n.description().contains("The number of connections with this SSL cipher and protocol.")).
+            count());
 
         selector.close(node);
         super.verifySelectorEmpty(selector);
+
+        assertEquals(0, metrics.metrics().keySet().stream().
+            filter(n -> n.description().contains("The number of connections with this SSL cipher and protocol.")).
+            count());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
@@ -401,5 +408,4 @@ public class SslSelectorTest extends SelectorTest {
             }
         }
     }
-
 }

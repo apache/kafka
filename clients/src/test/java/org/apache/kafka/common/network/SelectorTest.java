@@ -31,7 +31,9 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -72,6 +74,9 @@ import static org.mockito.Mockito.when;
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
 public class SelectorTest {
+    @Rule
+    final public Timeout globalTimeout = Timeout.millis(240000);
+
     protected static final int BUFFER_SIZE = 4 * 1024;
     private static final String METRIC_GROUP = "MetricGroup";
 
@@ -830,7 +835,6 @@ public class SelectorTest {
             // do the i/o
             selector.poll(0L);
             assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
-
             // handle requests and responses of the fast node
             for (NetworkReceive receive : selector.completedReceives()) {
                 assertEquals(requestPrefix + "-" + responses, asString(receive));
