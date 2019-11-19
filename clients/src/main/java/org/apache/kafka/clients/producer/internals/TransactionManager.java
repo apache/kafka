@@ -909,7 +909,7 @@ public class TransactionManager {
             return true;
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
-                    (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))){
+                    (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))) {
                 // We should retry the OutOfOrderSequenceException if the batch is _not_ the next batch, ie. its base
                 // sequence isn't the lastAckedSequence + 1.
                 return true;

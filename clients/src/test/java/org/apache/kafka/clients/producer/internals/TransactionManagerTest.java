@@ -53,7 +53,6 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -135,8 +134,8 @@ public class TransactionManagerTest {
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short)0, (short)1),
-                new ApiVersion(ApiKeys.PRODUCE.id, (short)0, (short)7))));
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
+                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
                 DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         Metrics metrics = new Metrics(metricConfig, time);

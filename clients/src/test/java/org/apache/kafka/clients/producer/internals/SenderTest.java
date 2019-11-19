@@ -1116,7 +1116,7 @@ public class SenderTest {
 
         // The epoch should be bumped and the second request should be requeued
         assertEquals(2, batches.size());
-        assertEquals((short)1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals((short) 1, transactionManager.producerIdAndEpoch().epoch);
         assertEquals(1, transactionManager.sequenceNumber(tp0).longValue());
         assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }

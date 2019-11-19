@@ -640,7 +640,7 @@ public class Sender implements Runnable {
                 if (transactionManager == null) {
                     reenqueueBatch(batch, now);
                 } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()) ||
-                        (transactionManager.hasProducerIdAndEpoch(batch.producerId(), (short)(batch.producerEpoch() + 1)) &&
+                        (transactionManager.hasProducerIdAndEpoch(batch.producerId(), (short) (batch.producerEpoch() + 1)) &&
                                 batch.baseSequence() == 0)) {
                     // If idempotence is enabled only retry the request if the current producer id is the same as
                     // the producer id of the batch.
