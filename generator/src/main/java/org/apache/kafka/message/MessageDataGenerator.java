@@ -1160,7 +1160,7 @@ public final class MessageDataGenerator {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
             } else if (nullableVersions.empty()) {
                 if (field.zeroCopy()) {
-                    buffer.printf("if (%s.remaining() > 0) {%n", field.camelCaseName());
+                    buffer.printf("if (%s.hasRemaining()) {%n", field.camelCaseName());
                 } else {
                     buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
                 }
