@@ -132,8 +132,10 @@ import static org.easymock.EasyMock.captureLong;
  * <ul>
  *     <li>
  *          the {@code apply} method has different parameters, which are
- *          used for passing some context that depends on the method you
+ *          used for passing "context" that depends on the method you
  *          want to override.
+ *          The context must be used inside the {@code IAnswer} lambda
+ *          expression.
  *     </li>
  *     <li>
  *         the method returns an {@code IAnswer<? extends ThreadCache>} which
@@ -246,6 +248,10 @@ public class MockInternalProcessorContext {
 
     public static Builder builder(final ThreadCache cache) {
         return builder(null, null, null, null, cache);
+    }
+
+    public static Builder builder(final StreamsMetricsImpl metrics) {
+        return builder(null, null, null, metrics, createStreamConfig(), null, null);
     }
 
     public static Builder builder(final File stateDir,

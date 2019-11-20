@@ -41,9 +41,9 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.Callback;
@@ -114,7 +114,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain<SourceRecord> transformationChain;
     @Mock private KafkaProducer<byte[], byte[]> producer;
-    @Mock private OffsetStorageReader offsetReader;
+    @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ClusterConfigState clusterConfigState;
     private WorkerSourceTask workerTask;
@@ -689,6 +689,20 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertTrue(workerTask.awaitStop(1000));
 
         workerTaskFuture.get();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCancel() {
+        createWorkerTask();
+
+        offsetReader.close();
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.cancel();
 
         PowerMock.verifyAll();
     }

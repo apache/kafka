@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -97,12 +96,7 @@ public class OffsetCommitRequestTest {
             OffsetCommitResponse response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
-
-            if (version >= 3) {
-                assertEquals(throttleTimeMs, response.throttleTimeMs());
-            } else {
-                assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
-            }
+            assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
     }
 

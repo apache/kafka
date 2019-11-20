@@ -196,7 +196,8 @@ public class TransactionalMessageCopier {
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
         final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
-        committed.forEach((tp, offsetAndMetadata) -> {
+        consumer.assignment().forEach(tp -> {
+            OffsetAndMetadata offsetAndMetadata = committed.get(tp);
             if (offsetAndMetadata != null)
                 consumer.seek(tp, offsetAndMetadata.offset());
             else

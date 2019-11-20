@@ -14,28 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer.internals;
+package org.apache.kafka.connect.storage;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
+import java.io.Closeable;
+import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.Future;
 
-class ProducerIdAndEpoch {
-    static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageReader {
 
-    public final long producerId;
-    public final short epoch;
-
-    ProducerIdAndEpoch(long producerId, short epoch) {
-        this.producerId = producerId;
-        this.epoch = epoch;
-    }
-
-    public boolean isValid() {
-        return NO_PRODUCER_ID < producerId;
-    }
-
-    @Override
-    public String toString() {
-        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
-    }
+    /**
+     * {@link Future#cancel(boolean) Cancel} all outstanding offset read requests, and throw an
+     * exception in all current and future calls to {@link #offsets(Collection)} and
+     * {@link #offset(Map)}. This is useful for unblocking task threads which need to shut down but
+     * are blocked on offset reads.
+     */
+    void close();
 }
