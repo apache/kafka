@@ -1667,10 +1667,10 @@ class PartitionTest extends AbstractPartitionTest {
     val offsetMetadata2 = new LogOffsetMetadata(15)
     partition.getReplica(4).get.updateLastSentHighWatermark(20)
     partition.getReplica(4).get.updateFetchState(
-      offsetMetadata1, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L, isAddingReplica = true)
+      offsetMetadata1, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L)
     partition.getReplica(5).get.updateLastSentHighWatermark(20)
     partition.getReplica(5).get.updateFetchState(
-      offsetMetadata2, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L, isAddingReplica = true)
+      offsetMetadata2, followerStartOffset = 0L, followerFetchTimeMs = 100L, leaderEndOffset = 20L)
     assertEquals(10, partition.replicasMaxReassignmentLag)
   }
 

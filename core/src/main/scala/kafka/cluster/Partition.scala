@@ -290,7 +290,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def replicasMaxReassignmentLag: Long = remoteReplicas
     .filter(rep => assignmentState.isAddingReplica(rep.brokerId))
-    .maxBy(_.lastReassignmentLag).lastReassignmentLag
+    .maxBy(_.fetchLag).fetchLag
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -566,8 +566,7 @@ class Partition(val topicPartition: TopicPartition,
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
             followerStartOffset = Log.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset,
-            isAddingReplica = false
+            leaderEndOffset = Log.UnknownOffset
           )
           replica.updateLastSentHighWatermark(0L)
         }
@@ -639,8 +638,7 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata,
           followerStartOffset,
           followerFetchTimeMs,
-          leaderEndOffset,
-          isAddingReplica(followerId))
+          leaderEndOffset)
 
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
