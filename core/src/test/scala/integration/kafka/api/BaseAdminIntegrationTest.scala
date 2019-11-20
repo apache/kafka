@@ -158,7 +158,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
-    assertEquals(Set().asJava, result.authorizedOperations().get())
+    assertNull(result.authorizedOperations().get())
 
     //with includeAuthorizedOperations flag
     result = client.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true))
@@ -172,7 +172,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     // without includeAuthorizedOperations flag
     var topicResult = getTopicMetadata(client, topic)
-    assertEquals(Set().asJava, topicResult.authorizedOperations)
+    assertNull(topicResult.authorizedOperations)
 
     //with includeAuthorizedOperations flag
     topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
@@ -181,7 +181,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
-  def configuredClusterPermissions() : Set[AclOperation] = {
+  def configuredClusterPermissions(): Set[AclOperation] = {
     Cluster.supportedOperations.map(operation => operation.toJava)
   }
 

@@ -22,13 +22,15 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.Assert._
 import org.junit.{Before, Test}
-import org.apache.kafka.test.TestUtils.isValidClusterId
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.collection.Seq
@@ -143,13 +145,14 @@ class MetadataRequestTest extends BaseRequestTest {
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion).build())
     checkAutoCreatedTopic(topic1, topic2, response1)
 
-    // V3 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
-    val response2 = sendMetadataRequest(new MetadataRequest(requestData(List(topic2, topic3), false), 3.toShort))
-    checkAutoCreatedTopic(topic2, topic3, response2)
+    // V3 doesn't support a configurable allowAutoTopicCreation, so disabling auto-creation is not supported
+    intercept[UnsupportedVersionException] {
+      sendMetadataRequest(new MetadataRequest(requestData(List(topic2, topic3), false), 3.toShort))
+    }
 
     // V4 and higher support a configurable allowAutoTopicCreation
     val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic3, topic4).asJava, false, 4.toShort).build)
-    assertNull(response3.errors.get(topic3))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic3))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
     assertEquals(None, zkClient.getTopicPartitionCount(topic4))
   }
