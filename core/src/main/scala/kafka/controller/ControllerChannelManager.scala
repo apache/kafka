@@ -470,8 +470,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
-        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) =>
-          sendEvent(LeaderAndIsrResponseReceived(r, broker)))
+        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
+          val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
+          sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))
+        })
+
 
     }
     leaderAndIsrRequestMap.clear()
@@ -523,8 +526,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
       val updateMetadataRequestBuilder = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion,
         controllerId, controllerEpoch, brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
-      sendRequest(broker, updateMetadataRequestBuilder, (r: AbstractResponse) =>
-        sendEvent(UpdateMetadataResponseReceived(r, broker)))
+      sendRequest(broker, updateMetadataRequestBuilder, (r: AbstractResponse) => {
+        val updateMetadataResponse = r.asInstanceOf[UpdateMetadataResponse]
+        sendEvent(UpdateMetadataResponseReceived(updateMetadataResponse, broker))
+      })
+
     }
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
