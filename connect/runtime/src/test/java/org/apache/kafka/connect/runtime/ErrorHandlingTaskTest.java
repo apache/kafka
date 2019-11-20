@@ -46,7 +46,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
+import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -127,7 +127,7 @@ public class ErrorHandlingTaskTest {
     private KafkaProducer<byte[], byte[]> producer;
 
     @Mock
-    OffsetStorageReader offsetReader;
+    OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
 
