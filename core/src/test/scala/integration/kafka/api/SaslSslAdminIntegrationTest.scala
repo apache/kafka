@@ -15,7 +15,6 @@ package kafka.api
 import java.io.File
 import java.util
 
-import integration.kafka.api.BaseAdminIntegrationTest
 import kafka.log.LogConfig
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
 import kafka.security.authorizer.AuthorizerWrapper
