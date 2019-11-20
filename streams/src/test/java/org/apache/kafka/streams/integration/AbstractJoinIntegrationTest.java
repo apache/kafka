@@ -229,10 +229,7 @@ public abstract class AbstractJoinIntegrationTest {
                     expectedFinalResult = updatedExpected.get(expected.size() - 1);
                 }
             }
-
         }
-
-
     }
 
 
