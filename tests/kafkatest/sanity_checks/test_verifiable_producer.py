@@ -59,7 +59,7 @@ class TestVerifiableProducer(Test):
         node = self.producer.nodes[0]
         node.version = KafkaVersion(producer_version)
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring
