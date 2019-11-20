@@ -21,7 +21,7 @@
   "validVersions": "0-1",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "AuthBytes", "type": "bytes", "versions": "0+",
+    { "name": "AuthBytes", "type": "bytes", "versions": "0+", "zeroCopy": true,
       "about": "The SASL authentication bytes from the client, as defined by the SASL mechanism." }
   ]
 }

@@ -1890,7 +1890,7 @@ public class SaslAuthenticatorTest {
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
         ByteBuffer authBuf = ByteBuffer.wrap(authString.getBytes("UTF-8"));
         if (enableSaslAuthenticateHeader) {
-            SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
+            SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf);
             SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
             sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_AUTHENTICATE, request);
         } else {

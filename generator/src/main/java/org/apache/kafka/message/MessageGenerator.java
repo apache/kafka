@@ -136,13 +136,14 @@ public final class MessageGenerator {
                     String javaName = spec.generatedClassName() + JAVA_SUFFIX;
                     outputFileNames.add(javaName);
                     Path outputPath = Paths.get(outputDir, javaName);
+                    MessageDataGenerator generator;
                     try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                        MessageDataGenerator generator = new MessageDataGenerator(packageName);
+                        generator = new MessageDataGenerator(packageName);
                         generator.generate(spec);
                         generator.write(writer);
                     }
                     numProcessed++;
-                    messageTypeGenerator.registerMessageType(spec);
+                    messageTypeGenerator.registerMessageType(spec, generator.containsZeroCopyFields());
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }

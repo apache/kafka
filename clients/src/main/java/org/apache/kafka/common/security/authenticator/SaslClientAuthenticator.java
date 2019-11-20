@@ -383,7 +383,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
                 if (saslAuthenticateVersion != DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
-                            .setAuthBytes(tokenBuf.array());
+                            .setAuthBytes(tokenBuf);
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
                     tokenBuf = request.serialize(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
