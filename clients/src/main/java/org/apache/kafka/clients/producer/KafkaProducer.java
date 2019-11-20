@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
@@ -914,7 +915,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
                     compressionType, serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize);
+            ensureValidRecordSize(serializedSize, serializedValue);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
@@ -1053,17 +1054,27 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Validate that the record size isn't too large
      */
-    private void ensureValidRecordSize(int size) {
-        if (size > this.maxRequestSize)
-            throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the maximum request size you have configured with the " +
-                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
-                    " configuration.");
+    private void ensureValidRecordSize(int size, byte[] recordValue) {
+        if (size > this.maxRequestSize) {
+            String strMessage = null;
+            String strMessageByte = null;
+            try {
+                strMessage = new String(recordValue, "UTF-8");
+                strMessageByte = strMessage.length() > 1024 ? strMessage.substring(0, 1023)
+                        : strMessage.substring(0, strMessage.length());
+            } catch (UnsupportedEncodingException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            throw new RecordTooLargeException("The message is " + size
+                    + " bytes when serialized which is larger than the maximum request size you have configured with the "
+                    + ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration. The message was : " + strMessageByte
+                    + "...");
+        }
         if (size > this.totalMemorySize)
-            throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the total memory buffer you have configured with the " +
-                    ProducerConfig.BUFFER_MEMORY_CONFIG +
-                    " configuration.");
+            throw new RecordTooLargeException("The message is " + size
+                    + " bytes when serialized which is larger than the total memory buffer you have configured with the "
+                    + ProducerConfig.BUFFER_MEMORY_CONFIG + " configuration.");
     }
 
     /**
