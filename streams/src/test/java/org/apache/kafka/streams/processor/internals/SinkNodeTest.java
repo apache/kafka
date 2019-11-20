@@ -25,8 +25,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.InternalProcessorContextMock;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext.InternalProcessorContextMock;
 import org.junit.Before;
 import org.junit.Test;
 

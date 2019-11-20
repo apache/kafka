@@ -32,15 +32,17 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.InternalProcessorContextMock;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext.InternalProcessorContextMock;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.IAnswer;
 
 import java.io.File;
 import java.util.HashMap;
@@ -183,7 +185,8 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
-    private final InternalProcessorContextMock context;
+    private final InternalProcessorContextMock
+            context;
     private final StateSerdes<K, V> stateSerdes;
 
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
@@ -241,21 +244,26 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
-        final MockInternalProcessorContext.Builder contextBuilder = MockInternalProcessorContext
-                .builder(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null);
+        context = MockInternalProcessorContext
+                .builder(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null)
+                .setGetCache(new MockInternalProcessorContext.IPCFunction<ThreadCache>() {
 
-        final MockInternalProcessorContext.ExpectedAnswers expectedAnswers = contextBuilder.expectedAnswers();
+                    private ThreadCache threadCache;
 
-        expectedAnswers.setGetCache(internalProcessorContext -> () ->
-                new ThreadCache(new LogContext("testCache "), 1024 * 1024L, internalProcessorContext.metrics()));
-
-        expectedAnswers.setAppConfigs(internalProcessorContext -> () -> new StreamsConfig(props).originals());
-
-        final MockInternalProcessorContext.Captures captures = expectedAnswers.getCaptures();
-        expectedAnswers.setAppConfigsWithPrefix(internalProcessorContext -> () -> new StreamsConfig(props)
-                .originalsWithPrefix(captures.getPrefix().getValue()));
-
-        context = contextBuilder.build();
+                    @Override
+                    public IAnswer<? extends ThreadCache> apply(final InternalProcessorContext internalProcessorContext) {
+                        return () -> {
+                            if (threadCache == null) {
+                                threadCache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, internalProcessorContext.metrics());
+                            }
+                            return threadCache;
+                        };
+                    }
+                })
+                .setAppConfigs(internalProcessorContext -> () -> new StreamsConfig(props).originals())
+                .setAppConfigsWithPrefix((internalProcessorContext, prefix) -> () -> new StreamsConfig(props)
+                        .originalsWithPrefix(prefix.getValue()))
+                .build();
     }
 
     private void recordFlushed(final K key, final V value) {

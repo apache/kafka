@@ -27,8 +27,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.InternalProcessorContextMock;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext.InternalProcessorContextMock;
 import org.junit.Before;
 import org.junit.Test;
 

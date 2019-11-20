@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -42,12 +41,11 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.InternalProcessorContextMock;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext.InternalProcessorContextMock;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.Capture;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -104,30 +102,24 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private InternalProcessorContextMock getInternalProcessorContext(final File stateDir, final StreamsMetricsImpl metrics) {
-        final MockInternalProcessorContext.Builder contextBuilder = MockInternalProcessorContext.builder(
-                stateDir,
-                Serdes.String(),
-                Serdes.String(),
-                metrics,
-                new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-                NoOpRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 100000, metrics)
-        );
-        final MockInternalProcessorContext.ExpectedAnswers expectedAnswers = contextBuilder.expectedAnswers();
-        expectedAnswers.setForwardKeyValueTo(internalProcessorContext -> {
-            final Capture<?> keyCapture = expectedAnswers.getCaptures().getKey();
-            final Capture<?> valueCapture = expectedAnswers.getCaptures().getValue();
-            final Capture<To> toCapture = expectedAnswers.getCaptures().getTo();
-            return () -> {
-                toInternal.update(toCapture.getValue());
-                results.add(new KeyValueTimestamp<>(
-                        keyCapture.getValue(),
-                        valueCapture.getValue(),
-                        toInternal.timestamp()));
-                return null;
-            };
-        });
-        return contextBuilder.build();
+        return MockInternalProcessorContext
+                .builder(
+                        stateDir,
+                        Serdes.String(),
+                        Serdes.String(),
+                        metrics,
+                        new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+                        NoOpRecordCollector::new,
+                        new ThreadCache(new LogContext("testCache "), 100000, metrics))
+                .setForwardKeyValueTo((internalProcessorContext, keyCapture, valueCapture, toCapture) -> () -> {
+                    toInternal.update(toCapture.getValue());
+                    results.add(new KeyValueTimestamp<>(
+                            keyCapture.getValue(),
+                            valueCapture.getValue(),
+                            toInternal.timestamp()));
+                    return null;
+                })
+                .build();
     }
 
     private void initStore(final boolean enableCaching) {

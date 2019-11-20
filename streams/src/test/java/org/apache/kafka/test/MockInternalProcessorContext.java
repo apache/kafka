@@ -67,36 +67,116 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.captureLong;
 
 /**
- *  How to use this class:
+ * {@link MockInternalProcessorContext} creates a
+ * {@link InternalProcessorContextMock} mock object that can be used for
+ * creating a mock of an {@link InternalProcessorContext}
  *
+ * The interface {@link InternalProcessorContextMock} adds some methods to
+ * the {@link InternalProcessorContext} interface useful for testing.
+ *
+ * How to use this class:
+ * <pre>
+ * {@code
  *  Client                                                  MockInternalProcessorContext
  *    |                                                                 |
- *    |     {@link MockInternalProcessorContext#builder()}              |
+ *    |     MockInternalProcessorContext#builder()                      |
  *    | --------------------------------------------------------------> |
  *    |                                                                 |
  *    |                                     Builder <------------------ |
  *    |                                        |                        |
- *    |                                        |                        |
- *    |     {@link Builder}                    |                        |
+ *    |     Builder                            |                        |
  *    | <-------------------------------------------------------------- |
- *    |                                        |                        |
- *    |                                        |
- *    | {@link Builder#expectedAnswers()}      |
+ *    |  Change expected answer of method <MethodName> in
+ *    |  InternalProcessorContextMock using set<MethodName>
+ *    |  method of the builder.
  *    | -------------------------------------> |
  *    |                                        |
- *    |      change expected answers           |
- *    |                                        |
- *    | {@link Builder#build()}                |
+ *    | Builder#build()                        |
  *    | -------------------------------------> |
- *    | {@link InternalProcessorContextMock}   |
+ *    | InternalProcessorContextMock           |
  *    | <------------------------------------- |
+ * }
+ * </pre>
+ * <p>
+ *     So, for example, if you want to override the default
+ *     answer to the method {@link InternalProcessorContext#getCache()} the
+ *     method {@link Builder#setGetCache(IPCFunction)} can be used as shown
+ *     below:
+ * </p>
+ * <pre>
+ * {@code
+ * MockInternalProcessorContext
+ *   .builder(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null)
+ *   .setGetCache(new MockInternalProcessorContext.IPCFunction<ThreadCache>() {
+ *
+ *      private ThreadCache threadCache;
+ *
+ *      @Override
+ *      public IAnswer<? extends ThreadCache> apply(final InternalProcessorContext internalProcessorContext) {
+ *          return () -> {
+ *              if (threadCache == null) {
+ *                  threadCache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, internalProcessorContext.metrics());
+ *              }
+ *              return threadCache;
+ *          };
+ *      }
+ *   })
+ *   .build()
+ * }
+ * </pre>
+ *
+ * <p>Notes:</p>
+ * <ul>
+ *     <li>
+ *          the {@code apply} method has different parameters, which are
+ *          used for passing some context that depends on the method you
+ *          want to override.
+ *     </li>
+ *     <li>
+ *         the method returns an {@code IAnswer<? extends ThreadCache>} which
+ *         is a lambda expression that takes no parameters and returns a
+ *         {@code ? extends ThreadCache} - see EasyMock {@link IAnswer} class
+ *     </li>
+ * </ul>
+ *
  */
 public class MockInternalProcessorContext {
 
+    /**
+     * Depending on the parameters passed to the overloaded
+     * {@code builder(#param)} method the class delegates method calls to an
+     * instance of {@link MockProcessorContext} or
+     * {@link AbstractProcessorContext}.
+     *
+     * Default answers are set inside methods:
+     * {@link DefaultExpectedAnswers#get()} and
+     * {@link MockInternalProcessorContext#builder(File, Serde, Serde, StreamsMetricsImpl, StreamsConfig, RecordCollector.Supplier, ThreadCache)}
+     */
+
     private static final String PROCESSOR_NODE_NAME = "TESTING_NODE";
     private static final String CLIENT_ID = "mock";
+
+    public interface InternalProcessorContextMock extends InternalProcessorContext, RecordCollector.Supplier {
+
+        void setRecordCollector(final RecordCollector recordCollector);
+
+        StateRestoreCallback stateRestoreCallback(final String storeName);
+
+        List<MockProcessorContext.CapturedForward> forwarded();
+
+        void setTimestamp(final long timestamp);
+
+        void setKeySerde(final Serde<?> keySerde);
+
+        void setValueSerde(final Serde<?> valSerde);
+
+        StateRestoreListener getRestoreListener(final String storeName);
+
+        void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog);
+    }
 
     public static Builder builder() {
         return new Builder(getDefaultExpectedAnswer(MockInternalProcessorContext::getProcessorContext));
@@ -155,6 +235,19 @@ public class MockInternalProcessorContext {
         return builder(null, keySerde, valueSerde, streamsMetrics, streamsConfig, supplier, null);
     }
 
+    public static Builder builder(final RecordCollector collector) {
+        return builder(
+                TestUtils.tempDirectory(),
+                Serdes.String(),
+                Serdes.Long(),
+                collector,
+                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
+    }
+
+    public static Builder builder(final ThreadCache cache) {
+        return builder(null, null, null, null, cache);
+    }
+
     public static Builder builder(final File stateDir,
                                   final Serde<?> keySerde,
                                   final Serde<?> valSerde,
@@ -175,54 +268,31 @@ public class MockInternalProcessorContext {
                                   final ThreadCache cache) {
         final MockProcessorContext mockProcessorContext = getProcessorContext();
         final ExpectedAnswers expectedAnswers = getDefaultExpectedAnswer(() -> mockProcessorContext);
-        final AbstractProcessorContext abstractProcessorContext =
-                getAbstractProcessorContext(mockProcessorContext.taskId(), metrics, config, cache);
-        final Captures captures = expectedAnswers.getCaptures();
-        // Delegate expected answers to the abstract processor context
-        expectedAnswers.setCurrentNode(DefaultExpectedAnswers
-                .currentNode(abstractProcessorContext, captures.processorNode));
-        expectedAnswers.setApplicationId(DefaultExpectedAnswers
-                .applicationId(abstractProcessorContext));
-        expectedAnswers.setTaskId(DefaultExpectedAnswers
-                .taskId(abstractProcessorContext));
-        expectedAnswers.setAppConfigs(DefaultExpectedAnswers
-                .appConfigs(abstractProcessorContext));
-        expectedAnswers.setAppConfigsWithPrefix(DefaultExpectedAnswers
-                .appConfigsWithPrefix(abstractProcessorContext, captures.prefix));
-        expectedAnswers.setMetrics(DefaultExpectedAnswers
-                .metrics(abstractProcessorContext));
-        expectedAnswers.setForwardKeyValue(DefaultExpectedAnswers
-                .forwardKeyValue(abstractProcessorContext, captures.key, captures.value));
-        expectedAnswers.setForwardKeyValueTo(DefaultExpectedAnswers
-                .forwardKeyValueTo(abstractProcessorContext, captures.key, captures.value, captures.to));
-        expectedAnswers.setGetCache(DefaultExpectedAnswers
-                .getCache(abstractProcessorContext));
-        expectedAnswers.setKeySerde(DefaultExpectedAnswers
-                .keySerde(keySerde, captures.keySerde));
-        expectedAnswers.setValueSerde(DefaultExpectedAnswers
-                .valueSerde(valSerde, captures.valueSerde));
-        expectedAnswers.setStateDir(DefaultExpectedAnswers
-                .stateDir(stateDir));
-        expectedAnswers.setRecordCollector(DefaultExpectedAnswers
-                .recordCollector(collectorSupplier));
+        final AbstractProcessorContext abstractProcessorContext = mockAbstractProcessorContext(mockProcessorContext.taskId(), metrics, config, cache);
         final Builder builder = new Builder(expectedAnswers);
+        // Delegate answers to the abstract processor context
+        builder
+                .setCurrentNode(DefaultExpectedAnswers.currentNode(abstractProcessorContext))
+                .setApplicationId(DefaultExpectedAnswers.applicationId(abstractProcessorContext))
+                .setTaskId(DefaultExpectedAnswers.taskId(abstractProcessorContext))
+                .setAppConfigs(DefaultExpectedAnswers.appConfigs(abstractProcessorContext))
+                .setAppConfigsWithPrefix(DefaultExpectedAnswers.appConfigsWithPrefix(abstractProcessorContext))
+                .setMetrics(DefaultExpectedAnswers.metrics(abstractProcessorContext))
+                .setForwardKeyValue(DefaultExpectedAnswers.forwardKeyValue(abstractProcessorContext))
+                .setForwardKeyValueTo(DefaultExpectedAnswers.forwardKeyValueTo(abstractProcessorContext))
+                .setGetCache(DefaultExpectedAnswers.getCache(abstractProcessorContext))
+                .setKeySerde(DefaultExpectedAnswers.keySerde(keySerde))
+                .setValueSerde(DefaultExpectedAnswers.valueSerde(valSerde))
+                .setStateDir(DefaultExpectedAnswers.stateDir(stateDir))
+                .setRecordCollector(DefaultExpectedAnswers.recordCollector(collectorSupplier));
+
         mockForwardAbstractProcessorContext(abstractProcessorContext, builder.internalProcessorContextMock());
+
         EasyMock.replay(abstractProcessorContext);
         abstractProcessorContext.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         abstractProcessorContext.setCurrentNode(new ProcessorNode(PROCESSOR_NODE_NAME));
+
         return builder;
-    }
-
-    public static Builder builder(final RecordCollector collector) {
-        return builder(TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.Long(),
-                collector,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-    }
-
-    public static Builder builder(final ThreadCache cache) {
-        return builder(null, null, null, null, cache);
     }
 
     private static StreamsMetricsImpl createStreamsMetrics(final StreamsConfig config, String version) {
@@ -244,8 +314,7 @@ public class MockInternalProcessorContext {
         return new StreamsConfig(StreamsTestUtils.getStreamsConfig());
     }
 
-    private static ExpectedAnswers getDefaultExpectedAnswer(
-            final Supplier<MockProcessorContext> mockProcessorContextSupplier) {
+    private static ExpectedAnswers getDefaultExpectedAnswer(final Supplier<MockProcessorContext> mockProcessorContextSupplier) {
         return new DefaultExpectedAnswers(mockProcessorContextSupplier.get()).get();
     }
 
@@ -269,9 +338,7 @@ public class MockInternalProcessorContext {
         final Capture<To> toCapture = Capture.newInstance();
         final ToInternal toInternal = new ToInternal();
 
-        abstractProcessorContext.forward(
-                capture(keyCapture),
-                capture(valueCapture));
+        abstractProcessorContext.forward(capture(keyCapture), capture(valueCapture));
         EasyMock.expectLastCall()
                 .andAnswer(() -> {
                     abstractProcessorContext.forward(
@@ -281,10 +348,7 @@ public class MockInternalProcessorContext {
                     return null;
                 }).anyTimes();
 
-        abstractProcessorContext.forward(
-                capture(keyCapture),
-                capture(valueCapture),
-                capture(toCapture));
+        abstractProcessorContext.forward(capture(keyCapture), capture(valueCapture), capture(toCapture));
         EasyMock.expectLastCall().andAnswer(() -> {
             toInternal.update(toCapture.getValue());
             if (toInternal.hasTimestamp()) {
@@ -309,135 +373,196 @@ public class MockInternalProcessorContext {
         }).anyTimes();
     }
 
-    public static class Captures {
-        final Capture<Object> key = Capture.newInstance();
-        final Capture<Object> value = Capture.newInstance();
-        final Capture<To> to = Capture.newInstance();
-        final Capture<Duration> intervalDuration = Capture.newInstance();
-        final Capture<PunctuationType> punctuationType = Capture.newInstance();
-        final Capture<Punctuator> punctuator = Capture.newInstance();
-        final Capture<String> stateStoreName = Capture.newInstance();
-        final Capture<String> prefix = Capture.newInstance();
-        final Capture<Boolean> initialize = Capture.newInstance();
-        final Capture<String> stateRestoreCallbackName = Capture.newInstance();
-        final Map<String, StateRestoreCallback> restoreCallbacks = new HashMap<>();
-        final Capture<StateStore> stateStore = Capture.newInstance();
-        final Capture<StateRestoreCallback> stateRestoreCallback = Capture.newInstance();
-        final Capture<RecordCollector> recordCollector = Capture.newInstance();
-        final Capture<ProcessorRecordContext> processorRecordContext = Capture.newInstance();
-        final Capture<ProcessorNode> processorNode = Capture.newInstance();
-        final Capture<Long> timestamp = Capture.newInstance();
-        final Capture<Serde<?>> keySerde = Capture.newInstance();
-        final Capture<Serde<?>> valueSerde = Capture.newInstance();
-        final Capture<Iterable<KeyValue<byte[], byte[]>>> changelogCapture = Capture.newInstance();
-        final Capture<String> storeNameCapture = Capture.newInstance();
-        final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
-
-        public Capture<Object> getKey() {
-            return key;
-        }
-
-        public Capture<Object> getValue() {
-            return value;
-        }
-
-        public Capture<To> getTo() {
-            return to;
-        }
-
-        public Capture<Duration> getIntervalDuration() {
-            return intervalDuration;
-        }
-
-        public Capture<PunctuationType> getPunctuationType() {
-            return punctuationType;
-        }
-
-        public Capture<Punctuator> getPunctuator() {
-            return punctuator;
-        }
-
-        public Capture<String> getStateStoreName() {
-            return stateStoreName;
-        }
-
-        public Capture<String> getPrefix() {
-            return prefix;
-        }
-
-        public Capture<Boolean> getInitialize() {
-            return initialize;
-        }
-
-        public Capture<String> getStateRestoreCallbackName() {
-            return stateRestoreCallbackName;
-        }
-
-        public Map<String, StateRestoreCallback> getRestoreCallbacks() {
-            return restoreCallbacks;
-        }
-
-        public Capture<StateStore> getStateStore() {
-            return stateStore;
-        }
-
-        public Capture<StateRestoreCallback> getStateRestoreCallback() {
-            return stateRestoreCallback;
-        }
-
-        public Capture<RecordCollector> getRecordCollector() {
-            return recordCollector;
-        }
-
-        public Capture<ProcessorRecordContext> getProcessorRecordContext() {
-            return processorRecordContext;
-        }
-
-        public Capture<ProcessorNode> getProcessorNode() {
-            return processorNode;
-        }
-
-        public Capture<Long> getTimestamp() {
-            return timestamp;
-        }
-
-        public Capture<Serde<?>> getKeySerde() {
-            return keySerde;
-        }
-
-        public Capture<Serde<?>> getValueSerde() {
-            return valueSerde;
-        }
-
-        public Map<String, StateStore> getStateStoreMap() {
-            return stateStoreMap;
-        }
-    }
-
     public static class Builder {
 
         private final InternalProcessorContextMock internalProcessorContext;
         private final ExpectedAnswers expectedAnswers;
-        private final Captures captures;
 
         Builder(final ExpectedAnswers expectedAnswers) {
             internalProcessorContext = EasyMock.mock(InternalProcessorContextMock.class);
             this.expectedAnswers = expectedAnswers;
-            this.captures = expectedAnswers.getCaptures();
         }
 
-        public ExpectedAnswers expectedAnswers() {
-            return expectedAnswers;
+        public Builder setApplicationId(final IPCFunction<String> applicationId) {
+            expectedAnswers.setApplicationId(applicationId);
+            return this;
+        }
+
+        public Builder setAppConfigs(final IPCFunction<Map<String, Object>> appConfigs) {
+            expectedAnswers.setAppConfigs(appConfigs);
+            return this;
+        }
+
+        public Builder setAppConfigsWithPrefix(final IPCBiFunction<String, Map<String, Object>> appConfigsWithPrefix) {
+            expectedAnswers.setAppConfigsWithPrefix(appConfigsWithPrefix);
+            return this;
+        }
+
+        public Builder setTaskId(final IPCFunction<TaskId> taskId) {
+            expectedAnswers.setTaskId(taskId);
+            return this;
+        }
+
+        public Builder setStateDir(final IPCFunction<File> stateDir) {
+            expectedAnswers.setStateDir(stateDir);
+            return this;
+        }
+
+        public Builder setMetrics(final IPCFunction<StreamsMetricsImpl> metrics) {
+            expectedAnswers.setMetrics(metrics);
+            return this;
+        }
+
+        public Builder setRegister(final IPCTriFunction<StateStore, StateRestoreCallback, Void> register) {
+            expectedAnswers.setRegister(register);
+            return this;
+        }
+
+        public Builder setSchedule(final IPCQuadruFunction<Duration, PunctuationType, Punctuator, Cancellable> schedule) {
+            expectedAnswers.setSchedule(schedule);
+            return this;
+        }
+
+        public Builder setGetStateStore(final IPCBiFunction<String, StateStore> getStateStore) {
+            expectedAnswers.setGetStateStore(getStateStore);
+            return this;
+        }
+
+        public Builder setSetRecordCollector(final IPCBiFunction<RecordCollector, Void> setRecordCollector) {
+            expectedAnswers.setSetRecordCollector(setRecordCollector);
+            return this;
+        }
+
+        public Builder setStateStoreCallback(final IPCBiFunction<String, StateRestoreCallback> stateStoreCallback) {
+            expectedAnswers.setStateStoreCallback(stateStoreCallback);
+            return this;
+        }
+
+        public Builder setSetRecordContext(final IPCBiFunction<ProcessorRecordContext, Void> setRecordContext) {
+            expectedAnswers.setSetRecordContext(setRecordContext);
+            return this;
+        }
+
+        public Builder setSetCurrentNode(final IPCBiFunction<ProcessorNode, Void> setCurrentNode) {
+            expectedAnswers.setSetCurrentNode(setCurrentNode);
+            return this;
+        }
+
+        public Builder setGetCache(final IPCFunction<ThreadCache> getCache) {
+            expectedAnswers.setGetCache(getCache);
+            return this;
+        }
+
+        public Builder setInitialize(final IPCFunction<Void> initialize) {
+            expectedAnswers.setInitialize(initialize);
+            return this;
+        }
+
+        public Builder setUninitialize(final IPCFunction<Void> uninitialize) {
+            expectedAnswers.setUninitialize(uninitialize);
+            return this;
+        }
+
+        public Builder setGetRestoreListener(final IPCBiFunction<String, StateRestoreListener> getRestoreListener) {
+            expectedAnswers.setGetRestoreListener(getRestoreListener);
+            return this;
+        }
+
+        public Builder setRestore(final IPCTriFunction<String, Iterable<KeyValue<byte[], byte[]>>, Void> restore) {
+            expectedAnswers.setRestore(restore);
+            return this;
+        }
+
+        public Builder setCommit(final IPCFunction<Void> commit) {
+            expectedAnswers.setCommit(commit);
+            return this;
+        }
+
+        public Builder setForwarded(final IPCFunction<List<MockProcessorContext.CapturedForward>> forwarded) {
+            expectedAnswers.setForwarded(forwarded);
+            return this;
+        }
+
+        public Builder setForwardKeyValue(final IPCTriFunction<Object, Object, Void> forwardKeyValue) {
+            expectedAnswers.setForwardKeyValue(forwardKeyValue);
+            return this;
+        }
+
+        public Builder setForwardKeyValueTo(final IPCQuadruFunction<Object, Object, To, Void> forwardKeyValueTo) {
+            expectedAnswers.setForwardKeyValueTo(forwardKeyValueTo);
+            return this;
+        }
+
+        public Builder setSetTimestamp(final IPCBiFunction<Long, Void> setTimestamp) {
+            expectedAnswers.setSetTimestamp(setTimestamp);
+            return this;
+        }
+
+        public Builder setHeaders(final IPCFunction<Headers> headers) {
+            expectedAnswers.setHeaders(headers);
+            return this;
+        }
+
+        public Builder setOffset(final IPCFunction<Long> offset) {
+            expectedAnswers.setOffset(offset);
+            return this;
+        }
+
+        public Builder setPartition(final IPCFunction<Integer> partition) {
+            expectedAnswers.setPartition(partition);
+            return this;
+        }
+
+        public Builder setTopic(final IPCFunction<String> topic) {
+            expectedAnswers.setTopic(topic);
+            return this;
+        }
+
+        public Builder setSetValueSerde(final IPCBiFunction<Serde<?>, Void> setValueSerde) {
+            expectedAnswers.setSetValueSerde(setValueSerde);
+            return this;
+        }
+
+        public Builder setSetKeySerde(final IPCBiFunction<Serde<?>, Void> setKeySerde) {
+            expectedAnswers.setSetKeySerde(setKeySerde);
+            return this;
+        }
+
+        public Builder setRecordCollector(final IPCBiFunction<RecordCollector, RecordCollector> recordCollector) {
+            expectedAnswers.setRecordCollector(recordCollector);
+            return this;
+        }
+
+        public Builder setKeySerde(final IPCBiFunction<Serde<?>, Serde> keySerde) {
+            expectedAnswers.setKeySerde(keySerde);
+            return this;
+        }
+
+        public Builder setValueSerde(final IPCBiFunction<Serde<?>, Serde> valueSerde) {
+            expectedAnswers.setValueSerde(valueSerde);
+            return this;
+        }
+
+        public Builder setRecordContext(final IPCBiFunction<ProcessorRecordContext, ProcessorRecordContext> recordContext) {
+            expectedAnswers.setRecordContext(recordContext);
+            return this;
+        }
+
+        public Builder setCurrentNode(final IPCBiFunction<ProcessorNode, ProcessorNode> currentNode) {
+            expectedAnswers.setCurrentNode(currentNode);
+            return this;
+        }
+
+        public Builder setTimestamp(final IPCBiFunction<Long, Long> timestamp) {
+            expectedAnswers.setTimestamp(timestamp);
+            return this;
         }
 
         public InternalProcessorContextMock build() {
             this
                     .stateDir()
-                    .setCurrentNode()
                     .currentNode()
-                    .setRecordContext()
                     .recordContext()
-                    .setRecordCollector()
                     .recordCollector()
                     .stateStoreCallback()
                     .initialize()
@@ -447,16 +572,13 @@ public class MockInternalProcessorContext {
                     .appConfigs()
                     .appConfigsWithPrefix()
                     .keySerde()
-                    .setKeySerde()
                     .valueSerde()
-                    .setValueSerde()
                     .metrics()
                     .topic()
                     .partition()
                     .offset()
                     .headers()
                     .timestamp()
-                    .setTimestamp()
                     .getStateStore()
                     .schedule()
                     .forward()
@@ -465,6 +587,7 @@ public class MockInternalProcessorContext {
                     .register()
                     .restore()
                     .getCache();
+
             EasyMock.replay(internalProcessorContext);
             return internalProcessorContext;
         }
@@ -481,54 +604,56 @@ public class MockInternalProcessorContext {
             return this;
         }
 
-        private Builder setCurrentNode() {
-            internalProcessorContext.setCurrentNode(capture(captures.processorNode));
-            EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetCurrentNode().apply(internalProcessorContext))
-                    .anyTimes();
-            return this;
-        }
-
         private Builder currentNode() {
+            final Capture<ProcessorNode> processorNode = Capture.newInstance();
             EasyMock.expect(internalProcessorContext.currentNode())
-                    .andAnswer(expectedAnswers.getCurrentNode().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getCurrentNode()
+                            .apply(internalProcessorContext, processorNode))
                     .anyTimes();
-            return this;
-        }
-
-        private Builder setRecordContext() {
-            internalProcessorContext.setRecordContext(capture(captures.processorRecordContext));
+            internalProcessorContext.setCurrentNode(capture(processorNode));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetRecordContext().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getSetCurrentNode()
+                            .apply(internalProcessorContext, processorNode))
                     .anyTimes();
             return this;
         }
 
         private Builder recordContext() {
-            EasyMock.expect(internalProcessorContext.recordContext())
-                    .andAnswer(expectedAnswers.getRecordContext().apply(internalProcessorContext))
-                    .anyTimes();
-            return this;
-        }
+            final Capture<ProcessorRecordContext> processorRecordContext = Capture.newInstance();
 
-        private Builder setRecordCollector() {
-            internalProcessorContext.setRecordCollector(capture(captures.recordCollector));
+            EasyMock.expect(internalProcessorContext.recordContext())
+                    .andAnswer(expectedAnswers.getRecordContext()
+                            .apply(internalProcessorContext, processorRecordContext))
+                    .anyTimes();
+
+            internalProcessorContext.setRecordContext(capture(processorRecordContext));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetRecordCollector().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getSetRecordContext()
+                            .apply(internalProcessorContext, processorRecordContext))
                     .anyTimes();
             return this;
         }
 
         private Builder recordCollector() {
+            final Capture<RecordCollector> recordCollector = Capture.newInstance();
             EasyMock.expect(internalProcessorContext.recordCollector())
-                    .andAnswer(expectedAnswers.getRecordCollector().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getRecordCollector()
+                            .apply(internalProcessorContext, recordCollector))
+                    .anyTimes();
+
+            internalProcessorContext.setRecordCollector(capture(recordCollector));
+            EasyMock.expectLastCall()
+                    .andAnswer(expectedAnswers.getSetRecordCollector()
+                            .apply(internalProcessorContext, recordCollector))
                     .anyTimes();
             return this;
         }
 
         private Builder stateStoreCallback() {
-            EasyMock.expect(internalProcessorContext.stateRestoreCallback(capture(captures.stateRestoreCallbackName)))
-                    .andAnswer(expectedAnswers.getStateStoreCallback().apply(internalProcessorContext))
+            final Capture<String> stateRestoreCallbackName = Capture.newInstance();
+            EasyMock.expect(internalProcessorContext.stateRestoreCallback(capture(stateRestoreCallbackName)))
+                    .andAnswer(expectedAnswers.getStateStoreCallback()
+                            .apply(internalProcessorContext, stateRestoreCallbackName))
                     .anyTimes();
             return this;
         }
@@ -571,39 +696,38 @@ public class MockInternalProcessorContext {
         }
 
         private Builder appConfigsWithPrefix() {
-            EasyMock.expect(internalProcessorContext.appConfigsWithPrefix(
-                    capture(captures.prefix)))
-                    .andAnswer(expectedAnswers.getAppConfigsWithPrefix().apply(internalProcessorContext))
+            final Capture<String> prefix = Capture.newInstance();
+            EasyMock.expect(internalProcessorContext.appConfigsWithPrefix(capture(prefix)))
+                    .andAnswer(expectedAnswers.getAppConfigsWithPrefix().apply(internalProcessorContext, prefix))
                     .anyTimes();
             return this;
         }
 
         private Builder keySerde() {
-            EasyMock.expect((Serde) internalProcessorContext.keySerde())
-                    .andAnswer(expectedAnswers.getKeySerde().apply(internalProcessorContext))
-                    .anyTimes();
-            return this;
-        }
+            final Capture<Serde<?>> keySerde = Capture.newInstance();
 
-        private Builder setKeySerde() {
-            internalProcessorContext.setKeySerde(capture(captures.keySerde));
+            EasyMock.expect((Serde) internalProcessorContext.keySerde())
+                    .andAnswer(expectedAnswers.getKeySerde().apply(internalProcessorContext, keySerde))
+                    .anyTimes();
+
+            internalProcessorContext.setKeySerde(capture(keySerde));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetKeySerde().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getSetKeySerde().apply(internalProcessorContext, keySerde))
                     .anyTimes();
             return this;
         }
 
         private Builder valueSerde() {
-            EasyMock.expect((Serde) internalProcessorContext.valueSerde())
-                    .andAnswer(expectedAnswers.getValueSerde().apply(internalProcessorContext))
-                    .anyTimes();
-            return this;
-        }
+            final Capture<Serde<?>> valueSerde = Capture.newInstance();
 
-        private Builder setValueSerde() {
-            internalProcessorContext.setValueSerde(capture(captures.valueSerde));
+            EasyMock.expect((Serde) internalProcessorContext.valueSerde())
+                    .andAnswer(expectedAnswers.getValueSerde().apply(internalProcessorContext, valueSerde))
+                    .anyTimes();
+
+            internalProcessorContext.setValueSerde(capture(valueSerde));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetValueSerde().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getSetValueSerde()
+                            .apply(internalProcessorContext, valueSerde))
                     .anyTimes();
             return this;
         }
@@ -644,49 +768,52 @@ public class MockInternalProcessorContext {
         }
 
         private Builder timestamp() {
-            EasyMock.expect(internalProcessorContext.timestamp())
-                    .andAnswer(expectedAnswers.getTimestamp().apply(internalProcessorContext))
-                    .anyTimes();
-            return this;
-        }
+            final Capture<Long> timestamp = Capture.newInstance();
 
-        private Builder setTimestamp() {
-            internalProcessorContext.setTimestamp(EasyMock.captureLong(captures.timestamp));
+            EasyMock.expect(internalProcessorContext.timestamp())
+                    .andAnswer(expectedAnswers.getTimestamp().apply(internalProcessorContext, timestamp))
+                    .anyTimes();
+
+            internalProcessorContext.setTimestamp(captureLong(timestamp));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getSetTimestamp().apply(internalProcessorContext));
+                    .andAnswer(expectedAnswers.getSetTimestamp().apply(internalProcessorContext, timestamp));
             EasyMock.expectLastCall().anyTimes();
             return this;
         }
 
         private Builder getStateStore() {
-            EasyMock.expect(internalProcessorContext.getStateStore(capture(captures.stateStoreName)))
-                    .andAnswer(expectedAnswers.getGetStateStore().apply(internalProcessorContext))
+            final Capture<String> stateStoreName = Capture.newInstance();
+            EasyMock.expect(internalProcessorContext.getStateStore(capture(stateStoreName)))
+                    .andAnswer(expectedAnswers.getGetStateStore().apply(internalProcessorContext, stateStoreName))
                     .anyTimes();
             return this;
         }
 
         private Builder schedule() {
-            EasyMock.expect(internalProcessorContext.schedule(
-                    capture(captures.intervalDuration),
-                    capture(captures.punctuationType),
-                    capture(captures.punctuator)))
-                    .andAnswer(expectedAnswers.getSchedule().apply(internalProcessorContext))
+            final Capture<Duration> intervalDuration = Capture.newInstance();
+            final Capture<PunctuationType> punctuationType = Capture.newInstance();
+            final Capture<Punctuator> punctuator = Capture.newInstance();
+            EasyMock.expect(internalProcessorContext
+                    .schedule(capture(intervalDuration), capture(punctuationType), capture(punctuator)))
+                    .andAnswer(expectedAnswers.getSchedule()
+                            .apply(internalProcessorContext, intervalDuration, punctuationType, punctuator))
                     .anyTimes();
             return this;
         }
 
         private Builder forward() {
-            internalProcessorContext.forward(
-                    capture(captures.key),
-                    capture(captures.value));
+            final Capture<Object> key = Capture.newInstance();
+            final Capture<Object> value = Capture.newInstance();
+            final Capture<To> to = Capture.newInstance();
+
+            internalProcessorContext.forward(capture(key), capture(value));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getForwardKeyValue().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getForwardKeyValue().apply(internalProcessorContext, key, value))
                     .anyTimes();
-            internalProcessorContext.forward(capture(captures.key),
-                    capture(captures.value),
-                    capture(captures.to));
+
+            internalProcessorContext.forward(capture(key), capture(value), capture(to));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getForwardKeyValueTo().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getForwardKeyValueTo().apply(internalProcessorContext, key, value, to))
                     .anyTimes();
             return this;
         }
@@ -707,25 +834,28 @@ public class MockInternalProcessorContext {
         }
 
         private Builder register() {
-            internalProcessorContext.register(
-                    capture(captures.stateStore),
-                    capture(captures.stateRestoreCallback));
+            final Capture<StateStore> stateStore = Capture.newInstance();
+            final Capture<StateRestoreCallback> stateRestoreCallback = Capture.newInstance();
+            internalProcessorContext.register(capture(stateStore), capture(stateRestoreCallback));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getRegister().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getRegister()
+                            .apply(internalProcessorContext, stateStore, stateRestoreCallback))
                     .anyTimes();
             return this;
         }
 
         private Builder restore() {
-            EasyMock.expect(internalProcessorContext.getRestoreListener(capture(captures.storeNameCapture)))
-                    .andAnswer(expectedAnswers.getGetRestoreListener().apply(internalProcessorContext))
+            final Capture<String> storeNameCapture = Capture.newInstance();
+            final Capture<Iterable<KeyValue<byte[], byte[]>>> changelogCapture = Capture.newInstance();
+            EasyMock.expect(internalProcessorContext.getRestoreListener(capture(storeNameCapture)))
+                    .andAnswer(expectedAnswers.getGetRestoreListener()
+                            .apply(internalProcessorContext, storeNameCapture))
                     .anyTimes();
 
-            internalProcessorContext.restore(
-                    capture(captures.storeNameCapture),
-                    capture(captures.changelogCapture));
+            internalProcessorContext.restore(capture(storeNameCapture), capture(changelogCapture));
             EasyMock.expectLastCall()
-                    .andAnswer(expectedAnswers.getRestore().apply(internalProcessorContext))
+                    .andAnswer(expectedAnswers.getRestore()
+                            .apply(internalProcessorContext, storeNameCapture, changelogCapture))
                     .anyTimes();
             return this;
         }
@@ -740,400 +870,374 @@ public class MockInternalProcessorContext {
 
     /**
      * {@link IPCFunction<R>} is a function that takes an InternalProcessorContext
-     * and returns an answer of type IAnswer<R>.
+     * and returns an answer of type IAnswer<? extends R>.
      *
      * Note: IPC => InternalProcessorContext
      *
      * @param <R> return type
      */
     @FunctionalInterface
-    public interface IPCFunction<R> extends Function<InternalProcessorContext, IAnswer<R>> { }
+    public interface IPCFunction<R> extends Function<InternalProcessorContext, IAnswer<? extends R>> { }
 
+    /**
+     * {@link IPCFunction<R>} is a function that takes an
+     * InternalProcessorContext and one captures,
+     * and returns an answer of type IAnswer<? extends R>.
+     *
+     * Note: IPC => InternalProcessorContext
+     *
+     * @param <R> return type
+     */
     @FunctionalInterface
-    public interface IPCBiFunction<P, R> extends BiFunction<InternalProcessorContext, P, IAnswer<R>> { }
+    public interface IPCBiFunction<P, R> extends BiFunction<InternalProcessorContext, Capture<P>, IAnswer<? extends R>> { }
 
+    /**
+     * {@link IPCFunction<R>} is a function that takes an
+     * InternalProcessorContext and two captures,
+     * and returns an answer of type IAnswer<? extends R>.
+     *
+     * Note: IPC => InternalProcessorContext
+     *
+     * @param <R> return type
+     */
     @FunctionalInterface
     public interface IPCTriFunction<P1, P2, R> {
-        IAnswer<R> apply(InternalProcessorContext context, P1 var1, P2 var2);
-    }
-
-    @FunctionalInterface
-    public interface IPCQuadrFunction<P1, P2, P3, R> {
-        IAnswer<R> apply(InternalProcessorContext context, P1 var1, P2 var2, P3 var3);
-    }
-
-    @FunctionalInterface
-    public interface IPCQuintFunction<P1, P2, P3, P4, R> {
-        IAnswer<R> apply(InternalProcessorContext context, P1 var1, P2 var2, P3 var3, P4 var4);
+        IAnswer<? extends R> apply(InternalProcessorContext context, Capture<P1> var1, Capture<P2> var2);
     }
 
     /**
-     * ExpectedAnswers keeps track of all expected answers to the
-     * {@link InternalProcessorContextMock} methods.
+     * {@link IPCFunction<R>} is a function that takes an
+     * InternalProcessorContext and three captures,
+     * and returns an answer of type IAnswer<? extends R>.
+     *
+     * Note: IPC => InternalProcessorContext
+     *
+     * @param <R> return type
      */
-    public static class ExpectedAnswers {
-        private IPCFunction<? extends String> applicationId;
-        private IPCFunction<? extends Map<String, Object>> appConfigs;
-        private IPCFunction<? extends Map<String, Object>> appConfigsWithPrefix;
-        private IPCFunction<? extends TaskId> taskId;
-        private IPCFunction<? extends Serde> keySerde;
-        private IPCFunction<? extends Serde> valueSerde;
-        private IPCFunction<? extends File> stateDir;
-        private IPCFunction<? extends StreamsMetricsImpl> metrics;
-        private IPCFunction<?> register;
-        private IPCFunction<? extends Cancellable> schedule;
-        private IPCFunction<? extends StateStore> getStateStore;
-        private IPCFunction<? extends ProcessorRecordContext> recordContext;
-        private IPCFunction<? extends RecordCollector> recordCollector;
-        private IPCFunction<?> setRecordCollector;
-        private IPCFunction<? extends StateRestoreCallback> stateStoreCallback;
-        private IPCFunction<?> setRecordContext;
-        private IPCFunction<?> setCurrentNode;
-        private IPCFunction<? extends ProcessorNode> currentNode;
-        private IPCFunction<? extends ThreadCache> getCache;
-        private IPCFunction<?> initialize;
-        private IPCFunction<?> uninitialize;
-        private IPCFunction<? extends StateRestoreListener> getRestoreListener;
-        private IPCFunction<?> restore;
-        private IPCFunction<?> commit;
-        private IPCFunction<? extends List<MockProcessorContext.CapturedForward>> forwarded;
-        private IPCFunction<?> forwardKeyValue;
-        private IPCFunction<?> forwardKeyValueTo;
-        private IPCFunction<?> setTimestamp;
-        private IPCFunction<? extends Long> timestamp;
-        private IPCFunction<? extends Headers> headers;
-        private IPCFunction<? extends Long> offset;
-        private IPCFunction<? extends Integer> partition;
-        private IPCFunction<? extends String> topic;
-        private IPCFunction<?> setValueSerde;
-        private IPCFunction<?> setKeySerde;
-        private Captures captures;
+    @FunctionalInterface
+    public interface IPCQuadruFunction<P1, P2, P3, R> {
+        IAnswer<? extends R> apply(InternalProcessorContext context, Capture<P1> var1, Capture<P2> var2, Capture<P3> var3);
+    }
 
-        ExpectedAnswers(final Captures captures) {
-            this.captures = captures;
-        }
+    private static class ExpectedAnswers {
+        private IPCBiFunction<RecordCollector, RecordCollector> recordCollector;
+        private IPCBiFunction<RecordCollector, Void> setRecordCollector;
+        private IPCFunction<String> applicationId;
+        private IPCFunction<Map<String, Object>> appConfigs;
+        private IPCBiFunction<String, Map<String, Object>> appConfigsWithPrefix;
+        private IPCFunction<TaskId> taskId;
+        private IPCBiFunction<Serde<?>, Serde> keySerde;
+        private IPCBiFunction<Serde<?>, Serde> valueSerde;
+        private IPCFunction<File> stateDir;
+        private IPCFunction<StreamsMetricsImpl> metrics;
+        private IPCTriFunction<StateStore, StateRestoreCallback, Void> register;
+        private IPCQuadruFunction<Duration, PunctuationType, Punctuator, Cancellable> schedule;
+        private IPCBiFunction<String, StateStore> getStateStore;
+        private IPCBiFunction<ProcessorRecordContext, ProcessorRecordContext> recordContext;
+        private IPCBiFunction<String, StateRestoreCallback> stateStoreCallback;
+        private IPCBiFunction<ProcessorRecordContext, Void> setRecordContext;
+        private IPCBiFunction<ProcessorNode, Void> setCurrentNode;
+        private IPCBiFunction<ProcessorNode, ProcessorNode> currentNode;
+        private IPCFunction<ThreadCache> getCache;
+        private IPCFunction<Void> initialize;
+        private IPCFunction<Void> uninitialize;
+        private IPCBiFunction<String, StateRestoreListener> getRestoreListener;
+        private IPCTriFunction<String, Iterable<KeyValue<byte[], byte[]>>, Void> restore;
+        private IPCFunction<Void> commit;
+        private IPCFunction<List<MockProcessorContext.CapturedForward>> forwarded;
+        private IPCTriFunction<Object, Object, Void> forwardKeyValue;
+        private IPCQuadruFunction<Object, Object, To, Void> forwardKeyValueTo;
+        private IPCBiFunction<Long, Void> setTimestamp;
+        private IPCBiFunction<Long, Long> timestamp;
+        private IPCFunction<Headers> headers;
+        private IPCFunction<Long> offset;
+        private IPCFunction<Integer> partition;
+        private IPCFunction<String> topic;
+        private IPCBiFunction<Serde<?>, Void> setValueSerde;
+        private IPCBiFunction<Serde<?>, Void> setKeySerde;
 
-        public void setApplicationId(
-                final IPCFunction<? extends String> applicationId) {
-            this.applicationId = applicationId;
-        }
-
-        public void setAppConfigs(
-                final IPCFunction<? extends Map<String, Object>> appConfigs) {
-            this.appConfigs = appConfigs;
-        }
-
-        public void setAppConfigsWithPrefix(
-                final IPCFunction<? extends Map<String, Object>> appConfigsWithPrefix) {
-            this.appConfigsWithPrefix = appConfigsWithPrefix;
-        }
-
-        public void setTaskId(
-                final IPCFunction<? extends TaskId> taskId) {
-            this.taskId = taskId;
-        }
-
-        public void setKeySerde(
-                final IPCFunction<? extends Serde> keySerde) {
-            this.keySerde = keySerde;
-        }
-
-        public void setValueSerde(
-                final IPCFunction<? extends Serde> valueSerde) {
-            this.valueSerde = valueSerde;
-        }
-
-        public void setStateDir(
-                final IPCFunction<? extends File> stateDir) {
-            this.stateDir = stateDir;
-        }
-
-        public void setMetrics(
-                final IPCFunction<? extends StreamsMetricsImpl> metrics) {
-            this.metrics = metrics;
-        }
-
-        public void setRegister(
-                final IPCFunction<?> register) {
-            this.register = register;
-        }
-
-        public void setSchedule(
-                final IPCFunction<? extends Cancellable> schedule) {
-            this.schedule = schedule;
-        }
-
-        public void setGetStateStore(
-                final IPCFunction<? extends StateStore> getStateStore) {
-            this.getStateStore = getStateStore;
-        }
-
-        public void setRecordContext(
-                final IPCFunction<? extends ProcessorRecordContext> recordContext) {
-            this.recordContext = recordContext;
-        }
-
-        public void setRecordCollector(
-                final IPCFunction<? extends RecordCollector> recordCollector) {
+        public void setRecordCollector(final IPCBiFunction<RecordCollector, RecordCollector> recordCollector) {
             this.recordCollector = recordCollector;
         }
 
-        public void setSetRecordCollector(
-                final IPCFunction<?> setRecordCollector) {
+        public void setSetRecordCollector(final IPCBiFunction<RecordCollector, Void> setRecordCollector) {
             this.setRecordCollector = setRecordCollector;
         }
 
-        public void setStateStoreCallback(
-                final IPCFunction<? extends StateRestoreCallback> stateStoreCallback) {
+        public void setApplicationId(final IPCFunction<String> applicationId) {
+            this.applicationId = applicationId;
+        }
+
+        public void setAppConfigs(final IPCFunction<Map<String, Object>> appConfigs) {
+            this.appConfigs = appConfigs;
+        }
+
+        public void setAppConfigsWithPrefix(final IPCBiFunction<String, Map<String, Object>> appConfigsWithPrefix) {
+            this.appConfigsWithPrefix = appConfigsWithPrefix;
+        }
+
+        public void setTaskId(final IPCFunction<TaskId> taskId) {
+            this.taskId = taskId;
+        }
+
+        public void setKeySerde(final IPCBiFunction<Serde<?>, Serde> keySerde) {
+            this.keySerde = keySerde;
+        }
+
+        public void setValueSerde(final IPCBiFunction<Serde<?>, Serde> valueSerde) {
+            this.valueSerde = valueSerde;
+        }
+
+        public void setStateDir(final IPCFunction<File> stateDir) {
+            this.stateDir = stateDir;
+        }
+
+        public void setMetrics(final IPCFunction<StreamsMetricsImpl> metrics) {
+            this.metrics = metrics;
+        }
+
+        public void setRegister(final IPCTriFunction<StateStore, StateRestoreCallback, Void> register) {
+            this.register = register;
+        }
+
+        public void setSchedule(final IPCQuadruFunction<Duration, PunctuationType, Punctuator, Cancellable> schedule) {
+            this.schedule = schedule;
+        }
+
+        public void setGetStateStore(final IPCBiFunction<String, StateStore> getStateStore) {
+            this.getStateStore = getStateStore;
+        }
+
+        public void setRecordContext(final IPCBiFunction<ProcessorRecordContext, ProcessorRecordContext> recordContext) {
+            this.recordContext = recordContext;
+        }
+
+        public void setStateStoreCallback(final IPCBiFunction<String, StateRestoreCallback> stateStoreCallback) {
             this.stateStoreCallback = stateStoreCallback;
         }
 
-        public void setSetRecordContext(
-                final IPCFunction<?> setRecordContext) {
+        public void setSetRecordContext(final IPCBiFunction<ProcessorRecordContext, Void> setRecordContext) {
             this.setRecordContext = setRecordContext;
         }
 
-        public void setSetCurrentNode(
-                final IPCFunction<?> setCurrentNode) {
+        public void setSetCurrentNode(final IPCBiFunction<ProcessorNode, Void> setCurrentNode) {
             this.setCurrentNode = setCurrentNode;
         }
 
-        public void setCurrentNode(
-                final IPCFunction<? extends ProcessorNode> currentNode) {
+        public void setCurrentNode(final IPCBiFunction<ProcessorNode, ProcessorNode> currentNode) {
             this.currentNode = currentNode;
         }
 
-        public void setGetCache(
-                final IPCFunction<? extends ThreadCache> getCache) {
+        public void setGetCache(final IPCFunction<ThreadCache> getCache) {
             this.getCache = getCache;
         }
 
-        public void setInitialize(
-                final IPCFunction<?> initialize) {
+        public void setInitialize(final IPCFunction<Void> initialize) {
             this.initialize = initialize;
         }
 
-        public void setUninitialize(
-                final IPCFunction<?> uninitialize) {
+        public void setUninitialize(final IPCFunction<Void> uninitialize) {
             this.uninitialize = uninitialize;
         }
 
-        public void setGetRestoreListener(
-                final IPCFunction<? extends StateRestoreListener> getRestoreListener) {
+        public void setGetRestoreListener(final IPCBiFunction<String, StateRestoreListener> getRestoreListener) {
             this.getRestoreListener = getRestoreListener;
         }
 
-        public void setRestore(
-                final IPCFunction<?> restore) {
+        public void setRestore(final IPCTriFunction<String, Iterable<KeyValue<byte[], byte[]>>, Void> restore) {
             this.restore = restore;
         }
 
-        public void setCommit(
-                final IPCFunction<?> commit) {
+        public void setCommit(final IPCFunction<Void> commit) {
             this.commit = commit;
         }
 
-        public void setForwarded(
-                final IPCFunction<? extends List<MockProcessorContext.CapturedForward>> forwarded) {
+        public void setForwarded(final IPCFunction<List<MockProcessorContext.CapturedForward>> forwarded) {
             this.forwarded = forwarded;
         }
 
-        public void setForwardKeyValue(
-                final IPCFunction<?> forwardKeyValue) {
+        public void setForwardKeyValue(final IPCTriFunction<Object, Object, Void> forwardKeyValue) {
             this.forwardKeyValue = forwardKeyValue;
         }
 
-        public void setForwardKeyValueTo(
-                final IPCFunction<?> forwardKeyValueTo) {
+        public void setForwardKeyValueTo(final IPCQuadruFunction<Object, Object, To, Void> forwardKeyValueTo) {
             this.forwardKeyValueTo = forwardKeyValueTo;
         }
 
-        public void setSetTimestamp(
-                final IPCFunction<?> setTimestamp) {
+        public void setSetTimestamp(final IPCBiFunction<Long, Void> setTimestamp) {
             this.setTimestamp = setTimestamp;
         }
 
-        public void setTimestamp(
-                final IPCFunction<? extends Long> timestamp) {
+        public void setTimestamp(final IPCBiFunction<Long, Long> timestamp) {
             this.timestamp = timestamp;
         }
 
-        public void setHeaders(
-                final IPCFunction<? extends Headers> headers) {
+        public void setHeaders(final IPCFunction<Headers> headers) {
             this.headers = headers;
         }
 
-        public void setOffset(
-                final IPCFunction<? extends Long> offset) {
+        public void setOffset(final IPCFunction<Long> offset) {
             this.offset = offset;
         }
 
-        public void setPartition(
-                final IPCFunction<? extends Integer> partition) {
+        public void setPartition(final IPCFunction<Integer> partition) {
             this.partition = partition;
         }
 
-        public void setTopic(
-                final IPCFunction<? extends String> topic) {
+        public void setTopic(final IPCFunction<String> topic) {
             this.topic = topic;
         }
 
-        public void setSetValueSerde(
-                final IPCFunction<?> setValueSerde) {
+        public void setSetValueSerde(final IPCBiFunction<Serde<?>, Void> setValueSerde) {
             this.setValueSerde = setValueSerde;
         }
 
-        public void setSetKeySerde(
-                final IPCFunction<?> setKeySerde) {
+        public void setSetKeySerde(final IPCBiFunction<Serde<?>, Void> setKeySerde) {
             this.setKeySerde = setKeySerde;
         }
 
-        IPCFunction<? extends String> getApplicationId() {
-            return applicationId;
-        }
-
-        IPCFunction<? extends Map<String, Object>> getAppConfigs() {
-            return appConfigs;
-        }
-
-        IPCFunction<? extends Map<String, Object>> getAppConfigsWithPrefix() {
-            return appConfigsWithPrefix;
-        }
-
-        IPCFunction<? extends TaskId> getTaskId() {
-            return taskId;
-        }
-
-        IPCFunction<? extends Serde> getKeySerde() {
-            return keySerde;
-        }
-
-        IPCFunction<? extends Serde> getValueSerde() {
-            return valueSerde;
-        }
-
-        IPCFunction<? extends File> getStateDir() {
-            return stateDir;
-        }
-
-        IPCFunction<? extends StreamsMetricsImpl> getMetrics() {
-            return metrics;
-        }
-
-        IPCFunction<?> getRegister() {
-            return register;
-        }
-
-        IPCFunction<? extends Cancellable> getSchedule() {
-            return schedule;
-        }
-
-        IPCFunction<? extends StateStore> getGetStateStore() {
-            return getStateStore;
-        }
-
-        IPCFunction<? extends ProcessorRecordContext> getRecordContext() {
-            return recordContext;
-        }
-
-        IPCFunction<? extends RecordCollector> getRecordCollector() {
+        IPCBiFunction<RecordCollector, RecordCollector> getRecordCollector() {
             return recordCollector;
         }
 
-        IPCFunction<?> getSetRecordCollector() {
+        IPCBiFunction<RecordCollector, Void> getSetRecordCollector() {
             return setRecordCollector;
         }
 
-        IPCFunction<? extends StateRestoreCallback> getStateStoreCallback() {
+        IPCFunction<String> getApplicationId() {
+            return applicationId;
+        }
+
+        IPCFunction<Map<String, Object>> getAppConfigs() {
+            return appConfigs;
+        }
+
+        IPCBiFunction<String, Map<String, Object>> getAppConfigsWithPrefix() {
+            return appConfigsWithPrefix;
+        }
+
+        IPCFunction<TaskId> getTaskId() {
+            return taskId;
+        }
+
+        IPCBiFunction<Serde<?>, Serde> getKeySerde() {
+            return keySerde;
+        }
+
+        IPCBiFunction<Serde<?>, Serde> getValueSerde() {
+            return valueSerde;
+        }
+
+        IPCFunction<File> getStateDir() {
+            return stateDir;
+        }
+
+        IPCFunction<StreamsMetricsImpl> getMetrics() {
+            return metrics;
+        }
+
+        IPCTriFunction<StateStore, StateRestoreCallback, Void> getRegister() {
+            return register;
+        }
+
+        IPCQuadruFunction<Duration, PunctuationType, Punctuator, Cancellable> getSchedule() {
+            return schedule;
+        }
+
+        IPCBiFunction<String, StateStore> getGetStateStore() {
+            return getStateStore;
+        }
+
+        IPCBiFunction<ProcessorRecordContext, ProcessorRecordContext> getRecordContext() {
+            return recordContext;
+        }
+
+        IPCBiFunction<String, StateRestoreCallback> getStateStoreCallback() {
             return stateStoreCallback;
         }
 
-        IPCFunction<?> getSetRecordContext() {
+        IPCBiFunction<ProcessorRecordContext, Void> getSetRecordContext() {
             return setRecordContext;
         }
 
-        IPCFunction<?> getSetCurrentNode() {
+        IPCBiFunction<ProcessorNode, Void> getSetCurrentNode() {
             return setCurrentNode;
         }
 
-        IPCFunction<? extends ProcessorNode> getCurrentNode() {
+        IPCBiFunction<ProcessorNode, ProcessorNode> getCurrentNode() {
             return currentNode;
         }
 
-        IPCFunction<? extends ThreadCache> getGetCache() {
+        IPCFunction<ThreadCache> getGetCache() {
             return getCache;
         }
 
-        public IPCFunction<?> getInitialize() {
+        IPCFunction<Void> getInitialize() {
             return initialize;
         }
 
-        IPCFunction<?> getUninitialize() {
+        IPCFunction<Void> getUninitialize() {
             return uninitialize;
         }
 
-        IPCFunction<? extends StateRestoreListener> getGetRestoreListener() {
+        IPCBiFunction<String, StateRestoreListener> getGetRestoreListener() {
             return getRestoreListener;
         }
 
-        IPCFunction<?> getRestore() {
+        IPCTriFunction<String, Iterable<KeyValue<byte[], byte[]>>, Void> getRestore() {
             return restore;
         }
 
-        IPCFunction<?> getCommit() {
+        IPCFunction<Void> getCommit() {
             return commit;
         }
 
-        IPCFunction<? extends List<MockProcessorContext.CapturedForward>> getForwarded() {
+        IPCFunction<List<MockProcessorContext.CapturedForward>> getForwarded() {
             return forwarded;
         }
 
-        IPCFunction<?> getForwardKeyValue() {
+        IPCTriFunction<Object, Object, Void> getForwardKeyValue() {
             return forwardKeyValue;
         }
 
-        IPCFunction<?> getForwardKeyValueTo() {
+        IPCQuadruFunction<Object, Object, To, Void> getForwardKeyValueTo() {
             return forwardKeyValueTo;
         }
 
-        IPCFunction<?> getSetTimestamp() {
+        IPCBiFunction<Long, Void> getSetTimestamp() {
             return setTimestamp;
         }
 
-        IPCFunction<? extends Long> getTimestamp() {
+        IPCBiFunction<Long, Long> getTimestamp() {
             return timestamp;
         }
 
-        IPCFunction<? extends Headers> getHeaders() {
+        IPCFunction<Headers> getHeaders() {
             return headers;
         }
 
-        IPCFunction<? extends Long> getOffset() {
+        IPCFunction<Long> getOffset() {
             return offset;
         }
 
-        IPCFunction<? extends Integer> getPartition() {
+        IPCFunction<Integer> getPartition() {
             return partition;
         }
 
-        IPCFunction<? extends String> getTopic() {
+        IPCFunction<String> getTopic() {
             return topic;
         }
 
-        IPCFunction<?> getSetValueSerde() {
+        IPCBiFunction<Serde<?>, Void> getSetValueSerde() {
             return setValueSerde;
         }
 
-        IPCFunction<?> getSetKeySerde() {
+        IPCBiFunction<Serde<?>, Void> getSetKeySerde() {
             return setKeySerde;
-        }
-
-        public Captures getCaptures() {
-            return captures;
         }
     }
 
-    public static class DefaultExpectedAnswers implements Supplier<ExpectedAnswers> {
+    private static class DefaultExpectedAnswers implements Supplier<ExpectedAnswers> {
 
         private static final long DEFAULT_LONG = -1L;
 
@@ -1145,48 +1249,34 @@ public class MockInternalProcessorContext {
 
         @Override
         public ExpectedAnswers get() {
-            final Captures captures = new Captures();
-            final ExpectedAnswers expectedAnswers = new ExpectedAnswers(captures);
+            final State state = new State();
+            final ExpectedAnswers expectedAnswers = new ExpectedAnswers();
             expectedAnswers.setApplicationId(applicationId(mockProcessorContext));
             expectedAnswers.setAppConfigs(appConfigs(mockProcessorContext));
-            expectedAnswers.setAppConfigsWithPrefix(appConfigsWithPrefix(mockProcessorContext, captures.getPrefix()));
+            expectedAnswers.setAppConfigsWithPrefix(appConfigsWithPrefix(mockProcessorContext));
             expectedAnswers.setTaskId(taskId(mockProcessorContext));
-            expectedAnswers.setKeySerde(keySerde(mockProcessorContext, captures.getKeySerde()));
-            expectedAnswers.setValueSerde(valueSerde(mockProcessorContext, captures.getValueSerde()));
+            expectedAnswers.setKeySerde(keySerde(mockProcessorContext));
+            expectedAnswers.setValueSerde(valueSerde(mockProcessorContext));
             expectedAnswers.setStateDir(stateDir(mockProcessorContext));
             expectedAnswers.setMetrics(metrics(mockProcessorContext));
-            expectedAnswers.setRegister(register(
-                    captures.stateStore, captures.stateRestoreCallback,
-                    captures.restoreCallbacks, captures.stateStoreMap));
-            expectedAnswers.setSchedule(schedule(
-                    mockProcessorContext, captures.intervalDuration,
-                    captures.punctuationType, captures.punctuator));
-            expectedAnswers.setGetStateStore(getStateStore(
-                    captures.stateStoreMap, captures.stateStoreName));
+            expectedAnswers.setRegister(register(state.restoreCallbacks, state.stateStoreMap));
+            expectedAnswers.setSchedule(schedule(mockProcessorContext));
+            expectedAnswers.setGetStateStore(getStateStore(state.stateStoreMap));
             expectedAnswers.setRecordContext(recordContext());
-            expectedAnswers.setRecordCollector(recordCollector(
-                    captures.recordCollector));
+            expectedAnswers.setRecordCollector(recordCollector());
             expectedAnswers.setSetRecordCollector(setRecordCollector());
-            expectedAnswers.setStateStoreCallback(stateStoreCallback(
-                    captures.stateRestoreCallbackName,
-                    captures.restoreCallbacks));
-            expectedAnswers.setSetRecordContext(setRecordContext(
-                    mockProcessorContext,
-                    captures.processorRecordContext));
+            expectedAnswers.setStateStoreCallback(stateStoreCallback(state.restoreCallbacks));
+            expectedAnswers.setSetRecordContext(setRecordContext(mockProcessorContext));
             expectedAnswers.setSetCurrentNode(setCurrentNode());
-            expectedAnswers.setCurrentNode(currentNode(
-                    captures.processorNode));
+            expectedAnswers.setCurrentNode(currentNode());
             expectedAnswers.setGetCache(getCache());
-            expectedAnswers.setInitialize(initialize(captures.initialize));
-            expectedAnswers.setUninitialize(uninitialize(captures.initialize));
+            expectedAnswers.setInitialize(initialize(state.initialize));
+            expectedAnswers.setUninitialize(uninitialize(state.initialize));
             expectedAnswers.setCommit(commit(mockProcessorContext));
             expectedAnswers.setForwarded(forwarded(mockProcessorContext));
-            expectedAnswers.setForwardKeyValue(forwardKeyValue(
-                    mockProcessorContext, captures.key, captures.value));
-            expectedAnswers.setForwardKeyValueTo(forwardKeyValueTo(
-                    mockProcessorContext, captures.key,
-                    captures.value, captures.to));
-            expectedAnswers.setSetTimestamp(setTimestamp(captures.timestamp));
+            expectedAnswers.setForwardKeyValue(forwardKeyValue(mockProcessorContext));
+            expectedAnswers.setForwardKeyValueTo(forwardKeyValueTo(mockProcessorContext));
+            expectedAnswers.setSetTimestamp(setTimestamp());
             expectedAnswers.setTimestamp(getTimestamp(mockProcessorContext));
             expectedAnswers.setHeaders(headers(mockProcessorContext));
             expectedAnswers.setOffset(offset(mockProcessorContext));
@@ -1194,20 +1284,24 @@ public class MockInternalProcessorContext {
             expectedAnswers.setTopic(topic(mockProcessorContext));
             expectedAnswers.setSetValueSerde(setValueSerde());
             expectedAnswers.setSetKeySerde(setKeySerde());
-            InternalProcessorContextRestorer restorer = new InternalProcessorContextRestorer(captures.restoreCallbacks);
-            expectedAnswers.setRestore(restore(restorer, captures.changelogCapture, captures.storeNameCapture));
-            expectedAnswers.setGetRestoreListener(getRestoreListener(restorer, captures.storeNameCapture));
+            final Restorer restorer = new Restorer(state.restoreCallbacks);
+            expectedAnswers.setRestore(restore(restorer));
+            expectedAnswers.setGetRestoreListener(getRestoreListener(restorer));
             return expectedAnswers;
         }
 
-        public static IPCFunction<?> setCurrentNode() {
-            return internalProcessorContext -> () -> null;
+        private static class State {
+            final Map<String, StateRestoreCallback> restoreCallbacks = new HashMap<>();
+            final Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
+            final Capture<Boolean> initialize = Capture.newInstance();
         }
 
-        public static IPCFunction<? extends ProcessorNode> currentNode(
-                final InternalProcessorContext processorContext,
-                final Capture<ProcessorNode> processorNodeCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<ProcessorNode, Void> setCurrentNode() {
+            return (internalProcessorContext, pn) -> () -> null;
+        }
+
+        static IPCBiFunction<ProcessorNode, ProcessorNode> currentNode(final InternalProcessorContext processorContext) {
+            return (internalProcessorContext, processorNodeCapture) -> () -> {
                 if (processorNodeCapture.hasCaptured()) {
                     return processorNodeCapture.getValue();
                 }
@@ -1215,9 +1309,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends ProcessorNode> currentNode(
-                final Capture<ProcessorNode> processorNodeCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<ProcessorNode, ProcessorNode> currentNode() {
+            return (internalProcessorContext, processorNodeCapture) -> () -> {
                 if (processorNodeCapture.hasCaptured()) {
                     return processorNodeCapture.getValue();
                 }
@@ -1225,9 +1318,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<?> setRecordContext(final MockProcessorContext processorContext,
-                                               final Capture<ProcessorRecordContext> processorRecordContextCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<ProcessorRecordContext, Void> setRecordContext(final MockProcessorContext processorContext) {
+            return (internalProcessorContext, processorRecordContextCapture) -> () -> {
                 final ProcessorRecordContext recordContext =
                         processorRecordContextCapture.getValue();
                 processorContext.setRecordMetadata(
@@ -1241,8 +1333,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends ProcessorRecordContext> recordContext() {
-            return internalProcessorContext -> () -> new ProcessorRecordContext(
+        static IPCBiFunction<ProcessorRecordContext, ProcessorRecordContext> recordContext() {
+            return (internalProcessorContext, processorRecordContextCapture) -> () -> new ProcessorRecordContext(
                     internalProcessorContext.timestamp(),
                     internalProcessorContext.offset(),
                     internalProcessorContext.partition(),
@@ -1251,13 +1343,12 @@ public class MockInternalProcessorContext {
             );
         }
 
-        public static IPCFunction<?> setRecordCollector() {
-            return internalProcessorContext -> () -> null;
+        static IPCBiFunction<RecordCollector, Void> setRecordCollector() {
+            return (internalProcessorContext, rcc) -> () -> null;
         }
 
-        public static IPCFunction<? extends RecordCollector> recordCollector(
-                final Capture<RecordCollector> recordCollectorCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<RecordCollector, RecordCollector> recordCollector() {
+            return (internalProcessorContext, recordCollectorCapture) -> () -> {
                 if (recordCollectorCapture.hasCaptured()) {
                     return recordCollectorCapture.getValue();
                 }
@@ -1265,56 +1356,56 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends RecordCollector> recordCollector(final RecordCollector.Supplier supplier) {
-            return internalProcessorContext -> () -> Optional
-                    .ofNullable(supplier.recordCollector())
+        static IPCBiFunction<RecordCollector, RecordCollector> recordCollector(final RecordCollector.Supplier supplier) {
+            return (internalProcessorContext, recordCollector) -> () -> Optional
+                    .of(recordCollector)
+                    .filter(Capture::hasCaptured)
+                    .map(rc -> Optional.ofNullable(rc.getValue()))
+                    .orElseGet(() -> Optional.of(supplier.recordCollector()))
                     .orElseThrow(() -> new UnsupportedOperationException("No RecordCollector specified"));
+
         }
 
-        public static IPCFunction<? extends StateRestoreCallback> stateStoreCallback(
-                final Capture<String> stateRestoreCallbackNameCapture,
+        static IPCBiFunction<String, StateRestoreCallback> stateStoreCallback(
                 final Map<String, StateRestoreCallback> restoreCallbacks) {
-            return internalProcessorContext -> () ->
+            return (internalProcessorContext, stateRestoreCallbackNameCapture) -> () ->
                     restoreCallbacks.get(stateRestoreCallbackNameCapture.getValue());
         }
 
-        public static IPCFunction<?> initialize(final Capture<Boolean> initializeCapture) {
+        static IPCFunction<Void> initialize(final Capture<Boolean> initializeCapture) {
             return internalProcessorContext -> () -> {
                 initializeCapture.setValue(true);
                 return null;
             };
         }
 
-        public static IPCFunction<?> uninitialize(final Capture<Boolean> initializeCapture) {
+        static IPCFunction<Void> uninitialize(final Capture<Boolean> initializeCapture) {
             return internalProcessorContext -> () -> {
                 initializeCapture.setValue(false);
                 return null;
             };
         }
 
-        public static IPCFunction<? extends String> applicationId(final ProcessorContext processorContext) {
+        static IPCFunction<String> applicationId(final ProcessorContext processorContext) {
             return internalProcessorContext -> processorContext::applicationId;
         }
 
-        public static IPCFunction<? extends TaskId> taskId(final ProcessorContext processorContext) {
+        static IPCFunction<TaskId> taskId(final ProcessorContext processorContext) {
             return internalProcessorContext -> processorContext::taskId;
         }
 
-        public static IPCFunction<? extends Map<String, Object>> appConfigs(final ProcessorContext processorContext) {
+        static IPCFunction<Map<String, Object>> appConfigs(final ProcessorContext processorContext) {
             return internalProcessorContext -> processorContext::appConfigs;
         }
 
-        public static IPCFunction<? extends Map<String, Object>> appConfigsWithPrefix(
-                final ProcessorContext processorContext,
-                final Capture<String> prefixCapture) {
-            return internalProcessorContext -> () -> processorContext
-                    .appConfigsWithPrefix(prefixCapture.getValue());
+        static IPCBiFunction<String, Map<String, Object>> appConfigsWithPrefix(
+                final ProcessorContext processorContext) {
+            return (internalProcessorContext, prefix) -> () -> processorContext
+                    .appConfigsWithPrefix(prefix.getValue());
         }
 
-        public static IPCFunction<? extends Serde> keySerde(
-                final ProcessorContext processorContext,
-                final Capture<Serde<?>> keySerdeCapture) {
-            return internalProcessorContext1 -> () -> {
+        static IPCBiFunction<Serde<?>, Serde> keySerde(final ProcessorContext processorContext) {
+            return (internalProcessorContext, keySerdeCapture) -> () -> {
                 if (keySerdeCapture.hasCaptured()) {
                     return keySerdeCapture.getValue();
                 }
@@ -1322,9 +1413,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Serde> keySerde(final Serde<?> keySerde,
-                                                            final Capture<Serde<?>> keySerdeCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<Serde<?>, Serde> keySerde(final Serde<?> keySerde) {
+            return (internalProcessorContext, keySerdeCapture) -> () -> {
                 if (keySerdeCapture.hasCaptured()) {
                     return keySerdeCapture.getValue();
                 }
@@ -1332,14 +1422,12 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<?> setKeySerde() {
-            return internalProcessorContext -> () -> null;
+        static IPCBiFunction<Serde<?>, Void> setKeySerde() {
+            return (internalProcessorContext, serdeCapture) -> () -> null;
         }
 
-        public static IPCFunction<? extends Serde> valueSerde(
-                final ProcessorContext processorContext,
-                final Capture<Serde<?>> valueSerdeCapture) {
-            return internalProcessorContext1 -> () -> {
+        static IPCBiFunction<Serde<?>, Serde> valueSerde(final ProcessorContext processorContext) {
+            return (internalProcessorContext, valueSerdeCapture) -> () -> {
                 if (valueSerdeCapture.hasCaptured()) {
                     return valueSerdeCapture.getValue();
                 }
@@ -1347,9 +1435,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Serde> valueSerde(final Serde<?> valueSerde,
-                                                              final Capture<Serde<?>> valueSerdeCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<Serde<?>, Serde> valueSerde(final Serde<?> valueSerde) {
+            return (internalProcessorContext, valueSerdeCapture) -> () -> {
                 if (valueSerdeCapture.hasCaptured()) {
                     return valueSerdeCapture.getValue();
                 }
@@ -1357,25 +1444,25 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<?> setValueSerde() {
-            return internalProcessorContext -> () -> null;
+        static IPCBiFunction<Serde<?>, Void> setValueSerde() {
+            return (internalProcessorContext, serdeCapture) -> () -> null;
         }
 
-        public static IPCFunction<? extends File> stateDir(final File stateDir) {
+        static IPCFunction<File> stateDir(final File stateDir) {
             return internalProcessorContext -> () -> Optional
                     .ofNullable(stateDir)
                     .orElseThrow(() -> new UnsupportedOperationException("State directory not specified"));
         }
 
-        public static IPCFunction<? extends File> stateDir(final ProcessorContext processorContext) {
+        static IPCFunction<File> stateDir(final ProcessorContext processorContext) {
             return internalProcessorContext -> processorContext::stateDir;
         }
 
-        public static IPCFunction<? extends StreamsMetricsImpl> metrics(final ProcessorContext processorContext) {
+        static IPCFunction<StreamsMetricsImpl> metrics(final ProcessorContext processorContext) {
             return internalProcessorContext -> () -> (StreamsMetricsImpl) processorContext.metrics();
         }
 
-        public static IPCFunction<? extends String> topic(final ProcessorContext processorContext) {
+        static IPCFunction<String> topic(final ProcessorContext processorContext) {
             return internalProcessorContext -> () -> {
                 try {
                     return processorContext.topic();
@@ -1385,7 +1472,7 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Integer> partition(final ProcessorContext processorContext) {
+        static IPCFunction<Integer> partition(final ProcessorContext processorContext) {
             return internalProcessorContext -> () -> {
                 try {
                     return processorContext.partition();
@@ -1395,7 +1482,7 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Long> offset(final ProcessorContext processorContext) {
+        static IPCFunction<Long> offset(final ProcessorContext processorContext) {
             return internalProcessorContext -> () -> {
                 try {
                     return processorContext.offset();
@@ -1405,7 +1492,7 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Headers> headers(final MockProcessorContext processorContext) {
+        static IPCFunction<Headers> headers(final MockProcessorContext processorContext) {
             return internalProcessorContext -> () -> {
                 try {
                     return Optional
@@ -1426,9 +1513,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Long> getTimestamp(
-                final ProcessorContext processorContext) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<Long, Long> getTimestamp(final ProcessorContext processorContext) {
+            return (internalProcessorContext, timestampCapture) -> () -> {
                 try {
                     return processorContext.timestamp();
                 } catch (Exception e) {
@@ -1437,8 +1523,8 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<?> setTimestamp(final Capture<Long> timestampCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCBiFunction<Long, Void> setTimestamp() {
+            return (internalProcessorContext, timestampCapture) -> () -> {
                 internalProcessorContext.setRecordContext(new ProcessorRecordContext(
                         timestampCapture.getValue(),
                         internalProcessorContext.offset(),
@@ -1449,29 +1535,20 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends StateStore> getStateStore(
-                final Map<String, StateStore> stateStoreMap,
-                final Capture<String> stateStoreNameCapture) {
-            return internalProcessorContext -> () ->
+        static IPCBiFunction<String, StateStore> getStateStore(final Map<String, StateStore> stateStoreMap) {
+            return (internalProcessorContext, stateStoreNameCapture) -> () ->
                     stateStoreMap.get(stateStoreNameCapture.getValue());
         }
 
-        public static IPCFunction<?> forwardKeyValue(
-                final ProcessorContext processorContext,
-                final Capture<Object> keyCapture,
-                final Capture<Object> valueCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCTriFunction<Object, Object, Void> forwardKeyValue(final ProcessorContext processorContext) {
+            return (internalProcessorContext, keyCapture, valueCapture) -> () -> {
                 processorContext.forward(keyCapture.getValue(), valueCapture.getValue());
                 return null;
             };
         }
 
-        public static IPCFunction<?> forwardKeyValueTo(
-                final ProcessorContext processorContext,
-                final Capture<Object> keyCapture,
-                final Capture<Object> valueCapture,
-                final Capture<To> toCapture) {
-            return internalProcessorContext -> () -> {
+        static IPCQuadruFunction<Object, Object, To, Void> forwardKeyValueTo(final ProcessorContext processorContext) {
+            return (internalProcessorContext, keyCapture, valueCapture, toCapture) -> () -> {
                 processorContext.forward(
                         keyCapture.getValue(),
                         valueCapture.getValue(),
@@ -1480,66 +1557,54 @@ public class MockInternalProcessorContext {
             };
         }
 
-        public static IPCFunction<? extends Cancellable> schedule(
-                final ProcessorContext processorContext,
-                final Capture<Duration> intervalDurationCapture,
-                final Capture<PunctuationType> punctuationTypeCapture,
-                final Capture<Punctuator> punctuatorCapture) {
-            return internalProcessorContext -> () -> processorContext.schedule(
-                    intervalDurationCapture.getValue(),
-                    punctuationTypeCapture.getValue(),
-                    punctuatorCapture.getValue());
+        static IPCQuadruFunction<Duration, PunctuationType, Punctuator, Cancellable> schedule(final ProcessorContext processorContext) {
+            return (internalProcessorContext, durationCapture, punctuationTypeCapture, punctuatorCapture) -> () ->
+                    processorContext.schedule(
+                            durationCapture.getValue(),
+                            punctuationTypeCapture.getValue(),
+                            punctuatorCapture.getValue());
         }
 
-        public static IPCFunction<?
-                extends List<MockProcessorContext.CapturedForward>> forwarded(
+        static IPCFunction<List<MockProcessorContext.CapturedForward>> forwarded(
                 final MockProcessorContext processorContext) {
             return internalProcessorContext -> processorContext::forwarded;
         }
 
-        public static IPCFunction<?> commit(final ProcessorContext processorContext) {
+        static IPCFunction<Void> commit(final ProcessorContext processorContext) {
             return internalProcessorContext ->  () -> {
                 processorContext.commit();
                 return null;
             };
         }
 
-        public static IPCFunction<?> register(
-                final Capture<StateStore> stateStoreCapture,
-                final Capture<StateRestoreCallback> stateRestoreCallbackCapture,
+        static IPCTriFunction<StateStore, StateRestoreCallback, Void> register(
                 final Map<String, StateRestoreCallback> restoreCallbacks,
                 final Map<String, StateStore> stateStoreMap) {
-            return internalProcessorContext -> () -> {
+            return (internalProcessorContext, stateStoreCapture, stateRestoreCallbackCapture) -> () -> {
                 final StateStore stateStore = stateStoreCapture.getValue();
-                final StateRestoreCallback stateRestoreCallback = stateRestoreCallbackCapture.getValue();
-                restoreCallbacks.put(stateStore.name(), stateRestoreCallback);
+                restoreCallbacks.put(stateStore.name(), stateRestoreCallbackCapture.getValue());
                 stateStoreMap.put(stateStore.name(), stateStore);
                 return null;
             };
         }
 
-        public static IPCFunction<?> restore(
-                final InternalProcessorContextRestorer restorer,
-                final Capture<Iterable<KeyValue<byte[], byte[]>>> changelogCapture,
-                final Capture<String> storeNameCapture) {
-            return internalProcessorContext1 -> () -> {
+        static IPCTriFunction<String, Iterable<KeyValue<byte[], byte[]>>, Void> restore(final Restorer restorer) {
+            return (internalProcessorContext, storeNameCapture, changelogCapture) -> () -> {
                 restorer.restore(storeNameCapture.getValue(), changelogCapture.getValue());
                 return null;
             };
         }
 
-        public static IPCFunction<? extends StateRestoreListener> getRestoreListener(
-                final InternalProcessorContextRestorer restorer,
-                final Capture<String> storeNameCapture) {
-            return internalProcessorContext -> () -> restorer.getRestoreListener(storeNameCapture.getValue());
+        static IPCBiFunction<String, StateRestoreListener> getRestoreListener(final Restorer restorer) {
+            return (internalProcessorContext, storeNameCapture) -> () ->
+                    restorer.getRestoreListener(storeNameCapture.getValue());
         }
 
-        public static IPCFunction<? extends  ThreadCache> getCache(
-                final InternalProcessorContext processorContext) {
-            return internalProcessorContext ->  processorContext::getCache;
+        static IPCFunction<ThreadCache> getCache(final InternalProcessorContext processorContext) {
+            return internalProcessorContext -> processorContext::getCache;
         }
 
-        public static IPCFunction<? extends ThreadCache> getCache() {
+        static IPCFunction<ThreadCache> getCache() {
             return internalProcessorContext -> () -> null;
         }
     }
@@ -1550,7 +1615,7 @@ public class MockInternalProcessorContext {
      */
     private static abstract class AbstractProcessorContextMock extends AbstractProcessorContext {
 
-        public AbstractProcessorContextMock(
+        AbstractProcessorContextMock(
                 final TaskId taskId,
                 final StreamsConfig config,
                 final StreamsMetricsImpl metrics,
@@ -1559,10 +1624,10 @@ public class MockInternalProcessorContext {
         }
     }
 
-    private static AbstractProcessorContext getAbstractProcessorContext(final TaskId taskId,
-                                                                        final StreamsMetricsImpl metrics,
-                                                                        final StreamsConfig config,
-                                                                        final ThreadCache cache) {
+    private static AbstractProcessorContext mockAbstractProcessorContext(final TaskId taskId,
+                                                                         final StreamsMetricsImpl metrics,
+                                                                         final StreamsConfig config,
+                                                                         final ThreadCache cache) {
         return EasyMock.partialMockBuilder(AbstractProcessorContextMock.class)
                 .withConstructor(
                         TaskId.class,
@@ -1573,11 +1638,11 @@ public class MockInternalProcessorContext {
                 .createMock();
     }
 
-    private static class InternalProcessorContextRestorer {
+    private static class Restorer {
 
         private final Map<String, StateRestoreCallback> restoreCallbacks;
 
-        InternalProcessorContextRestorer(final Map<String, StateRestoreCallback> restoreCallbacks) {
+        Restorer(final Map<String, StateRestoreCallback> restoreCallbacks) {
             this.restoreCallbacks = restoreCallbacks;
         }
 

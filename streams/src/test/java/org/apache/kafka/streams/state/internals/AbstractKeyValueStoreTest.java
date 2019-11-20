@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
-import org.apache.kafka.test.InternalProcessorContextMock;
+import org.apache.kafka.test.MockInternalProcessorContext.InternalProcessorContextMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
