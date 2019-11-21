@@ -507,7 +507,7 @@ public class StreamThread extends Thread {
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics, false);
 
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(
             builder,

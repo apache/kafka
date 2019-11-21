@@ -138,7 +138,7 @@ public abstract class WindowBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics()), false));
 
         windowStore.init(context, windowStore);
     }

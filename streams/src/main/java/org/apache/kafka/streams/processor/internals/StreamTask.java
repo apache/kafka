@@ -488,12 +488,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
-        flushState();
-
-        if (!eosEnabled) {
-            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
-        }
-
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
@@ -502,25 +496,43 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }
 
-        try {
-            if (eosEnabled) {
-                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                producer.commitTransaction();
-                transactionInFlight = false;
-                if (startNewTransaction) {
-                    producer.beginTransaction();
-                    transactionInFlight = true;
-                }
-            } else {
-                consumer.commitSync(consumedOffsetsAndMetadata);
-            }
-        } catch (final CommitFailedException | ProducerFencedException error) {
-            throw new TaskMigratedException(this, error);
+        if (eosEnabled) {
+            commitEos(startNewTransaction, consumedOffsetsAndMetadata);
+        } else {
+            commitNonEos(consumedOffsetsAndMetadata);
         }
 
         commitNeeded = false;
         commitRequested = false;
         commitSensor.record(time.nanoseconds() - startNs);
+    }
+
+    void commitEos(final boolean startNewTransaction, final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
+       try {
+           producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+           producer.commitTransaction();
+           transactionInFlight = false;
+           if (startNewTransaction) {
+               producer.beginTransaction();
+               transactionInFlight = true;
+           }
+       } catch (final CommitFailedException | ProducerFencedException error) {
+           throw new TaskMigratedException(this, error);
+       }
+
+       // We don't need to call flush on producer again as the txn commit process is guaranteed to flush.
+       super.flushState();
+    }
+
+    void commitNonEos(final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
+        flushState();
+        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+
+        try {
+            consumer.commitSync(consumedOffsetsAndMetadata);
+        } catch (final CommitFailedException | ProducerFencedException error) {
+            throw new TaskMigratedException(this, error);
+        }
     }
 
     private Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {

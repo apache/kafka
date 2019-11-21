@@ -115,7 +115,7 @@ public class MeteredWindowStoreTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics, false)
         );
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;

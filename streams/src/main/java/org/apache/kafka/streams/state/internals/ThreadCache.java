@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.CacheSizeExceedException;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
@@ -38,6 +39,7 @@ public class ThreadCache {
     private final long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
+    private final boolean bounded;
 
     // internal stats
     private long numPuts = 0;
@@ -49,10 +51,14 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final LogContext logContext, final long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
+    public ThreadCache(final LogContext logContext,
+                       final long maxCacheSizeBytes,
+                       final StreamsMetricsImpl metrics,
+                       final boolean bounded) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
         this.log = logContext.logger(getClass());
+        this.bounded = bounded;
     }
 
     public long puts() {
@@ -143,6 +149,8 @@ public class ThreadCache {
     }
 
     public void put(final String namespace, final Bytes key, final LRUCacheEntry value) {
+        maybeRejectPut(key, value);
+
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
@@ -151,6 +159,8 @@ public class ThreadCache {
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
+        maybeRejectPut(key, value);
+
         final NamedCache cache = getOrCreateCache(namespace);
 
         final LRUCacheEntry result = cache.putIfAbsent(key, value);
@@ -160,6 +170,12 @@ public class ThreadCache {
             numPuts++;
         }
         return result;
+    }
+
+    private void maybeRejectPut(final Bytes key, final LRUCacheEntry value) {
+        if (bounded && sizeBytes() + NamedCache.LRUNode.size(key, value) > maxCacheSizeBytes) {
+            throw new CacheSizeExceedException("Could not add more records as within a transaction session we could not saturate the cache");
+        }
     }
 
     public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {

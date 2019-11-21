@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.CacheSizeExceedException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -39,6 +40,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;
@@ -47,6 +50,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
+    private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
     private final StreamTask task;
     private final RecordCollector collector;
     private final ToInternal toInternal = new ToInternal();
@@ -112,15 +116,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore store = stateManager.getStore(name);
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store, this::commit);
         } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store, this::commit);
         } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store, this::commit);
         } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
+            return new WindowStoreReadWriteDecorator((WindowStore) store, this::commit);
         } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
+            return new SessionStoreReadWriteDecorator((SessionStore) store, this::commit);
         }
 
         return store;
@@ -435,9 +439,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends WrappedStateStore<T, K, V> {
 
         static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
+        final Runnable requestCommit;
 
-        private StateStoreReadWriteDecorator(final T inner) {
+        private StateStoreReadWriteDecorator(final T inner, final Runnable requestCommit) {
             super(inner);
+            this.requestCommit = requestCommit;
         }
 
         @Override
@@ -450,14 +456,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public void close() {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
+
+        protected void onCacheSizeExceed() {
+            requestCommit.run();
+            log.warn("The cache is full, considering tuning the commit interval or increase the cache size");
+        }
     }
 
     static class KeyValueStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
-        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
-            super(inner);
+        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner, Runnable requestCommit) {
+            super(inner, requestCommit);
         }
 
         @Override
@@ -484,13 +495,22 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final K key,
                         final V value) {
-            wrapped().put(key, value);
+            try {
+                wrapped().put(key, value);
+            } catch (CacheSizeExceedException e) {
+                onCacheSizeExceed();
+            }
         }
 
         @Override
         public V putIfAbsent(final K key,
                              final V value) {
-            return wrapped().putIfAbsent(key, value);
+            try {
+                return wrapped().putIfAbsent(key, value);
+            } catch (CacheSizeExceedException e) {
+                onCacheSizeExceed();
+            }
+            return null;
         }
 
         @Override
@@ -508,8 +528,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedKeyValueStore<K, V> {
 
-        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
-            super(inner);
+        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner, Runnable requestCommit) {
+            super(inner, requestCommit);
         }
     }
 
@@ -517,22 +537,30 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends StateStoreReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
-        WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
-            super(inner);
+        WindowStoreReadWriteDecorator(final WindowStore<K, V> inner, Runnable requestCommit) {
+            super(inner, requestCommit);
         }
 
         @Deprecated
         @Override
         public void put(final K key,
                         final V value) {
-            wrapped().put(key, value);
+            try {
+                wrapped().put(key, value);
+            } catch (CacheSizeExceedException e) {
+                onCacheSizeExceed();
+            }
         }
 
         @Override
         public void put(final K key,
                         final V value,
                         final long windowStartTimestamp) {
-            wrapped().put(key, value, windowStartTimestamp);
+            try {
+                wrapped().put(key, value, windowStartTimestamp);
+            } catch (CacheSizeExceedException e) {
+                onCacheSizeExceed();
+            }
         }
 
         @Override
@@ -575,8 +603,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 
-        TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner) {
-            super(inner);
+        TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner, Runnable requestCommit) {
+            super(inner, requestCommit);
         }
     }
 
@@ -584,8 +612,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends StateStoreReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
-        SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
-            super(inner);
+        SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner, final Runnable requestCommit) {
+            super(inner, requestCommit);
         }
 
         @Override
@@ -611,7 +639,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final Windowed<K> sessionKey,
                         final AGG aggregate) {
-            wrapped().put(sessionKey, aggregate);
+            try {
+                wrapped().put(sessionKey, aggregate);
+            } catch (CacheSizeExceedException e) {
+                onCacheSizeExceed();
+            }
         }
 
         @Override

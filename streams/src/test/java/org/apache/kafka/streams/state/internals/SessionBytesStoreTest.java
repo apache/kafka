@@ -126,7 +126,7 @@ public abstract class SessionBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics()), false));
 
         sessionStore.init(context, sessionStore);
     }

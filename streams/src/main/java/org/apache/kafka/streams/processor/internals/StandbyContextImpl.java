@@ -87,8 +87,8 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
             new ThreadCache(
                 new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
                 0,
-                metrics
-            )
+                metrics,
+                false)
         );
     }
 

@@ -127,7 +127,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()), false)
         );
         bytesStore.init(context, bytesStore);
     }

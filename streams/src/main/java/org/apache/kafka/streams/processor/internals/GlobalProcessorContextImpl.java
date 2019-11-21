@@ -55,15 +55,15 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         final StateStore store = stateManager.getGlobalStore(name);
 
         if (store instanceof TimestampedKeyValueStore) {
-            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store, this::commit);
         } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store, this::commit);
         } else if (store instanceof TimestampedWindowStore) {
-            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store, this::commit);
         } else if (store instanceof WindowStore) {
-            return new WindowStoreReadWriteDecorator((WindowStore) store);
+            return new WindowStoreReadWriteDecorator((WindowStore) store, this::commit);
         } else if (store instanceof SessionStore) {
-            return new SessionStoreReadWriteDecorator((SessionStore) store);
+            return new SessionStoreReadWriteDecorator((SessionStore) store, this::commit);
         }
 
         return store;
