@@ -440,8 +440,9 @@ public class TaskManager {
         this.cluster = cluster;
     }
 
-    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        this.streamsMetadataState.onChange(partitionsByHostState, cluster);
+    public void setHostPartitionMappings(final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                                         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost) {
+        this.streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, cluster);
     }
 
     public void setPartitionsToTaskId(final Map<TopicPartition, TaskId> partitionsToTaskId) {
