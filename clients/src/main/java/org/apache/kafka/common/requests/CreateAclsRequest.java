@@ -22,42 +22,22 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.message.CreateAclsRequestData;
+import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class CreateAclsRequest extends AbstractRequest {
-    public static class AclCreation {
-        private final AclBinding acl;
-
-        public AclCreation(AclBinding acl) {
-            this.acl = acl;
-        }
-
-        public AclBinding acl() {
-            return acl;
-        }
-
-        @Override
-        public String toString() {
-            return "(acl=" + acl + ")";
-        }
-    }
 
     public static class Builder extends AbstractRequest.Builder<CreateAclsRequest> {
         private final CreateAclsRequestData data;
-
-        public Builder(List<AclCreation> creations) {
-            this(createAclsRequestData(creations));
-        }
 
         public Builder(CreateAclsRequestData data) {
             super(ApiKeys.CREATE_ACLS);
@@ -71,40 +51,24 @@ public class CreateAclsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return "(type=CreateAclsRequest, creations=" + Utils.join(data.creations(), ", ") + ")";
+            return data.toString();
         }
     }
 
-    private final List<AclCreation> aclCreations;
     private final CreateAclsRequestData data;
 
-    CreateAclsRequest(short version, List<AclCreation> aclCreations) {
+    CreateAclsRequest(short version, CreateAclsRequestData data) {
         super(ApiKeys.CREATE_ACLS, version);
-        this.aclCreations = aclCreations;
-        this.data = createAclsRequestData(aclCreations);
-        validate(aclCreations);
-    }
-
-    private CreateAclsRequest(short version, CreateAclsRequestData data) {
-        super(ApiKeys.CREATE_ACLS, version);
+        validate(data);
         this.data = data;
-        this.aclCreations = new ArrayList<>(data.creations().size());
-        for (CreateAclsRequestData.CreatableAcl creation : data.creations()) {
-            ResourcePattern pattern = new ResourcePattern(
-                ResourceType.fromCode(creation.resourceType()),
-                creation.resourceName(),
-                PatternType.fromCode(creation.resourcePatternType()));
-            AccessControlEntry entry = new AccessControlEntry(
-                creation.principal(),
-                creation.host(),
-                AclOperation.fromCode(creation.operation()),
-                AclPermissionType.fromCode(creation.permissionType()));
-            aclCreations.add(new AclCreation(new AclBinding(pattern, entry)));
-        }
     }
 
     public CreateAclsRequest(Struct struct, short version) {
         this(version, new CreateAclsRequestData(struct, version));
+    }
+
+    public List<CreateAclsRequestData.CreatableAcl> aclCreations() {
+        return data.creations();
     }
 
     @Override
@@ -112,54 +76,63 @@ public class CreateAclsRequest extends AbstractRequest {
         return data.toStruct(version());
     }
 
-    public List<AclCreation> aclCreations() {
-        return aclCreations;
-    }
-
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        List<CreateAclsResponse.AclCreationResponse> responses = new ArrayList<>();
-        for (int i = 0; i < aclCreations.size(); i++)
-            responses.add(new CreateAclsResponse.AclCreationResponse(ApiError.fromThrowable(throwable)));
-        return new CreateAclsResponse(throttleTimeMs, responses);
+        CreateAclsResponseData.CreatableAclResult result = CreateAclsRequest.aclResult(throwable);
+        List<CreateAclsResponseData.CreatableAclResult> results = Collections.nCopies(data.creations().size(), result);
+        return new CreateAclsResponse(new CreateAclsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResults(results));
     }
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
         return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
     }
 
-    private void validate(List<AclCreation> aclCreations) {
+    private void validate(CreateAclsRequestData data) {
         if (version() == 0) {
-            final boolean unsupported = aclCreations.stream()
-                .map(AclCreation::acl)
-                .map(AclBinding::pattern)
-                .map(ResourcePattern::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL);
-            if (unsupported) {
+            final boolean unsupported = data.creations().stream().anyMatch(creation ->
+                creation.resourcePatternType() != PatternType.LITERAL.code());
+            if (unsupported)
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-            }
         }
 
-        final boolean unknown = aclCreations.stream()
-            .map(AclCreation::acl)
+        final boolean unknown = data.creations().stream()
+            .map(CreateAclsRequest::aclBinding)
             .anyMatch(AclBinding::isUnknown);
-        if (unknown) {
+        if (unknown)
             throw new IllegalArgumentException("You can not create ACL bindings with unknown elements");
-        }
     }
 
-    private static CreateAclsRequestData createAclsRequestData(List<AclCreation> aclCreations) {
-        CreateAclsRequestData data = new CreateAclsRequestData();
-        for (AclCreation creation : aclCreations) {
-            data.creations().add(new CreateAclsRequestData.CreatableAcl()
-                .setHost(creation.acl().entry().host())
-                .setOperation(creation.acl.entry().operation().code())
-                .setPermissionType(creation.acl.entry().permissionType().code())
-                .setPrincipal(creation.acl.entry().principal())
-                .setResourceName(creation.acl.pattern().name())
-                .setResourceType(creation.acl.pattern().resourceType().code())
-                .setResourcePatternType(creation.acl.pattern().patternType().code()));
-        }
-        return data;
+    // Visible for testing
+    static AclBinding aclBinding(CreateAclsRequestData.CreatableAcl acl) {
+        ResourcePattern pattern = new ResourcePattern(
+            ResourceType.fromCode(acl.resourceType()),
+            acl.resourceName(),
+            PatternType.fromCode(acl.resourcePatternType()));
+        AccessControlEntry entry = new AccessControlEntry(
+            acl.principal(),
+            acl.host(),
+            AclOperation.fromCode(acl.operation()),
+            AclPermissionType.fromCode(acl.permissionType()));
+        return new AclBinding(pattern, entry);
+    }
+
+    public static CreateAclsRequestData.CreatableAcl creatableAcl(AclBinding binding) {
+        return new CreateAclsRequestData.CreatableAcl()
+            .setHost(binding.entry().host())
+            .setOperation(binding.entry().operation().code())
+            .setPermissionType(binding.entry().permissionType().code())
+            .setPrincipal(binding.entry().principal())
+            .setResourceName(binding.pattern().name())
+            .setResourceType(binding.pattern().resourceType().code())
+            .setResourcePatternType(binding.pattern().patternType().code());
+    }
+
+    private static CreateAclsResponseData.CreatableAclResult aclResult(Throwable throwable) {
+        ApiError apiError = ApiError.fromThrowable(throwable);
+        return new CreateAclsResponseData.CreatableAclResult()
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(apiError.message());
     }
 }

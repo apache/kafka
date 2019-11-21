@@ -43,6 +43,8 @@ import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
+import org.apache.kafka.common.message.CreateAclsRequestData;
+import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
@@ -129,8 +131,6 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
-import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
@@ -1719,19 +1719,23 @@ public class RequestResponseTest {
     }
 
     private CreateAclsRequest createCreateAclsRequest() {
-        List<AclCreation> creations = new ArrayList<>();
-        creations.add(new AclCreation(new AclBinding(
+        List<CreateAclsRequestData.CreatableAcl> creations = new ArrayList<>();
+        creations.add(CreateAclsRequest.creatableAcl(new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
-        creations.add(new AclCreation(new AclBinding(
+        creations.add(CreateAclsRequest.creatableAcl(new AclBinding(
             new ResourcePattern(ResourceType.GROUP, "mygroup", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
-        return new CreateAclsRequest.Builder(creations).build();
+        CreateAclsRequestData data = new CreateAclsRequestData().setCreations(creations);
+        return new CreateAclsRequest.Builder(data).build();
     }
 
     private CreateAclsResponse createCreateAclsResponse() {
-        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(ApiError.NONE),
-            new AclCreationResponse(new ApiError(Errors.INVALID_REQUEST, "Foo bar"))));
+        return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
+            new CreateAclsResponseData.CreatableAclResult(),
+            new CreateAclsResponseData.CreatableAclResult()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("Foo bar"))));
     }
 
     private DeleteAclsRequest createDeleteAclsRequest() {
