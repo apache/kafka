@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -46,12 +48,18 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
-        if (!streamThread.isRunningAndNotRebalancing()) {
+        // TODO: This needs to be rethought
+        if (!streamThread.isRunning()) {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                    streamThread.state() + ", not RUNNING");
+                streamThread.state() + ", not RUNNING");
         }
         final List<T> stores = new ArrayList<>();
-        for (final Task streamTask : streamThread.tasks().values()) {
+        final Set<Task> tasks = new HashSet<>(streamThread.tasks().values());
+        if (streamThread.standbyTasks() != null) {
+            tasks.addAll(streamThread.standbyTasks().values());
+        }
+
+        for (final Task streamTask : tasks) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {

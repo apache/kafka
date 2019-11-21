@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -952,8 +954,8 @@ public class StreamsPartitionAssignorTest {
         createMockTaskManager();
         final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
             new HostInfo("localhost", 9090),
-            mkSet(t3p0, t3p3));
-        taskManager.setPartitionsByHostState(hostState);
+            Utils.mkSet(t3p0, t3p3));
+        taskManager.setHostPartitionMappings(hostState, Collections.emptyMap());
         EasyMock.expectLastCall();
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -973,7 +975,7 @@ public class StreamsPartitionAssignorTest {
 
         configurePartitionAssignor(emptyMap());
         final List<TaskId> activeTaskList = asList(task0_0, task0_3);
-        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTaskList, standbyTasks, hostState, 0);
+        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTaskList, standbyTasks, hostState, Collections.emptyMap(), 0);
         final ConsumerPartitionAssignor.Assignment assignment = new ConsumerPartitionAssignor.Assignment(asList(t3p0, t3p3), info.encode());
 
         partitionAssignor.onAssignment(assignment, null);
@@ -1517,13 +1519,28 @@ public class StreamsPartitionAssignorTest {
         final AssignmentInfo decode = AssignmentInfo.decode(assignment.get(CONSUMER_1).userData());
         assertThat(
             decode,
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, asList(task0_0, task0_2), emptyMap(), emptyMap(), 0)));
+            equalTo(new AssignmentInfo(
+                LATEST_SUPPORTED_VERSION,
+                Arrays.asList(task0_0, task0_2),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                0
+            )));
+
 
         // The new consumer's assignment should be empty until c1 has the chance to revoke its partitions/tasks
         assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
         assertThat(
             AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()),
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, emptyList(), emptyMap(), emptyMap(), 0)));
+            equalTo(new AssignmentInfo(
+                LATEST_SUPPORTED_VERSION,
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                0
+            )));
     }
 
     @Test
@@ -1573,11 +1590,11 @@ public class StreamsPartitionAssignorTest {
                     new ArrayList<>(activeTasks),
                     standbyTaskMap,
                     emptyMap(),
+                    emptyMap(),
                     0
                 )
             )
         );
-
 
         assertThat(assignment.get("future-consumer").partitions(), equalTo(Collections.singletonList(t1p2)));
         assertThat(
@@ -1587,6 +1604,7 @@ public class StreamsPartitionAssignorTest {
                     LATEST_SUPPORTED_VERSION,
                     Collections.singletonList(task0_2),
                     futureStandbyTaskMap,
+                    emptyMap(),
                     emptyMap(),
                     0)
             )
@@ -1625,13 +1643,13 @@ public class StreamsPartitionAssignorTest {
         assertThat(assignment.get(CONSUMER_1).partitions(), equalTo(asList(t1p0, t1p2)));
         assertThat(
             AssignmentInfo.decode(assignment.get(CONSUMER_1).userData()),
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, asList(task0_0, task0_2), emptyMap(), emptyMap(), 0)));
+            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, asList(task0_0, task0_2), emptyMap(), emptyMap(), emptyMap(), 0)));
 
 
         assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(Collections.singletonList(t1p1)));
         assertThat(
             AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()),
-            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, Collections.singletonList(task0_1), emptyMap(), emptyMap(), 0)));
+            equalTo(new AssignmentInfo(LATEST_SUPPORTED_VERSION, Collections.singletonList(task0_1), emptyMap(), emptyMap(), emptyMap(), 0)));
     }
 
     @Test
@@ -1676,8 +1694,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static ConsumerPartitionAssignor.Assignment createAssignment(final Map<HostInfo, Set<TopicPartition>> firstHostState) {
-        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, emptyList(), emptyMap(), firstHostState, 0);
-
+        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, emptyList(), emptyMap(), firstHostState, emptyMap(), 0);
         return new ConsumerPartitionAssignor.Assignment(emptyList(), info.encode());
     }
 

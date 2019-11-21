@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -44,7 +45,8 @@ import java.util.Set;
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
     private final InternalTopologyBuilder builder;
-    private final List<StreamsMetadata> allMetadata = new ArrayList<>();
+    private final List<StreamsMetadata> allActiveMetadata = new ArrayList<>();
+    private final List<StreamsMetadata> allStandbyMetadata = new ArrayList<>();
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private Cluster clusterMetadata;
@@ -63,7 +65,8 @@ public class StreamsMetadataState {
 
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
-        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
+        builder.append(indent).append("GlobalActiveMetadata: ").append(allActiveMetadata).append("\n");
+        builder.append(indent).append("GlobalStandbyMetadata: ").append(allStandbyMetadata).append("\n");
         builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
         builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
         builder.append(indent).append(clusterMetadata).append("\n");
@@ -77,8 +80,8 @@ public class StreamsMetadataState {
      *
      * @return all the {@link StreamsMetadata}s in a {@link KafkaStreams} application
      */
-    public synchronized Collection<StreamsMetadata> getAllMetadata() {
-        return allMetadata;
+    public synchronized Collection<StreamsMetadata> getAllActiveMetadata() {
+        return allActiveMetadata;
     }
     
     /**
@@ -95,7 +98,7 @@ public class StreamsMetadataState {
         }
 
         if (globalStores.contains(storeName)) {
-            return allMetadata;
+            return allActiveMetadata;
         }
 
         final List<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
@@ -104,7 +107,7 @@ public class StreamsMetadataState {
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
-        for (final StreamsMetadata metadata : allMetadata) {
+        for (final StreamsMetadata metadata : allActiveMetadata) {
             if (metadata.stateStoreNames().contains(storeName)) {
                 results.add(metadata);
             }
@@ -142,7 +145,7 @@ public class StreamsMetadataState {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
             if (thisHost == UNKNOWN_HOST) {
-                return allMetadata.get(0);
+                return allActiveMetadata.get(0);
             }
             return myMetadata;
         }
@@ -158,6 +161,39 @@ public class StreamsMetadataState {
                                         sourceTopicsInfo);
     }
 
+    /**
+     * TODO: rework based on final API design
+     */
+    public synchronized <K> List<StreamsMetadata> getAllMetadataWithKey(final String storeName,
+        final K key,
+        final Serializer<K> keySerializer) {
+        Objects.requireNonNull(keySerializer, "keySerializer can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Objects.requireNonNull(key, "key can't be null");
+
+        if (!isInitialized()) {
+            return Arrays.asList(StreamsMetadata.NOT_AVAILABLE);
+        }
+
+        if (globalStores.contains(storeName)) {
+            // global stores are on every node. if we dont' have the host info
+            // for this host then just pick the first metadata
+            if (thisHost == UNKNOWN_HOST) {
+                return allActiveMetadata;
+            }
+            return Arrays.asList(myMetadata);
+        }
+
+        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
+        if (sourceTopicsInfo == null) {
+            return null;
+        }
+
+        return getAllStreamsMetadataForKey(storeName,
+            key,
+            new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
+            sourceTopicsInfo);
+    }
 
 
 
@@ -190,7 +226,7 @@ public class StreamsMetadataState {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
             if (thisHost == UNKNOWN_HOST) {
-                return allMetadata.get(0);
+                return allActiveMetadata.get(0);
             }
             return myMetadata;
         }
@@ -205,12 +241,14 @@ public class StreamsMetadataState {
     /**
      * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
      * metadata
-     * @param currentState       the current mapping of {@link HostInfo} -> {@link TopicPartition}s
+     * @param activePartitionHostMap    the current mapping of {@link HostInfo} -> {@link TopicPartition}s for active partitions
+     * @param standbyPartitionHostMap    the current mapping of {@link HostInfo} -> {@link TopicPartition}s for standby partitions
      * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
+    synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
+        final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap, final Cluster clusterMetadata) {
         this.clusterMetadata = clusterMetadata;
-        rebuildMetadata(currentState);
+        rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }
 
     private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
@@ -222,28 +260,42 @@ public class StreamsMetadataState {
         return false;
     }
 
-    private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        allMetadata.clear();
-        if (currentState.isEmpty()) {
+    private Set<String> getStoresOnHost(final Map<String, List<String>> stores, final Set<TopicPartition> partitionsForHost) {
+        final Set<String> storesOnHost = new HashSet<>();
+        for (final Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
+            final List<String> topicsForStore = storeTopicEntry.getValue();
+            if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
+                storesOnHost.add(storeTopicEntry.getKey());
+            }
+        }
+        return storesOnHost;
+    }
+
+
+    private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
+        final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
+        allActiveMetadata.clear();
+        allStandbyMetadata.clear();
+        if (activePartitionHostMap.isEmpty()) {
             return;
         }
         final Map<String, List<String>> stores = builder.stateStoreNameToSourceTopics();
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
+        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : activePartitionHostMap.entrySet()) {
             final HostInfo key = entry.getKey();
             final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
-            final Set<String> storesOnHost = new HashSet<>();
-            for (final Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
-                final List<String> topicsForStore = storeTopicEntry.getValue();
-                if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
-                    storesOnHost.add(storeTopicEntry.getKey());
-                }
-            }
+            final Set<String> storesOnHost = getStoresOnHost(stores, partitionsForHost);
             storesOnHost.addAll(globalStores);
             final StreamsMetadata metadata = new StreamsMetadata(key, storesOnHost, partitionsForHost);
-            allMetadata.add(metadata);
+            allActiveMetadata.add(metadata);
             if (key.equals(thisHost)) {
                 myMetadata = metadata;
             }
+        }
+        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : standbyPartitionHostMap.entrySet()) {
+            final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
+            final Set<String> storesOnHost = getStoresOnHost(stores, partitionsForHost);
+            final StreamsMetadata metadata = new StreamsMetadata(entry.getKey(), storesOnHost, partitionsForHost);
+            allStandbyMetadata.add(metadata);
         }
     }
 
@@ -258,7 +310,7 @@ public class StreamsMetadataState {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
-        for (final StreamsMetadata streamsMetadata : allMetadata) {
+        for (final StreamsMetadata streamsMetadata : allActiveMetadata) {
             final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
             final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
@@ -268,6 +320,37 @@ public class StreamsMetadataState {
             }
         }
         return null;
+    }
+
+    private List<StreamsMetadata> getMatchingMetadata(final Set<TopicPartition> matchingPartitions,
+        final List<StreamsMetadata> allMetadata, final String storeName) {
+        final List<StreamsMetadata> matchingMetadata = new ArrayList<>();
+        for (final StreamsMetadata streamsMetadata : allMetadata) {
+            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
+            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
+            topicPartitions.retainAll(matchingPartitions);
+            if (stateStoreNames.contains(storeName) && !topicPartitions.isEmpty()) {
+                matchingMetadata.add(streamsMetadata);
+            }
+        }
+        return matchingMetadata;
+    }
+
+    private <K> List<StreamsMetadata> getAllStreamsMetadataForKey(final String storeName,
+        final K key,
+        final StreamPartitioner<? super K, ?> partitioner,
+        final SourceTopicsInfo sourceTopicsInfo) {
+
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
+        final Set<TopicPartition> matchingPartitions = new HashSet<>();
+        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
+            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
+        }
+
+        final List<StreamsMetadata> matchingMetadata = new ArrayList<>();
+        matchingMetadata.addAll(getMatchingMetadata(matchingPartitions, allActiveMetadata, storeName));
+        matchingMetadata.addAll(getMatchingMetadata(matchingPartitions, allStandbyMetadata, storeName));
+        return matchingMetadata;
     }
 
     private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {

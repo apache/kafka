@@ -1195,6 +1195,10 @@ public class StreamThread extends Thread {
         return taskManager.activeTasks();
     }
 
+    public Map<TaskId, StandbyTask> standbyTasks() {
+        return taskManager.standbyTasks();
+    }
+
     /**
      * Produces a string representation containing useful information about a StreamThread.
      * This is useful in debugging scenarios.
