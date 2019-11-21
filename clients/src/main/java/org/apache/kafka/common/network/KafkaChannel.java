@@ -364,7 +364,7 @@ public class KafkaChannel implements AutoCloseable {
     public String socketDescription() {
         Socket socket = transportLayer.socketChannel().socket();
         if (socket.getInetAddress() == null)
-            return socket.getLocalAddress().toString();
+            return "[non-connected socket]";
         return socket.getInetAddress().toString();
     }
 
