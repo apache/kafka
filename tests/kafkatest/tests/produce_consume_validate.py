@@ -103,14 +103,13 @@ class ProduceConsumeValidateTest(Test):
         self.producer.stop()
         self.consumer.wait()
 
-    def run_multistep_produce_consume_validate(self, core_test_actions, *args):
-        """Top-level template for multi-step produce/consume/validate tests."""
+    def run_produce_consume_validate(self, core_test_action=None, *args):
+        """Top-level template for simple produce/consume/validate tests."""
         try:
             self.start_producer_and_consumer()
 
-            for _ in core_test_actions(*args):
-                self.check_alive()
-                self.check_producing()
+            if core_test_action is not None:
+                core_test_action(*args)
 
             self.stop_producer_and_consumer()
             self.validate()
@@ -118,12 +117,6 @@ class ProduceConsumeValidateTest(Test):
             for s in self.test_context.services:
                 self.mark_for_collect(s)
             raise
-
-    def run_produce_consume_validate(self, core_test_action=None, *args):
-        def run_action():
-            core_test_action(*args)
-            yield
-        self.run_multistep_produce_consume_validate(run_action)
 
     def validate(self):
         messages_consumed = self.consumer.messages_consumed[1]
