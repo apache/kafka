@@ -74,7 +74,7 @@ public class DeleteAclsResponseTest {
         final DeleteAclsResponse original = new DeleteAclsResponse(10, aclResponses(LITERAL_RESPONSE));
         final Struct struct = original.toStruct(V0);
 
-        final DeleteAclsResponse result = new DeleteAclsResponse(struct);
+        final DeleteAclsResponse result = new DeleteAclsResponse(struct, V0);
 
         assertResponseEquals(original, result);
     }
@@ -84,7 +84,7 @@ public class DeleteAclsResponseTest {
         final DeleteAclsResponse original = new DeleteAclsResponse(100, aclResponses(LITERAL_RESPONSE, PREFIXED_RESPONSE));
         final Struct struct = original.toStruct(V1);
 
-        final DeleteAclsResponse result = new DeleteAclsResponse(struct);
+        final DeleteAclsResponse result = new DeleteAclsResponse(struct, V1);
 
         assertResponseEquals(original, result);
     }

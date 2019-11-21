@@ -47,7 +47,7 @@ public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static ResourcePattern resourcePatternromStructFields(Struct struct) {
+    static ResourcePattern resourcePatternFromStructFields(Struct struct) {
         byte resourceType = struct.get(RESOURCE_TYPE);
         String name = struct.get(RESOURCE_NAME);
         PatternType patternType = PatternType.fromCode(

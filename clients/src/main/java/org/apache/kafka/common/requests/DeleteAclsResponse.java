@@ -16,95 +16,31 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
-import static org.apache.kafka.common.protocol.CommonFields.HOST;
-import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
-import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-
 public class DeleteAclsResponse extends AbstractResponse {
     public static final Logger log = LoggerFactory.getLogger(DeleteAclsResponse.class);
-    private final static String FILTER_RESPONSES_KEY_NAME = "filter_responses";
-    private final static String MATCHING_ACLS_KEY_NAME = "matching_acls";
-
-    private static final Schema MATCHING_ACL_V0 = new Schema(
-            ERROR_CODE,
-            ERROR_MESSAGE,
-            RESOURCE_TYPE,
-            RESOURCE_NAME,
-            PRINCIPAL,
-            HOST,
-            OPERATION,
-            PERMISSION_TYPE);
-
-    /**
-     * V1 sees a new `RESOURCE_PATTERN_TYPE` that defines the type of the resource pattern.
-     *
-     * For more info, see {@link PatternType}.
-     */
-    private static final Schema MATCHING_ACL_V1 = new Schema(
-            ERROR_CODE,
-            ERROR_MESSAGE,
-            RESOURCE_TYPE,
-            RESOURCE_NAME,
-            RESOURCE_PATTERN_TYPE,
-            PRINCIPAL,
-            HOST,
-            OPERATION,
-            PERMISSION_TYPE);
-
-    private static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(FILTER_RESPONSES_KEY_NAME,
-                    new ArrayOf(new Schema(
-                            ERROR_CODE,
-                            ERROR_MESSAGE,
-                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V0), "The matching ACLs")))));
-
-    /**
-     * V1 sees a new `RESOURCE_PATTERN_TYPE` field added to MATCHING_ACL_V1, that describes how the resource pattern is interpreted
-     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
-     *
-     * For more info, see {@link PatternType}.
-     */
-    private static final Schema DELETE_ACLS_RESPONSE_V1 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(FILTER_RESPONSES_KEY_NAME,
-                    new ArrayOf(new Schema(
-                            ERROR_CODE,
-                            ERROR_MESSAGE,
-                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V1), "The matching ACLs")))));
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_ACLS_RESPONSE_V0, DELETE_ACLS_RESPONSE_V1};
-    }
 
     public static class AclDeletionResult {
         private final ApiError error;
@@ -160,81 +96,47 @@ public class DeleteAclsResponse extends AbstractResponse {
         }
     }
 
-    private final int throttleTimeMs;
-
-    private final List<AclFilterResponse> responses;
+    private final DeleteAclsResponseData data;
 
     public DeleteAclsResponse(int throttleTimeMs, List<AclFilterResponse> responses) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.responses = responses;
+        data = new DeleteAclsResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setFilterResults(responses.stream().map(this::toResult).collect(Collectors.toList()));
     }
 
-    public DeleteAclsResponse(Struct struct) {
-        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        this.responses = new ArrayList<>();
-        for (Object responseStructObj : struct.getArray(FILTER_RESPONSES_KEY_NAME)) {
-            Struct responseStruct = (Struct) responseStructObj;
-            ApiError error = new ApiError(responseStruct);
-            List<AclDeletionResult> deletions = new ArrayList<>();
-            for (Object matchingAclStructObj : responseStruct.getArray(MATCHING_ACLS_KEY_NAME)) {
-                Struct matchingAclStruct = (Struct) matchingAclStructObj;
-                ApiError matchError = new ApiError(matchingAclStruct);
-                AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
-                ResourcePattern resource = RequestUtils.resourcePatternromStructFields(matchingAclStruct);
-                deletions.add(new AclDeletionResult(matchError, new AclBinding(resource, entry)));
-            }
-            this.responses.add(new AclFilterResponse(error, deletions));
-        }
+    public DeleteAclsResponse(Struct struct, short version) {
+        data = new DeleteAclsResponseData(struct, version);
     }
 
     @Override
     protected Struct toStruct(short version) {
         validate(version);
-
-        Struct struct = new Struct(ApiKeys.DELETE_ACLS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        List<Struct> responseStructs = new ArrayList<>();
-        for (AclFilterResponse response : responses) {
-            Struct responseStruct = struct.instance(FILTER_RESPONSES_KEY_NAME);
-            response.error.write(responseStruct);
-            List<Struct> deletionStructs = new ArrayList<>();
-            for (AclDeletionResult deletion : response.deletions()) {
-                Struct deletionStruct = responseStruct.instance(MATCHING_ACLS_KEY_NAME);
-                deletion.error.write(deletionStruct);
-                RequestUtils.resourcePatternSetStructFields(deletion.acl().pattern(), deletionStruct);
-                RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
-                deletionStructs.add(deletionStruct);
-            }
-            responseStruct.set(MATCHING_ACLS_KEY_NAME, deletionStructs.toArray(new Struct[0]));
-            responseStructs.add(responseStruct);
-        }
-        struct.set(FILTER_RESPONSES_KEY_NAME, responseStructs.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     public List<AclFilterResponse> responses() {
-        return responses;
+        return data.filterResults().stream().map(this::toFilterResponse).collect(Collectors.toList());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (AclFilterResponse response : responses)
+        for (AclFilterResponse response : responses())
             updateErrorCounts(errorCounts, response.error.error());
         return errorCounts;
     }
 
     public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsResponse(ApiKeys.DELETE_ACLS.responseSchema(version).read(buffer));
+        return new DeleteAclsResponse(ApiKeys.DELETE_ACLS.parseResponse(version, buffer), version);
     }
 
     public String toString() {
-        return "(responses=" + Utils.join(responses, ",") + ")";
+        return "(responses=" + Utils.join(responses(), ",") + ")";
     }
 
     @Override
@@ -244,23 +146,65 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     private void validate(short version) {
         if (version == 0) {
-            final boolean unsupported = responses.stream()
-                .flatMap(r -> r.deletions.stream())
-                .map(AclDeletionResult::acl)
-                .map(AclBinding::pattern)
-                .map(ResourcePattern::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+            final boolean unsupported = responses().stream()
+                    .flatMap(r -> r.deletions.stream())
+                    .map(AclDeletionResult::acl)
+                    .map(AclBinding::pattern)
+                    .map(ResourcePattern::patternType)
+                    .anyMatch(patternType -> patternType != PatternType.LITERAL);
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 
-        final boolean unknown = responses.stream()
-            .flatMap(r -> r.deletions.stream())
-            .map(AclDeletionResult::acl)
-            .anyMatch(AclBinding::isUnknown);
+        final boolean unknown = responses().stream()
+                .flatMap(r -> r.deletions.stream())
+                .map(AclDeletionResult::acl)
+                .anyMatch(AclBinding::isUnknown);
         if (unknown) {
             throw new IllegalArgumentException("Response contains UNKNOWN elements");
         }
+    }
+
+    private DeleteAclsResponseData.DeleteAclsFilterResult toResult(AclFilterResponse filterResponse) {
+        return new DeleteAclsResponseData.DeleteAclsFilterResult()
+                .setErrorCode(filterResponse.error.error().code())
+                .setErrorMessage(filterResponse.error.message())
+                .setMatchingAcls(filterResponse.deletions.stream().map(this::toMatchingAcl).collect(Collectors.toList()));
+    }
+
+    private DeleteAclsResponseData.DeleteAclsMatchingAcl toMatchingAcl(AclDeletionResult result) {
+        return new DeleteAclsResponseData.DeleteAclsMatchingAcl()
+                .setErrorCode(result.error.error().code())
+                .setErrorMessage(result.error.message())
+                .setResourceName(result.acl.pattern().name())
+                .setResourceType(result.acl.pattern().resourceType().code())
+                .setPatternType(result.acl.pattern().patternType().code())
+                .setHost(result.acl.entry().host())
+                .setOperation(result.acl.entry().operation().code())
+                .setPermissionType(result.acl.entry().permissionType().code())
+                .setPrincipal(result.acl.entry().principal());
+    }
+
+    private AclFilterResponse toFilterResponse(DeleteAclsResponseData.DeleteAclsFilterResult result) {
+
+        return new AclFilterResponse(
+                new ApiError(Errors.forCode(result.errorCode()), result.errorMessage()),
+                result.matchingAcls().stream().map(this::toDeletionResult).collect(Collectors.toList()));
+    }
+
+    private AclDeletionResult toDeletionResult(DeleteAclsResponseData.DeleteAclsMatchingAcl result) {
+        ResourcePattern pattern = new ResourcePattern(
+                ResourceType.fromCode(result.resourceType()),
+                result.resourceName(),
+                PatternType.fromCode(result.patternType()));
+        AccessControlEntry entry = new AccessControlEntry(
+                result.principal(),
+                result.host(),
+                AclOperation.fromCode(result.operation()),
+                AclPermissionType.fromCode(result.permissionType()));
+        return new AclDeletionResult(
+                new ApiError(Errors.forCode(result.errorCode()), result.errorMessage()),
+                new AclBinding(pattern, entry));
     }
 }
