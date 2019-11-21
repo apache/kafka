@@ -271,7 +271,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 
     protected override def loggerName = classOf[LogCleaner].getName
 
-    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue -2 )
+    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue - 2)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
