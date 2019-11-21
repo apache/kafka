@@ -22,7 +22,7 @@
     </p>
     <h3><a id="messages" href="#messages">5.2 Messages</a></h3>
     <p>
-    Messages consist of a variable-length header, a variable length opaque key byte array and a variable length opaque value byte array. The format of the header is described in the following section.
+    Messages consist of a variable-length header, a variable-length opaque key byte array and a variable-length opaque value byte array. The format of the header is described in the following section.
     Leaving the key and value opaque is the right decision: there is a great deal of progress being made on serialization libraries right now, and any particular choice is unlikely to be right for all uses. Needless to say a particular application using Kafka would likely mandate a particular serialization type as part of its usage. The <code>RecordBatch</code> interface is simply an iterator over messages with specialized methods for bulk reading and writing to an NIO <code>Channel</code>.</p>
 
     <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
