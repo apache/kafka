@@ -106,6 +106,8 @@ object ControllerState {
 
   case object UpdateMetadataResponseReceived extends ControllerState {
     def value = 16
+
+    override protected def hasRateAndTimeMetric: Boolean = false
   }
 
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
