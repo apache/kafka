@@ -89,7 +89,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.10.3"
+  gradleVersion = "$versions.gradle"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
