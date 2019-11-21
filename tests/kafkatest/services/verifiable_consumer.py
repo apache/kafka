@@ -21,7 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import DEV_BRANCH, V_2_3_0
 
 
 class ConsumerState:
@@ -225,7 +225,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         # apply group.instance.id to the node for static membership validation
         node.group_instance_id = None
         if self.static_membership:
+            assert node.version >= V_2_3_0, \
+                "Version %s does not support static membership (must be 2.3 or higher)" % str(node.version)
             node.group_instance_id = self.group_id + "-instance-" + str(idx)
+
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
 
@@ -292,8 +295,12 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"
-        cmd += " --reset-policy %s --group-id %s --topic %s --group-instance-id %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-               (self.reset_policy, self.group_id, self.topic, node.group_instance_id, self.kafka.bootstrap_servers(self.security_config.security_protocol),
+
+        if node.version >= V_2_3_0 and node.group_instance_id:
+            cmd += "--group-instance-id %s" % node.group_instance_id
+
+        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
+               (self.reset_policy, self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
                
         if self.max_messages > 0:
