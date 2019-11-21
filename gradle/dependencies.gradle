@@ -54,6 +54,7 @@ versions += [
   bcpkix: "1.60",
   httpclient: "4.5.7",
   easymock: "4.0.2",
+  gradle: "5.1.1",
   jackson: "2.10.0",
   jetty: "9.4.14.v20181114",
   jersey: "2.27",
