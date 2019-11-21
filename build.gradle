@@ -78,7 +78,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.8.1"
+  gradleVersion = "$versions.gradle"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
