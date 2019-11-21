@@ -305,8 +305,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.assignment_strategy:
             cmd += " --assignment-strategy %s" % self.assignment_strategy
 
-        if self.enable_auto_commit:
-            cmd += " --enable-autocommit %s" % self.enable_auto_commit
+        if self.enable_autocommit:
+            cmd += " --enable-autocommit %s" % self.enable_autocommit
 
         cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
