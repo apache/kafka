@@ -25,10 +25,11 @@ import kafka.zookeeper.SetDataResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.KeeperException.Code
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{Before, Test}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.{After, Before, Test}
 import org.mockito.Mockito
 import org.mockito.Mockito.doReturn
 import org.mockito.Mockito.verify
@@ -38,12 +39,12 @@ import scala.collection.{Map, Set, mutable}
 class ReassignmentManagerTest {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
-  private var mockTopicDeletionManager: TopicDeletionManager = null
   private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
   private var mockReplicaStateMachine: ReplicaStateMachine = null
   private var mockPartitionStateMachine: PartitionStateMachine = null
-  private var mockBrokerRequestBatch: ControllerBrokerRequestBatch = null
+  private var testReassignmentListener: ReassignmentListener = null
 
+  private var mockBrokerRequestBatch: ControllerBrokerRequestBatch = null
   private final val controllerEpoch = 10
   private final val zkEpoch = 105
   private final val topic = "topic"
@@ -54,25 +55,42 @@ class ReassignmentManagerTest {
 
   @Before
   def setUp(): Unit = {
+    testReassignmentListener = new ReassignmentListener() {
+      var preReassignmentStartOrResume = false
+      var postReassignmentStartedOrResumed = false
+      var preReassignmentFinishCalled = false
+      var postReassignmentFinishedCalled = false
+
+      override def preReassignmentStartOrResume(tp: TopicPartition): Unit = preReassignmentStartOrResume = true
+
+      override def postReassignmentStartedOrResumed(tp: TopicPartition): Unit = postReassignmentStartedOrResumed = true
+
+      override def preReassignmentFinish(tp: TopicPartition, deletedZNode: Boolean): Unit = preReassignmentFinishCalled = true
+
+      override def postReassignmentFinished(tp: TopicPartition): Unit = postReassignmentFinishedCalled = true
+    }
     controllerContext = new ControllerContext
     controllerContext.epoch = controllerEpoch
     controllerContext.epochZkVersion = zkEpoch
     mockZkClient = Mockito.mock(classOf[KafkaZkClient])
-    mockTopicDeletionManager = Mockito.mock(classOf[TopicDeletionManager])
     mockControllerBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
     mockReplicaStateMachine = Mockito.mock(classOf[ReplicaStateMachine])
     mockPartitionStateMachine = new MockPartitionStateMachine(controllerContext, false)
     mockBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
-    partitionReassignmentManager = new ReassignmentManager(controllerContext, mockZkClient, mockTopicDeletionManager,
-      mockReplicaStateMachine, mockPartitionStateMachine, null, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None))
+    partitionReassignmentManager = new ReassignmentManager(controllerContext, mockZkClient, testReassignmentListener,
+      mockReplicaStateMachine, mockPartitionStateMachine, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None),
+      shouldSkipReassignment = _ => None)
   }
 
   @Test
-  def testTopicsQueuedUpForDeletionDoNotGetReassigned(): Unit = {
+  def testShouldSkipReassignment(): Unit = {
+    partitionReassignmentManager = new ReassignmentManager(controllerContext, mockZkClient, testReassignmentListener,
+      mockReplicaStateMachine, mockPartitionStateMachine, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None),
+      shouldSkipReassignment = _ => Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
+
     val initialAssignment = ReplicaAssignment(Seq(0, 1, 2), Seq(), Seq())
     controllerContext.updatePartitionFullReplicaAssignment(tp, initialAssignment)
     setLiveBrokers(Seq(0, 1, 2, 3))
-    doReturn(true, Nil: _*).when(mockTopicDeletionManager).isTopicQueuedUpForDeletion(tp.topic())
     val results = partitionReassignmentManager.triggerApiReassignment(Map(tp -> Some(Seq(1,2,3))))
     assertTrue(results(tp).is(Errors.UNKNOWN_TOPIC_OR_PARTITION))
   }
@@ -111,6 +129,8 @@ class ReassignmentManagerTest {
     // act
     val results = partitionReassignmentManager.triggerApiReassignment(Map(tp -> Some(Seq(3, 4, 5))))
     assertTrue(s"reassignment failed - $results", results(tp).isSuccess)
+    assertTrue("Listener was not called pre reassignment start", testReassignmentListener.preReassignmentStartOrResume)
+    assertTrue("Listener was not called post reassignment start", testReassignmentListener.postReassignmentStartedOrResumed)
 
      // U2. Should have updated memory
     assertEquals(expectedNewAssignment, controllerContext.partitionFullReplicaAssignment(tp))
@@ -126,6 +146,9 @@ class ReassignmentManagerTest {
       )
     }
     verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+
+    assertFalse("Listener was wrongly called pre reassignment finish", testReassignmentListener.preReassignmentFinishCalled)
+    assertFalse("Listener was wrongly called post reassignment finish", testReassignmentListener.postReassignmentFinishedCalled)
   }
 
   /**
@@ -180,6 +203,8 @@ class ReassignmentManagerTest {
 
     // act
     partitionReassignmentManager.maybeResumeReassignment(tp)
+    assertTrue("Listener was not called pre reassignment resumption", testReassignmentListener.preReassignmentStartOrResume)
+    assertTrue("Listener was not called post reassignment resumption", testReassignmentListener.postReassignmentStartedOrResumed)
 
     // B1. All adding replicas moved to OnlineReplica state.
     verify(mockReplicaStateMachine).handleStateChanges(
@@ -193,13 +218,13 @@ class ReassignmentManagerTest {
     verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, ReplicaDeletionStarted)
     verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, ReplicaDeletionSuccessful)
     verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, NonExistentReplica)
-    // B7. Should have cleared in-memory partitionsBeingReassigned and unregistered the znode handler
+    // B7. Should have cleared in-memory partitionsBeingReassigned and called
+    assertTrue("Listener was not called pre reassignment finish", testReassignmentListener.preReassignmentFinishCalled)
     assertEquals(Set(), controllerContext.partitionsBeingReassigned)
-    verify(mockZkClient).unregisterZNodeChangeHandler(TopicPartitionStateZNode.path(tp))
     // B8. Resend the update metadata request to every broker
     verify(mockBrokerRequestBatch).addUpdateMetadataRequestForBrokers(controllerContext.liveBrokerIds.toSeq, Set(tp))
     verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
-    verify(mockTopicDeletionManager).resumeDeletionForTopics(Set(tp.topic()))
+    assertTrue("Listener was not called post reassignment finish", testReassignmentListener.postReassignmentFinishedCalled)
   }
 
   def setLiveBrokers(brokerIds: Seq[Int]): Unit = {

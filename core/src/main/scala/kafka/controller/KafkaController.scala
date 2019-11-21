@@ -95,8 +95,39 @@ class KafkaController(val config: KafkaConfig,
     new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
     partitionStateMachine, new ControllerDeletionClient(this, zkClient))
-  val reassignmentsManager = new ReassignmentManager(controllerContext, zkClient, topicDeletionManager,
-    replicaStateMachine, partitionStateMachine, eventManager, brokerRequestBatch, stateChangeLogger)
+  val reassignmentListener = new ReassignmentListener {
+
+    // While a reassignment is in progress, deletion is not allowed
+    override def preReassignmentStartOrResume(tp: TopicPartition): Unit =
+      topicDeletionManager.markTopicIneligibleForDeletion(Set(tp.topic), reason = "topic reassignment in progress")
+
+    override def postReassignmentStartedOrResumed(tp: TopicPartition): Unit =
+      zkClient.registerZNodeChangeHandler(new PartitionReassignmentIsrChangeHandler(eventManager, tp))
+
+    override def preReassignmentFinish(tp: TopicPartition, deletedZNode: Boolean): Unit = {
+      val path = TopicPartitionStateZNode.path(tp)
+      zkClient.unregisterZNodeChangeHandler(path)
+      if (deletedZNode) {
+        // Ensure we detect future reassignments
+        eventManager.put(ZkPartitionReassignment)
+      }
+    }
+
+    // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
+    override def postReassignmentFinished(tp: TopicPartition): Unit =
+      topicDeletionManager.resumeDeletionForTopics(Set(tp.topic))
+  }
+  val reassignmentsManager = new ReassignmentManager(controllerContext, zkClient, reassignmentListener,
+    replicaStateMachine, partitionStateMachine, brokerRequestBatch, stateChangeLogger,
+    shouldSkipReassignment = tp => {
+      if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic())) {
+        info(s"Skipping reassignment of $tp since the topic is currently being deleted")
+        Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist."))
+      } else {
+        None
+      }
+    }
+  )
 
   private val controllerChangeHandler = new ControllerChangeHandler(eventManager)
   private val brokerChangeHandler = new BrokerChangeHandler(eventManager)

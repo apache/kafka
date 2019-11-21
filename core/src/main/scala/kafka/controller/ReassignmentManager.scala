@@ -31,18 +31,43 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 
+trait ReassignmentListener {
+  /**
+   * Called right before the reassignment is starting
+   */
+  def preReassignmentStartOrResume(tp: TopicPartition)
+
+  /**
+   * Called right after the reassignment is persisted in ZK
+   */
+  def postReassignmentStartedOrResumed(tp: TopicPartition)
+
+  /**
+   * Called right before we clear a reassignment from memory
+   * @param deletedZNode - boolean indicating whether the reassign_partitions znode was
+   *                       deleted as part of the completion of the reassignment
+   *                       (e.g if it was the last reassignment in that znode)
+   */
+  def preReassignmentFinish(tp: TopicPartition, deletedZNode: Boolean)
+
+  /**
+   * Called at the very end of the reassignment process
+   */
+  def postReassignmentFinished(tp: TopicPartition)
+}
+
 /**
  * A helper class which contains logic for driving partition reassignments.
  * This class is not thread-safe.
  */
 class ReassignmentManager(controllerContext: ControllerContext,
                           zkClient: KafkaZkClient,
-                          topicDeletionManager: TopicDeletionManager,
+                          reassignmentListener: ReassignmentListener,
                           replicaStateMachine: ReplicaStateMachine,
                           partitionStateMachine: PartitionStateMachine,
-                          eventManager: ControllerEventManager,
                           brokerRequestBatch: ControllerBrokerRequestBatch,
-                          stateChangeLogger: StateChangeLogger) extends Logging {
+                          stateChangeLogger: StateChangeLogger,
+                          shouldSkipReassignment: TopicPartition => Option[ApiError]) extends Logging {
 
   /**
    * If there is an existing reassignment through zookeeper for any of the requested partitions, they will be
@@ -155,12 +180,7 @@ class ReassignmentManager(controllerContext: ControllerContext,
    */
   private def maybeTriggerPartitionReassignment(reassignments: Map[TopicPartition, ReplicaAssignment]): Map[TopicPartition, ApiError] = {
     reassignments.map { case (tp, reassignment) =>
-      val topic = tp.topic
-
-      val apiError = if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
-        info(s"Skipping reassignment of $tp since the topic is currently being deleted")
-        new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
-      } else {
+      val apiError = shouldSkipReassignment(tp).getOrElse {
         val assignedReplicas = controllerContext.partitionReplicaAssignment(tp)
         if (assignedReplicas.nonEmpty) {
           try {
@@ -218,7 +238,7 @@ class ReassignmentManager(controllerContext: ControllerContext,
   /**
    * This callback is invoked:
    * 1. By the AlterPartitionReassignments API
-   * 2. By the reassigned partitions listener which is triggered when the /admin/reassign/partitions znode is created
+   * 2. By the reassigned partitions listener which is triggered when the /admin/reassign_partitions znode is created
    * 3. When an ongoing reassignment finishes - this is detected by a change in the partition's ISR znode
    * 4. Whenever a new broker comes up which is part of an ongoing reassignment
    * 5. On controller startup/failover
@@ -286,8 +306,7 @@ class ReassignmentManager(controllerContext: ControllerContext,
    * @throws IllegalStateException
    */
   private def onPartitionReassignment(topicPartition: TopicPartition, reassignment: ReplicaAssignment): Unit = {
-    // While a reassignment is in progress, deletion is not allowed
-    topicDeletionManager.markTopicIneligibleForDeletion(Set(topicPartition.topic), reason = "topic reassignment in progress")
+    reassignmentListener.preReassignmentStartOrResume(topicPartition)
 
     updateCurrentReassignment(topicPartition, reassignment)
 
@@ -319,8 +338,7 @@ class ReassignmentManager(controllerContext: ControllerContext,
       brokerRequestBatch.newBatch()
       brokerRequestBatch.addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
       brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
-      // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
-      topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
+      reassignmentListener.postReassignmentFinished(topicPartition)
     }
   }
 
@@ -357,8 +375,7 @@ class ReassignmentManager(controllerContext: ControllerContext,
         stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
     }
 
-    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
-    zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
+    reassignmentListener.postReassignmentStartedOrResumed(topicPartition)
 
     controllerContext.partitionsBeingReassigned.add(topicPartition)
   }
@@ -500,9 +517,11 @@ class ReassignmentManager(controllerContext: ControllerContext,
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      val path = TopicPartitionStateZNode.path(topicPartition)
-      zkClient.unregisterZNodeChangeHandler(path)
-      maybeRemoveFromZkReassignment((tp, replicas) => tp == topicPartition && replicas == assignment.replicas)
+      val deletedZNode = maybeRemoveFromZkReassignment(
+        (tp, replicas) => tp == topicPartition && replicas == assignment.replicas
+      )
+
+      reassignmentListener.preReassignmentFinish(topicPartition, deletedZNode)
       controllerContext.partitionsBeingReassigned.remove(topicPartition)
     } else {
       throw new IllegalStateException("Cannot remove a reassigning partition because it is not present in memory")
@@ -513,10 +532,11 @@ class ReassignmentManager(controllerContext: ControllerContext,
    * Remove partitions from an active zk-based reassignment (if one exists).
    *
    * @param shouldRemoveReassignment Predicate indicating which partition reassignments should be removed
+   * @return a boolean indicating whether the /admin/reassign_partitions znode was deleted
    */
-  private def maybeRemoveFromZkReassignment(shouldRemoveReassignment: (TopicPartition, Seq[Int]) => Boolean): Unit = {
+  private def maybeRemoveFromZkReassignment(shouldRemoveReassignment: (TopicPartition, Seq[Int]) => Boolean): Boolean = {
     if (!zkClient.reassignPartitionsInProgress())
-      return
+      return false
 
     val reassigningPartitions = zkClient.getPartitionReassignment()
     val (removingPartitions, updatedPartitionsBeingReassigned) = reassigningPartitions.partition { case (tp, replicas) =>
@@ -528,11 +548,11 @@ class ReassignmentManager(controllerContext: ControllerContext,
     if (updatedPartitionsBeingReassigned.isEmpty) {
       info(s"No more partitions need to be reassigned. Deleting zk path ${ReassignPartitionsZNode.path}")
       zkClient.deletePartitionReassignment(controllerContext.epochZkVersion)
-      // Ensure we detect future reassignments
-      eventManager.put(ZkPartitionReassignment)
+      true
     } else {
       try {
         zkClient.setOrCreatePartitionReassignment(updatedPartitionsBeingReassigned, controllerContext.epochZkVersion)
+        false
       } catch {
         case e: KeeperException => throw new AdminOperationException(e)
       }
