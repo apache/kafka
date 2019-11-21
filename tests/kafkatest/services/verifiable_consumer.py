@@ -301,6 +301,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
         if node.group_instance_id:
             cmd += " --group-instance-id %s" % node.group_instance_id
+        elif node.version == V_2_3_0 or node.version == V_2_3_1:
+            # In 2.3, --group-instance-id was required, but would be left empty
+            # if `None` is passed as the argument value
+            cmd += " --group-instance-id None"
 
         if self.assignment_strategy:
             cmd += " --assignment-strategy %s" % self.assignment_strategy
