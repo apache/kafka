@@ -1872,6 +1872,7 @@ project(':connect:mirror') {
     compile libs.slf4jApi
 
     testCompile libs.junit
+    testCompile libs.mockitoCore
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':connect:runtime').sourceSets.test.output
     testCompile project(':core')
