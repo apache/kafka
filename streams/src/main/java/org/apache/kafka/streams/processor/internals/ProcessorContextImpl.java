@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.CacheSizeExceedException;
+import org.apache.kafka.streams.errors.CacheFullException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -317,7 +317,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class WindowStoreReadOnlyDecorator<K, V>
+    static class WindowStoreReadOnlyDecorator<K, V>
         extends StateStoreReadOnlyDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
@@ -467,7 +467,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends StateStoreReadWriteDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
-        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner, Runnable requestCommit) {
+        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner, final Runnable requestCommit) {
             super(inner, requestCommit);
         }
 
@@ -497,7 +497,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                         final V value) {
             try {
                 wrapped().put(key, value);
-            } catch (CacheSizeExceedException e) {
+            } catch (final CacheFullException e) {
                 onCacheSizeExceed();
             }
         }
@@ -507,7 +507,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                              final V value) {
             try {
                 return wrapped().putIfAbsent(key, value);
-            } catch (CacheSizeExceedException e) {
+            } catch (final CacheFullException e) {
                 onCacheSizeExceed();
             }
             return null;
@@ -528,7 +528,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedKeyValueStore<K, V> {
 
-        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner, Runnable requestCommit) {
+        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner, final Runnable requestCommit) {
             super(inner, requestCommit);
         }
     }
@@ -537,7 +537,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends StateStoreReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
-        WindowStoreReadWriteDecorator(final WindowStore<K, V> inner, Runnable requestCommit) {
+        WindowStoreReadWriteDecorator(final WindowStore<K, V> inner, final Runnable requestCommit) {
             super(inner, requestCommit);
         }
 
@@ -545,11 +545,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final K key,
                         final V value) {
-            try {
-                wrapped().put(key, value);
-            } catch (CacheSizeExceedException e) {
-                onCacheSizeExceed();
-            }
+            wrapped().put(key, value);
         }
 
         @Override
@@ -558,7 +554,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                         final long windowStartTimestamp) {
             try {
                 wrapped().put(key, value, windowStartTimestamp);
-            } catch (CacheSizeExceedException e) {
+            } catch (final CacheFullException e) {
                 onCacheSizeExceed();
             }
         }
@@ -603,7 +599,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 
-        TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner, Runnable requestCommit) {
+        TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner, final Runnable requestCommit) {
             super(inner, requestCommit);
         }
     }
@@ -641,7 +637,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                         final AGG aggregate) {
             try {
                 wrapped().put(sessionKey, aggregate);
-            } catch (CacheSizeExceedException e) {
+            } catch (final CacheFullException e) {
                 onCacheSizeExceed();
             }
         }

@@ -311,7 +311,8 @@ public class TopologyTestDriver implements Closeable {
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver"),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
-            streamsMetrics, false);
+            streamsMetrics,
+            false);
         final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}

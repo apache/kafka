@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.CacheSizeExceedException;
+import org.apache.kafka.streams.errors.CacheFullException;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
@@ -174,7 +174,8 @@ public class ThreadCache {
 
     private void maybeRejectPut(final Bytes key, final LRUCacheEntry value) {
         if (bounded && sizeBytes() + NamedCache.LRUNode.size(key, value) > maxCacheSizeBytes) {
-            throw new CacheSizeExceedException("Could not add more records as within a transaction session we could not saturate the cache");
+            throw new CacheFullException("Cache get saturated within current transaction session: the ongoing task will enforce a txn commit to unblock."
+                + "Consider either reducing the commit interval or increasing the cache size for optimal throughput");
         }
     }
 

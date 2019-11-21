@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * The exception triggered when the current transaction size is reached.
+ * The exception triggered when the bounded cache is full.
  *
  */
-public class CacheSizeExceedException extends StreamsException {
-    public CacheSizeExceedException(String message) {
+public class CacheFullException extends StreamsException {
+    public CacheFullException(final String message) {
         super(message);
     }
 }

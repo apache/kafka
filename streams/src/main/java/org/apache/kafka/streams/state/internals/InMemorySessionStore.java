@@ -57,9 +57,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
-    InMemorySessionStore(final String name,
-                         final long retentionPeriod,
-                         final String metricScope) {
+    protected InMemorySessionStore(final String name,
+                                   final long retentionPeriod,
+                                   final String metricScope) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;

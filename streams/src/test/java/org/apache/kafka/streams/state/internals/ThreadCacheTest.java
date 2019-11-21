@@ -20,10 +20,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.CacheFullException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ThreadCacheTest {
@@ -43,7 +45,7 @@ public class ThreadCacheTest {
     private final LogContext logContext = new LogContext("testCache ");
 
     @Test
-    public void basicPutGet() throws IOException {
+    public void basicPutGet() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
@@ -53,7 +55,8 @@ public class ThreadCacheTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final ThreadCache cache = new ThreadCache(logContext,
                                                   toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""),
-                                                  new MockStreamsMetrics(new Metrics()), false);
+                                                  new MockStreamsMetrics(new Metrics()),
+                                                  false);
 
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
@@ -447,8 +450,8 @@ public class ThreadCacheTest {
     @Test
     public void shouldCleanupNamedCacheOnClose() {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()), false);
-        cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
-        cache.put(namespace2, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
+        cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
+        cache.put(namespace2, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
         assertEquals(cache.size(), 2);
         cache.close(namespace2);
         assertEquals(cache.size(), 1);
@@ -458,7 +461,7 @@ public class ThreadCacheTest {
     @Test
     public void shouldReturnNullIfKeyIsNull() {
         final ThreadCache threadCache = new ThreadCache(logContext, 10, new MockStreamsMetrics(new Metrics()), false);
-        threadCache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
+        threadCache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
         assertNull(threadCache.get(namespace, null));
     }
 
@@ -471,9 +474,29 @@ public class ThreadCacheTest {
     }
 
     @Test
-    public void shouldBlockWhenCacheSizeIsFull() {
+    public void shouldBlockPutWhenCacheSizeIsFull() {
         final ThreadCache cache = new ThreadCache(logContext, 100, new MockStreamsMetrics(new Metrics()), true);
-        cache.put
+        final LRUCacheEntry value = cleanEntry(new byte[]{0});
+        testCacheBlock(cache, value, () -> cache.put(namespace1, Bytes.wrap(new byte[]{0}), value));
+    }
+
+    @Test
+    public void shouldBlockPutIfAbsentWhenCacheSizeIsFull() {
+        final ThreadCache cache = new ThreadCache(logContext, 100, new MockStreamsMetrics(new Metrics()), true);
+        final LRUCacheEntry value = cleanEntry(new byte[]{0});
+        testCacheBlock(cache, value, () -> cache.putIfAbsent(namespace1, Bytes.wrap(new byte[]{0}), value));
+    }
+
+    private void testCacheBlock(final ThreadCache cache,
+                                final LRUCacheEntry value,
+                                final ThrowingRunnable operation) {
+        final Bytes key = Bytes.wrap(new byte[]{1});
+        cache.put(namespace1, key, value);
+        assertEquals(47, cache.sizeBytes());
+        final Bytes key2 = Bytes.wrap(new byte[]{2});
+        cache.put(namespace1, key2, value);
+        assertEquals(94, cache.sizeBytes());
+        assertThrows(CacheFullException.class, operation);
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {
@@ -483,6 +506,4 @@ public class ThreadCacheTest {
     private LRUCacheEntry cleanEntry(final byte[] key) {
         return new LRUCacheEntry(key);
     }
-
-
 }

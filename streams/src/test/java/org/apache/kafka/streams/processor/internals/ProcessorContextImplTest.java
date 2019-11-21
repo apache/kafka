@@ -17,12 +17,18 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.CacheFullException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KeyValueStoreReadWriteDecorator;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.SessionStoreReadWriteDecorator;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.WindowStoreReadWriteDecorator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -32,6 +38,9 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.Before;
 import org.junit.Test;
@@ -50,6 +59,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -99,12 +109,6 @@ public class ProcessorContextImplTest {
             timestampedIters.add(i, mock(KeyValueIterator.class));
         }
 
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
-        replay(streamsConfig);
-
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
@@ -125,7 +129,7 @@ public class ProcessorContextImplTest {
         context = new ProcessorContextImpl(
             mock(TaskId.class),
             mock(StreamTask.class),
-            streamsConfig,
+            initStreamsConfig(),
             mock(RecordCollector.class),
             stateManager,
             mock(StreamsMetricsImpl.class),
@@ -139,6 +143,15 @@ public class ProcessorContextImplTest {
                 "LocalWindowStore",
                 "LocalTimestampedWindowStore",
                 "LocalSessionStore"))));
+    }
+
+    private StreamsConfig initStreamsConfig() {
+        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
+        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
+        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
+        replay(streamsConfig);
+        return streamsConfig;
     }
 
     @Test
@@ -346,6 +359,90 @@ public class ProcessorContextImplTest {
             assertEquals(iters.get(5), store.fetch(KEY));
             assertEquals(iters.get(6), store.fetch(KEY, KEY));
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCommitRequestedWithCacheSizeException() {
+        // Key value store
+        testCacheSizeLimit(new KeyValueStoreWithException(STORE_NAME),
+            store -> ((KeyValueStoreReadWriteDecorator) store).put(Bytes.wrap(new byte[]{1}), new byte[]{1}));
+        testCacheSizeLimit(new KeyValueStoreWithException(STORE_NAME),
+            store -> ((KeyValueStoreReadWriteDecorator) store).putIfAbsent(Bytes.wrap(new byte[]{1}), new byte[]{1}));
+
+        // Window store
+        testCacheSizeLimit(new WindowStoreWithException(STORE_NAME),
+            store -> ((WindowStoreReadWriteDecorator) store).put(Bytes.wrap(new byte[]{1}), new byte[]{1}, 10L));
+
+        // Session store
+        testCacheSizeLimit(new SessionStoreWithException(STORE_NAME),
+            store -> ((SessionStoreReadWriteDecorator) store).put(new Windowed<>(Bytes.wrap(new byte[]{1}), new SessionWindow(0, 0)), new byte[]{1}));
+    }
+
+    interface WriteOperation {
+        void writeForStore(StateStore store);
+    }
+
+    private void testCacheSizeLimit(final StateStore store,
+                                    final WriteOperation writeOperation) {
+        final StreamTask task = mock(StreamTask.class);
+        task.requestCommit();
+        replay(task);
+
+        final ProcessorStateManager processorStateManager = mock(ProcessorStateManager.class);
+        expect(processorStateManager.getGlobalStore(ProcessorContextImplTest.STORE_NAME)).andReturn(null);
+        expect(processorStateManager.getStore(ProcessorContextImplTest.STORE_NAME)).andReturn(store);
+        replay(processorStateManager);
+
+        context = new ProcessorContextImpl(
+            mock(TaskId.class),
+            task,
+            initStreamsConfig(),
+            mock(RecordCollector.class),
+            processorStateManager,
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
+        );
+
+        context.setCurrentNode(
+            new ProcessorNode<String, Long>("fake", null, new HashSet<>(Collections.singletonList(ProcessorContextImplTest.STORE_NAME))));
+
+        writeOperation.writeForStore(context.getStateStore(ProcessorContextImplTest.STORE_NAME));
+
+        verify(task);
+    }
+
+    class KeyValueStoreWithException extends InMemoryKeyValueStore {
+        KeyValueStoreWithException(final String name) {
+            super(name);
+        }
+
+        @Override
+        public void put(final Bytes key, final byte[] value) {
+            throw new CacheFullException("Key value store cache is full");
+        }
+    }
+
+    class WindowStoreWithException extends InMemoryWindowStore {
+        WindowStoreWithException(final String name) {
+            super(name, 10, 10, false, null);
+        }
+
+        @Override
+        public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+            throw new CacheFullException("Window store cache is full");
+        }
+    }
+
+    class SessionStoreWithException extends InMemorySessionStore {
+        SessionStoreWithException(final String name) {
+            super(name, 10, null);
+        }
+
+        @Override
+        public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+            throw new CacheFullException("Session store cache is full");
+        }
     }
 
     @SuppressWarnings("unchecked")

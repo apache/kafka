@@ -252,14 +252,15 @@ public class NamedCacheTest {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, null, true, 0, 0, 0, "");
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
         final Bytes key = Bytes.wrap(new byte[] {3});
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                cache.put(key, clean);
-            }
-        });
+        cache.setListener(dirty1 -> cache.put(key, clean));
         cache.put(key, dirty);
         cache.evict();
+    }
+
+    @Test
+    public void testEntrySize() {
+        assertEquals(47, NamedCache.LRUNode.size(Bytes.wrap(new byte[]{1}),
+            new LRUCacheEntry(new byte[]{1}, null, true, -1, -1, -1, "")));
     }
 
     @Test

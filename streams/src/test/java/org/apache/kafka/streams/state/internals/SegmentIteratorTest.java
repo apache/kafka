@@ -61,7 +61,8 @@ public class SegmentIteratorTest {
                 new ThreadCache(
                     new LogContext("testCache "),
                     0,
-                    new MockStreamsMetrics(new Metrics()), false));
+                    new MockStreamsMetrics(new Metrics()),
+                    false));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());

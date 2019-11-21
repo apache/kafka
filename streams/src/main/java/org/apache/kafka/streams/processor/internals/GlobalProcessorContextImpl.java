@@ -113,7 +113,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @Override
     public void commit() {
-        //no-op
+        // no-op
     }
 
     /**
