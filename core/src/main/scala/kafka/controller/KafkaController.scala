@@ -95,7 +95,7 @@ class KafkaController(val config: KafkaConfig,
     new ControllerBrokerRequestBatch(config, controllerChannelManager, eventManager, controllerContext, stateChangeLogger))
   val topicDeletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
     partitionStateMachine, new ControllerDeletionClient(this, zkClient))
-  val reassignmentsManager = new ReassignmentsManager(controllerContext, zkClient, topicDeletionManager,
+  val reassignmentsManager = new ReassignmentManager(controllerContext, zkClient, topicDeletionManager,
     replicaStateMachine, partitionStateMachine, eventManager, brokerRequestBatch, stateChangeLogger)
 
   private val controllerChangeHandler = new ControllerChangeHandler(eventManager)

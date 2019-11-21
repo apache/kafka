@@ -35,14 +35,14 @@ import scala.collection.{Map, Seq, Set, immutable, mutable}
  * A helper class which contains logic for driving partition reassignments.
  * This class is not thread-safe.
  */
-class ReassignmentsManager(controllerContext: ControllerContext,
-                           zkClient: KafkaZkClient,
-                           topicDeletionManager: TopicDeletionManager,
-                           replicaStateMachine: ReplicaStateMachine,
-                           partitionStateMachine: PartitionStateMachine,
-                           eventManager: ControllerEventManager,
-                           brokerRequestBatch: ControllerBrokerRequestBatch,
-                           stateChangeLogger: StateChangeLogger) extends Logging {
+class ReassignmentManager(controllerContext: ControllerContext,
+                          zkClient: KafkaZkClient,
+                          topicDeletionManager: TopicDeletionManager,
+                          replicaStateMachine: ReplicaStateMachine,
+                          partitionStateMachine: PartitionStateMachine,
+                          eventManager: ControllerEventManager,
+                          brokerRequestBatch: ControllerBrokerRequestBatch,
+                          stateChangeLogger: StateChangeLogger) extends Logging {
 
   /**
    * If there is an existing reassignment through zookeeper for any of the requested partitions, they will be

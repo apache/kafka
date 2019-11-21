@@ -35,7 +35,7 @@ import org.mockito.Mockito.verify
 
 import scala.collection.{Map, Set, mutable}
 
-class ReassignmentsManagerTest {
+class ReassignmentManagerTest {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
   private var mockTopicDeletionManager: TopicDeletionManager = null
@@ -50,7 +50,7 @@ class ReassignmentsManagerTest {
   private final val tp = new TopicPartition(topic, 0)
   private final val mockPartitionReassignmentHandler = new PartitionReassignmentHandler(null)
 
-  private var partitionReassignmentManager: ReassignmentsManager = null
+  private var partitionReassignmentManager: ReassignmentManager = null
 
   @Before
   def setUp(): Unit = {
@@ -61,9 +61,9 @@ class ReassignmentsManagerTest {
     mockTopicDeletionManager = Mockito.mock(classOf[TopicDeletionManager])
     mockControllerBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
     mockReplicaStateMachine = Mockito.mock(classOf[ReplicaStateMachine])
-    mockPartitionStateMachine = Mockito.mock(classOf[PartitionStateMachine])
+    mockPartitionStateMachine = new MockPartitionStateMachine(controllerContext, false)
     mockBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
-    partitionReassignmentManager = new ReassignmentsManager(controllerContext, mockZkClient, mockTopicDeletionManager,
+    partitionReassignmentManager = new ReassignmentManager(controllerContext, mockZkClient, mockTopicDeletionManager,
       mockReplicaStateMachine, mockPartitionStateMachine, null, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None))
   }
 
@@ -169,8 +169,7 @@ class ReassignmentsManagerTest {
     // B3. Send a LeaderAndIsr request with RS = TRS.
     //     If the current leader is not in TRS or isn't alive, we move the leader to a new replica in TRS.
     //     We may send the LeaderAndIsr to more than the TRS replicas due to the way the partition state machine works (it reads replicas from ZK)
-    doReturn(Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]], Nil: _*)
-      .when(mockPartitionStateMachine).handleStateChanges(Seq(tp), OnlinePartition, Some(ReassignPartitionLeaderElectionStrategy))
+    controllerContext.partitionStates.put(tp, NewPartition)
     // B6. Update ZK with RS = TRS, AR = [], RR = [].
     doReturn(mockSetDataResponseOK, Nil: _*).when(mockZkClient)
       .setTopicAssignmentRaw(tp.topic(), mutable.Map(tp -> expectedNewAssignment), zkEpoch)
