@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 public final class StreamsAssignmentProtocolVersions {
     public static final int UNKNOWN = -1;
     public static final int EARLIEST_PROBEABLE_VERSION = 3;
-    public static final int LATEST_SUPPORTED_VERSION = 5;
+    public static final int LATEST_SUPPORTED_VERSION = 6;
 
     private StreamsAssignmentProtocolVersions() {}
 }
