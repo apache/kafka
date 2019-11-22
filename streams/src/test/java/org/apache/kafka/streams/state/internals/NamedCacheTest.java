@@ -157,12 +157,7 @@ public class NamedCacheTest {
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
         cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, headers, true, 0, 0, 0, ""));
 
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                flushed.addAll(dirty);
-            }
-        });
+        cache.setListener(flushed::addAll);
 
         cache.evict();
 
@@ -188,11 +183,8 @@ public class NamedCacheTest {
 
     @Test
     public void shouldRemoveDeletedValuesOnFlush() {
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                // no-op
-            }
+        cache.setListener(dirty -> {
+            // no-op
         });
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, null, true, 0, 0, 0, ""));
@@ -209,15 +201,12 @@ public class NamedCacheTest {
         cache.put(Bytes.wrap(new byte[]{1}), clean);
         cache.put(Bytes.wrap(new byte[]{2}), clean);
         assertEquals(3 * cache.head().size(), cache.sizeInBytes());
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                cache.put(Bytes.wrap(new byte[]{3}), clean);
-                // evict key 1
-                cache.evict();
-                // evict key 2
-                cache.evict();
-            }
+        cache.setListener(dirty1 -> {
+            cache.put(Bytes.wrap(new byte[]{3}), clean);
+            // evict key 1
+            cache.evict();
+            // evict key 2
+            cache.evict();
         });
 
         assertEquals(3 * cache.head().size(), cache.sizeInBytes());
@@ -255,12 +244,6 @@ public class NamedCacheTest {
         cache.setListener(dirty1 -> cache.put(key, clean));
         cache.put(key, dirty);
         cache.evict();
-    }
-
-    @Test
-    public void testEntrySize() {
-        assertEquals(47, NamedCache.LRUNode.size(Bytes.wrap(new byte[]{1}),
-            new LRUCacheEntry(new byte[]{1}, null, true, -1, -1, -1, "")));
     }
 
     @Test

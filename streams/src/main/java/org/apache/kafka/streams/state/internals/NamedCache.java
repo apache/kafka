@@ -346,10 +346,6 @@ class NamedCache {
         }
 
         long size() {
-            return size(key, entry);
-        }
-
-        static long size(final Bytes key, final LRUCacheEntry entry) {
             return key.get().length +
                    8 + // entry
                    8 + // previous

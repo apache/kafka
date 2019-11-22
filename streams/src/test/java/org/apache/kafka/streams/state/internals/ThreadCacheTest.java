@@ -497,6 +497,8 @@ public class ThreadCacheTest {
         cache.put(namespace1, key2, value);
         assertEquals(94, cache.sizeBytes());
         assertThrows(CacheFullException.class, operation);
+        // The add operation will still succeed after a cache full exception.
+        assertEquals(141, cache.sizeBytes());
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {

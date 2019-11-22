@@ -149,34 +149,26 @@ public class ThreadCache {
     }
 
     public void put(final String namespace, final Bytes key, final LRUCacheEntry value) {
-        maybeRejectPut(key, value);
-
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
         cache.put(key, value);
+
         maybeEvict(namespace);
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
-        maybeRejectPut(key, value);
 
         final NamedCache cache = getOrCreateCache(namespace);
 
         final LRUCacheEntry result = cache.putIfAbsent(key, value);
-        maybeEvict(namespace);
-
         if (result == null) {
             numPuts++;
         }
-        return result;
-    }
 
-    private void maybeRejectPut(final Bytes key, final LRUCacheEntry value) {
-        if (bounded && sizeBytes() + NamedCache.LRUNode.size(key, value) > maxCacheSizeBytes) {
-            throw new CacheFullException("Cache get saturated within current transaction session: the ongoing task will enforce a txn commit to unblock."
-                + "Consider either reducing the commit interval or increasing the cache size for optimal throughput");
-        }
+        maybeEvict(namespace);
+
+        return result;
     }
 
     public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {
@@ -246,6 +238,10 @@ public class ThreadCache {
     private void maybeEvict(final String namespace) {
         int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
+            if (bounded) {
+                throw new CacheFullException("Cache get saturated within current transaction session: the ongoing task will enforce a txn commit to unblock."
+                                                 + "Consider either reducing the commit interval or increasing the cache size for optimal throughput");
+            }
             final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
             // a put on another cache. So even though the sizeInBytes() is
