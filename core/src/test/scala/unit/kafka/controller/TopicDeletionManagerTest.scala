@@ -16,12 +16,8 @@
  */
 package kafka.controller
 
-import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 import org.mockito.Mockito._
@@ -34,7 +30,7 @@ class TopicDeletionManagerTest {
 
   @Test
   def testInitialization(): Unit = {
-    val controllerContext = initContext(
+    val controllerContext = TestUtils.initContext(
       brokers = Seq(1, 2, 3),
       topics = Set("foo", "bar", "baz"),
       numPartitions = 2,
@@ -58,7 +54,7 @@ class TopicDeletionManagerTest {
 
   @Test
   def testBasicDeletion(): Unit = {
-    val controllerContext = initContext(
+    val controllerContext = TestUtils.initContext(
       brokers = Seq(1, 2, 3),
       topics = Set("foo", "bar"),
       numPartitions = 2,
@@ -99,7 +95,7 @@ class TopicDeletionManagerTest {
 
   @Test
   def testDeletionWithBrokerOffline(): Unit = {
-    val controllerContext = initContext(
+    val controllerContext = TestUtils.initContext(
       brokers = Seq(1, 2, 3),
       topics = Set("foo", "bar"),
       numPartitions = 2,
@@ -167,7 +163,7 @@ class TopicDeletionManagerTest {
 
   @Test
   def testBrokerFailureAfterDeletionStarted(): Unit = {
-    val controllerContext = initContext(
+    val controllerContext = TestUtils.initContext(
       brokers = Seq(1, 2, 3),
       topics = Set("foo", "bar"),
       numPartitions = 2,
@@ -226,31 +222,4 @@ class TopicDeletionManagerTest {
     assertEquals(offlineReplicas, controllerContext.replicasInState("foo", ReplicaDeletionStarted))
 
   }
-
-  def initContext(brokers: Seq[Int],
-                  topics: Set[String],
-                  numPartitions: Int,
-                  replicationFactor: Int): ControllerContext = {
-    val context = new ControllerContext
-    val brokerEpochs = brokers.map { brokerId =>
-      val endpoint = new EndPoint("localhost", 9900 + brokerId, new ListenerName("blah"),
-        SecurityProtocol.PLAINTEXT)
-      Broker(brokerId, Seq(endpoint), rack = None) -> 1L
-    }.toMap
-    context.setLiveBrokerAndEpochs(brokerEpochs)
-
-    // Simple round-robin replica assignment
-    var leaderIndex = 0
-    for (topic <- topics; partitionId <- 0 until numPartitions) {
-      val partition = new TopicPartition(topic, partitionId)
-      val replicas = (0 until replicationFactor).map { i =>
-        val replica = brokers((i + leaderIndex) % brokers.size)
-        replica
-      }
-      context.updatePartitionReplicaAssignment(partition, replicas)
-      leaderIndex += 1
-    }
-    context
-  }
-
 }

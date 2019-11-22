@@ -19,6 +19,7 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
+import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper.SetDataResponse
@@ -41,8 +42,7 @@ class ReassignmentManagerTest {
   class TestReassignmentListener(var preReassignmentStartOrResumeCalled: Boolean = false,
                                  var postReassignmentStartedOrResumedCalled: Boolean = false,
                                  var preReassignmentFinishCalled: Boolean = false,
-                                 var postReassignmentFinishedCalled: Boolean = false,
-                                ) extends ReassignmentListener {
+                                 var postReassignmentFinishedCalled: Boolean = false) extends ReassignmentListener {
     override def preReassignmentStartOrResume(tp: TopicPartition): Unit = preReassignmentStartOrResumeCalled = true
 
     override def postReassignmentStartedOrResumed(tp: TopicPartition): Unit = postReassignmentStartedOrResumedCalled = true
@@ -60,8 +60,6 @@ class ReassignmentManagerTest {
   private var testReassignmentListener: TestReassignmentListener = null
 
   private var mockBrokerRequestBatch: ControllerBrokerRequestBatch = null
-  private final val controllerEpoch = 10
-  private final val zkEpoch = 105
   private final val topic = "topic"
   private final val tp = new TopicPartition(topic, 0)
   private final val mockPartitionReassignmentHandler = new PartitionReassignmentHandler(null)
@@ -71,13 +69,16 @@ class ReassignmentManagerTest {
   @Before
   def setUp(): Unit = {
     testReassignmentListener = new TestReassignmentListener()
-    controllerContext = new ControllerContext
-    controllerContext.epoch = controllerEpoch
-    controllerContext.epochZkVersion = zkEpoch
+    controllerContext = TestUtils.initContext(brokers = Seq(1, 2, 3, 4, 5),
+      topics = Set(tp.topic),
+      numPartitions = 1,
+      replicationFactor = 3)
     mockZkClient = Mockito.mock(classOf[KafkaZkClient])
     mockControllerBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
-    mockReplicaStateMachine = Mockito.mock(classOf[ReplicaStateMachine])
+    mockReplicaStateMachine = new MockReplicaStateMachine(controllerContext)
+    mockReplicaStateMachine.startup()
     mockPartitionStateMachine = new MockPartitionStateMachine(controllerContext, false)
+    mockPartitionStateMachine.startup()
     mockBrokerRequestBatch = Mockito.mock(classOf[ControllerBrokerRequestBatch])
     partitionReassignmentManager = new ReassignmentManager(controllerContext, mockZkClient, testReassignmentListener,
       mockReplicaStateMachine, mockPartitionStateMachine, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None),
@@ -90,9 +91,6 @@ class ReassignmentManagerTest {
       mockReplicaStateMachine, mockPartitionStateMachine, mockBrokerRequestBatch, new StateChangeLogger(0, inControllerContext = true, None),
       shouldSkipReassignment = _ => Some(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
 
-    val initialAssignment = ReplicaAssignment(Seq(0, 1, 2), Seq(), Seq())
-    controllerContext.updatePartitionFullReplicaAssignment(tp, initialAssignment)
-    setLiveBrokers(Seq(0, 1, 2, 3))
     val results = partitionReassignmentManager.triggerApiReassignment(Map(tp -> Some(Seq(1,2,3))))
     assertTrue(results(tp).is(Errors.UNKNOWN_TOPIC_OR_PARTITION))
   }
@@ -109,24 +107,19 @@ class ReassignmentManagerTest {
      * Existing assignment is [1,2,3]
      * We issue a reassignment to [3, 4, 5]
      */
-    val expectedAddingReplicas = Seq(4, 5)
     val expectedFullReplicaSet = Seq(3, 4, 5, 1, 2)
-    val initialAssignment = ReplicaAssignment(Seq(1, 2, 3), Seq(), Seq())
-    val initialLeaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3), zkEpoch)
-    controllerContext.partitionAssignments.put(topic, mutable.Map(tp.partition() -> initialAssignment))
-    controllerContext.updatePartitionFullReplicaAssignment(tp, initialAssignment)
+    val initialLeaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3), controllerContext.epochZkVersion)
     controllerContext.partitionsBeingReassigned.add(tp)
-    setLiveBrokers(Seq(1,2,3,4,5))
     mockAreReplicasInIsr(tp, List(1, 2, 3), initialLeaderAndIsr)
     val expectedNewAssignment = ReplicaAssignment.fromOldAndNewReplicas(Seq(1, 2, 3), Seq(3, 4, 5))
     assertEquals(expectedFullReplicaSet, expectedNewAssignment.replicas)
     // U1. Should update ZK
-    doReturn(mockSetDataResponseOK, Nil: _*).when(mockZkClient).setTopicAssignmentRaw(topic, mutable.Map(tp -> expectedNewAssignment), zkEpoch)
+    doReturn(mockSetDataResponseOK, Nil: _*).when(mockZkClient).setTopicAssignmentRaw(topic, mutable.Map(tp -> expectedNewAssignment), controllerContext.epochZkVersion)
     // U2. Should update memory
     // A1. Should update partition leader epoch in ZK
     val expectedLeaderAndIsr = initialLeaderAndIsr.newEpochAndZkVersion
     doReturn(UpdateLeaderAndIsrResult(Map(tp -> Right(expectedLeaderAndIsr)), Seq()), Nil: _*)
-      .when(mockZkClient).updateLeaderAndIsr(Map(tp -> expectedLeaderAndIsr), controllerEpoch, zkEpoch)
+      .when(mockZkClient).updateLeaderAndIsr(Map(tp -> expectedLeaderAndIsr), controllerContext.epoch, controllerContext.epochZkVersion)
 
     // act
     val results = partitionReassignmentManager.triggerApiReassignment(Map(tp -> Some(Seq(3, 4, 5))))
@@ -139,15 +132,9 @@ class ReassignmentManagerTest {
     // A1. Should send a LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
     verify(mockBrokerRequestBatch).addLeaderAndIsrRequestForBrokers(
       expectedFullReplicaSet, tp,
-      LeaderIsrAndControllerEpoch(expectedLeaderAndIsr, controllerEpoch), expectedNewAssignment, isNew = false
+      LeaderIsrAndControllerEpoch(expectedLeaderAndIsr, controllerContext.epoch), expectedNewAssignment, isNew = false
     )
-    // A2. replicas in AR -> NewReplica
-    expectedAddingReplicas.foreach { newReplica =>
-      verify(mockReplicaStateMachine).handleStateChanges(
-        Seq(PartitionAndReplica(tp, newReplica)), NewReplica
-      )
-    }
-    verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerContext.epoch)
 
     assertFalse("Listener was wrongly called pre reassignment finish", testReassignmentListener.preReassignmentFinishCalled)
     assertFalse("Listener was wrongly called post reassignment finish", testReassignmentListener.postReassignmentFinishedCalled)
@@ -178,17 +165,17 @@ class ReassignmentManagerTest {
      * Existing assignment is [1,2,3]
      * We had issued a reassignment to [3, 4, 5] and now all replicas are in ISR
      */
-    val expectedRemovingReplicas = Seq(PartitionAndReplica(tp, 1), PartitionAndReplica(tp, 2))
     val initialAssignment = ReplicaAssignment.fromOldAndNewReplicas(Seq(1, 2, 3), Seq(3, 4, 5))
     val expectedNewAssignment = ReplicaAssignment(Seq(3, 4, 5), Seq(), Seq())
-    val initialLeaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3, 4, 5), zkEpoch)
-    setLiveBrokers(Seq(1, 2, 3, 4, 5))
+    val initialLeaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3, 4, 5), controllerContext.epochZkVersion)
     controllerContext.partitionAssignments.put(topic, mutable.Map(tp.partition() -> initialAssignment))
     controllerContext.updatePartitionFullReplicaAssignment(tp, initialAssignment)
     controllerContext.partitionsBeingReassigned.add(tp)
     controllerContext.partitionLeadershipInfo.put(tp,
-      LeaderIsrAndControllerEpoch(initialLeaderAndIsr, controllerEpoch))
+      LeaderIsrAndControllerEpoch(initialLeaderAndIsr, controllerContext.epoch))
     mockAreReplicasInIsr(tp, List(1, 2, 3, 4, 5), initialLeaderAndIsr)
+    // A2. replicas in AR -> NewReplica
+    mockReplicaStateMachine.handleStateChanges(Seq(4, 5).map(PartitionAndReplica(tp, _)), NewReplica)
 
     // B2. Set RS = TRS, AR = [], RR = [] in memory.
     // B3. Send a LeaderAndIsr request with RS = TRS.
@@ -197,7 +184,7 @@ class ReassignmentManagerTest {
     controllerContext.partitionStates.put(tp, NewPartition)
     // B6. Update ZK with RS = TRS, AR = [], RR = [].
     doReturn(mockSetDataResponseOK, Nil: _*).when(mockZkClient)
-      .setTopicAssignmentRaw(tp.topic(), mutable.Map(tp -> expectedNewAssignment), zkEpoch)
+      .setTopicAssignmentRaw(tp.topic(), mutable.Map(tp -> expectedNewAssignment), controllerContext.epochZkVersion)
     // B7. Remove the ISR reassign listener and maybe update the /admin/reassign_partitions path in ZK to remove this partition from it if present.
     doReturn(true, Nil: _*).when(mockZkClient).reassignPartitionsInProgress()
     doReturn(Map(tp -> Seq(1, 2, 3)), Nil: _*).when(mockZkClient).getPartitionReassignment()
@@ -208,24 +195,14 @@ class ReassignmentManagerTest {
     assertTrue("Listener was not called pre reassignment resumption", testReassignmentListener.preReassignmentStartOrResumeCalled)
     assertTrue("Listener was not called post reassignment resumption", testReassignmentListener.postReassignmentStartedOrResumedCalled)
 
-    // B1. All adding replicas moved to OnlineReplica state.
-    verify(mockReplicaStateMachine).handleStateChanges(
-      initialAssignment.addingReplicas.map(PartitionAndReplica(tp, _)), OnlineReplica
-    )
     // B2. Should have updated memory
     assertEquals(expectedNewAssignment, controllerContext.partitionFullReplicaAssignment(tp))
-    // B4. replicas in RR -> Offline (force those replicas out of isr)
-    // B5. replicas in RR -> NonExistentReplica (force those replicas to be deleted)
-    verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, OfflineReplica)
-    verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, ReplicaDeletionStarted)
-    verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, ReplicaDeletionSuccessful)
-    verify(mockReplicaStateMachine).handleStateChanges(expectedRemovingReplicas, NonExistentReplica)
     // B7. Should have cleared in-memory partitionsBeingReassigned and called
     assertTrue("Listener was not called pre reassignment finish", testReassignmentListener.preReassignmentFinishCalled)
     assertEquals(Set(), controllerContext.partitionsBeingReassigned)
     // B8. Resend the update metadata request to every broker
     verify(mockBrokerRequestBatch).addUpdateMetadataRequestForBrokers(controllerContext.liveBrokerIds.toSeq, Set(tp))
-    verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
+    verify(mockBrokerRequestBatch).sendRequestsToBrokers(controllerContext.epoch)
     assertTrue("Listener was not called post reassignment finish", testReassignmentListener.postReassignmentFinishedCalled)
   }
 
@@ -244,7 +221,7 @@ class ReassignmentManagerTest {
    */
   def mockAreReplicasInIsr(tp: TopicPartition, isr: List[Int], leaderAndIsr: LeaderAndIsr): Unit = {
     val tpStateMap: Map[TopicPartition, LeaderIsrAndControllerEpoch] = Map(
-      tp -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+      tp -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
     )
     doReturn(tpStateMap, Nil: _*).when(mockZkClient).getTopicPartitionStates(Seq(tp))
   }
