@@ -89,6 +89,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 .numBrokers(1)
                 .workerProps(workerProps)
                 .brokerProps(brokerProps)
+                .maskExitProcedures(true)
                 .build();
 
         // start the clusters
