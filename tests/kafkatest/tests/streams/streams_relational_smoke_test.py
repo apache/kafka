@@ -121,3 +121,6 @@ class StreamsRelationalSmokeTest(KafkaTest):
         driver.node.account.ssh("grep 'Smoke test complete: passed' %s" % driver.LOG_FILE, allow_fail=False)
 
         driver.stop()
+
+        # the test is over, and the node is going to be cleaned, so there's no need to wait for a clean shutdown.
+        processor3.stop_nodes(clean_shutdown = False)
