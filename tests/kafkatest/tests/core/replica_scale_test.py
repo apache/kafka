@@ -60,7 +60,7 @@ class ReplicaScaleTest(Test):
                 "replication-factor": replication_factor,
                 "configs": {"min.insync.replicas": 1}
             }
-            self.kafka.create_topic(topic_cfg, describe=False)
+            self.kafka.create_topic(topic_cfg)
 
         topics_create_end_time = time.time()
         self.logger.info("Time to create topics: %d" % (topics_create_end_time - topics_create_start_time))
