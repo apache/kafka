@@ -73,32 +73,19 @@ class TestDowngrade(EndToEndTest):
 
     @cluster(num_nodes=7)
     @parametrize(version=str(LATEST_2_3), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_3), compression_types=["zstd"])
+    @parametrize(version=str(LATEST_2_3), compression_types=["zstd"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_2_2), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_2), compression_types=["zstd"])
+    @parametrize(version=str(LATEST_2_2), compression_types=["zstd"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_2_1), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_1), compression_types=["lz4"])
+    @parametrize(version=str(LATEST_2_1), compression_types=["lz4"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_2_0), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_0), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_2_0), compression_types=["snappy"], security_protocol="SASL_SSL")
     @parametrize(version=str(LATEST_1_1), compression_types=["none"])
-    @parametrize(version=str(LATEST_1_1), compression_types=["lz4"])
-    @parametrize(version=str(LATEST_1_0), compression_types=["none"])
-    @parametrize(version=str(LATEST_1_0), compression_types=["snappy"])
-    @parametrize(version=str(LATEST_0_11_0), compression_types=["none"])
-    @parametrize(version=str(LATEST_0_11_0), compression_types=["lz4"])
-    @parametrize(version=str(LATEST_0_10_2), compression_types=["none"])
-    @parametrize(version=str(LATEST_0_10_2), compression_types=["lz4"])
-    @parametrize(version=str(LATEST_0_10_1), compression_types=["none"])
-    @parametrize(version=str(LATEST_0_10_1), compression_types=["gzip"])
-    @parametrize(version=str(LATEST_0_10_0), compression_types=["none"])
-    @parametrize(version=str(LATEST_0_10_0), compression_types=["lz4"])
-    @parametrize(version=str(LATEST_0_9), compression_types=["none"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_0_9), compression_types=["snappy"])
-    @parametrize(version=str(LATEST_0_9), compression_types=["lz4"])
+    @parametrize(version=str(LATEST_1_1), compression_types=["lz4"], security_protocol="SASL_SSL")
     def test_upgrade_and_downgrade(self, version, compression_types, security_protocol="PLAINTEXT"):
         """Test upgrade and downgrade of Kafka cluster from old versions to the current version
 
-        `version` is the Kafka version to upgrade from and dowrade back to
+        `version` is the Kafka version to upgrade from and downgrade back to
 
         Downgrades are supported to any version which is at or above the current 
         `inter.broker.protocol.version` (IBP). For example, if a user upgrades from 1.1 to 2.3, 
