@@ -17,17 +17,17 @@
 
 package kafka.server
 
+import java.util.{Arrays, Collections}
+
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
-import java.util.Collections
-import java.util.Arrays
 
 class DeleteTopicsRequestTest extends BaseRequestTest {
 
@@ -131,12 +131,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
-    DeleteTopicsResponse.parse(response, request.version)
+    connectAndReceive(request, destination = socketServer).asInstanceOf[DeleteTopicsResponse]
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA)
-    MetadataResponse.parse(response, request.version)
+    connectAndReceive(request).asInstanceOf[MetadataResponse]
   }
+
 }

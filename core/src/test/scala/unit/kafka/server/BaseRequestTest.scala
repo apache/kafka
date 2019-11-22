@@ -22,15 +22,14 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Properties
 
-import scala.collection.Seq
-
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, RequestUtils, ResponseHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+
+import scala.collection.Seq
 
 abstract class BaseRequestTest extends IntegrationTestHarness {
   private var correlationId = 0
@@ -84,107 +83,61 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     outgoing.flush()
   }
 
-  private def receiveResponse(socket: Socket): Array[Byte] = {
+  def receive(socket: Socket, apiKey: ApiKeys, version: Short): AbstractResponse = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
+
     val response = new Array[Byte](len)
     incoming.readFully(response)
-    response
+
+    val responseBuffer = ByteBuffer.wrap(response)
+    ResponseHeader.parse(responseBuffer, apiKey.responseHeaderVersion(version))
+
+    val responseStruct = apiKey.parseResponse(version, responseBuffer)
+    AbstractResponse.parseResponse(apiKey, responseStruct, version)
   }
 
-  def requestAndReceive(socket: Socket, request: Array[Byte]): Array[Byte] = {
-    sendRequest(socket, request)
-    receiveResponse(socket)
+  def sendAndReceive(request: AbstractRequest,
+                     socket: Socket,
+                     clientId: String = "client-id",
+                     correlationId: Option[Int] = None): AbstractResponse = {
+    send(request, socket, clientId, correlationId)
+    receive(socket, request.api, request.version)
   }
 
-  /**
-    * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
-    * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
-    * @return A ByteBuffer containing the response (without the response header)
-    */
-  def connectAndSend(request: AbstractRequest, apiKey: ApiKeys,
-                     destination: SocketServer = anySocketServer,
-                     apiVersion: Option[Short] = None,
-                     protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
+  def connectAndReceive(request: AbstractRequest,
+                        destination: SocketServer = anySocketServer,
+                        protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): AbstractResponse = {
     val socket = connect(destination, protocol)
-    try sendAndReceive(request, apiKey, socket, apiVersion)
-    finally socket.close()
-  }
-
-  /**
-    * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
-    * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
-    * @return A ByteBuffer containing the response (without the response header).
-    */
-  def connectAndSendStruct(requestStruct: Struct, apiKey: ApiKeys, apiVersion: Short,
-                           destination: SocketServer = anySocketServer,
-                           protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
-    val socket = connect(destination, protocol)
-    try sendStructAndReceive(requestStruct, apiKey, socket, apiVersion)
+    try sendAndReceive(request, socket)
     finally socket.close()
   }
 
   /**
     * Serializes and sends the request to the given api.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Short): Unit = {
-    val header = nextRequestHeader(apiKey, apiVersion)
+  def send(request: AbstractRequest,
+           socket: Socket,
+           clientId: String = "client-id",
+           correlationId: Option[Int] = None): Unit = {
+    val header = nextRequestHeader(request.api, request.version, clientId, correlationId)
+    sendWithHeader(request, header, socket)
+  }
+
+  def sendWithHeader(request: AbstractRequest, header: RequestHeader, socket: Socket): Unit = {
     val serializedBytes = request.serialize(header).array
     sendRequest(socket, serializedBytes)
   }
 
-  /**
-   * Receive response and return a ByteBuffer containing response without the header
-   */
-  def receive(socket: Socket, responseHeaderVersion: Short): ByteBuffer = {
-    val response = receiveResponse(socket)
-    skipResponseHeader(response, responseHeaderVersion)
-  }
-
-  /**
-    * Serializes and sends the request to the given api.
-    * A ByteBuffer containing the response is returned.
-    */
-  def sendAndReceive(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
-    val version = apiVersion.getOrElse(request.version)
-    send(request, apiKey, socket, version)
-    val response = receiveResponse(socket)
-    skipResponseHeader(response, apiKey.responseHeaderVersion(version))
-  }
-
-  /**
-   * Sends a request built by the builder, waits for the response and parses it 
-   */
-  def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
-    val apiKey = requestBuilder.apiKey
-    val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
-    val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response, apiKey.responseHeaderVersion(request.version()))
-    apiKey.parseResponse(request.version, responseBuffer)
-  }
-  
-  /**
-    * Serializes and sends the requestStruct to the given api.
-    * A ByteBuffer containing the response (without the response header) is returned.
-    */
-  def sendStructAndReceive(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
-    val header = nextRequestHeader(apiKey, apiVersion)
-    val serializedBytes = RequestUtils.serialize(header.toStruct, requestStruct).array
-    val response = requestAndReceive(socket, serializedBytes)
-    skipResponseHeader(response, apiKey.responseHeaderVersion(apiVersion))
-  }
-
-  protected def skipResponseHeader(response: Array[Byte], responseHeaderVersion: Short): ByteBuffer = {
-    val responseBuffer = ByteBuffer.wrap(response)
-    // Parse the header to ensure its valid and move the buffer forward
-    ResponseHeader.parse(responseBuffer, responseHeaderVersion)
-    responseBuffer
-  }
-
-  def nextRequestHeader(apiKey: ApiKeys, apiVersion: Short): RequestHeader = {
-    correlationId += 1
-    new RequestHeader(apiKey, apiVersion, "client-id", correlationId)
+  def nextRequestHeader(apiKey: ApiKeys,
+                        apiVersion: Short,
+                        clientId: String = "client-id",
+                        correlationIdOpt: Option[Int] = None): RequestHeader = {
+    val correlationId = correlationIdOpt.getOrElse {
+      this.correlationId += 1
+      this.correlationId
+    }
+    new RequestHeader(apiKey, apiVersion, clientId, correlationId)
   }
 
 }

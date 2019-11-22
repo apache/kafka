@@ -39,21 +39,21 @@ object ApiVersionsRequestTest {
   }
 }
 
-class ApiVersionsRequestTest extends BaseRequestTest {
+class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
 
   override def brokerCount: Int = 1
 
   @Test
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, None, request.version)
+    val apiVersionsResponse = sendApiVersionsRequest(request)
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(Short.MaxValue), 0)
+    val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)
     assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
     assertFalse(apiVersionsResponse.data.apiKeys().isEmpty)
     val apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id)
@@ -65,7 +65,7 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   @Test
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build( 0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(0.asInstanceOf[Short]), 0)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
     ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
   }
 
@@ -73,13 +73,11 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   def testApiVersionsRequestValidationV3(): Unit = {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, Some(3.asInstanceOf[Short]), 3)
+    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
   }
 
-  private def sendApiVersionsRequest(request: ApiVersionsRequest, apiVersion: Option[Short] = None,
-                                     responseVersion: Short): ApiVersionsResponse = {
-    val response = connectAndSend(request, ApiKeys.API_VERSIONS, apiVersion = apiVersion)
-    ApiVersionsResponse.parse(response, responseVersion)
+  private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
+    connectAndReceive(request).asInstanceOf[ApiVersionsResponse]
   }
 }

@@ -18,16 +18,14 @@
 package kafka.admin
 
 import kafka.controller.ReplicaAssignment
-import kafka.network.SocketServer
-import org.junit.Assert._
-import kafka.utils.TestUtils._
-import kafka.utils.TestUtils
 import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
@@ -188,8 +186,8 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
-    MetadataResponse.parse(response, request.version)
+  private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
+    connectAndReceive(request).asInstanceOf[MetadataResponse]
   }
+
 }
