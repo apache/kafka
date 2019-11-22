@@ -143,7 +143,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
 
-    //Write 10 messages
+    //Write 10 messages (ensure they are not batched so we can truncate in the middle below)
     (0 until 10).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, s"$i".getBytes, msg)).get()
     }
@@ -165,10 +165,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer.close()
     producer = createProducer
 
-    //Write ten larger messages (so we can easily distinguish between messages written in the two phases)
-    (0 until 10).foreach { _ =>
-      producer.send(new ProducerRecord(topic, 0, null, msgBigger)).get()
-    }
+    //Write ten additional messages
+    (11 until 20).map { i =>
+      producer.send(new ProducerRecord(topic, 0, s"$i".getBytes, msg))
+    }.foreach(_.get())
 
     //Start broker 101 (we expect it to truncate to match broker 100's log)
     broker101.startup()
