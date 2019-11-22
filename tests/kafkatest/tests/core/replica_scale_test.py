@@ -58,7 +58,7 @@ class ReplicaScaleTest(Test):
                 "topic": topic,
                 "partitions": partition_count,
                 "replication-factor": replication_factor,
-                "configs": {"min.insync.replicas": 1}
+                "configs": {"min.insync.replicas": 2}
             }
             self.kafka.create_topic(topic_cfg)
 
@@ -113,7 +113,7 @@ class ReplicaScaleTest(Test):
                 "topic": topic,
                 "partitions": partition_count,
                 "replication-factor": replication_factor,
-                "configs": {"min.insync.replicas": 1}
+                "configs": {"min.insync.replicas": 2}
             }
             self.kafka.create_topic(topic_cfg)
         topics_create_end_time = time.time()
