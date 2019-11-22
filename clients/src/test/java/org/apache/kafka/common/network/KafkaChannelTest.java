@@ -147,4 +147,18 @@ public class KafkaChannelTest {
         KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator, 1024, pool);
         assertEquals("(Remote Address: 192.192.192.192, Local Address: localhost)", channel.socketDescription());
     }
+
+    @Test
+    public void testSocketDescriptionWithNoSocket() {
+        Authenticator authenticator = Mockito.mock(Authenticator.class);
+        TransportLayer transport = Mockito.mock(TransportLayer.class);
+        SocketChannel socketChannel = Mockito.mock(SocketChannel.class);
+
+        when(socketChannel.socket()).thenReturn(null);
+        when(transport.socketChannel()).thenReturn(socketChannel);
+        MemoryPool pool = Mockito.mock(MemoryPool.class);
+
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator, 1024, pool);
+        assertEquals("[non-existing socket]", channel.socketDescription());
+    }
 }
