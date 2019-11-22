@@ -49,10 +49,10 @@ class ReplicaScaleTest(Test):
 
     @cluster(num_nodes=12)
     @parametrize(topic_count=500, partition_count=34, replication_factor=3)
-    def test_100k_bench(self, topic_count, partition_count, replication_factor):
+    def test_produce_consume(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
-            topic = "100k_replicas_bench%d" % i
+            topic = "replicas_produce_consume_%d" % i
             print("Creating topic %s" % topic)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
@@ -80,10 +80,10 @@ class ReplicaScaleTest(Test):
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 inactive_topics={},
-                                                active_topics={"100k_replicas_bench[0-2]": {
+                                                active_topics={"replicas_produce_consume_[0-2]": {
                                                     "numPartitions": partition_count, "replicationFactor": replication_factor
                                                 }})
-        produce_workload = trogdor.create_task("100k-replicas-produce-workload", produce_spec)
+        produce_workload = trogdor.create_task("replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=600)
         self.logger.info("Completed produce bench")
 
@@ -95,8 +95,8 @@ class ReplicaScaleTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
-                                                active_topics=["100k_replicas_bench[0-2]"])
-        consume_workload = trogdor.create_task("100k-replicas-consume_workload", consume_spec)
+                                                active_topics=["replicas_produce_consume_[0-2]"])
+        consume_workload = trogdor.create_task("replicas-consume-workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=600)
         self.logger.info("Completed consume bench")
 
@@ -104,7 +104,7 @@ class ReplicaScaleTest(Test):
 
     @cluster(num_nodes=12)
     @parametrize(topic_count=500, partition_count=34, replication_factor=3)
-    def test_100k_clean_bounce(self, topic_count, partition_count, replication_factor):
+    def test_clean_bounce(self, topic_count, partition_count, replication_factor):
         t0 = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
