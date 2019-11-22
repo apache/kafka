@@ -19,7 +19,9 @@ package kafka.tools
 
 import java.io.PrintStream
 
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.serialization.Deserializer
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert._
@@ -32,16 +34,31 @@ class CustomDeserializer extends Deserializer[String] {
     assertThat("topic must not be null", topic, CoreMatchers.notNullValue)
     new String(data)
   }
+
+  override def deserialize(topic: String, headers: Headers, data: Array[Byte]): String = {
+    println("WITH HEADERS")
+    new String(data)
+  }
 }
 
 class CustomDeserializerTest {
+
+  @Test
+  def checkFormatterCallDeserializerWithHeaders(): Unit = {
+    val formatter = new DefaultMessageFormatter()
+    formatter.valueDeserializer = Some(new CustomDeserializer)
+    val output = TestUtils.grabConsoleOutput(formatter.writeTo(
+      new ConsumerRecord("topic_test", 1, 1L, "key".getBytes, "value".getBytes), mock(classOf[PrintStream])))
+    assertThat("DefaultMessageFormatter should call `deserialize` method with headers.", output, CoreMatchers.containsString("WITH HEADERS"))
+    formatter.close()
+  }
 
   @Test
   def checkDeserializerTopicIsNotNull(): Unit = {
     val formatter = new DefaultMessageFormatter()
     formatter.keyDeserializer = Some(new CustomDeserializer)
 
-    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes),
+    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1L, "key".getBytes, "value".getBytes),
       mock(classOf[PrintStream]))
 
     formatter.close()
