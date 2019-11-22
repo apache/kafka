@@ -30,6 +30,9 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -37,6 +40,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -52,15 +56,18 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -185,6 +192,44 @@ public abstract class AbstractJoinIntegrationTest {
      */
     void runTest(final List<List<KeyValueTimestamp<Long, String>>> expectedResult) throws Exception {
         runTest(expectedResult, null);
+    }
+
+
+    void runTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult) {
+        runTestWithDriver(expectedResult, null);
+    }
+
+    void runTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult, final String storeName) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+            final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
+            final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
+            final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
+            final Map<String, TestInputTopic<Long, String>> testInputTopicMap = new HashMap<>();
+
+            testInputTopicMap.put(INPUT_TOPIC_RIGHT, right);
+            testInputTopicMap.put(INPUT_TOPIC_LEFT, left);
+
+            TestRecord<Long, String> expectedFinalResult = null;
+
+            final long firstTimestamp = System.currentTimeMillis();
+            long ts = firstTimestamp;
+            final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
+            for (final Input<String> singleInputRecord : input) {
+                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++ts);
+
+                final List<TestRecord<Long, String>> expected = resultIterator.next();
+                if (expected != null) {
+                    final List<TestRecord<Long, String>> updatedExpected = new LinkedList<>();
+                    for (final TestRecord<Long, String> record : expected) {
+                        updatedExpected.add(new TestRecord<>(record.key(), record.value(), null, firstTimestamp + record.timestamp()));
+                    }
+
+                    final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
+                    assertEquals(output, updatedExpected);
+                    expectedFinalResult = updatedExpected.get(expected.size() - 1);
+                }
+            }
+        }
     }
 
 
