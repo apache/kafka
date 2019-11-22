@@ -128,8 +128,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testAutoTopicCreation(): Unit = {
-    def checkAutoCreatedTopic(existingTopic: String, autoCreatedTopic: String, response: MetadataResponse): Unit = {
-      assertNull(response.errors.get(existingTopic))
+    def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {
       assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
       assertEquals(Some(servers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
       for (i <- 0 until servers.head.config.numPartitions)
@@ -140,21 +139,28 @@ class MetadataRequestTest extends BaseRequestTest {
     val topic2 = "t2"
     val topic3 = "t3"
     val topic4 = "t4"
-    createTopic(topic1, 1, 1)
+    val topic5 = "t5"
+    createTopic(topic1, numPartitions = 1, replicationFactor = 1)
 
-    val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion).build())
-    checkAutoCreatedTopic(topic1, topic2, response1)
+    val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build())
+    assertNull(response1.errors.get(topic1))
+    checkAutoCreatedTopic(topic2, response1)
+
+    // The default behavior in old versions of the metadata API is to allow topic creation, so
+    // protocol downgrades should happen gracefully when auto-creation is explicitly requested.
+    val response2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic3).asJava, true).build(1))
+    checkAutoCreatedTopic(topic3, response2)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so disabling auto-creation is not supported
     intercept[UnsupportedVersionException] {
-      sendMetadataRequest(new MetadataRequest(requestData(List(topic2, topic3), false), 3.toShort))
+      sendMetadataRequest(new MetadataRequest(requestData(List(topic4), false), 3.toShort))
     }
 
     // V4 and higher support a configurable allowAutoTopicCreation
-    val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic3, topic4).asJava, false, 4.toShort).build)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic3))
+    val response3 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic4, topic5).asJava, false, 4.toShort).build)
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
-    assertEquals(None, zkClient.getTopicPartitionCount(topic4))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic5))
+    assertEquals(None, zkClient.getTopicPartitionCount(topic5))
   }
 
   @Test
