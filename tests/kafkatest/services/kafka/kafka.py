@@ -468,8 +468,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --delete --topic %(topic)s " % {
-            'zk_connect': self.zk_connect_setting(),
+        cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
+            'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
             'topic': topic
         }
 

@@ -50,7 +50,7 @@ class ReplicaScaleTest(Test):
     @cluster(num_nodes=12)
     @parametrize(topic_count=500, partition_count=34, replication_factor=3)
     def test_produce_consume(self, topic_count, partition_count, replication_factor):
-        t0 = time.time()
+        topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
             print("Creating topic %s" % topic)  # Force some stdout for Jenkins
@@ -62,8 +62,8 @@ class ReplicaScaleTest(Test):
             }
             self.kafka.create_topic(topic_cfg, describe=False)
 
-        t1 = time.time()
-        self.logger.info("Time to create topics: %d" % (t1-t0))
+        topics_create_end_time = time.time()
+        self.logger.info("Time to create topics: %d" % (topics_create_end_time - topics_create_start_time))
 
         producer_workload_service = ProduceBenchWorkloadService(self.test_context, self.kafka)
         consumer_workload_service = ConsumeBenchWorkloadService(self.test_context, self.kafka)
@@ -105,7 +105,7 @@ class ReplicaScaleTest(Test):
     @cluster(num_nodes=12)
     @parametrize(topic_count=500, partition_count=34, replication_factor=3)
     def test_clean_bounce(self, topic_count, partition_count, replication_factor):
-        t0 = time.time()
+        topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
             print("Creating topic %s" % topic)  # Force some stdout for Jenkins
@@ -116,24 +116,24 @@ class ReplicaScaleTest(Test):
                 "configs": {"min.insync.replicas": 1}
             }
             self.kafka.create_topic(topic_cfg)
-        t1 = time.time()
-        self.logger.info("Time to create topics: %d" % (t1-t0))
+        topics_create_end_time = time.time()
+        self.logger.info("Time to create topics: %d" % (topics_create_end_time - topics_create_start_time))
 
         restart_times = []
         for node in self.kafka.nodes:
-            t2 = time.time()
+            broker_bounce_start_time = time.time()
             self.kafka.stop_node(node, clean_shutdown=True, timeout_sec=600)
             self.kafka.start_node(node, timeout_sec=600)
-            t3 = time.time()
-            restart_times.append(t3-t2)
-            self.logger.info("Time to restart %s: %d" % (node.name, t3-t2))
+            broker_bounce_end_time = time.time()
+            restart_times.append(broker_bounce_end_time - broker_bounce_start_time)
+            self.logger.info("Time to restart %s: %d" % (node.name, broker_bounce_end_time - broker_bounce_start_time))
 
         self.logger.info("Restart times: %s" % restart_times)
 
-        t0 = time.time()
+        delete_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
             self.logger.info("Deleting topic %s" % topic)
             self.kafka.delete_topic(topic)
-        t1 = time.time()
-        self.logger.info("Time to delete topics: %d" % (t1-t0))
+        delete_end_time = time.time()
+        self.logger.info("Time to delete topics: %d" % (delete_end_time - delete_start_time))
