@@ -193,7 +193,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    connectAndReceive(request, destination = brokerSocketServer(leaderId)).asInstanceOf[ProduceResponse]
+    connectAndReceive[ProduceResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

@@ -44,7 +44,7 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
     val request = new DescribeLogDirsRequest.Builder(null).build()
-    val response = connectAndReceive(request, destination = controllerSocketServer).asInstanceOf[DescribeLogDirsResponse]
+    val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
     val logDirInfos = response.logDirInfos()
 
     assertEquals(logDirCount, logDirInfos.size())

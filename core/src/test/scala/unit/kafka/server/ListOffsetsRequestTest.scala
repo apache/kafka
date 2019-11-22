@@ -164,7 +164,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(leaderId: Int, request: ListOffsetRequest): ListOffsetResponse = {
-    connectAndReceive(request, destination = brokerSocketServer(leaderId)).asInstanceOf[ListOffsetResponse]
+    connectAndReceive[ListOffsetResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

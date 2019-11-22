@@ -262,7 +262,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       .setKey(group)).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
-      val response = connectAndReceive(request).asInstanceOf[FindCoordinatorResponse]
+      val response = connectAndReceive[FindCoordinatorResponse](request)
       nodeId = response.node.id
       response.error == Errors.NONE
     }, s"Failed to find coordinator for group $group")

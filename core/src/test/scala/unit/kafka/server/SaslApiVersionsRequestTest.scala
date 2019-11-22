@@ -88,12 +88,12 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
   }
 
   private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest): ApiVersionsResponse = {
-    sendAndReceive(request, socket).asInstanceOf[ApiVersionsResponse]
+    sendAndReceive[ApiVersionsResponse](request, socket)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket): Unit = {
     val request = new SaslHandshakeRequest(new SaslHandshakeRequestData().setMechanism("PLAIN"))
-    val response = sendAndReceive(request, socket).asInstanceOf[SaslHandshakeResponse]
+    val response = sendAndReceive[SaslHandshakeResponse](request, socket)
     assertEquals(Errors.NONE, response.error)
     assertEquals(Collections.singletonList("PLAIN"), response.enabledMechanisms)
   }

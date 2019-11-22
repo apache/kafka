@@ -96,7 +96,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(brokerId: Int, request: OffsetsForLeaderEpochRequest): OffsetsForLeaderEpochResponse = {
-    val response = connectAndReceive(request, destination = brokerSocketServer(brokerId))
-    response.asInstanceOf[OffsetsForLeaderEpochResponse]
+    connectAndReceive[OffsetsForLeaderEpochResponse](request, destination = brokerSocketServer(brokerId))
   }
+
 }

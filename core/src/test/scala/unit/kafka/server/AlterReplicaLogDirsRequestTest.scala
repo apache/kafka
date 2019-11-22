@@ -111,7 +111,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
 
   private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String]): AlterReplicaLogDirsResponse = {
     val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
-    connectAndReceive(request, destination = controllerSocketServer).asInstanceOf[AlterReplicaLogDirsResponse]
+    connectAndReceive[AlterReplicaLogDirsResponse](request, destination = controllerSocketServer)
   }
 
 }

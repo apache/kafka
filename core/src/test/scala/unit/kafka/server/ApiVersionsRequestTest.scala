@@ -78,6 +78,7 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
-    connectAndReceive(request).asInstanceOf[ApiVersionsResponse]
+    connectAndReceive[ApiVersionsResponse](request)
   }
+
 }

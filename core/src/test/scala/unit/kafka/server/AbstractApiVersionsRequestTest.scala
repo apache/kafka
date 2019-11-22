@@ -26,8 +26,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
     val socket = connect(anySocketServer, securityProtocol)
     try {
       sendWithHeader(request, overrideHeader, socket)
-      val response = receive(socket, ApiKeys.API_VERSIONS, 0.toShort)
-      response.asInstanceOf[ApiVersionsResponse]
+      receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)
     } finally socket.close()
   }
 

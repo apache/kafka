@@ -61,7 +61,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   }
 
   private def sendAddPartitionsRequest(leaderId: Int, request: AddPartitionsToTxnRequest): AddPartitionsToTxnResponse = {
-    connectAndReceive(request, destination = brokerSocketServer(leaderId)).asInstanceOf[AddPartitionsToTxnResponse]
+    connectAndReceive[AddPartitionsToTxnResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   private def createRequest(partitions: List[TopicPartition]): AddPartitionsToTxnRequest = {

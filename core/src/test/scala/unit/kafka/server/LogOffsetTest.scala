@@ -249,11 +249,11 @@ class LogOffsetTest extends BaseRequestTest {
   private def server: KafkaServer = servers.head
 
   private def sendListOffsetsRequest(request: ListOffsetRequest): ListOffsetResponse = {
-    connectAndReceive(request).asInstanceOf[ListOffsetResponse]
+    connectAndReceive[ListOffsetResponse](request)
   }
 
   private def sendFetchRequest(request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive(request).asInstanceOf[FetchResponse[MemoryRecords]]
+    connectAndReceive[FetchResponse[MemoryRecords]](request)
   }
 
 }

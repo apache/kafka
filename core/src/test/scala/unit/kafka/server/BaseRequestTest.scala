@@ -24,12 +24,14 @@ import java.util.Properties
 
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
+import kafka.utils.NotNothing
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.collection.Seq
+import scala.reflect.ClassTag
 
 abstract class BaseRequestTest extends IntegrationTestHarness {
   private var correlationId = 0
@@ -83,33 +85,40 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     outgoing.flush()
   }
 
-  def receive(socket: Socket, apiKey: ApiKeys, version: Short): AbstractResponse = {
+  def receive[T <: AbstractResponse](socket: Socket, apiKey: ApiKeys, version: Short)
+                                    (implicit classTag: ClassTag[T]): T = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
 
-    val response = new Array[Byte](len)
-    incoming.readFully(response)
+    val responseBytes = new Array[Byte](len)
+    incoming.readFully(responseBytes)
 
-    val responseBuffer = ByteBuffer.wrap(response)
+    val responseBuffer = ByteBuffer.wrap(responseBytes)
     ResponseHeader.parse(responseBuffer, apiKey.responseHeaderVersion(version))
 
     val responseStruct = apiKey.parseResponse(version, responseBuffer)
-    AbstractResponse.parseResponse(apiKey, responseStruct, version)
+    AbstractResponse.parseResponse(apiKey, responseStruct, version) match {
+      case response: T => response
+      case response =>
+        throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, but found ${response.getClass}")
+    }
   }
 
-  def sendAndReceive(request: AbstractRequest,
-                     socket: Socket,
-                     clientId: String = "client-id",
-                     correlationId: Option[Int] = None): AbstractResponse = {
+  def sendAndReceive[T <: AbstractResponse](request: AbstractRequest,
+                                            socket: Socket,
+                                            clientId: String = "client-id",
+                                            correlationId: Option[Int] = None)
+                                           (implicit classTag: ClassTag[T]): T = {
     send(request, socket, clientId, correlationId)
-    receive(socket, request.api, request.version)
+    receive[T](socket, request.api, request.version)
   }
 
-  def connectAndReceive(request: AbstractRequest,
-                        destination: SocketServer = anySocketServer,
-                        protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): AbstractResponse = {
+  def connectAndReceive[T <: AbstractResponse](request: AbstractRequest,
+                                               destination: SocketServer = anySocketServer,
+                                               protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT)
+                                              (implicit classTag: ClassTag[T]): T = {
     val socket = connect(destination, protocol)
-    try sendAndReceive(request, socket)
+    try sendAndReceive[T](request, socket)
     finally socket.close()
   }
 
@@ -129,10 +138,11 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     sendRequest(socket, serializedBytes)
   }
 
-  def nextRequestHeader(apiKey: ApiKeys,
-                        apiVersion: Short,
-                        clientId: String = "client-id",
-                        correlationIdOpt: Option[Int] = None): RequestHeader = {
+  def nextRequestHeader[T <: AbstractResponse](apiKey: ApiKeys,
+                                               apiVersion: Short,
+                                               clientId: String = "client-id",
+                                               correlationIdOpt: Option[Int] = None
+                                              ): RequestHeader = {
     val correlationId = correlationIdOpt.getOrElse {
       this.correlationId += 1
       this.correlationId

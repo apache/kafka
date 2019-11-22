@@ -131,11 +131,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    connectAndReceive(request, destination = socketServer).asInstanceOf[DeleteTopicsResponse]
+    connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    connectAndReceive(request).asInstanceOf[MetadataResponse]
+    connectAndReceive[MetadataResponse](request)
   }
 
 }

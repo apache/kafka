@@ -1087,7 +1087,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertFalse(zkClient.topicExists(createTopic))
 
     val metadataRequest = new MetadataRequest.Builder(List(topic, createTopic).asJava, true).build()
-    val metadataResponse = connectAndReceive(metadataRequest).asInstanceOf[MetadataResponse]
+    val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
 
     assertEquals(Set(topic).asJava, metadataResponse.topicsByError(Errors.NONE))
     assertEquals(Set(createTopic).asJava, metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED))
@@ -1097,7 +1097,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // retry as topic being created can have MetadataResponse with Errors.LEADER_NOT_AVAILABLE
     TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS)(() => {
-      val metadataResponse = connectAndReceive(metadataRequest).asInstanceOf[MetadataResponse]
+      val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
       assertEquals(Set(topic, createTopic).asJava, metadataResponse.topicsByError(Errors.NONE))
     })
   }
@@ -1392,54 +1392,54 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testUnauthorizedDeleteTopicsWithoutDescribe(): Unit = {
-    val deleteResponse = connectAndReceive(deleteTopicsRequest).asInstanceOf[DeleteTopicsResponse]
+    val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteResponse.data.responses.find(deleteTopic).errorCode)
   }
 
   @Test
   def testUnauthorizedDeleteTopicsWithDescribe(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DESCRIBE, ALLOW)), deleteTopicResource)
-    val deleteResponse = connectAndReceive(deleteTopicsRequest).asInstanceOf[DeleteTopicsResponse]
+    val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, deleteResponse.data.responses.find(deleteTopic).errorCode)
   }
 
   @Test
   def testDeleteTopicsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
-    val deleteResponse = connectAndReceive(deleteTopicsRequest).asInstanceOf[DeleteTopicsResponse]
+    val deleteResponse = connectAndReceive[DeleteTopicsResponse](deleteTopicsRequest)
     assertEquals(Errors.NONE.code, deleteResponse.data.responses.find(deleteTopic).errorCode)
   }
 
   @Test
   def testUnauthorizedDeleteRecordsWithoutDescribe(): Unit = {
-    val deleteRecordsResponse = connectAndReceive(deleteRecordsRequest).asInstanceOf[DeleteRecordsResponse]
+    val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteRecordsResponse.responses.asScala.head._2.error)
   }
 
   @Test
   def testUnauthorizedDeleteRecordsWithDescribe(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DESCRIBE, ALLOW)), deleteTopicResource)
-    val deleteRecordsResponse = connectAndReceive(deleteRecordsRequest).asInstanceOf[DeleteRecordsResponse]
+    val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteRecordsResponse.responses.asScala.head._2.error)
   }
 
   @Test
   def testDeleteRecordsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
-    val deleteRecordsResponse = connectAndReceive(deleteRecordsRequest).asInstanceOf[DeleteRecordsResponse]
+    val deleteRecordsResponse = connectAndReceive[DeleteRecordsResponse](deleteRecordsRequest)
     assertEquals(Errors.NONE, deleteRecordsResponse.responses.asScala.head._2.error)
   }
 
   @Test
   def testUnauthorizedCreatePartitions(): Unit = {
-    val createPartitionsResponse = connectAndReceive(createPartitionsRequest).asInstanceOf[CreatePartitionsResponse]
+    val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, createPartitionsResponse.errors.asScala.head._2.error)
   }
 
   @Test
   def testCreatePartitionsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, ALTER, ALLOW)), new ResourcePattern(TOPIC, "*", LITERAL))
-    val createPartitionsResponse = connectAndReceive(createPartitionsRequest).asInstanceOf[CreatePartitionsResponse]
+    val createPartitionsResponse = connectAndReceive[CreatePartitionsResponse](createPartitionsRequest)
     assertEquals(Errors.NONE, createPartitionsResponse.errors.asScala.head._2.error)
   }
 
@@ -1674,7 +1674,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testClusterId(): Unit = {
     val request = new requests.MetadataRequest.Builder(List.empty.asJava, false).build()
-    val response = connectAndReceive(request).asInstanceOf[MetadataResponse]
+    val response = connectAndReceive[MetadataResponse](request)
     assertEquals(Collections.emptyMap, response.errorCounts)
     assertFalse("Cluster id not returned", response.clusterId.isEmpty)
   }
@@ -1765,7 +1765,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest,
                                      socketServer: SocketServer): requests.OffsetFetchResponse = {
-    connectAndReceive(request, socketServer).asInstanceOf[OffsetFetchResponse]
+    connectAndReceive[OffsetFetchResponse](request, socketServer)
   }
 
   private def buildTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {

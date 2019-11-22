@@ -71,8 +71,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    val response = connectAndReceive(request, destination = brokerSocketServer(leaderId))
-    response.asInstanceOf[FetchResponse[MemoryRecords]]
+    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
   }
 
   private def initProducer(): Unit = {
@@ -295,7 +294,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(receive(socket, ApiKeys.FETCH, version).asInstanceOf[FetchResponse[MemoryRecords]])
+          Some(receive[FetchResponse[MemoryRecords]](socket, ApiKeys.FETCH, version))
         }
       } finally {
         socket.close()

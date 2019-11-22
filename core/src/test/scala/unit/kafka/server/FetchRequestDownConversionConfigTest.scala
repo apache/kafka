@@ -79,8 +79,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    val response = connectAndReceive(request, destination = brokerSocketServer(leaderId))
-    response.asInstanceOf[FetchResponse[MemoryRecords]]
+    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
   }
 
   /**

@@ -187,7 +187,7 @@ class AddPartitionsTest extends BaseRequestTest {
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    connectAndReceive(request).asInstanceOf[MetadataResponse]
+    connectAndReceive[MetadataResponse](request)
   }
 
 }

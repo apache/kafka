@@ -219,7 +219,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def verifyConnection(socket: Socket): Unit = {
-    val produceResponse = sendAndReceive(produceRequest, socket).asInstanceOf[ProduceResponse]
+    val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
     assertEquals(1, produceResponse.responses.size)
     val (_, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(Errors.NONE, partitionResponse.error)

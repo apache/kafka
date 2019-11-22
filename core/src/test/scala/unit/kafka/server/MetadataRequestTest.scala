@@ -378,8 +378,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndReceive(request, destination = destination.getOrElse(anySocketServer))
-    response.asInstanceOf[MetadataResponse]
+    connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
   }
 
 }

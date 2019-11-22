@@ -58,7 +58,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest): DeleteTopicsResponse = {
-    connectAndReceive(request, destination = controllerSocketServer).asInstanceOf[DeleteTopicsResponse]
+    connectAndReceive[DeleteTopicsResponse](request, destination = controllerSocketServer)
   }
 
 }
