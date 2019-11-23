@@ -42,6 +42,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -128,6 +129,7 @@ public class LeaderAndIsrRequestTest {
             assertEquals(1, request.controllerId());
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
+            assertFalse(request.containsAllReplicas());
 
             ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
@@ -167,6 +169,22 @@ public class LeaderAndIsrRequestTest {
         int size1 = MessageTestUtil.messageSize(v1.data(), v1.version());
 
         assertTrue("Expected v2 < v1: v2=" + size2 + ", v1=" + size1, size2 < size1);
+    }
+
+    @Test
+    public void testContainsAllReplicas() {
+        Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        for (TopicPartition tp : tps) {
+            partitionStates.add(new LeaderAndIsrPartitionState()
+                    .setTopicName(tp.topic())
+                    .setPartitionIndex(tp.partition()));
+        }
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(LEADER_AND_ISR.latestVersion(), 0, 0, 0,
+                partitionStates, Collections.emptySet(), true);
+
+        LeaderAndIsrRequest request = builder.build();
+        assertTrue(request.containsAllReplicas());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

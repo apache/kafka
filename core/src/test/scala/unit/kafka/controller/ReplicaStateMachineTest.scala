@@ -32,6 +32,8 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
+import scala.util.Random
+
 class ReplicaStateMachineTest {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
@@ -141,6 +143,33 @@ class ReplicaStateMachineTest {
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
     assertEquals(OnlineReplica, replicaState(replica))
+  }
+
+  @Test
+  def testOfflineToOnlineReplicaTransitionContainsAllReplicas(): Unit = {
+    val partitions = (0 to 10).map { partitionId => new TopicPartition("foo", partitionId) }
+    val newBrokers = (0 to 3)
+    val partitionAndReplicaSet = partitions.map { partition =>
+      PartitionAndReplica(partition, Random.nextInt(newBrokers.size))
+    }
+
+    EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
+    newBrokers.foreach { brokerId =>
+      EasyMock.expect(mockControllerBrokerRequestBatch.setContainsAllReplicas(Set(brokerId)))
+    }
+    EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
+    EasyMock.replay(mockControllerBrokerRequestBatch)
+
+    partitionAndReplicaSet.foreach { replica =>
+      controllerContext.putReplicaState(replica, OfflineReplica)
+      controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, Seq(replica.replica))
+    }
+    replicaStateMachine.handleStateChanges(partitionAndReplicaSet, OnlineReplica, containsAllReplicas = true)
+
+    partitionAndReplicaSet.foreach { replica =>
+      assertEquals(OnlineReplica, replicaState(replica))
+    }
+    EasyMock.verify(mockControllerBrokerRequestBatch)
   }
 
   @Test
