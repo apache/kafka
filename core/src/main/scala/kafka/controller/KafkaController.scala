@@ -1113,8 +1113,8 @@ class KafkaController(val config: KafkaConfig,
     // so we will keep the previous behavior and don't reject the request
     if (brokerEpoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
       val cachedBrokerEpoch = controllerContext.liveBrokerIdAndEpochs(id)
-      if (brokerEpoch < cachedBrokerEpoch) {
-        val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
+      if (brokerEpoch != cachedBrokerEpoch) {
+        val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an invalid broker epoch " +
           s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch."
         info(stateBrokerEpochErrorMessage)
         throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)

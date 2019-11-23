@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthori
 import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
@@ -91,8 +92,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val prefixedGroupResource =  new ResourcePattern(GROUP, groupPrefix, PREFIXED)
   val wildcardTopicResource =  new ResourcePattern(TOPIC, wildcard, LITERAL)
   val wildcardGroupResource =  new ResourcePattern(GROUP, wildcard, LITERAL)
-  def kafkaPrincipalStr = s"$kafkaPrincipalType:$kafkaPrincipal"
-  def clientPrincipalStr = s"$kafkaPrincipalType:$clientPrincipal"
+
+  def kafkaPrincipalStr: String = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kafkaPrincipal).toString
+  def clientPrincipalStr: String = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipal).toString
 
   // Arguments to AclCommand to set ACLs.
   def clusterActionArgs: Array[String] = Array("--authorizer-properties",

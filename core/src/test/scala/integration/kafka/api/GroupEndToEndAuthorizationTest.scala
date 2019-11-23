@@ -40,7 +40,6 @@ object GroupEndToEndAuthorizationTest {
 }
 
 class GroupEndToEndAuthorizationTest extends SaslScramSslEndToEndAuthorizationTest {
-  override val kafkaPrincipalType = GroupPrincipalType
   override val clientPrincipal = ClientGroup
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
 }
