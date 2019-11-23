@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection.ObjectEqualityComparator
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
@@ -181,6 +182,11 @@ class CachedPartition(val topic: String,
       ", localLogStartOffset=" + localLogStartOffset  +
         ")"
   }
+
+  // This operation is only used by ImplicitLinkedHashCollection when we
+  // try to insert the same object into the collection more than once.
+  // Since we do not plan to do that, we don't need to implement this.
+  override def duplicate(): CachedPartition = throw new UnsupportedOperationException
 }
 
 /**
@@ -245,7 +251,7 @@ case class FetchSession(val id: Int,
       val newCachedPart = new CachedPartition(topicPart, reqData)
       val cachedPart = partitionMap.find(newCachedPart)
       if (cachedPart == null) {
-        partitionMap.mustAdd(newCachedPart)
+        partitionMap.add(newCachedPart)
         added.add(topicPart)
       } else {
         cachedPart.updateRequestParams(reqData)
@@ -378,7 +384,8 @@ class FullFetchContext(private val time: Time,
         val part = entry.getKey
         val respData = entry.getValue
         val reqData = fetchData.get(part)
-        cachedPartitions.mustAdd(new CachedPartition(part, reqData, respData))
+        cachedPartitions.addOrReplace(new CachedPartition(part, reqData, respData),
+          ObjectEqualityComparator.INSTANCE)
       })
       cachedPartitions
     }
@@ -431,7 +438,7 @@ class IncrementalFetchContext(private val time: Time,
           nextElement = element
           if (updateFetchContextAndRemoveUnselected) {
             session.partitionMap.remove(cachedPart)
-            session.partitionMap.mustAdd(cachedPart)
+            session.partitionMap.add(cachedPart)
           }
         } else {
           if (updateFetchContextAndRemoveUnselected) {

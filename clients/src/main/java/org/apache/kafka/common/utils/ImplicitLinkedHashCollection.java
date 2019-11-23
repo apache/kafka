@@ -20,6 +20,8 @@ package org.apache.kafka.common.utils;
 import java.util.AbstractCollection;
 import java.util.AbstractSequentialList;
 import java.util.AbstractSet;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
@@ -27,21 +29,22 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 /**
- * A memory-efficient hash set which tracks the order of insertion of elements.
+ * A memory efficient collection which supports O(1) lookup of elements, and also tracks their
+ * order of insertion.  Unlike in a Set or a Map, multiple elements can be inserted which are equal
+ * to each other.  The type of contained objects must be a subclass of
+ * ImplicitLinkedHashCollection#Element.  All elements must implement hashCode and equals.
  *
- * Like java.util.LinkedHashSet, this collection maintains a linked list of elements.
- * However, rather than using a separate linked list, this collection embeds the next
- * and previous fields into the elements themselves.  This reduces memory consumption,
- * because it means that we only have to store one Java object per element, rather
- * than multiple.
+ * The internal data structure is a hash table whose elements form a linked list.  Rather than
+ * using a separate linked list, this collection embeds the "next" and "previous fields into the
+ * elements themselves.  This reduces memory consumption, because it means that we only have to
+ * store one Java object per element, rather than multiple.
  *
- * The next and previous fields are stored as array indices rather than pointers.
- * This ensures that the fields only take 32 bits, even when pointers are 64 bits.
- * It also makes the garbage collector's job easier, because it reduces the number of
- * pointers that it must chase.
+ * The next and previous fields are stored as array indices rather than pointers.  This ensures
+ * that the fields only take 32 bits, even when pointers are 64 bits.  It also makes the garbage
+ * collector's job easier, because it reduces the number of pointers that it must chase.
  *
- * This class uses linear probing.  Unlike HashMap (but like HashTable), we don't force
- * the size to be a power of 2.  This saves memory.
+ * This class uses linear probing.  Unlike HashMap (but like HashTable), we don't force the size to
+ * be a power of 2.  This saves memory.
  *
  * This set does not allow null elements.  It does not have internal synchronization.
  */
@@ -51,6 +54,40 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         void setPrev(int prev);
         int next();
         void setNext(int next);
+        Element duplicate();
+    }
+
+    /**
+     * Compares two elements.
+     *
+     * If compare(x, y) == true, then x.hashCode() == y.hashCode() must also be true.
+     */
+    public interface Comparator<T> {
+        boolean compare(T x, T y);
+    }
+
+    /**
+     * Compares two elements using Object#equals().
+     */
+    public static class ObjectEqualityComparator<T> implements Comparator<T> {
+        public static final ObjectEqualityComparator<Object> INSTANCE = new ObjectEqualityComparator<>();
+
+        @Override
+        public boolean compare(T x, T y) {
+            return x.equals(y);
+        }
+    }
+
+    /**
+     * Compares two elements using reference equality.
+     */
+    public static class ReferenceEqualityComparator<T> implements Comparator<T> {
+        public static final ReferenceEqualityComparator<Object> INSTANCE = new ReferenceEqualityComparator<>();
+
+        @Override
+        public boolean compare(T x, T y) {
+            return x == y;
+        }
     }
 
     /**
@@ -99,6 +136,11 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         @Override
         public void setNext(int next) {
             this.next = next;
+        }
+
+        @Override
+        public Element duplicate() {
+            return new HeadElement();
         }
     }
 
@@ -288,32 +330,34 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         return new ImplicitLinkedHashCollectionIterator(index);
     }
 
-    final int slot(Element[] curElements, Object e) {
+    final static int slot(Element[] curElements, Object e) {
         return (e.hashCode() & 0x7fffffff) % curElements.length;
     }
 
     /**
-     * Find an element matching an example element.
+     * Find the index of an element matching a given target element.
      *
      * Using the element's hash code, we can look up the slot where it belongs.
      * However, it may not have ended up in exactly this slot, due to a collision.
      * Therefore, we must search forward in the array until we hit a null, before
      * concluding that the element is not present.
      *
-     * @param key               The element to match.
+     * @param target            The element to match.
+     * @param comparator        The comparator to use.
      * @return                  The match index, or INVALID_INDEX if no match was found.
      */
-    final private int findIndexOfEqualElement(Object key) {
-        if (key == null || size == 0) {
+    @SuppressWarnings("unchecked")
+    final private int findIndex(Object target, Comparator<? super E> comparator) {
+        if (target == null || size == 0) {
             return INVALID_INDEX;
         }
-        int slot = slot(elements, key);
+        int slot = slot(elements, target);
         for (int seen = 0; seen < elements.length; seen++) {
             Element element = elements[slot];
             if (element == null) {
                 return INVALID_INDEX;
             }
-            if (key.equals(element)) {
+            if (comparator.compare((E) target, (E) element)) {
                 return slot;
             }
             slot = (slot + 1) % elements.length;
@@ -322,14 +366,26 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * An element e in the collection such that e.equals(key) and
-     * e.hashCode() == key.hashCode().
+     * Return the first element e in the collection such that target.equals(e).
      *
-     * @param key   The element to match.
-     * @return      The matching element, or null if there were none.
+     * @param target        The element to match.
+     *
+     * @return              The matching element, or null if there were none.
      */
-    final public E find(E key) {
-        int index = findIndexOfEqualElement(key);
+    public E find(E target) {
+        return find(target, ObjectEqualityComparator.INSTANCE);
+    }
+
+    /**
+     * Return the first element e in the collection such that comparator.compare(target, e) == true.
+     *
+     * @param target        The element to match.
+     * @param comparator    How to compare the two elements.
+     *
+     * @return              The matching element, or null if there were none.
+     */
+    public E find(E target, Comparator<? super E> comparator) {
+        int index = findIndex(target, comparator);
         if (index == INVALID_INDEX) {
             return null;
         }
@@ -339,10 +395,50 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
+     * Returns all of the elements e in the collection such that
+     * target.equals(e).
+     *
+     * @param target        The element to match.
+     *
+     * @return              The matching element, or null if there were none.
+     */
+    public List<E> findAll(E target) {
+        return findAll(target, ObjectEqualityComparator.INSTANCE);
+    }
+
+    /**
+     * Returns all of the elements e in the collection such that
+     * comparator.compare(e, target) == true.
+     *
+     * @param target    The element to match.
+     *
+     * @return          All of the matching elements.
+     */
+    @SuppressWarnings("unchecked")
+    public List<E> findAll(E target, Comparator<? super E> comparator) {
+        if (target == null || size == 0) {
+            return Collections.<E>emptyList();
+        }
+        ArrayList<E> results = new ArrayList<>();
+        int slot = slot(elements, target);
+        for (int seen = 0; seen < elements.length; seen++) {
+            E element = (E) elements[slot];
+            if (element == null) {
+                break;
+            }
+            if (comparator.compare(target, element)) {
+                results.add(element);
+            }
+            slot = (slot + 1) % elements.length;
+        }
+        return results;
+    }
+
+    /**
      * Returns the number of elements in the set.
      */
     @Override
-    final public int size() {
+    public int size() {
         return size;
     }
 
@@ -350,11 +446,11 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * Returns true if there is at least one element e in the collection such
      * that key.equals(e) and key.hashCode() == e.hashCode().
      *
-     * @param key       The object to try to match.
+     * @param target    The object to try to match.
      */
     @Override
-    final public boolean contains(Object key) {
-        return findIndexOfEqualElement(key) != INVALID_INDEX;
+    public boolean contains(Object target) {
+        return findIndex(target, ObjectEqualityComparator.INSTANCE) != INVALID_INDEX;
     }
 
     private static int calculateCapacity(int expectedNumElements) {
@@ -372,54 +468,92 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      *
      * @param newElement    The new element.
      *
-     * @return              True if the element was added to the collection;
-     *                      false if it was not, because there was an existing equal element.
+     * @return              True if the element was added to the collection.
+     *                      False if the element could not be added because it was null.
      */
     @Override
-    final public boolean add(E newElement) {
+    public boolean add(E newElement) {
+        return addOrReplace(newElement, ReferenceEqualityComparator.INSTANCE);
+    }
+
+    /**
+     * Add a new element to the collection.
+     *
+     * @param newElement    The new element.
+     * @param comparator    A comparator which will be used to determine if any object is
+     *                      similar enough to the new element to be replaced.
+     *
+     * @return              True if the element was added to the collection.
+     *                      False if the element could not be added because it was null.
+     */
+    final public boolean addOrReplace(E newElement, Comparator<? super E> comparator) {
         if (newElement == null) {
             return false;
         }
         if ((size + 1) >= elements.length / 2) {
             changeCapacity(calculateCapacity(elements.length));
         }
-        int slot = addInternal(newElement, elements);
-        if (slot >= 0) {
-            addToListTail(head, elements, slot);
+        if (addInternal(head, newElement, elements, comparator)) {
             size++;
-            return true;
         }
-        return false;
-    }
-
-    final public void mustAdd(E newElement) {
-        if (!add(newElement)) {
-            throw new RuntimeException("Unable to add " + newElement);
-        }
+        return true;
     }
 
     /**
      * Adds a new element to the appropriate place in the elements array.
      *
+     * @param head          The list head.
      * @param newElement    The new element to add.
      * @param addElements   The elements array.
-     * @return              The index at which the element was inserted, or INVALID_INDEX
-     *                      if the element could not be inserted.
+     * @param comparator    A comparator which will be used to determine if any object is
+     *                      similar enough to the new element to be replaced.
+     *
+     * @returns             True if the size of the collection has increased.
      */
-    int addInternal(Element newElement, Element[] addElements) {
+    @SuppressWarnings("unchecked")
+    static <E> boolean addInternal(Element head,
+                                   Element newElement,
+                                   Element[] addElements,
+                                   Comparator<? super E> comparator) {
         int slot = slot(addElements, newElement);
+        int bestSlot = INVALID_INDEX;
         for (int seen = 0; seen < addElements.length; seen++) {
             Element element = addElements[slot];
-            if (element == null) {
-                addElements[slot] = newElement;
-                return slot;
-            }
-            if (element.equals(newElement)) {
-                return INVALID_INDEX;
+            if (element == newElement) {
+                // If we find that this object has already been added to the collection,
+                // create a clone of the object and add the clone instead.  This is necessary
+                // because there is only one set of previous and next pointers contained
+                // in each element.  Therefore, the same Java object cannot possibly appear
+                // more than once in the list.
+                newElement = newElement.duplicate();
+            } else if (element == null) {
+                // When we hit a null, we know that we have seen all the possible values
+                // that might be possible to replace with the new element we are adding.
+                // This is because of the denseness invariant: if an element E should be
+                // in slot S but ends up in slot T, instead, there will never be a null
+                // between S and T.
+                if (bestSlot == INVALID_INDEX) {
+                    bestSlot = slot;
+                }
+                break;
+            } else if (comparator.compare((E) newElement, (E) element)) {
+                // If the current element can be replaced by the new element we are adding,
+                // mark it down as the best slot we've found so far.  We don't do the
+                // replacement immediately because we want to see all the possible values
+                // to make sure that the element we are adding has not already been added.
+                // That requires iterating until we hit a null.
+                bestSlot = slot;
             }
             slot = (slot + 1) % addElements.length;
         }
-        throw new RuntimeException("Not enough hash table slots to add a new element.");
+        boolean growing = true;
+        if (addElements[bestSlot] != null) {
+            removeFromList(head, addElements, bestSlot);
+            growing = false;
+        }
+        addElements[bestSlot] = newElement;
+        addToListTail(head, addElements, bestSlot);
+        return growing;
     }
 
     private void changeCapacity(int newCapacity) {
@@ -429,8 +563,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         for (Iterator<E> iter = iterator(); iter.hasNext(); ) {
             Element element = iter.next();
             iter.remove();
-            int newSlot = addInternal(element, newElements);
-            addToListTail(newHead, newElements, newSlot);
+            addInternal(newHead, element, newElements, ReferenceEqualityComparator.INSTANCE);
         }
         this.elements = newElements;
         this.head = newHead;
@@ -438,24 +571,30 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * Remove the first element e such that key.equals(e)
-     * and key.hashCode == e.hashCode.
+     * Remove an element from the collection, using object equality semantics.
      *
-     * @param key       The object to try to match.
-     * @return          True if an element was removed; false otherwise.
+     * @param target        The object to try to remove.
+     * @return              True if an element was removed; false otherwise.
      */
     @Override
-    final public boolean remove(Object key) {
-        int slot = findElementToRemove(key);
+    final public boolean remove(Object target) {
+        return remove(target, ObjectEqualityComparator.INSTANCE);
+    }
+
+    /**
+     * Remove an element from the collection, using the given comparator to test equality.
+     *
+     * @param target        The object to try to remove.
+     * @param comparator    The comparator to use.
+     * @return              True if an element was removed; false otherwise.
+     */
+    final public boolean remove(Object target, Comparator<? super E> comparator) {
+        int slot = findIndex(target, comparator);
         if (slot == INVALID_INDEX) {
             return false;
         }
         removeElementAtSlot(slot);
         return true;
-    }
-
-    int findElementToRemove(Object key) {
-        return findIndexOfEqualElement(key);
     }
 
     /**
@@ -539,7 +678,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     public ImplicitLinkedHashCollection(Iterator<E> iter) {
         clear(0);
         while (iter.hasNext()) {
-            mustAdd(iter.next());
+            add(iter.next());
         }
     }
 
@@ -575,14 +714,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * those elements were inserted in the same order. Because
      * {@code ImplicitLinkedHashCollectionListIterator} iterates over the elements
      * in insertion order, it is sufficient to call {@code valuesList.equals}.
-     *
-     * Note that {@link ImplicitLinkedHashMultiCollection} does not override
-     * {@code equals} and uses this method as well. This means that two
-     * {@code ImplicitLinkedHashMultiCollection} objects will be considered equal even
-     * if they each contain two elements A and B such that A.equals(B) but A != B and
-     * A and B have switched insertion positions between the two collections. This
-     * is an acceptable definition of equality, because the collections are still
-     * equal in terms of the order and value of each element.
      *
      * @param o object to be compared for equality with this collection
      * @return true is the specified object is equal to this collection

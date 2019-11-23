@@ -61,8 +61,11 @@ public final class MessageGenerator {
 
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
 
-    static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
+    static final String IMPLICIT_LINKED_HASH_COLLECTION_COMPARATOR_CLASS =
+        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection.Comparator";
+
+    static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
+        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
 
     static final String UNSUPPORTED_VERSION_EXCEPTION_CLASS =
         "org.apache.kafka.common.errors.UnsupportedVersionException";

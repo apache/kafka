@@ -100,7 +100,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
         generateClassSize(className, struct, parentVersions);
         buffer.printf("%n");
-        generateClassEquals(className, struct, isSetElement);
+        generateClassEquals(className, struct, false);
         buffer.printf("%n");
         generateClassHashCode(struct, isSetElement);
         buffer.printf("%n");
@@ -109,10 +109,16 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
         generateUnknownTaggedFieldsAccessor(struct);
         generateFieldMutators(struct, className, isSetElement);
+        generateClassCopy(struct, className);
+        generateClassDuplicate(className);
 
         if (!isTopLevel) {
             buffer.decrementIndent();
             buffer.printf("}%n");
+        }
+        if (isSetElement) {
+            buffer.printf("%n");
+            generateClassComparator(className, struct);
         }
         generateSubclasses(className, struct, parentVersions, isSetElement);
         if (isTopLevel) {
@@ -139,8 +145,8 @@ public final class MessageDataGenerator {
             headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
         }
         if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-            implementedInterfaces.add("ImplicitLinkedHashMultiCollection.Element");
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+            implementedInterfaces.add("ImplicitLinkedHashCollection.Element");
         }
         Set<String> classModifiers = new HashSet<>();
         classModifiers.add("public");
@@ -173,8 +179,8 @@ public final class MessageDataGenerator {
 
     private void generateHashSet(String className, StructSpec struct) {
         buffer.printf("%n");
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-        buffer.printf("public static class %s extends ImplicitLinkedHashMultiCollection<%s> {%n",
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+        buffer.printf("public static class %s extends ImplicitLinkedHashCollection<%s> {%n",
             collectionType(className), className);
         buffer.incrementIndent();
         generateHashSetZeroArgConstructor(className);
@@ -220,7 +226,7 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
         buffer.printf("return find(_key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -233,8 +239,8 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
-        buffer.printf("return findAll(_key);%n");
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
+        buffer.printf("return findAll(_key, %sComparator.INSTANCE);%n", className);
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -327,6 +333,97 @@ public final class MessageDataGenerator {
         }
     }
 
+    private void generateClassCopy(StructSpec struct, String className) {
+        buffer.printf("%n");
+        buffer.printf("public void copy(%s other) {%n", className);
+        buffer.incrementIndent();
+        for (FieldSpec field : struct.fields()) {
+            generateClassFieldCopy(field);
+        }
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateClassFieldCopy(FieldSpec field) {
+        if (field.type() instanceof FieldType.ArrayType) {
+            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+            FieldType elementType = arrayType.elementType();
+            headerGenerator.addImport(MessageGenerator.ITERATOR_CLASS);
+            buffer.printf("for (Iterator<%s> _i = other.%s.iterator(); _i.hasNext(); ) {%n",
+                getBoxedJavaType(elementType),
+                field.camelCaseName());
+            buffer.incrementIndent();
+            buffer.printf("this.%s.add(%s);%n",
+                field.camelCaseName(),
+                generateCopyExpression(elementType,
+                    field.zeroCopy(),
+                    !field.nullableVersions().empty(),
+                    "_i.next()"));
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        } else {
+            buffer.printf("this.%s = %s;%n",
+                field.camelCaseName(),
+                generateCopyExpression(field.type(),
+                    field.zeroCopy(),
+                    !field.nullableVersions().empty(),
+                    String.format("other.%s", field.camelCaseName())));
+        }
+    }
+
+    private String generateCopyExpression(FieldType type,
+                                          boolean zeroCopy,
+                                          boolean nullable,
+                                          String name) {
+        if (type instanceof FieldType.BoolFieldType ||
+                type instanceof FieldType.Int8FieldType ||
+                type instanceof FieldType.Int16FieldType ||
+                type instanceof FieldType.Int32FieldType ||
+                type instanceof FieldType.Int64FieldType) {
+            // Primitives should be be copied by value.
+            return name;
+        } else if (type instanceof FieldType.UUIDFieldType ||
+                type instanceof FieldType.StringFieldType) {
+            // Immutable types can be copied by reference.
+            return name;
+        } else if (type.isBytes()) {
+            if (zeroCopy) {
+                if (nullable) {
+                    return String.format("(%s == null) ? null : %s.duplicate()",
+                        name, name);
+                } else {
+                    return String.format("%s.duplicate()",
+                        name);
+                }
+            } else {
+                headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
+                if (nullable) {
+                    return String.format("(%s == null) ? null : " +
+                            "Arrays.copyOf(%s, %s.length)",
+                        name, name, name);
+                } else {
+                    return String.format("Arrays.copyOf(%s, %s.length)",
+                        name, name);
+                }
+            }
+        } else if (type.isStruct()) {
+            return String.format("%s.duplicate()", name);
+        } else {
+            throw new RuntimeException("Unsupported field type " + type);
+        }
+    }
+
+    private void generateClassDuplicate(String className) {
+        buffer.printf("%n");
+        buffer.printf("public %s duplicate() {%n", className);
+        buffer.incrementIndent();
+        buffer.printf("%s _duplicate = new %s();%n", className, className);
+        buffer.printf("_duplicate.copy(this);%n");
+        buffer.printf("return _duplicate;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
     private static String collectionType(String baseType) {
         return baseType + "Collection";
     }
@@ -359,7 +456,7 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (structRegistry.isStructArrayWithKeys(field)) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.LIST_CLASS);
@@ -374,7 +471,7 @@ public final class MessageDataGenerator {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (structRegistry.isStructArrayWithKeys(field)) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
@@ -625,7 +722,7 @@ public final class MessageDataGenerator {
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (isStructArrayWithKeys) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
                 buffer.printf("%s newCollection = new %s(%s);%n",
                     collectionType(arrayType.elementType().toString()),
                         collectionType(arrayType.elementType().toString()), lengthVar);
@@ -1631,7 +1728,7 @@ public final class MessageDataGenerator {
         buffer.printf("_cache.cacheSerializedValue(%s, _stringBytes);%n", name);
     }
 
-    private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys) {
+    private void generateClassEquals(String className, StructSpec struct, boolean isKeyEquals) {
         buffer.printf("@Override%n");
         buffer.printf("public boolean equals(Object obj) {%n");
         buffer.incrementIndent();
@@ -1639,9 +1736,7 @@ public final class MessageDataGenerator {
         if (!struct.fields().isEmpty()) {
             buffer.printf("%s other = (%s) obj;%n", className, className);
             for (FieldSpec field : struct.fields()) {
-                if ((!onlyMapKeys) || field.mapKey()) {
-                    generateFieldEquals(field);
-                }
+                generateFieldEquals(field, "this", "other");
             }
         }
         buffer.printf("return true;%n");
@@ -1649,45 +1744,71 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldEquals(FieldSpec field) {
+    private void generateClassComparator(String className, StructSpec struct) {
+        headerGenerator.addStaticImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_COMPARATOR_CLASS);
+        buffer.printf("public static class %sComparator implements Comparator<%s> {%n",
+            className, className);
+        buffer.incrementIndent();
+        buffer.printf("public static final %sComparator INSTANCE = new %sComparator();%n",
+            className, className);
+        buffer.printf("%n");
+        buffer.printf("@Override%n");
+        buffer.printf("public boolean compare(%s x, %s y) {%n",
+            className, className);
+        buffer.incrementIndent();
+        if (!struct.fields().isEmpty()) {
+            for (FieldSpec field : struct.fields()) {
+                if (field.mapKey()) {
+                    generateFieldEquals(field, "x", "y");
+                }
+            }
+        }
+        buffer.printf("return true;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateFieldEquals(FieldSpec field, String left, String right) {
         if (field.type() instanceof FieldType.UUIDFieldType) {
-            buffer.printf("if (!this.%s.equals(other.%s)) return false;%n",
-                field.camelCaseName(), field.camelCaseName());
+            buffer.printf("if (!%s.%s.equals(%s.%s)) return false;%n",
+                left, field.camelCaseName(), right, field.camelCaseName());
         } else if (field.type().isString() || field.type().isArray() || field.type().isStruct()) {
-            buffer.printf("if (this.%s == null) {%n", field.camelCaseName());
+            buffer.printf("if (%s.%s == null) {%n", left, field.camelCaseName());
             buffer.incrementIndent();
-            buffer.printf("if (other.%s != null) return false;%n", field.camelCaseName());
+            buffer.printf("if (%s.%s != null) return false;%n", right, field.camelCaseName());
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
-            buffer.printf("if (!this.%s.equals(other.%s)) return false;%n",
-                field.camelCaseName(), field.camelCaseName());
+            buffer.printf("if (!%s.%s.equals(%s.%s)) return false;%n",
+                left, field.camelCaseName(), right, field.camelCaseName());
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else if (field.type().isBytes()) {
             if (field.zeroCopy()) {
                 headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
-                buffer.printf("if (!Objects.equals(this.%s, other.%s)) return false;%n",
-                    field.camelCaseName(), field.camelCaseName());
+                buffer.printf("if (!Objects.equals(%s.%s, %s.%s)) return false;%n",
+                    left, field.camelCaseName(), right, field.camelCaseName());
             } else {
                 // Arrays#equals handles nulls.
                 headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
-                buffer.printf("if (!Arrays.equals(this.%s, other.%s)) return false;%n",
-                    field.camelCaseName(), field.camelCaseName());
+                buffer.printf("if (!Arrays.equals(%s.%s, %s.%s)) return false;%n",
+                    left, field.camelCaseName(), right, field.camelCaseName());
             }
         } else {
-            buffer.printf("if (%s != other.%s) return false;%n",
-                field.camelCaseName(), field.camelCaseName());
+            buffer.printf("if (%s.%s != %s.%s) return false;%n",
+                left, field.camelCaseName(), right, field.camelCaseName());
         }
     }
 
-    private void generateClassHashCode(StructSpec struct, boolean onlyMapKeys) {
+    private void generateClassHashCode(StructSpec struct, boolean isKeyHash) {
         buffer.printf("@Override%n");
         buffer.printf("public int hashCode() {%n");
         buffer.incrementIndent();
         buffer.printf("int hashCode = 0;%n");
         for (FieldSpec field : struct.fields()) {
-            if ((!onlyMapKeys) || field.mapKey()) {
+            if ((!isKeyHash) || field.mapKey()) {
                 generateFieldHashCode(field);
             }
         }
