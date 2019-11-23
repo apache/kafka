@@ -589,7 +589,7 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val loadAclCacheOpt = parser.accepts("load-acl-cache", "If you just run AclCommand,use this switch to avoid loading all ACL cache.")
-      .withRequiredArg
+      .withOptionalArg
       .describedAs("load-acl-cache")
       .ofType(classOf[String])
       .defaultsTo("true")
