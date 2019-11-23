@@ -51,7 +51,9 @@
         "about": "The leader's hostname." },
       { "name": "Port", "type": "int32", "versions": "0+",
         "about": "The leader's port." }
-    ]}
+    ]},
+    { "name": "ContainsAllReplicas", "type": "bool", "versions": "4+", "tag": 0,
+      "taggedVersions": "4+", "ignorable": true, "about": "Whether this request contains all replicas hosted by the broker." }
   ],
   "commonStructs": [
     { "name": "LeaderAndIsrPartitionState", "versions": "0+", "fields": [

@@ -338,11 +338,14 @@ class ControllerBrokerRequestBatch(config: KafkaConfig,
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean)
 
+case class LeaderAndIsrRequestInfo(containsAllReplicas: Boolean,
+                                   partitionStates: mutable.Map[TopicPartition, LeaderAndIsrPartitionState])
+
 abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     controllerContext: ControllerContext,
                                                     stateChangeLogger: StateChangeLogger) extends  Logging {
   val controllerId: Int = config.brokerId
-  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
+  val leaderAndIsrRequestMap = mutable.Map.empty[Int, LeaderAndIsrRequestInfo]
   val stopReplicaRequestMap = mutable.Map.empty[Int, ListBuffer[StopReplicaRequestInfo]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
@@ -367,6 +370,16 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         s"$updateMetadataRequestPartitionInfoMap might be lost ")
   }
 
+  def setContainsAllReplicas(brokerIds: Set[Int]): Unit = {
+    brokerIds.foreach { brokerId =>
+      val currentInfoOpt = leaderAndIsrRequestMap.get(brokerId)
+      val updatedInfo = currentInfoOpt
+        .map(_.copy(containsAllReplicas = true))
+        .getOrElse(LeaderAndIsrRequestInfo(containsAllReplicas = true, mutable.Map.empty))
+      leaderAndIsrRequestMap.update(brokerId, updatedInfo)
+    }
+  }
+
   def clear(): Unit = {
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
@@ -381,7 +394,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                        isNew: Boolean): Unit = {
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
-      val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
+      val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId,
+        LeaderAndIsrRequestInfo(containsAllReplicas = false, mutable.Map.empty)).partitionStates
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       result.put(topicPartition, new LeaderAndIsrPartitionState()
@@ -454,7 +468,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else 0
 
     leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
-      case (broker, leaderAndIsrPartitionStates) =>
+      case (broker, leaderAndIsrRequestInfo) =>
+        val leaderAndIsrPartitionStates = leaderAndIsrRequestInfo.partitionStates
+        val containsAllReplicas = leaderAndIsrRequestInfo.containsAllReplicas
+
         if (stateChangeLog.isTraceEnabled) {
           leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
             val typeOfRequest =
@@ -469,7 +486,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         }
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
+          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava, containsAllReplicas)
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))

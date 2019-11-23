@@ -20,7 +20,9 @@ import scala.collection.Seq
 
 class MockReplicaStateMachine(controllerContext: ControllerContext) extends ReplicaStateMachine(controllerContext) {
 
-  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  override def handleStateChanges(replicas: Seq[PartitionAndReplica],
+                                  targetState: ReplicaState,
+                                  containsAllReplicas: Boolean): Unit = {
     replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
     val (validReplicas, invalidReplicas) = controllerContext.checkValidReplicaStateChange(replicas, targetState)
     if (invalidReplicas.nonEmpty) {

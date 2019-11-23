@@ -44,12 +44,15 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
         private final List<LeaderAndIsrPartitionState> partitionStates;
         private final Collection<Node> liveLeaders;
+        private final boolean containsAllReplicas;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<LeaderAndIsrPartitionState> partitionStates, Collection<Node> liveLeaders) {
+                       List<LeaderAndIsrPartitionState> partitionStates, Collection<Node> liveLeaders,
+                       boolean containsAllReplicas) {
             super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.liveLeaders = liveLeaders;
+            this.containsAllReplicas = containsAllReplicas;
         }
 
         @Override
@@ -64,7 +67,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
-                .setLiveLeaders(leaders);
+                .setLiveLeaders(leaders)
+                .setContainsAllReplicas(containsAllReplicas);
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates);
@@ -95,6 +99,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .append(", controllerId=").append(controllerId)
                 .append(", controllerEpoch=").append(controllerEpoch)
                 .append(", brokerEpoch=").append(brokerEpoch)
+                .append(", containsAllReplicas=").append(containsAllReplicas)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
                 .append(")");
@@ -162,6 +167,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     @Override
     public long brokerEpoch() {
         return data.brokerEpoch();
+    }
+
+    public boolean containsAllReplicas() {
+        return data.containsAllReplicas();
     }
 
     public Iterable<LeaderAndIsrPartitionState> partitionStates() {

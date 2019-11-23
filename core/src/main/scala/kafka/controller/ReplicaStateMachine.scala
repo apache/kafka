@@ -71,7 +71,9 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
     }
   }
 
-  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit
+  def handleStateChanges(replicas: Seq[PartitionAndReplica],
+                         targetState: ReplicaState,
+                         containsAllReplicas: Boolean = false): Unit
 }
 
 /**
@@ -103,11 +105,15 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   private val controllerId = config.brokerId
   this.logIdent = s"[ReplicaStateMachine controllerId=$controllerId] "
 
-  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  override def handleStateChanges(replicas: Seq[PartitionAndReplica],
+                                  targetState: ReplicaState,
+                                  containsAllReplicas: Boolean = false): Unit = {
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
         replicas.groupBy(_.replica).foreach { case (replicaId, replicas) =>
+          if (containsAllReplicas)
+            controllerBrokerRequestBatch.setContainsAllReplicas(Set(replicaId))
           doHandleStateChanges(replicaId, replicas, targetState)
         }
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)

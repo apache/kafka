@@ -933,6 +933,21 @@ class LogManager(logDirs: Seq[File],
     removedLog
   }
 
+  def deleteStrayLogs(allReplicas: Set[TopicPartition]): Unit = logCreationOrDeletionLock synchronized {
+    def deleteStrayLogs(partitionsWithOpenLog: Set[TopicPartition],
+                             allReplicas: Set[TopicPartition],
+                             isFuture: Boolean): Unit = {
+      partitionsWithOpenLog.filterNot { topicPartition =>
+        allReplicas.contains(topicPartition)
+      }.foreach { toDelete =>
+        asyncDelete(toDelete, isFuture)
+      }
+    }
+
+    deleteStrayLogs(currentLogs.keys, allReplicas, isFuture = false)
+    deleteStrayLogs(futureLogs.keys, allReplicas, isFuture = true)
+  }
+
   /**
    * Provides the full ordered list of suggested directories for the next partition.
    * Currently this is done by calculating the number of partitions in each directory and then sorting the

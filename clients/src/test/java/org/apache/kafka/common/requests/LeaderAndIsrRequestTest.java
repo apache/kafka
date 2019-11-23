@@ -51,7 +51,7 @@ public class LeaderAndIsrRequestTest {
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
                 (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
-                Collections.emptyList(), Collections.emptySet());
+                Collections.emptyList(), Collections.emptySet(), false);
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -59,7 +59,7 @@ public class LeaderAndIsrRequestTest {
     public void testGetErrorResponse() {
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
             LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
-                    Collections.emptyList(), Collections.emptySet());
+                    Collections.emptyList(), Collections.emptySet(), false);
             LeaderAndIsrRequest request = builder.build();
             LeaderAndIsrResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -117,7 +117,7 @@ public class LeaderAndIsrRequestTest {
                 new Node(1, "host1", 9091)
             );
             LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
-                liveNodes).build();
+                liveNodes, false).build();
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
                 .setBrokerId(n.id())
@@ -159,7 +159,7 @@ public class LeaderAndIsrRequestTest {
                 .setPartitionIndex(tp.partition()));
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
-            partitionStates, Collections.emptySet());
+            partitionStates, Collections.emptySet(), false);
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);

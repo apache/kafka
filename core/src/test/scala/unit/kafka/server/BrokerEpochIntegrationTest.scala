@@ -148,7 +148,8 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, nodes.toSet.asJava)
+          partitionStates.asJava, nodes.toSet.asJava,
+          false)
 
         if (isEpochInRequestStale) {
           sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)

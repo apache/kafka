@@ -566,4 +566,13 @@ class LogManagerTest {
     logManager.topicConfigUpdated("test-topic")
     assertTrue(logManager.partitionsInitializing.isEmpty)
   }
+
+  @Test
+  def testDeleteStrayLogs(): Unit = {
+    val validLogs = for (i <- 0 to 5) yield logManager.getOrCreateLog(new TopicPartition(name, i), logConfig)
+    for (i <- 6 to 10) yield logManager.getOrCreateLog(new TopicPartition(name, i), logConfig)
+
+    logManager.deleteStrayLogs(validLogs.map(_.topicPartition).toSet)
+    assertEquals(validLogs.toSet, logManager.allLogs.toSet)
+  }
 }

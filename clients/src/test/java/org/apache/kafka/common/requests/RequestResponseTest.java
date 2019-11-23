@@ -1317,7 +1317,7 @@ public class RequestResponseTest {
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders).build();
+        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders, false).build();
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {

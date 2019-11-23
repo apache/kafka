@@ -469,7 +469,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setZkVersion(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
-      Set(new Node(brokerId, "localhost", 0)).asJava).build()
+      Set(new Node(brokerId, "localhost", 0)).asJava,
+      false).build()
   }
 
   private def stopReplicaRequest = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava).build()
