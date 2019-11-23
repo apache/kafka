@@ -27,21 +27,6 @@ wrapper {
     distributionType = Wrapper.DistributionType.ALL
 }
 
-def licenseString = """#
-# Copyright 2017 the original author or authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License."""
-
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
 // This allows us to avoid checking in the jar to our repository.
 // Additionally adds a license header to the wrapper while editing the file contents.
@@ -78,7 +63,6 @@ task bootstrapWrapper() {
         def wrapperScript = wrapper.scriptFile
         def wrapperLines = wrapperScript.readLines()
         wrapperScript.withPrintWriter { out ->
-            def licenseWritten = false
             def bootstrapWritten = false
             wrapperLines.each { line ->
                 // Print the wrapper bootstrap before the first usage of the wrapper jar.
@@ -87,35 +71,12 @@ task bootstrapWrapper() {
                     bootstrapWritten = true
                 }
                 out.print(line)
-                // Print the licence after the shebang.
-                if(!licenseWritten && line.contains("#!/usr/bin/env sh")) {
-                    out.println()
-                    out.print(licenseString)
-                    licenseWritten = true
-                }
-                out.println() // New Line
+                out.println()
             }
         }
     }
 }
 wrapper.finalizedBy bootstrapWrapper
-
-// Custom task to add a license header to the gradle-wrapper.properties file.
-task bootstrapWrapperProperties() {
-    // In the doLast block so this runs when the task is called and not during project configuration.
-    doLast {
-        def wrapperProperties = wrapper.propertiesFile
-        def wrapperLines = wrapperProperties.readLines()
-        wrapperProperties.withPrintWriter { out ->
-            // Print the license
-            out.println(licenseString)
-            wrapperLines.each { line ->
-                out.println(line)
-            }
-        }
-    }
-}
-wrapper.finalizedBy bootstrapWrapperProperties
 
 // Remove the generated batch file since we don't test building in the Windows environment.
 task removeWindowsScript(type: Delete) {
