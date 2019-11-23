@@ -153,3 +153,11 @@ chmod a+rwx /mnt
 ntpdate -u pool.ntp.org
 # Install ntp daemon - it will automatically start on boot
 apt-get -y install ntp
+
+# Increase the ulimit
+mkdir -p /etc/security/limits.d
+echo "* soft nofile 128000" >> /etc/security/limits.d/nofile.conf
+echo "* hard nofile 128000" >> /etc/security/limits.d/nofile.conf
+
+ulimit -Hn 128000
+ulimit -Sn 128000
