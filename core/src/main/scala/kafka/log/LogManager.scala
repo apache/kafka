@@ -935,8 +935,8 @@ class LogManager(logDirs: Seq[File],
 
   def deleteStrayLogs(allReplicas: Set[TopicPartition]): Unit = logCreationOrDeletionLock synchronized {
     def deleteStrayLogs(partitionsWithOpenLog: Set[TopicPartition],
-                             allReplicas: Set[TopicPartition],
-                             isFuture: Boolean): Unit = {
+                        allReplicas: Set[TopicPartition],
+                        isFuture: Boolean): Unit = {
       partitionsWithOpenLog.filterNot { topicPartition =>
         allReplicas.contains(topicPartition)
       }.foreach { toDelete =>
