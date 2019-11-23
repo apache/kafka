@@ -62,16 +62,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private val aclAuthorizer = new AclAuthorizer
   private val aclAuthorizer2 = new AclAuthorizer
-  private val aclAuthorizer3 = new AclAuthorizer
   private var resource: ResourcePattern = _
   private val superUsers = "User:superuser1; User:superuser2"
   private val username = "alice"
   private val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
   private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   private var config: KafkaConfig = _
-  private var config2: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
-  private val notLoadCache = "false"
 
   class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
     override def equals(o: scala.Any): Boolean = false
@@ -87,16 +84,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
-    config = KafkaConfig.fromProps(props)
 
-    val props2 = TestUtils.createBrokerConfig(0, zkConnect)
-    props2.put(AclAuthorizer.SuperUsersProp, superUsers)
-    props2.put(AclAuthorizer.LoadAclCacheSwitchProp, notLoadCache)
-    config2 = KafkaConfig.fromProps(props2)
+    config = KafkaConfig.fromProps(props)
     aclAuthorizer.configure(config.originals)
     aclAuthorizer2.configure(config.originals)
-    aclAuthorizer3.configure(config2.originals)
-
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
