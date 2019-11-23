@@ -72,7 +72,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     def connectAndVerify(): Unit = {
       val socket = connect()
       try {
-        sendAndReceive(produceRequest, socket)
+        sendAndReceive[ProduceResponse](produceRequest, socket)
       } finally {
         socket.close()
       }
@@ -100,7 +100,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       val socket = connect("PLAINTEXT")
       socket.setSoTimeout(1000)
       try {
-        sendAndReceive(produceRequest, socket)
+        sendAndReceive[ProduceResponse](produceRequest, socket)
       } finally {
         socket.close()
       }
@@ -155,7 +155,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     plaintextConns ++= (0 until 2).map(_ => connect("PLAINTEXT"))
     TestUtils.waitUntilTrue(() => connectionCount <= 10, "Internal connections not closed")
     plaintextConns.foreach(verifyConnection)
-    intercept[IOException](internalConns.foreach { socket => sendAndReceive(produceRequest, socket) })
+    intercept[IOException](internalConns.foreach { socket =>
+      sendAndReceive[ProduceResponse](produceRequest, socket)
+    })
     plaintextConns.foreach(_.close())
     internalConns.foreach(_.close())
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connections not closed")

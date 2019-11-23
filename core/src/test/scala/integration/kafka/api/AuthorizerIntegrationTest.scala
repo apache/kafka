@@ -20,7 +20,6 @@ import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
-import kafka.network.SocketServer
 import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthResourceType}
 import kafka.security.authorizer.AuthorizerUtils.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
@@ -40,8 +39,8 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreateTopicsRequestData, DeleteGroupsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreateTopicsRequestData, DeleteGroupsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -1186,13 +1185,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
     val offsetFetchRequest = requests.OffsetFetchRequest.Builder.allTopicPartitions(group).build()
-    var offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest, anySocketServer)
+    var offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DESCRIBE, ALLOW)), topicResource)
-    offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest, anySocketServer)
+    offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.containsKey(tp))
     assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
@@ -1694,7 +1693,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 isAuthorized: Boolean,
                                                 topicExists: Boolean = true): AbstractResponse = {
     val apiKey = request.api
-    val response = connectAndReceive(request)
+    val response = connectAndReceive[AbstractResponse](request)
     val error = requestKeyToError(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
@@ -1763,9 +1762,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest,
-                                     socketServer: SocketServer): requests.OffsetFetchResponse = {
-    connectAndReceive[OffsetFetchResponse](request, socketServer)
+  private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest): requests.OffsetFetchResponse = {
+    connectAndReceive[OffsetFetchResponse](request)
   }
 
   private def buildTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {

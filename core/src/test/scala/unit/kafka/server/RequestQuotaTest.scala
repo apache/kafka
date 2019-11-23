@@ -517,7 +517,7 @@ class RequestQuotaTest extends BaseRequestTest {
         while (!done && System.currentTimeMillis < startMs + 10000) {
           correlationId += 1
           val request = requestBuilder(apiKey).build()
-          val response = sendAndReceive(request, socket, clientId, Some(correlationId))
+          val response = sendAndReceive[AbstractResponse](request, socket, clientId, Some(correlationId))
           done = until.apply(response)
         }
       } finally {

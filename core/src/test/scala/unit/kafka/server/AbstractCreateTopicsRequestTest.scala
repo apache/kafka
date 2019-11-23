@@ -192,13 +192,11 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   protected def sendCreateTopicRequest(request: CreateTopicsRequest,
                                        socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = connectAndReceive(request, socketServer)
-    response.asInstanceOf[CreateTopicsResponse]
+    connectAndReceive[CreateTopicsResponse](request, socketServer)
   }
 
-  protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val response = connectAndReceive(request, destination)
-    response.asInstanceOf[MetadataResponse]
+  protected def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
+    connectAndReceive[MetadataResponse](request)
   }
 
 }

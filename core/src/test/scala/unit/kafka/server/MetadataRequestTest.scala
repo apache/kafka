@@ -25,7 +25,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.Assert._

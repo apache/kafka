@@ -28,7 +28,6 @@ import kafka.utils.NotNothing
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
-import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.collection.Seq
 import scala.reflect.ClassTag
@@ -49,33 +48,34 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }
   }
 
-  def anySocketServer = {
+  def anySocketServer: SocketServer = {
     servers.find { server =>
       val state = server.brokerState.currentState
       state != NotRunning.state && state != BrokerShuttingDown.state
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No live broker is available"))
   }
 
-  def controllerSocketServer = {
+  def controllerSocketServer: SocketServer = {
     servers.find { server =>
       server.kafkaController.isActive
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No controller broker is available"))
   }
 
-  def notControllerSocketServer = {
+  def notControllerSocketServer: SocketServer = {
     servers.find { server =>
       !server.kafkaController.isActive
     }.map(_.socketServer).getOrElse(throw new IllegalStateException("No non-controller broker is available"))
   }
 
-  def brokerSocketServer(brokerId: Int) = {
+  def brokerSocketServer(brokerId: Int): SocketServer = {
     servers.find { server =>
       server.config.brokerId == brokerId
     }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
   }
 
-  def connect(s: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
+  def connect(socketServer: SocketServer = anySocketServer,
+              listenerName: ListenerName = listenerName): Socket = {
+    new Socket("localhost", socketServer.boundPort(listenerName))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
@@ -86,7 +86,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   }
 
   def receive[T <: AbstractResponse](socket: Socket, apiKey: ApiKeys, version: Short)
-                                    (implicit classTag: ClassTag[T]): T = {
+                                    (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
 
@@ -108,16 +108,16 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
                                             socket: Socket,
                                             clientId: String = "client-id",
                                             correlationId: Option[Int] = None)
-                                           (implicit classTag: ClassTag[T]): T = {
+                                           (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
     send(request, socket, clientId, correlationId)
     receive[T](socket, request.api, request.version)
   }
 
   def connectAndReceive[T <: AbstractResponse](request: AbstractRequest,
                                                destination: SocketServer = anySocketServer,
-                                               protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT)
-                                              (implicit classTag: ClassTag[T]): T = {
-    val socket = connect(destination, protocol)
+                                               listenerName: ListenerName = listenerName)
+                                              (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+    val socket = connect(destination, listenerName)
     try sendAndReceive[T](request, socket)
     finally socket.close()
   }

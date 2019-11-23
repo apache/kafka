@@ -23,7 +23,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = connect(anySocketServer, securityProtocol)
+    val socket = connect(anySocketServer)
     try {
       sendWithHeader(request, overrideHeader, socket)
       receive[ApiVersionsResponse](socket, ApiKeys.API_VERSIONS, 0.toShort)

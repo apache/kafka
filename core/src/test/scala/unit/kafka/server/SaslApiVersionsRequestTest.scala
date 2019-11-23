@@ -50,7 +50,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
 
   @Test
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-    val plaintextSocket = connect(protocol = securityProtocol)
+    val plaintextSocket = connect()
     try {
       val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
@@ -62,7 +62,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
 
   @Test
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-    val plaintextSocket = connect(protocol = securityProtocol)
+    val plaintextSocket = connect()
     try {
       sendSaslHandshakeRequestValidateResponse(plaintextSocket)
       val response = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
@@ -74,7 +74,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
 
   @Test
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-    val plaintextSocket = connect(protocol = securityProtocol)
+    val plaintextSocket = connect()
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)
