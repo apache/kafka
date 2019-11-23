@@ -843,6 +843,21 @@ public final class MessageDataGenerator {
         }
     }
 
+    private void maybeGenerateNonIgnorableFieldCheck(FieldSpec field, VersionConditional cond) {
+        if (!field.ignorable()) {
+            cond.ifNotMember(__ -> {
+                generateNonDefaultValueCheck(field, field.nullableVersions());
+                buffer.incrementIndent();
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(" +
+                                "\"Attempted to write a non-default %s at version \" + _version);%n",
+                        field.camelCaseName());
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            });
+        }
+    }
+
     private void generateClassWriter(String className, StructSpec struct,
             Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.WRITABLE_CLASS);
@@ -908,18 +923,8 @@ public final class MessageDataGenerator {
                         }).
                         generate(buffer);
                 });
-            if (!field.ignorable()) {
-                cond.ifNotMember(__ -> {
-                    generateNonDefaultValueCheck(field, field.nullableVersions());
-                    buffer.incrementIndent();
-                    headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-                    buffer.printf("throw new UnsupportedVersionException(" +
-                            "\"Attempted to write a non-default %s at version \" + _version);%n",
-                        field.camelCaseName());
-                    buffer.decrementIndent();
-                    buffer.printf("}%n");
-                });
-            }
+
+            maybeGenerateNonIgnorableFieldCheck(field, cond);
             cond.generate(buffer);
         }
         headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_WRITER_CLASS);
@@ -1216,7 +1221,7 @@ public final class MessageDataGenerator {
             generate(buffer);
         buffer.printf("Struct struct = new Struct(SCHEMAS[_version]);%n");
         for (FieldSpec field : struct.fields()) {
-            VersionConditional.forVersions(field.versions(), curVersions).
+            VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
                 alwaysEmitBlockScope(field.type().isArray()).
                 ifMember(presentVersions -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
@@ -1231,8 +1236,10 @@ public final class MessageDataGenerator {
                             buffer.printf("}%n");
                         }).
                         generate(buffer);
-                }).
-                generate(buffer);
+                });
+
+            maybeGenerateNonIgnorableFieldCheck(field, cond);
+            cond.generate(buffer);
         }
         VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifMember(__ -> {
