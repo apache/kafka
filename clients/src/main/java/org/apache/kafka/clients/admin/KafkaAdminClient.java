@@ -81,6 +81,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -1764,6 +1765,7 @@ public class KafkaAdminClient extends AdminClient {
                 Iterator<CreateAclsResponseData.CreatableAclResult> iter = responses.iterator();
                 for (AclBinding binding : acls) {
                     KafkaFutureImpl<Void> future = futures.get(binding);
+                    //FIXME What about duplicates?
                     if (future.isCompletedExceptionally())
                         continue;
                     if (!iter.hasNext()) {
@@ -1794,19 +1796,20 @@ public class KafkaAdminClient extends AdminClient {
     public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         final long now = time.milliseconds();
         final Map<AclBindingFilter, KafkaFutureImpl<FilterResults>> futures = new HashMap<>();
-        final List<AclBindingFilter> filterList = new ArrayList<>();
+        final List<DeleteAclsRequestData.DeleteAclsFilter> filterList = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             if (futures.get(filter) == null) {
-                filterList.add(filter);
+                filterList.add(DeleteAclsRequest.toDeleteFilter(filter));
                 futures.put(filter, new KafkaFutureImpl<>());
             }
         }
+        final DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(filterList);
         runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
             DeleteAclsRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteAclsRequest.Builder(filterList);
+                return new DeleteAclsRequest.Builder(data);
             }
 
             @Override
@@ -1814,7 +1817,8 @@ public class KafkaAdminClient extends AdminClient {
                 DeleteAclsResponse response = (DeleteAclsResponse) abstractResponse;
                 List<AclFilterResponse> responses = response.responses();
                 Iterator<AclFilterResponse> iter = responses.iterator();
-                for (AclBindingFilter filter : filterList) {
+                //FIXME What about duplicates?
+                for (AclBindingFilter filter : filters) {
                     KafkaFutureImpl<FilterResults> future = futures.get(filter);
                     if (!iter.hasNext()) {
                         future.completeExceptionally(new UnknownServerException(

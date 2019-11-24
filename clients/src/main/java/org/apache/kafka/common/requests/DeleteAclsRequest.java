@@ -41,11 +41,6 @@ public class DeleteAclsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteAclsRequest> {
         private final DeleteAclsRequestData data;
 
-        public Builder(List<AclBindingFilter> filters) {
-            this(new DeleteAclsRequestData()
-                .setFilters(filters.stream().map(DeleteAclsRequest::toDeleteFilter).collect(Collectors.toList())));
-        }
-
         public Builder(DeleteAclsRequestData data) {
             super(DELETE_ACLS);
             this.data = data;
@@ -120,7 +115,8 @@ public class DeleteAclsRequest extends AbstractRequest {
         }
     }
 
-    private static DeleteAclsRequestData.DeleteAclsFilter toDeleteFilter(AclBindingFilter filter) {
+    //FIXME Make naming consistent with Create...
+    public static DeleteAclsRequestData.DeleteAclsFilter toDeleteFilter(AclBindingFilter filter) {
         return new DeleteAclsRequestData.DeleteAclsFilter()
             .setResourceNameFilter(filter.patternFilter().name())
             .setResourceTypeFilter(filter.patternFilter().resourceType().code())
@@ -131,6 +127,7 @@ public class DeleteAclsRequest extends AbstractRequest {
             .setPrincipalFilter(filter.entryFilter().principal());
     }
 
+    //FIXME Make naming consistent with Create...
     private static AclBindingFilter toAclBindingFilter(DeleteAclsRequestData.DeleteAclsFilter filter) {
         ResourcePatternFilter patternFilter = new ResourcePatternFilter(
             ResourceType.fromCode(filter.resourceTypeFilter()),

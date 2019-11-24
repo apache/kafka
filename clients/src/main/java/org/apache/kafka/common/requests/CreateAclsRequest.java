@@ -104,8 +104,7 @@ public class CreateAclsRequest extends AbstractRequest {
             throw new IllegalArgumentException("You can not create ACL bindings with unknown elements");
     }
 
-    // Visible for testing
-    static AclBinding aclBinding(CreateAclsRequestData.CreatableAcl acl) {
+    public static AclBinding aclBinding(CreateAclsRequestData.CreatableAcl acl) {
         ResourcePattern pattern = new ResourcePattern(
             ResourceType.fromCode(acl.resourceType()),
             acl.resourceName(),
