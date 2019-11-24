@@ -1705,7 +1705,7 @@ public class KafkaAdminClient extends AdminClient {
                 if (response.error().isFailure()) {
                     future.completeExceptionally(response.error().exception());
                 } else {
-                    future.complete(response.acls());
+                    future.complete(DescribeAclsResponse.aclBindings(response.acls()));
                 }
             }
 

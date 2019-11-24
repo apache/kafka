@@ -30,7 +30,6 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 
 
 public class DescribeAclsRequest extends AbstractRequest {
@@ -54,28 +53,12 @@ public class DescribeAclsRequest extends AbstractRequest {
 
         @Override
         public DescribeAclsRequest build(short version) {
-            validate(version);
             return new DescribeAclsRequest(data, version);
         }
 
         @Override
         public String toString() {
             return data.toString();
-        }
-
-        private void validate(short version) {
-            if (version == 0
-                && data.resourcePatternType() != PatternType.LITERAL.code()
-                && data.resourcePatternType() != PatternType.ANY.code()) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-            }
-
-            if (data.resourcePatternType() == PatternType.UNKNOWN.code()
-                || data.resourceType() == ResourceType.UNKNOWN.code()
-                || data.permissionType() == AclPermissionType.UNKNOWN.code()
-                || data.operation() == AclOperation.UNKNOWN.code()) {
-                throw new IllegalArgumentException("Filter contain UNKNOWN elements");
-            }
         }
     }
 
@@ -84,6 +67,7 @@ public class DescribeAclsRequest extends AbstractRequest {
     public DescribeAclsRequest(DescribeAclsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_ACLS, version);
         this.data = data;
+        validate(version);
     }
 
     public DescribeAclsRequest(Struct struct, short version) {
@@ -106,8 +90,7 @@ public class DescribeAclsRequest extends AbstractRequest {
         DescribeAclsResponseData response = new DescribeAclsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(error.error().code())
-            .setErrorMessage(error.message())
-            .setResources(Collections.emptyList());
+            .setErrorMessage(error.message());
         return new DescribeAclsResponse(response);
     }
 
@@ -126,6 +109,21 @@ public class DescribeAclsRequest extends AbstractRequest {
                 AclOperation.fromCode(data.operation()),
                 AclPermissionType.fromCode(data.permissionType()));
         return new AclBindingFilter(rpf, acef);
+    }
+
+    private void validate(short version) {
+        if (version == 0
+            && data.resourcePatternType() != PatternType.LITERAL.code()
+            && data.resourcePatternType() != PatternType.ANY.code()) {
+            throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+        }
+
+        if (data.resourcePatternType() == PatternType.UNKNOWN.code()
+            || data.resourceType() == ResourceType.UNKNOWN.code()
+            || data.permissionType() == AclPermissionType.UNKNOWN.code()
+            || data.operation() == AclOperation.UNKNOWN.code()) {
+            throw new IllegalArgumentException("Filter contain UNKNOWN elements");
+        }
     }
 
 }

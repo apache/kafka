@@ -22,6 +22,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -82,8 +83,8 @@ public class DescribeAclsResponseTest {
     }
 
     private static void assertResponseEquals(final DescribeAclsResponse original, final DescribeAclsResponse actual) {
-        final Set<AclBinding> originalBindings = new HashSet<>(original.acls());
-        final Set<AclBinding> actualBindings = new HashSet<>(actual.acls());
+        final Set<DescribeAclsResource> originalBindings = new HashSet<>(original.acls());
+        final Set<DescribeAclsResource> actualBindings = new HashSet<>(actual.acls());
 
         assertEquals(originalBindings, actualBindings);
     }

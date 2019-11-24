@@ -72,23 +72,8 @@ public class DescribeAclsResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public Collection<AclBinding> acls() {
-        List<AclBinding> acls = new ArrayList<>();
-        for (DescribeAclsResource resource : data.resources()) {
-            for (AclDescription acl : resource.acls()) {
-                ResourcePattern pattern = new ResourcePattern(
-                        ResourceType.fromCode(resource.type()),
-                        resource.name(),
-                        PatternType.fromCode(resource.patternType()));
-                AccessControlEntry entry = new AccessControlEntry(
-                        acl.principal(),
-                        acl.host(),
-                        AclOperation.fromCode(acl.operation()),
-                        AclPermissionType.fromCode(acl.permissionType()));
-                acls.add(new AclBinding(pattern, entry));
-            }
-        }
-        return acls;
+    public List<DescribeAclsResource> acls() {
+        return data.resources();
     }
 
     public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
@@ -103,18 +88,43 @@ public class DescribeAclsResponse extends AbstractResponse {
     private void validate(short version) {
         if (version == 0) {
             final boolean unsupported = acls().stream()
-                .map(AclBinding::pattern)
-                .map(ResourcePattern::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+                .anyMatch(acl -> acl.patternType() != PatternType.LITERAL.code());
             if (unsupported) {
                 throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
             }
         }
 
-        final boolean unknown = acls().stream().anyMatch(AclBinding::isUnknown);
+        final boolean unknown = acls().stream()
+                .map(DescribeAclsResponse::aclBindings)
+                .anyMatch(bindings -> bindings.stream().anyMatch(AclBinding::isUnknown));
         if (unknown) {
             throw new IllegalArgumentException("Contain UNKNOWN elements");
         }
+    }
+
+    private static List<AclBinding> aclBindings(DescribeAclsResource resource) {
+        List<AclBinding> acls = new ArrayList<>();
+        for (AclDescription acl : resource.acls()) {
+            ResourcePattern pattern = new ResourcePattern(
+                    ResourceType.fromCode(resource.type()),
+                    resource.name(),
+                    PatternType.fromCode(resource.patternType()));
+            AccessControlEntry entry = new AccessControlEntry(
+                    acl.principal(),
+                    acl.host(),
+                    AclOperation.fromCode(acl.operation()),
+                    AclPermissionType.fromCode(acl.permissionType()));
+            acls.add(new AclBinding(pattern, entry));
+        }
+        return acls;
+    }
+
+    public static List<AclBinding> aclBindings(List<DescribeAclsResource> resources) {
+        List<AclBinding> acls = new ArrayList<>();
+        for (DescribeAclsResource resource : resources) {
+            acls.addAll(aclBindings(resource));
+        }
+        return acls;
     }
 
     public static DescribeAclsResponse prepareResponse(int throttleTimeMs, ApiError error, Collection<AclBinding> acls) {
