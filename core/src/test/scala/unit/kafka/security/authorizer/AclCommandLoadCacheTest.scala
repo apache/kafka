@@ -32,6 +32,7 @@ class AclCommandLoadCacheTest extends ZooKeeperTestHarness {
   private val topic = "test.topic1"
   private val notLoadCache = "false"
 
+  /** every pull request run all test case,it may run some diff erro,we can improve this,I think*/
   @Test
   def notLoadCacheTest(): Unit = {
     AclCommand.main(Array[String]("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--force", "--add", "--allow-principal", testUsers1, "--operation", "read", "--topic", topic, "--load-acl-cache", notLoadCache))
