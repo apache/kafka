@@ -30,7 +30,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.resource.PatternType._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
@@ -41,7 +41,7 @@ import org.junit.{Assert, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-object SslAdminClientIntegrationTest {
+object SslAdminIntegrationTest {
   @volatile var semaphore: Option[Semaphore] = None
   @volatile var executor: Option[ExecutorService] = None
   @volatile var lastUpdateRequestContext: Option[AuthorizableRequestContext] = None
@@ -88,9 +88,11 @@ object SslAdminClientIntegrationTest {
   }
 }
 
-class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
+class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
+  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SslAdminClientIntegrationTest.TestableAclAuthorizer].getName)
+  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SslAdminIntegrationTest.TestableAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
@@ -116,17 +118,17 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
   }
 
   override def setUpSasl(): Unit = {
-    SslAdminClientIntegrationTest.semaphore = None
-    SslAdminClientIntegrationTest.executor = None
-    SslAdminClientIntegrationTest.lastUpdateRequestContext = None
+    SslAdminIntegrationTest.semaphore = None
+    SslAdminIntegrationTest.executor = None
+    SslAdminIntegrationTest.lastUpdateRequestContext = None
 
     startSasl(jaasSections(List.empty, None, ZkSasl))
   }
 
   override def tearDown(): Unit = {
     // Ensure semaphore doesn't block shutdown even if test has failed
-    val semaphore = SslAdminClientIntegrationTest.semaphore
-    SslAdminClientIntegrationTest.semaphore = None
+    val semaphore = SslAdminIntegrationTest.semaphore
+    SslAdminIntegrationTest.semaphore = None
     semaphore.foreach(s => s.release(s.getQueueLength))
 
     adminClients.foreach(_.close())
@@ -166,7 +168,7 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
 
   @Test
   def testAclUpdatesUsingAsynchronousAuthorizer(): Unit = {
-    SslAdminClientIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
+    SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     verifyAclUpdates()
   }
 
@@ -177,7 +179,7 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
   @Test
   def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(): Unit = {
     val testSemaphore = new Semaphore(0)
-    SslAdminClientIntegrationTest.semaphore = Some(testSemaphore)
+    SslAdminIntegrationTest.semaphore = Some(testSemaphore)
     waitForNoBlockedRequestThreads()
 
     // Queue requests until all threads are blocked. ACL create requests are sent to least loaded
@@ -207,9 +209,9 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
    */
   @Test
   def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(): Unit = {
-    SslAdminClientIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
+    SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     val testSemaphore = new Semaphore(0)
-    SslAdminClientIntegrationTest.semaphore = Some(testSemaphore)
+    SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
     waitForNoBlockedRequestThreads()
 
@@ -228,6 +230,9 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
   }
 
   private def verifyAclUpdates(): Unit = {
+    val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
+
     def validateRequestContext(context: AuthorizableRequestContext, apiKey: ApiKeys): Unit = {
       assertEquals(SecurityProtocol.SSL, context.securityProtocol)
       assertEquals("SSL", context.listenerName)
@@ -240,7 +245,7 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     }
 
     val testSemaphore = new Semaphore(0)
-    SslAdminClientIntegrationTest.semaphore = Some(testSemaphore)
+    SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
     client = AdminClient.create(createConfig())
     val results = client.createAcls(List(acl2, acl3).asJava).values
@@ -249,19 +254,19 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
     testSemaphore.release()
     results.values().asScala.foreach(_.get)
-    validateRequestContext(SslAdminClientIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
+    validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
 
     testSemaphore.acquire()
-    val results2 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
-    assertEquals(Set(ACL1.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
+    val results2 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
+    assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
     assertFalse(results2.values().asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
     testSemaphore.release()
     results.values().asScala.foreach(_.get)
-    assertEquals(0, results2.get(ACL1.toFilter).get.values.size())
+    assertEquals(0, results2.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results2.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl3), results2.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
-    validateRequestContext(SslAdminClientIntegrationTest.lastUpdateRequestContext.get, ApiKeys.DELETE_ACLS)
+    validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.DELETE_ACLS)
   }
 
   private def createAdminClient: AdminClient = {

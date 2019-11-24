@@ -14,24 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer.internals;
+package org.apache.kafka.common.utils;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
+import org.apache.kafka.common.record.RecordBatch;
 
-class ProducerIdAndEpoch {
-    static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+public class ProducerIdAndEpoch {
+    public static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH);
 
     public final long producerId;
     public final short epoch;
 
-    ProducerIdAndEpoch(long producerId, short epoch) {
+    public ProducerIdAndEpoch(long producerId, short epoch) {
         this.producerId = producerId;
         this.epoch = epoch;
     }
 
     public boolean isValid() {
-        return NO_PRODUCER_ID < producerId;
+        return RecordBatch.NO_PRODUCER_ID < producerId;
     }
 
     @Override

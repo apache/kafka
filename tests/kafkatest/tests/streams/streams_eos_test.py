@@ -58,9 +58,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
-        processor1.clean_node_enabled = False
-
         self.add_streams(processor1)
+        processor1.clean_node_enabled = False
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
         self.stop_streams3(processor2, processor3, processor1)
@@ -68,6 +67,7 @@ class StreamsEosTest(KafkaTest):
         self.stop_streams3(processor1, processor3, processor2)
         self.stop_streams2(processor1, processor3)
         self.stop_streams(processor1)
+        processor1.clean_node_enabled = True
 
         self.driver.stop()
 
@@ -98,9 +98,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
-        processor1.clean_node_enabled = False
-
         self.add_streams(processor1)
+        processor1.clean_node_enabled = False
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
         self.abort_streams(processor2, processor3, processor1)
@@ -110,6 +109,7 @@ class StreamsEosTest(KafkaTest):
         self.abort_streams(processor1, processor3, processor2)
         self.stop_streams2(processor1, processor3)
         self.stop_streams(processor1)
+        processor1.clean_node_enabled = True
 
         self.driver.stop()
 

@@ -188,7 +188,8 @@ public interface ConsumerRebalanceListener {
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now have been reassigned
-     *                   to other consumers (may not include all currently assigned partitions, i.e. there may still
+     *                   to other consumers. With the current protocol this will always include all of the consumer's
+     *                   previously assigned partitions, but this may change in future protocols (ie there would still
      *                   be some partitions left)
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}

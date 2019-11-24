@@ -196,7 +196,7 @@ class LogManager(logDirs: Seq[File],
 
   // dir should be an absolute path
   def handleLogDirFailure(dir: String): Unit = {
-    info(s"Stopping serving logs in dir $dir")
+    warn(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
       if (_liveLogDirs.isEmpty) {
@@ -231,7 +231,7 @@ class LogManager(logDirs: Seq[File],
         }
       }}
 
-      info(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
+      warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
       dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
     }

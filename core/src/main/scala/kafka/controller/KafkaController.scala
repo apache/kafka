@@ -35,7 +35,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, ApiError, LeaderAndIsrResponse}
+import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -1224,12 +1224,21 @@ class KafkaController(val config: KafkaConfig,
     replicatedPartitionsBrokerLeads().toSet
   }
 
-  private def processLeaderAndIsrResponseReceived(leaderAndIsrResponseObj: AbstractResponse, brokerId: Int): Unit = {
+  private def processUpdateMetadataResponseReceived(updateMetadataResponse: UpdateMetadataResponse, brokerId: Int): Unit = {
     if (!isActive) return
-    val leaderAndIsrResponse = leaderAndIsrResponseObj.asInstanceOf[LeaderAndIsrResponse]
+
+    if (updateMetadataResponse.error != Errors.NONE) {
+      stateChangeLogger.error(s"Received error ${updateMetadataResponse.error} in UpdateMetadata " +
+        s"response $updateMetadataResponse from broker $brokerId")
+    }
+  }
+
+  private def processLeaderAndIsrResponseReceived(leaderAndIsrResponse: LeaderAndIsrResponse, brokerId: Int): Unit = {
+    if (!isActive) return
 
     if (leaderAndIsrResponse.error != Errors.NONE) {
-      stateChangeLogger.error(s"Received error in LeaderAndIsr response $leaderAndIsrResponse from broker $brokerId")
+      stateChangeLogger.error(s"Received error ${leaderAndIsrResponse.error} in LeaderAndIsr " +
+        s"response $leaderAndIsrResponse from broker $brokerId")
       return
     }
 
@@ -1868,6 +1877,8 @@ class KafkaController(val config: KafkaConfig,
           processControlledShutdown(id, brokerEpoch, callback)
         case LeaderAndIsrResponseReceived(response, brokerId) =>
           processLeaderAndIsrResponseReceived(response, brokerId)
+        case UpdateMetadataResponseReceived(response, brokerId) =>
+          processUpdateMetadataResponseReceived(response, brokerId)
         case TopicDeletionStopReplicaResponseReceived(replicaId, requestError, partitionErrors) =>
           processTopicDeletionStopReplicaResponseReceived(replicaId, requestError, partitionErrors)
         case BrokerChange =>
@@ -2079,8 +2090,12 @@ case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCall
   def state = ControllerState.ControlledShutdown
 }
 
-case class LeaderAndIsrResponseReceived(LeaderAndIsrResponseObj: AbstractResponse, brokerId: Int) extends ControllerEvent {
+case class LeaderAndIsrResponseReceived(leaderAndIsrResponse: LeaderAndIsrResponse, brokerId: Int) extends ControllerEvent {
   def state = ControllerState.LeaderAndIsrResponseReceived
+}
+
+case class UpdateMetadataResponseReceived(updateMetadataResponse: UpdateMetadataResponse, brokerId: Int) extends ControllerEvent {
+  def state = ControllerState.UpdateMetadataResponseReceived
 }
 
 case class TopicDeletionStopReplicaResponseReceived(replicaId: Int,

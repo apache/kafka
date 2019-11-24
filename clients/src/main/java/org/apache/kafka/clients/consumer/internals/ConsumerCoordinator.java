@@ -753,14 +753,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
-            final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+            if (offsetAndMetadata != null) {
+                final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+                final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
                     leaderAndEpoch);
 
-            log.info("Setting offset for partition {} to the committed offset {}", tp, position);
-            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-            this.subscriptions.seekUnvalidated(tp, position);
+                log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
+                this.subscriptions.seekUnvalidated(tp, position);
+            }
         }
         return true;
     }
@@ -1232,10 +1234,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return;
                     }
                 } else if (data.offset >= 0) {
-                    // record the position with the offset (-1 indicates no committed offset to fetch)
+                    // record the position with the offset (-1 indicates no committed offset to fetch);
+                    // if there's no committed offset, record as null
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
                     log.info("Found no committed offset for partition {}", tp);
+                    offsets.put(tp, null);
                 }
             }
 

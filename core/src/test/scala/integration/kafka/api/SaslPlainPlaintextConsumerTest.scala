@@ -49,11 +49,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
     closeSasl()
   }
 
-  override def modifyConfigs(props: Seq[Properties]): Unit = {
-    super.modifyConfigs(props)
-    configureListeners(props)
-  }
-
   /**
    * Checks that everyone can access ZkData.SecureZkRootPaths and ZkData.SensitiveZkRootPaths
    * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.

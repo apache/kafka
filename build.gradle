@@ -136,13 +136,22 @@ if (file('.git').exists()) {
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
-        'streams/streams-scala/logs/*'
+        'streams/streams-scala/logs/*',
+        '**/generated/**'
     ])
   }
 }
 
 
 subprojects {
+
+  // enable running :dependencies task recursively on all subprojects
+  // eg: ./gradlew allDeps
+  task allDeps(type: DependencyReportTask) {}
+  // enable running :dependencyInsight task recursively on all subprojects
+  // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+
   apply plugin: 'java'
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {

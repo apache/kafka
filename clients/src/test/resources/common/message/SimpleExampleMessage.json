@@ -20,22 +20,20 @@
   "fields": [
     { "name": "processId", "versions": "1+", "type": "uuid" },
     { "name": "myTaggedIntArray", "type": "[]int32",
-        "versions": "1+", "taggedVersions": "1+", "tag": 0 },
-
-    {
-      "name": "zeroCopyByteBuffer",
-      "type": "bytes",
-      "zeroCopy": true,
-      "versions": "1",
-      "about": "Byte buffer field."
-    },
-    {
-      "name": "nullableZeroCopyByteBuffer",
-      "type": "bytes",
-      "zeroCopy": true,
-      "nullableVersions": "0+",
-      "versions": "1",
-      "about": "Nullable byte buffer field."
-    }
+        "taggedVersions": "1+", "tag": 0 },
+    { "name": "myNullableString", "type": "string", "default": "null",
+        "nullableVersions": "1+", "taggedVersions": "1+", "tag": 1 },
+    { "name": "myInt16", "type": "int16", "default": "123",
+        "taggedVersions": "1+", "tag": 2 },
+    { "name": "myString", "type": "string", "taggedVersions": "1+", "tag": 3 },
+    { "name": "myBytes", "type": "bytes",
+        "nullableVersions": "1+", "taggedVersions": "1+", "tag": 4 },
+    { "name": "taggedUuid", "type": "uuid", "default": "212d5494-4a8b-4fdf-94b3-88b470beb367",
+        "taggedVersions": "1+", "tag":  5},
+    { "name": "taggedLong", "type": "int64", "default": "0xcafcacafcacafca",
+        "taggedVersions": "1+", "tag":  6},
+    { "name": "zeroCopyByteBuffer", "versions": "1", "type": "bytes", "zeroCopy": true },
+    { "name": "nullableZeroCopyByteBuffer", "versions": "1", "nullableVersions": "0+",
+      "type": "bytes", "zeroCopy": true }
   ]
 }
