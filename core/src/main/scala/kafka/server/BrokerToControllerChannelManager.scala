@@ -3,10 +3,10 @@ package kafka.server
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import java.util.Collections
 
-import kafka.cluster.Broker
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{KafkaFuture, Node}
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
@@ -18,6 +18,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.JaasContext
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 class BrokerToControllerChannelManager(metadataCache: MetadataCache,
                                        time: Time,
@@ -28,7 +29,11 @@ class BrokerToControllerChannelManager(metadataCache: MetadataCache,
   private val requestQueue = new LinkedBlockingQueue[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
-  private lazy val requestThread = newRequestThread
+  private val requestThread = newRequestThread
+
+  def start(): Unit = {
+    requestThread.start()
+  }
 
   def shutdown(): Unit = {
     requestThread.shutdown()
@@ -40,7 +45,7 @@ class BrokerToControllerChannelManager(metadataCache: MetadataCache,
     val completionFuture = new KafkaFutureImpl[Int]
     sendRequest(new MetadataRequest.Builder(
       new MetadataRequestData().setTopics(Collections.singletonList(topic))), response => {
-      val metadataResponse = response.asInstanceOf[MetadataResponse]
+      val metadataResponse = response.responseBody().asInstanceOf[MetadataResponse]
       val topicOpt = metadataResponse.topicMetadata().asScala.find(t => topicName.equals(t.topic))
       if (topicOpt.isEmpty) {
         completionFuture.completeExceptionally(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception)
@@ -105,18 +110,13 @@ class BrokerToControllerChannelManager(metadataCache: MetadataCache,
   }
 
   private[server] def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: AbstractResponse => Unit = null): Unit = {
-    // create and start the thread lazily
-    if (!requestThread.isAlive) {
-      info(s"Starting ${requestThread.name}")
-      requestThread.start()
-    }
+                  callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
   }
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                     callback: AbstractResponse => Unit)
+                     callback: RequestCompletionHandler)
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
@@ -125,71 +125,68 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       config: KafkaConfig,
                                       listenerName: ListenerName,
                                       time: Time,
-                                      threadName: String) extends ShutdownableThread(threadName) {
+                                      threadName: String)
+  extends InterBrokerSendThread(threadName, networkClient, time, isInterruptible = false, exitOnError = false) {
 
-  private val socketTimeoutMs = config.controllerSocketTimeoutMs
   private var activeController: Option[Node] = None
 
-  private[server] def maybeGetActiveController(): Option[Broker] = {
-    metadataCache.getControllerId.flatMap(b => metadataCache.getAliveBroker(b))
+  override def requestTimeoutMs: Int = config.controllerSocketTimeoutMs
+
+  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+    val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
+    while (requestQueue.peek() != null) {
+      val topRequest = requestQueue.take()
+      val request = RequestAndCompletionHandler(activeController.get, topRequest.request, handleResponse(topRequest))
+      requestsToSend.enqueue(request)
+    }
+    requestsToSend
+  }
+
+  private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
+    if (response.wasDisconnected()) {
+      activeController = None
+      requestQueue.put(request)
+    } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+      // just close the controller connection and wait for metadata cache update in doWork
+      networkClient.close(activeController.get.idString)
+      activeController = None
+      requestQueue.put(request)
+    } else {
+      request.callback.onComplete(response)
+    }
   }
 
   private[server] def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
   override def doWork(): Unit = {
-    // just peek the top, will take if the request was successful
-    if (requestQueue.peek() == null) {
-      backoff()
-    } else {
-      val BrokerToControllerQueueItem(request, callback) = requestQueue.peek()
-      try {
-        var clientResponse: ClientResponse = null
-        if (controllerReady()) {
-          trace(s"Sending request: $request")
-          val clientRequest = networkClient.newClientRequest(activeController.get.idString, request,
-            time.milliseconds(), true)
-          clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
-          if (!clientResponse.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
-            requestQueue.take()
-          } else { // TODO: test this case
-            networkClient.close(activeController.get.idString)
-            activeController = None
-          }
+    try {
+      if (activeController.isDefined) {
+        super.doWork()
+      } else {
+        info("Controller isn't cached, looking for local metadata changes")
+        val controllerOpt = metadataCache.getControllerId.flatMap(metadataCache.getAliveBroker)
+        if (controllerOpt.isDefined) {
+          if (activeController.isEmpty || activeController.exists(_.id != controllerOpt.get.id))
+            info(s"Recorded new controller, from now on will use broker ${controllerOpt.get.id}")
+          activeController = Option(controllerOpt.get.node(listenerName))
+          metadataUpdater.setNodes(metadataCache.getAliveBrokers.map(_.node(listenerName)).asJava)
         } else {
-          info("Controller isn't cached, looking for local metadata changes")
-          val controllerOpt = metadataCache.getControllerId.flatMap(metadataCache.getAliveBroker)
-          if (controllerOpt.isDefined) {
-            if (activeController.isEmpty || activeController.exists(_.id != controllerOpt.get.id))
-              info(s"Recorded new controller, from now on will use broker ${controllerOpt.get.id}")
-            else if (activeController.isDefined) // close the old controller connection
-              networkClient.close(activeController.get.idString)
-            activeController = Option(controllerOpt.get.node(listenerName))
-            metadataUpdater.setNodes(metadataCache.getAliveBrokers.map(_.node(listenerName)).asJava)
-          } else {
-            warn("No controller defined in metadata cache, retrying after backoff")
-            backoff()
-          }
+          // need to backoff to avoid tight loops
+          warn("No controller defined in metadata cache, retrying after backoff")
+          backoff()
         }
-        if (clientResponse != null) {
-          if (callback != null) {
-            callback(clientResponse.responseBody())
-          }
-        }
-      } catch {
-        case e: Throwable =>
-          activeController match {
-            case Some(controller) => {}
-              warn(s"Broker ${config.brokerId}'s connection to active controller $controller was unsuccessful", e)
-              networkClient.close(controller.idString)
-            case None =>
-              warn(s"No connection with controller", e)
-          }
       }
+    } catch {
+      case e: Exception =>
+        activeController match {
+          case Some(controller) => {}
+            warn(s"Broker ${config.brokerId}'s connection to active controller $controller was unsuccessful", e)
+            networkClient.close(controller.idString)
+            activeController = None
+          case None =>
+            warn(s"No active controller", e)
+            backoff()
+        }
     }
-
-  }
-
-  private[server] def controllerReady(): Boolean = {
-    activeController.isDefined && NetworkClientUtils.awaitReady(networkClient, activeController.get, time, socketTimeoutMs)
   }
 }

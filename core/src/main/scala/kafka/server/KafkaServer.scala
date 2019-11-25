@@ -295,6 +295,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
         controllerChannel = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
+        controllerChannel.start()
 
         /* start group coordinator */
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue

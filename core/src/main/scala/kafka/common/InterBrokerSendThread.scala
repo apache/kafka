@@ -16,11 +16,12 @@
  */
 package kafka.common
 
-import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
+import java.util.Collections
+import java.util
 import java.util.Map.Entry
 
 import kafka.utils.ShutdownableThread
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
+import org.apache.kafka.clients._
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.FatalExitError
@@ -33,16 +34,17 @@ import scala.jdk.CollectionConverters._
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
 abstract class InterBrokerSendThread(name: String,
-                                     networkClient: NetworkClient,
+                                     networkClient: KafkaClient,
                                      time: Time,
-                                     isInterruptible: Boolean = true)
+                                     isInterruptible: Boolean = true,
+                                     exitOnError: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
   def requestTimeoutMs: Int
   private val unsentRequests = new UnsentRequests
 
-  def hasUnsentRequests = unsentRequests.iterator().hasNext
+  def hasUnsentRequests: Boolean = unsentRequests.iterator().hasNext
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -71,12 +73,16 @@ abstract class InterBrokerSendThread(name: String,
     } catch {
       case e: FatalExitError => throw e
       case t: Throwable =>
-        error(s"unhandled exception caught in InterBrokerSendThread", t)
-        // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
-        // as we will be in an unknown state with potentially some requests dropped and not
-        // being able to make progress. Known and expected Errors should have been appropriately
-        // dealt with already.
-        throw new FatalExitError()
+        if (exitOnError) {
+          error(s"unhandled exception caught in InterBrokerSendThread", t)
+          // rethrow any unhandled exceptions as FatalExitError so the JVM will be terminated
+          // as we will be in an unknown state with potentially some requests dropped and not
+          // being able to make progress. Known and expected Errors should have been appropriately
+          // dealt with already.
+          throw new FatalExitError()
+        } else {
+          throw t
+        }
     }
   }
 
@@ -142,19 +148,19 @@ case class RequestAndCompletionHandler(destination: Node, request: AbstractReque
                                        handler: RequestCompletionHandler)
 
 private class UnsentRequests {
-  private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
+  private val unsent = new util.HashMap[Node, util.ArrayDeque[ClientRequest]]
 
   def put(node: Node, request: ClientRequest): Unit = {
     var requests = unsent.get(node)
     if (requests == null) {
-      requests = new ArrayDeque[ClientRequest]
+      requests = new util.ArrayDeque[ClientRequest]
       unsent.put(node, requests)
     }
     requests.add(request)
   }
 
-  def removeAllTimedOut(now: Long): Collection[ClientRequest] = {
-    val expiredRequests = new ArrayList[ClientRequest]
+  def removeAllTimedOut(now: Long): util.Collection[ClientRequest] = {
+    val expiredRequests = new util.ArrayList[ClientRequest]
     for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
@@ -180,11 +186,11 @@ private class UnsentRequests {
     }
   }
 
-  def iterator(): Iterator[Entry[Node, ArrayDeque[ClientRequest]]] = {
+  def iterator(): util.Iterator[Entry[Node, util.ArrayDeque[ClientRequest]]] = {
     unsent.entrySet().iterator()
   }
 
-  def requestIterator(node: Node): Iterator[ClientRequest] = {
+  def requestIterator(node: Node): util.Iterator[ClientRequest] = {
     val requests = unsent.get(node)
     if (requests == null)
       Collections.emptyIterator[ClientRequest]
@@ -192,5 +198,5 @@ private class UnsentRequests {
       requests.iterator
   }
 
-  def nodes = unsent.keySet
+  def nodes: util.Set[Node] = unsent.keySet
 }
