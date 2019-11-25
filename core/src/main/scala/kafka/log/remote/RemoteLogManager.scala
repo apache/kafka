@@ -235,7 +235,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
             // copy segments only till the min of high-watermark or stable-offset
             // remote storage should contain only committed/acked messages
             val fetchOffset = lso
-            info(s"Checking for segments to copy, readOffset: $readOffset and fetchOffset: $fetchOffset")
+            debug(s"Checking for segments to copy, readOffset: $readOffset and fetchOffset: $fetchOffset")
             val activeSegBaseOffset = log.activeSegment.baseOffset
             val sortedSegments = log.logSegments(readOffset + 1, fetchOffset).toSeq.sortBy(_.baseOffset)
             val index:Int = sortedSegments.map(x => x.baseOffset).search(activeSegBaseOffset) match {
@@ -243,7 +243,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               case InsertionPoint(y) => y - 1
             }
             if (index <= 0) {
-              info(s"No segments found to be copied for partition $tp with read offset: $readOffset and active " +
+              debug(s"No segments found to be copied for partition $tp with read offset: $readOffset and active " +
                 s"baseoffset: $activeSegBaseOffset")
             } else {
               sortedSegments.slice(0, index).foreach { segment =>
@@ -255,9 +255,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                   return
                 }
 
-                val entries = remoteStorageManager.copyLogSegment(tp, segment, leaderEpochVal)
                 val file = segment.log.file()
                 val fileName = file.getName
+                info(s"Copying $fileName to remote storage.");
+
+                val entries = remoteStorageManager.copyLogSegment(tp, segment, leaderEpochVal)
                 val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
                 rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
                 if (!entries.isEmpty) {
@@ -307,15 +309,18 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
       def handleLogStartOffsetUpdate(topicPartition: TopicPartition, remoteLogStartOffset: Long): Unit = {
         updateRemoteLogStartOffset(topicPartition, remoteLogStartOffset)
-        info(s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
+        debug(s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
 
         // remove all indexes earlier to lso and rename them with a suffix of [Log.DeletedFileSuffix].
         val cleanedUpIndexes = rlmIndexer.maybeLoadIndex(topicPartition).cleanupIndexesUntil(remoteLogStartOffset)
+        if (!cleanedUpIndexes.isEmpty) {
+          info(s"Deleting remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
 
-        // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
-        // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
-        // as part of deleting files with a suffix of [Log.DeletedFileSuffix]
-        cleanedUpIndexes.foreach { x => x.deleteIfExists() }
+          // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
+          // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
+          // as part of deleting files with a suffix of [Log.DeletedFileSuffix]
+          cleanedUpIndexes.foreach { x => x.deleteIfExists() }
+        }
       }
 
       try {
