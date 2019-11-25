@@ -118,6 +118,36 @@ class ControllerChannelManagerTest {
   }
 
   @Test
+  def testLeaderAndIsrRequestContainsAllReplicas(): Unit = {
+    val allBrokers = Seq(1, 2, 3)
+    val newBrokers = Seq(1, 2)
+    val context = initContext(allBrokers, Set("foo"), 1, 3)
+    val batch = new MockControllerBrokerRequestBatch(context)
+
+    val partition = new TopicPartition("foo", 0)
+    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+    context.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+
+    batch.newBatch()
+    batch.addLeaderAndIsrRequestForBrokers(allBrokers, partition, leaderIsrAndControllerEpoch, replicaAssignment(Seq(1, 2, 3)), isNew = false)
+    batch.setContainsAllReplicas(newBrokers.toSet)
+    batch.sendRequestsToBrokers(controllerEpoch)
+
+    allBrokers.foreach { brokerId =>
+      val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(brokerId)
+      assertEquals(1, leaderAndIsrRequests.size)
+      val leaderAndIsrRequest = leaderAndIsrRequests.head
+
+      if (newBrokers.contains(brokerId))
+        assertTrue(leaderAndIsrRequest.containsAllReplicas)
+      else
+        assertFalse(leaderAndIsrRequest.containsAllReplicas)
+    }
+  }
+
+  @Test
   def testLeaderAndIsrRequestSentToLiveOrShuttingDownBrokers(): Unit = {
     val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
     val batch = new MockControllerBrokerRequestBatch(context)
