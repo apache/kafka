@@ -871,6 +871,20 @@ public class RequestResponseTest {
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
+    @Test
+    public void testInitProducerIdRequestVersions() {
+        InitProducerIdRequest.Builder bld = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000).
+                setTransactionalId("abracadabra").
+                setProducerId(123));
+        final UnsupportedVersionException exception = assertThrows(
+            UnsupportedVersionException.class, () -> {
+                bld.build((short) 2).toStruct();
+            });
+        assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
+        bld.build((short) 3);
+    }
+
     private ResponseHeader createResponseHeader(short headerVersion) {
         return new ResponseHeader(10, headerVersion);
     }
