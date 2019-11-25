@@ -521,6 +521,25 @@ subprojects {
   def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
   task reportCoverage(dependsOn: [coverageGen])
 
+  task determineCommitId {
+    def takeFromHash = 16
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("$rootDir/.git/$headRef").exists()) {
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+        }
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId = "unknown"
+    }
+  }
+
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -996,25 +1015,6 @@ project(':clients') {
     testCompile libs.jacksonJaxrsJsonProvider
   }
 
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
-  }
-
   task createVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
@@ -1227,25 +1227,6 @@ project(':streams') {
     }
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
-  }
-
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
   }
 
   task createStreamsVersionFile(dependsOn: determineCommitId) {
