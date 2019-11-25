@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
@@ -218,24 +219,34 @@ object OffsetIndex extends Logging {
   */
 class LazyOffsetIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
   @volatile private var offsetIndex: Option[OffsetIndex] = None
+  private val lock = new ReentrantLock()
 
   def file: File = {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file
-    else
-      _file
+    inLock(lock) {
+      if (offsetIndex.isDefined)
+        offsetIndex.get.file
+      else
+        _file
+    }
   }
 
   def file_=(f: File): Unit = {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file = f
-    else
-      _file = f
+    inLock(lock) {
+      if (offsetIndex.isDefined)
+        offsetIndex.get.file = f
+      else
+        _file = f
+    }
   }
 
   def get: OffsetIndex = {
-    if (offsetIndex.isEmpty)
-      offsetIndex = Some(new OffsetIndex(_file, baseOffset, maxIndexSize, writable))
+    if (offsetIndex.isEmpty) {
+      inLock(lock) {
+        if (offsetIndex.isEmpty) {
+          offsetIndex = Some(new OffsetIndex(_file, baseOffset, maxIndexSize, writable))
+        }
+      }
+    }
     offsetIndex.get
   }
 }

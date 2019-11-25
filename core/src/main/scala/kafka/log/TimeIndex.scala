@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
@@ -240,24 +241,34 @@ object TimeIndex extends Logging {
   */
 class LazyTimeIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
   @volatile private var timeIndex: Option[TimeIndex] = None
+  private val lock = new ReentrantLock()
 
   def file: File = {
-    if (timeIndex.isDefined)
-      timeIndex.get.file
-    else
-      _file
+    inLock(lock) {
+      if (timeIndex.isDefined)
+        timeIndex.get.file
+      else
+        _file
+    }
   }
 
   def file_=(f: File): Unit = {
-    if (timeIndex.isDefined)
-      timeIndex.get.file = f
-    else
-      _file = f
+    inLock(lock) {
+      if (timeIndex.isDefined)
+        timeIndex.get.file = f
+      else
+        _file = f
+    }
   }
 
   def get: TimeIndex = {
-    if (timeIndex.isEmpty)
-      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
+    if (timeIndex.isEmpty) {
+      inLock(lock) {
+        if (timeIndex.isEmpty) {
+          timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
+        }
+      }
+    }
     timeIndex.get
   }
 }
