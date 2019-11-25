@@ -1142,13 +1142,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // without describe permission on the topic, we shouldn't be able to fetch offsets
     val offsetFetchRequest = requests.OffsetFetchRequest.Builder.allTopicPartitions(group).build()
-    var offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest)
+    var offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.isEmpty)
 
     // now add describe permission on the topic and verify that the offset can be fetched
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DESCRIBE, ALLOW)), topicResource)
-    offsetFetchResponse = sendOffsetFetchRequest(offsetFetchRequest)
+    offsetFetchResponse = connectAndReceive[OffsetFetchResponse](offsetFetchRequest)
     assertEquals(Errors.NONE, offsetFetchResponse.error)
     assertTrue(offsetFetchResponse.responseData.containsKey(tp))
     assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
@@ -1717,10 +1717,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       assertEquals(part, record.partition)
       assertEquals(offset.toLong, record.offset)
     }
-  }
-
-  private def sendOffsetFetchRequest(request: requests.OffsetFetchRequest): requests.OffsetFetchResponse = {
-    connectAndReceive[OffsetFetchResponse](request)
   }
 
   private def buildTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {

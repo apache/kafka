@@ -50,45 +50,44 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
 
   @Test
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-    val plaintextSocket = connect()
+    val socket = connect()
     try {
-      val apiVersionsResponse = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
+      val apiVersionsResponse = sendAndReceive[ApiVersionsResponse](
+        new ApiVersionsRequest.Builder().build(0), socket)
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
-      sendSaslHandshakeRequestValidateResponse(plaintextSocket)
+      sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
-      plaintextSocket.close()
+      socket.close()
     }
   }
 
   @Test
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-    val plaintextSocket = connect()
+    val socket = connect()
     try {
-      sendSaslHandshakeRequestValidateResponse(plaintextSocket)
-      val response = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
+      sendSaslHandshakeRequestValidateResponse(socket)
+      val response = sendAndReceive[ApiVersionsResponse](
+        new ApiVersionsRequest.Builder().build(0), socket)
       assertEquals(Errors.ILLEGAL_SASL_STATE.code(), response.data.errorCode())
     } finally {
-      plaintextSocket.close()
+      socket.close()
     }
   }
 
   @Test
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-    val plaintextSocket = connect()
+    val socket = connect()
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)
       assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
-      val apiVersionsResponse2 = sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
+      val apiVersionsResponse2 = sendAndReceive[ApiVersionsResponse](
+        new ApiVersionsRequest.Builder().build(0), socket)
       ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
-      sendSaslHandshakeRequestValidateResponse(plaintextSocket)
+      sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
-      plaintextSocket.close()
+      socket.close()
     }
-  }
-
-  private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest): ApiVersionsResponse = {
-    sendAndReceive[ApiVersionsResponse](request, socket)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket): Unit = {
