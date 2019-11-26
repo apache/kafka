@@ -314,6 +314,7 @@ public class Selector implements Selectable, AutoCloseable {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
+        this.sensors.connectionsByClient.increment(channel(id).clientInformation());
     }
 
     private void ensureNotRegistered(String id) {
@@ -326,6 +327,7 @@ public class Selector implements Selectable, AutoCloseable {
     protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        channel.register(this);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
@@ -930,6 +932,7 @@ public class Selector implements Selectable, AutoCloseable {
         if (cipherInformation.isPresent()) {
             sensors.connectionsByCipher.decrement(cipherInformation.get());
         }
+        this.sensors.connectionsByClient.decrement(channel.clientInformation());
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
@@ -1072,6 +1075,12 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
+    // package private, called by KafkaChannel
+    void clientInformationUpdated(ClientInformation oldClientInformation, ClientInformation newClientInformation) {
+        this.sensors.connectionsByClient.decrement(oldClientInformation);
+        this.sensors.connectionsByClient.increment(newClientInformation);
+    }
+
     class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final String metricGrpPrefix;
@@ -1094,6 +1103,7 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor selectTime;
         public final Sensor ioTime;
         public final IntGaugeSuite<CipherInformation> connectionsByCipher;
+        public final IntGaugeSuite<ClientInformation> connectionsByClient;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
@@ -1197,6 +1207,15 @@ public class Selector implements Selectable, AutoCloseable {
                     tags.put("protocol", cipherInformation.protocol());
                     tags.putAll(metricTags);
                     return metrics.metricName("connections", metricGrpName, "The number of connections with this SSL cipher and protocol.", tags);
+                }, 100);
+
+            this.connectionsByClient = new IntGaugeSuite<>(log, "clients", metrics,
+                clientInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("clientSoftwareName", clientInformation.softwareName());
+                    tags.put("clientSoftwareVersion", clientInformation.softwareVersion());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this client and version.", tags);
                 }, 100);
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
@@ -1322,6 +1341,7 @@ public class Selector implements Selectable, AutoCloseable {
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
             connectionsByCipher.close();
+            connectionsByClient.close();
         }
     }
 

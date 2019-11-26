@@ -16,18 +16,22 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.net.InetAddress;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
@@ -37,8 +41,10 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -88,6 +94,72 @@ public class SaslServerAuthenticatorTest {
         } catch (IllegalSaslStateException e) {
             // expected exception
         }
+
+        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+    }
+
+    @Test
+    public void testOldestApiVersionsRequest() throws IOException {
+        final short version = ApiKeys.API_VERSIONS.oldestVersion();
+        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+            Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+
+        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
+        final Struct headerStruct = header.toStruct();
+
+        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        final Struct requestStruct = request.data.toStruct(version);
+
+        when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
+
+        when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf() + requestStruct.sizeOf());
+            return 4;
+        }).then(invocation -> {
+            headerStruct.writeTo(invocation.getArgument(0));
+            requestStruct.writeTo(invocation.getArgument(0));
+            return headerStruct.sizeOf() + requestStruct.sizeOf();
+        });
+
+        authenticator.authenticate();
+
+        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, authenticator.clientInformation().get().softwareName());
+        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, authenticator.clientInformation().get().softwareVersion());
+
+        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+    }
+
+    @Test
+    public void testLatestApiVersionsRequest() throws IOException {
+        final short version = ApiKeys.API_VERSIONS.latestVersion();
+        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+            Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+
+        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
+        final Struct headerStruct = header.toStruct();
+
+        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        final Struct requestStruct = request.data.toStruct(version);
+
+        when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
+
+        when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf() + requestStruct.sizeOf());
+            return 4;
+        }).then(invocation -> {
+            headerStruct.writeTo(invocation.getArgument(0));
+            requestStruct.writeTo(invocation.getArgument(0));
+            return headerStruct.sizeOf() + requestStruct.sizeOf();
+        });
+
+        authenticator.authenticate();
+
+        assertEquals("apache-kafka-java", authenticator.clientInformation().get().softwareName());
+        assertEquals(AppInfoParser.getVersion(), authenticator.clientInformation().get().softwareVersion());
 
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }

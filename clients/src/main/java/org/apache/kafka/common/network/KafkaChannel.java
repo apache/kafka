@@ -116,7 +116,9 @@ public class KafkaChannel implements AutoCloseable {
     private final String id;
     private final TransportLayer transportLayer;
     private final Supplier<Authenticator> authenticatorCreator;
+    private Selector selector;
     private Authenticator authenticator;
+    private ClientInformation clientInformation;
     // Tracks accumulated network thread time. This is updated on the network thread.
     // The values are read and reset after each response is sent.
     private long networkThreadTimeNanos;
@@ -145,6 +147,7 @@ public class KafkaChannel implements AutoCloseable {
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
+        this.clientInformation = ClientInformation.EMPTY;
     }
 
     public void close() throws IOException {
@@ -153,10 +156,42 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     /**
+     * Returns the selector that this channel belongs to or null if not provided.
+     */
+    public Selector selector() {
+        return selector;
+    }
+
+    /**
+     * Registers the reference to the selector that this channel belongs to. This
+     * is called by the selector when a KafkaChannel is registered.
+     */
+    void register(Selector selector) {
+        this.selector = selector;
+    }
+
+    /**
      * Returns the principal returned by `authenticator.principal()`.
      */
     public KafkaPrincipal principal() {
         return authenticator.principal();
+    }
+
+    /**
+     * Returns the ClientInformation extracted from the ApiVersionsRequest.
+     */
+    public ClientInformation clientInformation() {
+        return clientInformation;
+    }
+
+    /**
+     * Update the client information when a ApiVersionsRequest is received.
+     */
+    public void updateClientInformation(ClientInformation newClientInformation) {
+        ClientInformation oldClientInformation = this.clientInformation;
+        this.clientInformation = newClientInformation;
+        if (this.selector != null)
+            this.selector.clientInformationUpdated(oldClientInformation, newClientInformation);
     }
 
     /**
@@ -187,6 +222,8 @@ public class KafkaChannel implements AutoCloseable {
         if (ready()) {
             ++successfulAuthentications;
             state = ChannelState.READY;
+            if (authenticator.clientInformation().isPresent())
+                updateClientInformation(authenticator.clientInformation().get());
         }
     }
 
