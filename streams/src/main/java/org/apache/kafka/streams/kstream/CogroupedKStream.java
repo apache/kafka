@@ -54,7 +54,7 @@ public interface CogroupedKStream<K, VOut> {
      * a new aggregate using the current aggregate (or for the very first record using the
      * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
      * <p>
-     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
+     * Thus, {@code aggregate(Initializer, Materialized)} can be used to compute
      * aggregate functions like count.
      * It is an intermediate representation after a grouping of {@link KStream}s, before the
      * aggregations are applied to the new partitions resulting in a {@link KTable}.
@@ -72,18 +72,11 @@ public interface CogroupedKStream<K, VOut> {
      * The result is written into a local {@link KeyValueStore} (which is basically an
      * ever-updating materialized view) that can be queried by the given store name in {@code
      * materialized}.
-     * Furthermore, updates to the store are sent downstream into a {@link KTable}
-     * changelog stream.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
      * first record.
-     * The specified {@link Aggregator} is applied for each input record and computes
-     * a new aggregate using the current aggregate (or for the very first record using the
-     * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
-     * aggregate functions like count.
-     * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate
      * consecutive updates to the same key. The rate of propagated updates depends on your input
      * data rate, the number of distinct keys, the number of parallel running Kafka Streams
@@ -96,7 +89,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -117,7 +110,7 @@ public interface CogroupedKStream<K, VOut> {
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result
+     *                     result. Cannot be {@code null}.
      * @param materialized an instance of {@link Materialized} used to materialize a state store.
      *                     Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
@@ -128,8 +121,7 @@ public interface CogroupedKStream<K, VOut> {
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
-     * Records with {@code null}
-     * key or value are ignored.
+     * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of Reducing combining via
      * reduce(...)} as it, for example, allows the result to have a different type than the input
      * values.
@@ -142,11 +134,6 @@ public interface CogroupedKStream<K, VOut> {
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
      * first record.
-     * The specified {@link Aggregator} is applied for each input record and computes
-     * a new aggregate using the current aggregate (or for the very first record using the
-     * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
-     * aggregate functions like count.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate
      * consecutive updates to the same key. The rate of propagated updates depends on your input
@@ -160,7 +147,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -176,13 +163,13 @@ public interface CogroupedKStream<K, VOut> {
      * and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where
      * "applicationId" is user-specified in {@link StreamsConfig} via parameter {@link
-     * StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the provide store
-     * name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     * StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName"
+     * is a generated value, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result
+     *                     result. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -200,11 +187,7 @@ public interface CogroupedKStream<K, VOut> {
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
      * first record.
-     * The specified {@link Aggregator} is applied for each input record and computes
-     * a new aggregate using the current aggregate (or for the very first record using the
-     * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
-     * aggregate functions like count.
+     * The specified {@link Named} is applied once to the processor combining the grouped streams.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate
      * consecutive updates to the same key. The rate of propagated updates depends on your input
@@ -218,7 +201,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -239,10 +222,10 @@ public interface CogroupedKStream<K, VOut> {
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result
+     *                     result. Cannot be {@code null}.
      * @param materialized an instance of {@link Materialized} used to materialize a state store.
      *                     Cannot be {@code null}.
-     * @param named name the processors
+     * @param named name the processors. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
@@ -265,11 +248,7 @@ public interface CogroupedKStream<K, VOut> {
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
      * first record.
-     * The specified {@link Aggregator} is applied for each input record and computes
-     * a new aggregate using the current aggregate (or for the very first record using the
-     * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
-     * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute
-     * aggregate functions like count.
+     * The specified {@link Named} is applied once to the processor combining the grouped streams.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate
      * consecutive updates to the same key. The rate of propagated updates depends on your input
@@ -283,7 +262,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -305,8 +284,8 @@ public interface CogroupedKStream<K, VOut> {
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result
-     * @param named name the processor
+     *                     result. Cannot be {@code null}.
+     * @param named name the processor. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */

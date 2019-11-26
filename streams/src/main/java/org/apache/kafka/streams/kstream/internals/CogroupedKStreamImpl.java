@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
-    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
+    static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
 
     final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
     final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
@@ -95,10 +95,10 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
                 groupPatterns,
                 initializer,
                 named,
-                new TimestampedKeyValueStoreMaterializer<>(
-                        materializedInternal).materialize(),
+                new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
                 materializedInternal.keySerde(),
                 materializedInternal.valueSerde(),
+                materializedInternal.queryableStoreName(),
                 null,
                 null,
                 null);

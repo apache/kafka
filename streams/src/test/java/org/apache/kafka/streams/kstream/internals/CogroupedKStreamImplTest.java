@@ -79,7 +79,9 @@ public class CogroupedKStreamImplTest {
 
     @Before
     public void setup() {
-        final KStream<String, String> stream = builder.stream(TOPIC, Consumed
+
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        final KStream<String, String> stream = builder2.stream(TOPIC, Consumed
             .with(Serdes.String(), Serdes.String()));
 
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
@@ -102,14 +104,23 @@ public class CogroupedKStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullMaterMaterializedOnAggregate() {
+    public void shouldNotHaveNullMMaterializedOnAggregate() {
         cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
     }
-    
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullNamedOnAggregate() {
+        cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullNamedOnAggregate2() {
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Named) null);
+    }
+
 
     @Test
     public void useNamed() {
-
         final KStream<String, String> test = builder.stream("one", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = test.groupByKey();

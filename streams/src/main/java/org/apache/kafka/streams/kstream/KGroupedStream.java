@@ -545,10 +545,8 @@ public interface KGroupedStream<K, V> {
      * <p>
      * It is an intermediate representation after a grouping of {@link KStream}s, before the
      * aggregations are applied to the new partitions resulting in a {@link KTable}.
-     * <p>
      *
      * @param aggregator an {@link Aggregator} that computes a new aggregate result
-    This conversation was marked as resolved by wcarlson5
      * @param  <Vout> the type of the output values
      *
      */
