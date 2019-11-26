@@ -4166,7 +4166,6 @@ class LogTest {
     assertTrue(logMetricsAfterDeletion.isEmpty)
   }
 
-
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
   private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
