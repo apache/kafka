@@ -17,6 +17,7 @@ from kafkatest import __version__ as __kafkatest_version__
 import math
 import re
 import time
+from pipes import quote
 
 
 def kafkatest_version():
@@ -182,3 +183,9 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
             msg += "(There are also %d duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
 
     return success, msg
+
+
+def join_shell(split_command):
+    """Return an escaped command from the given parts"""
+    # TODO replace this with shlex.join in Python 3
+    return ' '.join(quote(str(arg)) for arg in split_command)

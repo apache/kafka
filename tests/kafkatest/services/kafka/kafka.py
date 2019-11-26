@@ -16,7 +16,6 @@
 import collections
 import json
 import os.path
-from pipes import quote
 import re
 import signal
 import time
@@ -32,7 +31,9 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, V_2_2_0, V_1_0_0
+from kafkatest.utils import join_shell
+
 
 
 class KafkaListener:
@@ -412,6 +413,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
+    def kafka_topics_cmd(self, node):
+        """
+        Generate the first part of a kafka-topics.sh command
+
+        This will return an array of the path to the kafka-topics.sh script as well as the correct connection arguments
+        depending on the Kafka version of the node.
+        """
+        cmd_parts = [self.path.script("kafka-topics.sh", node)]
+        if node.version < V_2_2_0:
+            cmd_parts.append("--zookeeper")
+            cmd_parts.append(self.zk_connect_setting())
+        else:
+            cmd_parts.append("--bootstrap-server")
+            cmd_parts.append(self.bootstrap_servers(self.security_protocol))
+        return cmd_parts
+
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
@@ -423,11 +440,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Creating topic %s with settings %s",
                          topic_cfg["topic"], topic_cfg)
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        cmd = []
-        cmd.append(kafka_topic_script)
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        cmd = self.kafka_topics_cmd(node)
         cmd.append("--create")
         cmd.append("--topic")
         cmd.append(topic_cfg.get("topic"))
@@ -449,7 +462,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 cmd.append("--config")
                 cmd.append("%s=%s" % (config_name, str(config_value)))
 
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         self.logger.info("Running topic creation command...\n%s" % cmd_str)
         node.account.ssh(cmd_str)
 
@@ -463,29 +476,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Deleting topic %s" % topic)
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        cmd = []
-        cmd.append(kafka_topic_script)
-        cmd.append("--bootstrap-server")
+        cmd = self.kafka_topics_cmd(node)
         cmd.append(self.bootstrap_servers(self.security_protocol))
         cmd.append("--delete")
         cmd.append(topic)
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         self.logger.info("Running topic delete command...\n%s" % cmd_str)
         node.account.ssh(cmd_str)
 
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        cmd = []
-        cmd.append(kafka_topic_script)
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        cmd = self.kafka_topics_cmd(node)
         cmd.append("--describe")
         cmd.append("--topic")
         cmd.append(topic)
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         output = ""
         for line in node.account.ssh_capture(cmd_str):
             output += line
@@ -496,12 +502,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         if node is None:
             node = self.nodes[0]
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        cmd = [kafka_topic_script]
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        cmd = self.kafka_topics_cmd(node)
         cmd.append("--list")
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         for line in node.account.ssh_capture(cmd_str):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
@@ -510,10 +513,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
-        cmd = []
-        cmd.append(self.path.script("kafka-configs.sh", node))
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        cmd = self.kafka_topics_cmd(node)
         cmd.append("--entity-name")
         cmd.append(topic)
         cmd.append("--entity-type")
@@ -521,7 +521,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd.append("--alter")
         cmd.append("--add-config")
         cmd.append("message.format.version=%s" % msg_format_version)
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
 
         self.logger.info("Running alter message format command...\n%s" % cmd_str)
         node.account.ssh(cmd_str)
@@ -533,10 +533,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Enabling unclean leader election for topic %s", topic)
         else:
             self.logger.info("Disabling unclean leader election for topic %s", topic)
-        cmd = []
-        cmd.append(self.path.script("kafka-configs.sh", node))
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        cmd = self.kafka_topics_cmd(node)
         cmd.append("--entity-name")
         cmd.append(topic)
         cmd.append("--entity-type")
@@ -544,7 +541,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd.append("--alter")
         cmd.append("--add-config")
         cmd.append("unclean.leader.election.enable=%s" % str(value).lower())
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
 
         self.logger.info("Running alter unclean leader command...\n%s" % cmd_str)
         node.account.ssh(cmd_str)
@@ -594,14 +591,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = []
         cmd.extend(("echo", json_str, ">", json_file, "&&"))
         cmd.append(self.path.script("kafka-reassign-partitions.sh", node))
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        if node.version < V_1_0_0:
+            cmd.append("--zookeeper")
+            cmd.append(self.zk_connect_setting())
+        else:
+            cmd.append("--bootstrap-server")
+            cmd.append(self.bootstrap_servers(self.security_protocol))
         cmd.append("--reassignment-json-file")
         cmd.append(json_file)
         cmd.append("--verify")
         cmd.extend(("&&", "sleep", "1", "&&", "rm", "-f", json_file))
 
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         # send command
         self.logger.info("Verifying parition reassignment...")
         self.logger.debug(cmd_str)
@@ -637,8 +638,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = []
         cmd.extend(("echo", json_str, ">", json_file, "&&"))
         cmd.append(self.path.script( "kafka-reassign-partitions.sh", node))
-        cmd.append("--bootstrap-server")
-        cmd.append(self.bootstrap_servers(self.security_protocol))
+        if node.version < V_1_0_0:
+            cmd.append("--zookeeper")
+            cmd.append(self.zk_connect_setting())
+        else:
+            cmd.append("--bootstrap-server")
+            cmd.append(self.bootstrap_servers(self.security_protocol))
         cmd.append("--reassignment-json-file")
         cmd.append(json_file)
         cmd.append("--execute")
@@ -647,7 +652,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd.append(throttle)
         cmd.extend(("&&", "sleep", "1", "&&", "rm", "-f", json_file))
 
-        cmd_str = quote(cmd)
+        cmd_str = join_shell(cmd)
         # send command
         self.logger.info("Executing parition reassignment...")
         self.logger.debug(cmd_str)
