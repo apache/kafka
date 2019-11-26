@@ -94,11 +94,14 @@ public class DescribeAclsResponse extends AbstractResponse {
             }
         }
 
-        final boolean unknown = acls().stream()
-                .map(DescribeAclsResponse::aclBindings)
-                .anyMatch(bindings -> bindings.stream().anyMatch(AclBinding::isUnknown));
-        if (unknown) {
-            throw new IllegalArgumentException("Contain UNKNOWN elements");
+        for (DescribeAclsResource resource : acls()) {
+            if (resource.patternType() == PatternType.UNKNOWN.code() || resource.type() == ResourceType.UNKNOWN.code())
+                throw new IllegalArgumentException("Contain UNKNOWN elements");
+            for (AclDescription acl : resource.acls()) {
+                if (acl.operation() == AclOperation.UNKNOWN.code() || acl.permissionType() == AclPermissionType.UNKNOWN.code()) {
+                    throw new IllegalArgumentException("Contain UNKNOWN elements");
+                }
+            }
         }
     }
 

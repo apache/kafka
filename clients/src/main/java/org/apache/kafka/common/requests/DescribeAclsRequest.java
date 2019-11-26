@@ -112,10 +112,13 @@ public class DescribeAclsRequest extends AbstractRequest {
     }
 
     private void validate(short version) {
-        if (version == 0
-            && data.resourcePatternType() != PatternType.LITERAL.code()
-            && data.resourcePatternType() != PatternType.ANY.code()) {
-            throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+        if (version == 0) {
+            if (data.resourcePatternType() == PatternType.ANY.code()) {
+                data.setResourcePatternType(PatternType.LITERAL.code());
+            }
+            if (data.resourcePatternType() != PatternType.LITERAL.code()) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            }
         }
 
         if (data.resourcePatternType() == PatternType.UNKNOWN.code()
