@@ -18,26 +18,10 @@
 package kafka.server
 
 import org.apache.kafka.common.message.ApiVersionsRequestData
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.junit.Assert._
 import org.junit.Test
-
-import scala.collection.JavaConverters._
-
-object ApiVersionsRequestTest {
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.data.apiKeys().size())
-    for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
-      val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
-      assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
-      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
-      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
-      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
-    }
-  }
-}
 
 class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
 
@@ -47,7 +31,7 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request)
-    ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test
@@ -64,9 +48,9 @@ class ApiVersionsRequestTest extends AbstractApiVersionsRequestTest {
 
   @Test
   def testApiVersionsRequestValidationV0(): Unit = {
-    val apiVersionsRequest = new ApiVersionsRequest.Builder().build( 0.asInstanceOf[Short])
+    val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
     val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest)
-    ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
+    validateApiVersionsResponse(apiVersionsResponse)
   }
 
   @Test

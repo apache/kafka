@@ -54,7 +54,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
     try {
       val apiVersionsResponse = sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse)
+      validateApiVersionsResponse(apiVersionsResponse)
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()
@@ -83,7 +83,7 @@ class SaslApiVersionsRequestTest extends AbstractApiVersionsRequestTest with Sas
       assertEquals(Errors.UNSUPPORTED_VERSION.code(), apiVersionsResponse.data.errorCode())
       val apiVersionsResponse2 = sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
-      ApiVersionsRequestTest.validateApiVersionsResponse(apiVersionsResponse2)
+      validateApiVersionsResponse(apiVersionsResponse2)
       sendSaslHandshakeRequestValidateResponse(socket)
     } finally {
       socket.close()

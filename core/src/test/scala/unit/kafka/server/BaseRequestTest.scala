@@ -141,8 +141,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   def nextRequestHeader[T <: AbstractResponse](apiKey: ApiKeys,
                                                apiVersion: Short,
                                                clientId: String = "client-id",
-                                               correlationIdOpt: Option[Int] = None
-                                              ): RequestHeader = {
+                                               correlationIdOpt: Option[Int] = None): RequestHeader = {
     val correlationId = correlationIdOpt.getOrElse {
       this.correlationId += 1
       this.correlationId
