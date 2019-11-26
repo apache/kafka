@@ -657,21 +657,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                try {
-                    commit(false, partitionTimes);
-                } finally {
-                    if (eosEnabled) {
-                        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+                commit(false, partitionTimes);
+            } finally {
+                if (eosEnabled) {
+                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
-                        try {
-                            recordCollector.close();
-                        } finally {
-                            producer = null;
-                        }
+                    try {
+                        recordCollector.close();
+                    } catch (final ProducerFencedException e) {
+                        taskMigratedException = new TaskMigratedException(this, e);
+                    } finally {
+                        producer = null;
                     }
                 }
-            } catch (final ProducerFencedException e) {
-                taskMigratedException = new TaskMigratedException(this, e);
             }
             if (taskMigratedException != null) {
                 throw taskMigratedException;

@@ -21,11 +21,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -122,7 +124,14 @@ public class StandbyTask extends AbstractTask {
     }
 
     private void flushAndCheckpointState() {
-        stateMgr.flush();
+        try {
+            stateMgr.flush();
+        } catch (final ProcessorStateException e) {
+            if (e.getCause() instanceof RetriableException) {
+                log.warn("Caught a retriable Kafka exception while flushing state. Initiating a rebalance to attempt recovery.", e);
+                throw new TaskMigratedException(this, e);
+            }
+        }
         stateMgr.checkpoint(Collections.emptyMap());
     }
 

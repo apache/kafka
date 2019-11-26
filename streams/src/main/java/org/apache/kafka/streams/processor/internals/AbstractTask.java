@@ -18,11 +18,13 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -172,7 +174,14 @@ public abstract class AbstractTask implements Task {
      * Flush all state stores owned by this task
      */
     void flushState() {
-        stateMgr.flush();
+        try {
+            stateMgr.flush();
+        } catch (final ProcessorStateException e) {
+            if (e.getCause() instanceof RetriableException) {
+                log.warn("Caught a retriable Kafka exception while flushing state. Initiating a rebalance to attempt recovery.", e);
+                throw new TaskMigratedException(this, e);
+            }
+        }
     }
 
     /**
