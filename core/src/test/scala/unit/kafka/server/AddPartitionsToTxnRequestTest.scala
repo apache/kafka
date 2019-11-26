@@ -49,7 +49,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
 
     val request = createRequest(List(createdTopicPartition, nonExistentTopic))
     val leaderId = servers.head.config.brokerId
-    val response = connectAndReceive[AddPartitionsToTxnResponse(request, brokerSocketServer(leaderId))
+    val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(leaderId))
 
     assertEquals(2, response.errors.size)
 
