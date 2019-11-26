@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.StreamsConfig;
@@ -127,7 +127,7 @@ public class StandbyTask extends AbstractTask {
         try {
             stateMgr.flush();
         } catch (final ProcessorStateException e) {
-            if (e.getCause() instanceof RetriableException) {
+            if (e.getCause() instanceof ProducerFencedException) {
                 log.warn("Caught a retriable Kafka exception while flushing state. Initiating a rebalance to attempt recovery.", e);
                 throw new TaskMigratedException(this, e);
             }
