@@ -51,18 +51,17 @@ public class UpdateMetadataRequestTest {
 
     @Test
     public void testUnsupportedVersion() {
-        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                (short) (UPDATE_METADATA.latestVersion() + 1), 0, 0, 0,
+        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(0, 0, 0,
                 Collections.emptyList(), Collections.emptyList());
-        assertThrows(UnsupportedVersionException.class, builder::build);
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) (UPDATE_METADATA.latestVersion() + 1)));
     }
 
     @Test
     public void testGetErrorResponse() {
         for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                    version, 0, 0, 0, Collections.emptyList(), Collections.emptyList());
-            UpdateMetadataRequest request = builder.build();
+                    0, 0, 0, Collections.emptyList(), Collections.emptyList());
+            UpdateMetadataRequest request = builder.build(version);
             UpdateMetadataResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
@@ -148,8 +147,8 @@ public class UpdateMetadataRequestTest {
                     ))
             );
 
-            UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3,
-                partitionStates, liveBrokers).build();
+            UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(1, 2, 3,
+                partitionStates, liveBrokers).build(version);
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(request.partitionStates()));
             assertEquals(liveBrokers, request.liveBrokers());
@@ -200,7 +199,7 @@ public class UpdateMetadataRequestTest {
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
         }
-        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
+        UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(0, 0, 0,
                 partitionStates, Collections.emptyList());
 
         assertTrue(MessageTestUtil.messageSize(builder.build((short) 5).data(), (short) 5) <

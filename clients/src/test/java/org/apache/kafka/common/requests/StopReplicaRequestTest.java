@@ -36,18 +36,17 @@ public class StopReplicaRequestTest {
 
     @Test
     public void testUnsupportedVersion() {
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(
-                (short) (STOP_REPLICA.latestVersion() + 1),
-                0, 0, 0L, false, Collections.emptyList());
-        assertThrows(UnsupportedVersionException.class, builder::build);
+        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(0, 0, 0L,
+                false, Collections.emptyList());
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) (STOP_REPLICA.latestVersion() + 1)));
     }
 
     @Test
     public void testGetErrorResponse() {
         for (short version = STOP_REPLICA.oldestVersion(); version < STOP_REPLICA.latestVersion(); version++) {
-            StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(version,
-                    0, 0, 0L, false, Collections.emptyList());
-            StopReplicaRequest request = builder.build();
+            StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(0, 0, 0L,
+                    false, Collections.emptyList());
+            StopReplicaRequest request = builder.build(version);
             StopReplicaResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
@@ -57,7 +56,7 @@ public class StopReplicaRequestTest {
     @Test
     public void testStopReplicaRequestNormalization() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
+        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder(0, 0, 0, false, tps);
         assertTrue(MessageTestUtil.messageSize(builder.build((short) 1).data(), (short) 1) <
             MessageTestUtil.messageSize(builder.build((short) 0).data(), (short) 0));
     }

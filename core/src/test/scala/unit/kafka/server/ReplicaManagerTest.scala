@@ -736,7 +736,7 @@ class ReplicaManagerTest {
     // Make local partition a follower - because epoch increased by more than 1, truncation should
     // trigger even though leader does not change
     leaderEpoch += leaderEpochIncrement
-    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(, controllerId, controllerEpoch, brokerEpoch,
+    val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(controllerId, controllerEpoch, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
       Set(new Node(followerBrokerId, "host1", 0),
         new Node(leaderBrokerId, "host2", 1)).asJava).build()
