@@ -192,7 +192,7 @@ public class GlobalStreamThread extends Thread {
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics, false);
         this.stateRestoreListener = stateRestoreListener;
     }
 

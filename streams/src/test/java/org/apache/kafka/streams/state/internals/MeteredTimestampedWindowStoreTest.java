@@ -69,7 +69,7 @@ public class MeteredTimestampedWindowStoreTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics, false)
         );
     }
 

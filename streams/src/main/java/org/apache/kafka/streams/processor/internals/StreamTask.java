@@ -176,8 +176,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
-        processorContext = processorContextImpl;
+        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -484,15 +483,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
+    private void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
-
-        flushState();
-
-        if (!eosEnabled) {
-            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
-        }
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -502,25 +495,45 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
         }
 
-        try {
-            if (eosEnabled) {
-                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
-                producer.commitTransaction();
-                transactionInFlight = false;
-                if (startNewTransaction) {
-                    producer.beginTransaction();
-                    transactionInFlight = true;
-                }
-            } else {
-                consumer.commitSync(consumedOffsetsAndMetadata);
-            }
-        } catch (final CommitFailedException | ProducerFencedException error) {
-            throw new TaskMigratedException(this, error);
+        if (eosEnabled) {
+            commitEos(startNewTransaction, consumedOffsetsAndMetadata);
+        } else {
+            commitNonEos(consumedOffsetsAndMetadata);
         }
 
         commitNeeded = false;
         commitRequested = false;
         commitSensor.record(time.nanoseconds() - startNs);
+    }
+
+    private void commitNonEos(final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
+        flushState();
+        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+
+        try {
+            consumer.commitSync(consumedOffsetsAndMetadata);
+        } catch (final CommitFailedException error) {
+            throw new TaskMigratedException(this, error);
+        }
+    }
+
+    // The main difference with non Eos commit is that we choose to flush the state after commit success so that
+    // interactive query will not see uncommitted records.
+    private void commitEos(final boolean startNewTransaction, final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
+        try {
+            producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+            producer.commitTransaction();
+            transactionInFlight = false;
+            // We don't need to call flush on producer again as the txn commit process is guaranteed to flush.
+            super.flushState();
+
+            if (startNewTransaction) {
+                producer.beginTransaction();
+                transactionInFlight = true;
+            }
+        } catch (final ProducerFencedException error) {
+            throw new TaskMigratedException(this, error);
+        }
     }
 
     private Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {

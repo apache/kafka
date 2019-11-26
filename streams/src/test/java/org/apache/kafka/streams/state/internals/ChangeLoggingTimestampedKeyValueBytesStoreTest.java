@@ -75,7 +75,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()), false));
         context.setTime(0);
         store.init(context, store);
     }

@@ -40,7 +40,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Before
     public void setUp() throws Exception {
         store = new InMemoryKeyValueStore(namespace);
-        cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()));
+        cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()), false);
     }
 
     @Test
@@ -147,7 +147,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     @Test
     public void shouldPeekNextKey() throws Exception {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore("one");
-        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()), false);
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);

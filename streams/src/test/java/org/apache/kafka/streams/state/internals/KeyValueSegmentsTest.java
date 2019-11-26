@@ -60,7 +60,7 @@ public class KeyValueSegmentsTest {
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()), false)
         );
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }

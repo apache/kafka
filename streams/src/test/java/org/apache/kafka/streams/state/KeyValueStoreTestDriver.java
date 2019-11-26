@@ -241,7 +241,7 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
         context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
-            ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
+            ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics(), false);
 
             @Override
             public ThreadCache getCache() {

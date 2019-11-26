@@ -347,10 +347,10 @@ class NamedCache {
 
         long size() {
             return key.get().length +
-                8 + // entry
-                8 + // previous
-                8 + // next
-                entry.size();
+                   8 + // entry
+                   8 + // previous
+                   8 + // next
+                   entry.size();
         }
 
         LRUNode next() {

@@ -103,7 +103,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             metrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
+            new ThreadCache(new LogContext("testCache "), 100000, metrics, false)
         ) {
             @Override
             public <K, V> void forward(final K key, final V value, final To to) {
@@ -608,7 +608,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics, false)
         ) {
             @Override
             public <K, V> void forward(final K key, final V value, final To to) {
