@@ -54,6 +54,8 @@ public class StopReplicaRequest extends AbstractControlRequest {
         }
 
         public StopReplicaRequest build(short version) {
+            ensureSupportedVersion(version);
+
             StopReplicaRequestData data = new StopReplicaRequestData()
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
@@ -77,7 +79,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 data.setUngroupedPartitions(requestPartitions);
             }
 
-            ensureSupportedVersion(version);
             return new StopReplicaRequest(data, version);
         }
 

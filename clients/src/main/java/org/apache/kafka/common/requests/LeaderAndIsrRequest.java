@@ -57,6 +57,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
         @Override
         public LeaderAndIsrRequest build(short version) {
+            ensureSupportedVersion(version);
+
             List<LeaderAndIsrLiveLeader> leaders = liveLeaders.stream().map(n -> new LeaderAndIsrLiveLeader()
                 .setBrokerId(n.id())
                 .setHostName(n.host())
@@ -76,7 +78,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 data.setUngroupedPartitionStates(partitionStates);
             }
 
-                ensureSupportedVersion(version);
             return new LeaderAndIsrRequest(data, version);
         }
 
