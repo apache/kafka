@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import java.util.Collections;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
@@ -72,7 +73,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(
                     kGroupedStream.getValue(),
                     initializer,
-                    named.withName(named.orElseGenerateWithPrefix(builder, CogroupedKStreamImpl.AGGREGATE_NAME) + "-" + counter++),
+                    named.withName(named.suffixWithOrElseGet("-cogroup-agg-" + counter++, builder, CogroupedKStreamImpl.AGGREGATE_NAME)),
                     stateCreated,
                     storeBuilder,
                     windows,
@@ -82,19 +83,17 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
             processors.add(statefulProcessorNode);
             builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
         }
-        final String functionName = named.orElseGenerateWithPrefix(builder, CogroupedKStreamImpl.AGGREGATE_NAME);
+        final String mergeProcessorName = named.orElseGenerateWithPrefix(builder, CogroupedKStreamImpl.AGGREGATE_NAME);
         final ProcessorSupplier<K, VOut> passThrough = new PassThrough<>();
-        final StatefulProcessorNode<K, VOut> tableSourceNode =
-                new StatefulProcessorNode<>(
-                        functionName,
-                        new ProcessorParameters<>(passThrough, functionName),
-                        new String[]{storeBuilder.name()}
-                );
+        final ProcessorGraphNode<K, VOut> tableSourceNode =
+                new ProcessorGraphNode<>(
+                        mergeProcessorName,
+                        new ProcessorParameters<>(passThrough, mergeProcessorName));
 
         builder.addGraphNode(processors, tableSourceNode);
 
         return new KTableImpl<KR, VIn, VOut>(
-                functionName,
+                mergeProcessorName,
                 keySerde,
                 valSerde,
                 Collections.singleton(tableSourceNode.nodeName()),

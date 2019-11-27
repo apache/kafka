@@ -28,8 +28,6 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link
  * KeyValue} pairs.
- * It is an intermediate representation of one or more {@link KStream}s in order to
- * apply one or more aggregation operations on the original {@link KStream} records.
  * <p>
  * It is an intermediate representation after a grouping of {@link KStream}s, before the
  * aggregations are applied to the new partitions resulting in a {@link KTable}.
@@ -43,7 +41,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 public interface CogroupedKStream<K, VOut> {
 
     /**
-     * Add an already {@link KGroupedStream grouped KStream} to this {@code CoGroupedKStream}.
+     * Add an already {@link KGroupedStream grouped KStream} to this {@code CogroupedKStream}.
      * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of
      * {@link KeyValue} pairs.
      * It is an intermediate representation of one or more {@link KStream}s
@@ -54,10 +52,8 @@ public interface CogroupedKStream<K, VOut> {
      * a new aggregate using the current aggregate (or for the very first record using the
      * intermediate aggregation result provided via the {@link Initializer}) and the record's value.
      * <p>
-     * Thus, {@code aggregate(Initializer, Materialized)} can be used to compute
-     * aggregate functions like count.
-     * It is an intermediate representation after a grouping of {@link KStream}s, before the
-     * aggregations are applied to the new partitions resulting in a {@link KTable}.
+
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * @param groupedStream a group stream object
      * @param aggregator   an {@link Aggregator} that computes a new aggregate result
      * @param <VIn> Type of input values
@@ -89,7 +85,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -122,9 +118,6 @@ public interface CogroupedKStream<K, VOut> {
     /**
      * Aggregate the values of records in these streams by the grouped key.
      * Records with {@code null} key or value are ignored.
-     * Aggregating is a generalization of Reducing combining via
-     * reduce(...)} as it, for example, allows the result to have a different type than the input
-     * values.
      * The result is written into a local {@link KeyValueStore} (which is basically an
      * ever-updating materialized view) that can be queried by the given store name in {@code
      * materialized}.
@@ -147,7 +140,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -187,7 +180,7 @@ public interface CogroupedKStream<K, VOut> {
      * The specified {@link Initializer} is applied once directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the
      * first record.
-     * The specified {@link Named} is applied once to the processor combining the grouped streams.
+     * The specified {@link Named} is used to name the processor combining the grouped streams.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate
      * consecutive updates to the same key. The rate of propagated updates depends on your input
@@ -201,7 +194,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -262,7 +255,7 @@ public interface CogroupedKStream<K, VOut> {
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * TimestampedKeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -26,6 +27,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
@@ -120,29 +122,73 @@ public class CogroupedKStreamImplTest {
 
 
     @Test
-    public void useNamed() {
+    public void shouldNameProcessorsBasedOnNamedParameter() {
         final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = test.groupByKey();
+        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
                 .aggregate(STRING_INITIALIZER, Named.as("test"));
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k1", "A", 0);
+        String tops = builder.build().describe().toString();
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
-        }
+        assertThat(tops, containsString("test-cogroup-agg-0") );
+        assertThat(tops, containsString("test-cogroup-agg-1") );
+    }
+
+    @Test
+    public void shouldRepartitionStreamsUsingMap() {
+        final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> test3 = builder.stream("three", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = test.map((k,v) -> new KeyValue<>(v,k)).groupByKey();
+        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
+        final KGroupedStream<String, String> groupedThree = test3.groupByKey();
+
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
+                .cogroup(groupedThree, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER, Named.as("test"));
+
+        customers.toStream().to(OUTPUT);
+
+        String tops = builder.build().describe().toString();
+
+        //System.out.println(tops);
+
+        //assertThat(tops, equalTo(""));
+
+    }
+
+    @Test
+    public void shouldRepartitionStreamsUsingTwoMaps() {
+        final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> test3 = builder.stream("three", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = test.map(KeyValue::new).groupByKey();
+        final KGroupedStream<String, String> groupedTwo = test2.map(KeyValue::new).groupByKey();
+        final KGroupedStream<String, String> groupedThree = test3.groupByKey();
+
+        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
+                .cogroup(groupedThree, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER, Named.as("test"));
+
+        customers.toStream().to(OUTPUT);
+
+        String tops = builder.build().describe().toString();
+
+        //System.out.println(tops);
+
+        //assertThat(tops, equalTo(""));
+
     }
 
     @Test
