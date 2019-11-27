@@ -22,6 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
+import java.util.{List => JList, ArrayList => JArrayList}
 import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
@@ -486,6 +487,24 @@ class Log(@volatile var dir: File,
   newGauge("Size",
     new Gauge[Long] {
       def value = size
+    },
+    tags)
+
+  newGauge("LogSegments",
+    new Gauge[JList[String]] {
+      def value = {
+        val list = logSegments.toSeq.map { seg =>
+          s"baseOffset=${seg.baseOffset}; created=${seg.createdMs}; logSize=${seg.size}; indexSize=${seg.indexSize}"
+        }
+        // Explicitly returning Java list to support JMX clients that don't have Scala runtime in the classpath
+        new JArrayList[String](list.asJava)
+      }
+    },
+    tags)
+
+  newGauge("Directory",
+    new Gauge[String] {
+      def value = dir.getAbsolutePath
     },
     tags)
 
@@ -2301,6 +2320,8 @@ class Log(@volatile var dir: File,
     removeMetric("LogStartOffset", tags)
     removeMetric("LogEndOffset", tags)
     removeMetric("Size", tags)
+    removeMetric("LogSegments", tags)
+    removeMetric("Directory", tags)
   }
 
   /**
