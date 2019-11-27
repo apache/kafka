@@ -347,7 +347,7 @@ public class StandbyTaskTest {
                 new LogContext("standby-task-test ")
             ),
             createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
+            streamsMetrics,
             stateDirectory
         );
 
@@ -440,7 +440,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
+            streamsMetrics,
             stateDirectory
         );
         task.initializeStateStores();
@@ -685,7 +685,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            streamsMetrics,
             stateDirectory
         );
 

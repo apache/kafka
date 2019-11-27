@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -46,8 +47,9 @@ import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
 
-    private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
-    private final AbstractProcessorContext context = new TestProcessorContext(metrics);
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), "test", StreamsConfig.METRICS_LATEST);
+    private final AbstractProcessorContext context = new TestProcessorContext(streamsMetrics);
     private final MockKeyValueStore stateStore = new MockKeyValueStore("store", false);
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private final ProcessorRecordContext recordContext = new ProcessorRecordContext(10, System.currentTimeMillis(), 1, "foo", headers);
@@ -193,8 +195,14 @@ public class AbstractProcessorContextTest {
             config.put("user.supplied.config", "user-suppplied-value");
         }
 
-        TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
+        TestProcessorContext(final StreamsMetricsImpl streamsMetrics) {
+            super(
+                new TaskId(0, 0),
+                new StreamsConfig(config),
+                streamsMetrics,
+                new StateManagerStub(),
+                new ThreadCache(new LogContext("name "), 0, streamsMetrics)
+            );
         }
 
         @Override

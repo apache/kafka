@@ -29,7 +29,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -127,7 +127,11 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(
+                new LogContext("testCache "),
+                0,
+                new StreamsMetricsImpl(new Metrics(), "test", StreamsConfig.METRICS_LATEST)
+                )
         );
         bytesStore.init(context, bytesStore);
     }

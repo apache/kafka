@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.ToInternal;
@@ -94,16 +93,17 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void initializeStore() {
         final File stateDir = TestUtils.tempDirectory();
         metrics = new Metrics();
-        final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
 
         context = new InternalMockProcessorContext(
             stateDir,
             Serdes.String(),
             Serdes.String(),
-            metrics,
+            streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
+            new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
         ) {
             @Override
             public <K, V> void forward(final K key, final V value, final To to) {
