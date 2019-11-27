@@ -19,8 +19,9 @@ package kafka.coordinator.transaction
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
-import javax.management.ObjectName
 
+import javax.management.ObjectName
+import kafka.api.KAFKA_2_4_IV1
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool}
@@ -65,7 +66,8 @@ class TransactionStateManagerTest {
   val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time, metrics)
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
+    replicaManager, txnConfig, time, metrics, KAFKA_2_4_IV1)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
@@ -344,7 +346,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAppendTransactionToLogWhileProducerFenced() = {
+  def testAppendTransactionToLogWhileProducerFenced(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
@@ -364,7 +366,7 @@ class TransactionStateManagerTest {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testAppendTransactionToLogWhilePendingStateChanged() = {
+  def testAppendTransactionToLogWhilePendingStateChanged(): Unit = {
     // first insert the initial transaction metadata
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
@@ -467,24 +469,24 @@ class TransactionStateManagerTest {
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
-  private def verifyMetadataDoesExistAndIsUsable(transactionalId: String) = {
+  private def verifyMetadataDoesExistAndIsUsable(transactionalId: String): Unit = {
     transactionManager.getTransactionState(transactionalId) match {
-      case Left(errors) => fail("shouldn't have been any errors")
+      case Left(_) => fail("shouldn't have been any errors")
       case Right(None) => fail("metadata should have been removed")
       case Right(Some(metadata)) =>
         assertTrue("metadata shouldn't be in a pending state", metadata.transactionMetadata.pendingState.isEmpty)
     }
   }
 
-  private def verifyMetadataDoesntExist(transactionalId: String) = {
+  private def verifyMetadataDoesntExist(transactionalId: String): Unit = {
     transactionManager.getTransactionState(transactionalId) match {
-      case Left(errors) => fail("shouldn't have been any errors")
-      case Right(Some(metdata)) => fail("metadata should have been removed")
+      case Left(_) => fail("shouldn't have been any errors")
+      case Right(Some(_)) => fail("metadata should have been removed")
       case Right(None) => // ok
     }
   }
 
-  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState) = {
+  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState): Unit = {
     for (partitionId <- 0 until numPartitions) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }

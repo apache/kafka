@@ -2,19 +2,11 @@ Apache Kafka
 =================
 See our [web site](https://kafka.apache.org) for details on the project.
 
-You need to have [Gradle](https://www.gradle.org/installation) and [Java](https://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
-
-Kafka requires Gradle 5.0 or higher.
+You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
 Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
 
 Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
-
-### First bootstrap and download the wrapper ###
-    cd kafka_source_dir
-    gradle
-
-Now everything else will work.
 
 ### Build a jar and run it ###
     ./gradlew jar
@@ -199,6 +191,18 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+
+### Dependency Analysis ###
+
+The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
+
+Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
+
+    ./gradlew allDeps
+
+    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+
+These take the same arguments as the builtin variants.
 
 ### Running system tests ###
 

@@ -20,12 +20,18 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds ProducerId and ProducerEpoch, allowing producers to try to resume after an INVALID_PRODUCER_EPOCH error
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional id, or null if the producer is not transactional." },
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
-      "about": "The time in ms to wait for before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." }
+      "about": "The time in ms to wait before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." },
+    { "name": "ProducerId", "type": "int64", "versions": "3+", "default": "-1",
+      "about": "The producer id. This is used to disambiguate requests if a transactional id is reused following its expiration." },
+    { "name": "ProducerEpoch", "type": "int16", "versions": "3+", "default": "-1",
+      "about": "The producer's current epoch. This will be checked against the producer epoch on the broker, and the request will return an error if they do not match." }
   ]
 }

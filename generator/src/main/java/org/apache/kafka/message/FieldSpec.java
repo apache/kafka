@@ -77,7 +77,10 @@ public final class FieldSpec {
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
         }
-        this.versions = Versions.parse(versions, null);
+        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+        // If versions is not set, but taggedVersions is, default to taggedVersions.
+        this.versions = Versions.parse(versions, this.taggedVersions.empty() ?
+            null : this.taggedVersions);
         if (this.versions == null) {
             throw new RuntimeException("You must specify the version of the " +
                 name + " structure.");
@@ -103,7 +106,6 @@ public final class FieldSpec {
                 throw new RuntimeException("Non-array field " + name + " cannot have fields");
             }
         }
-        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {
