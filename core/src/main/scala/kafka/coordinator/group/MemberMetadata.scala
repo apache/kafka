@@ -88,7 +88,9 @@ private[group] class MemberMetadata(var memberId: String,
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
     if (isAwaitingJoin)
       !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
-    else awaitingSyncCallback != null ||
+    else if (isNew || isAwaitingSync)
+      true
+    else
       latestHeartbeat + sessionTimeoutMs > deadlineMs
   }
 
