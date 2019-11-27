@@ -255,7 +255,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 final long committedTimestamp = decodeTimestamp(metadata.metadata());
                 partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                    + " to {} in stream task {}", partition, committedTimestamp, this);
+                    + " to {} in stream task {}", partition, committedTimestamp, id);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
