@@ -113,7 +113,6 @@ public class MetadataTest {
                 new ClusterResourceListeners());
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9002)));
 
-        metadata.requestUpdate();
         assertEquals(0, metadata.timeToAllowUpdate(time.milliseconds()));
         assertEquals(0, metadata.timeToNextUpdate(time.milliseconds()));
     }
@@ -165,7 +164,6 @@ public class MetadataTest {
 
     @Test
     public void testClusterListenerGetsNotifiedOfUpdate() {
-        long time = 0;
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);

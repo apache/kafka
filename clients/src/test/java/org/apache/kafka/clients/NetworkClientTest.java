@@ -898,11 +898,11 @@ public class NetworkClientTest {
         }
 
         @Override
-        public void handleDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
-            maybeFatalException.ifPresent(exception -> {
+        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeAuthException) {
+            maybeAuthException.ifPresent(exception -> {
                 failure = exception;
             });
-            super.handleDisconnect(now, destinationId, maybeFatalException);
+            super.handleServerDisconnect(now, destinationId, maybeAuthException);
         }
 
         @Override

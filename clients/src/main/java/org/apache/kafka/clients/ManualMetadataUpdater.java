@@ -38,9 +38,6 @@ import java.util.Optional;
  * This class is not thread-safe!
  */
 public class ManualMetadataUpdater implements MetadataUpdater {
-
-    private static final Logger log = LoggerFactory.getLogger(ManualMetadataUpdater.class);
-
     private List<Node> nodes;
 
     public ManualMetadataUpdater() {
@@ -71,14 +68,9 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeFatalException) {
-        if (maybeFatalException.isPresent()) {
-            // We don't fail the broker on failures, but there should be sufficient information in the
-            // logs indicating the reason for failure.
-            log.error("Received authentication failure from brokerId={}", nodeId, maybeFatalException.get());
-        } else {
-            log.info("Received disconnect from brokerId={}", nodeId);
-        }
+    public void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException) {
+        // We don't fail the broker on failures. There should be sufficient information from
+        // the NetworkClient logs to indicate the reason for the failure.
     }
 
     @Override
@@ -88,11 +80,6 @@ public class ManualMetadataUpdater implements MetadataUpdater {
 
     @Override
     public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-        // Do nothing
-    }
-
-    @Override
-    public void requestUpdate() {
         // Do nothing
     }
 

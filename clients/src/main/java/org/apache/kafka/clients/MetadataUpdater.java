@@ -67,7 +67,7 @@ public interface MetadataUpdater extends Closeable {
      * @param nodeId The id of the node that disconnected
      * @param maybeAuthException Optional authentication error
      */
-    void handleDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException);
+    void handleServerDisconnect(long now, String nodeId, Optional<AuthenticationException> maybeAuthException);
 
     /**
      * Handle a metadata request failure.
@@ -84,12 +84,6 @@ public interface MetadataUpdater extends Closeable {
      * requests with special handling for completed receives of such requests.
      */
     void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse);
-
-    /**
-     * Schedules an update of the current cluster metadata info. A subsequent call to `maybeUpdate` would trigger the
-     * start of the update if possible (see `maybeUpdate` for more information).
-     */
-    void requestUpdate();
 
     /**
      * Close this updater.

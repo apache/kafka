@@ -101,8 +101,9 @@ public class AdminMetadataManager {
         }
 
         @Override
-        public void handleDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
+        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
             maybeFatalException.ifPresent(AdminMetadataManager.this::updateFailed);
+            AdminMetadataManager.this.requestUpdate();
         }
 
         @Override
@@ -113,11 +114,6 @@ public class AdminMetadataManager {
         @Override
         public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
             // Do nothing
-        }
-
-        @Override
-        public void requestUpdate() {
-            AdminMetadataManager.this.requestUpdate();
         }
 
         @Override

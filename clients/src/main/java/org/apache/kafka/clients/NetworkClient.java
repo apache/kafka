@@ -760,7 +760,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         cancelInFlightRequests(nodeId, now, responses);
-        metadataUpdater.handleDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
+        metadataUpdater.handleServerDisconnect(now, nodeId, Optional.ofNullable(disconnectState.exception()));
     }
 
     /**
@@ -778,10 +778,6 @@ public class NetworkClient implements KafkaClient {
             log.debug("Disconnecting from node {} due to request timeout.", nodeId);
             processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
         }
-
-        // we disconnected, so we should probably refresh our metadata
-        if (!nodeIds.isEmpty())
-            metadataUpdater.requestUpdate();
     }
 
     private void handleAbortedSends(List<ClientResponse> responses) {
@@ -895,9 +891,6 @@ public class NetworkClient implements KafkaClient {
             log.debug("Node {} disconnected.", node);
             processDisconnection(responses, node, now, entry.getValue());
         }
-        // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
-        if (this.selector.disconnected().size() > 0)
-            metadataUpdater.requestUpdate();
     }
 
     /**
@@ -961,10 +954,10 @@ public class NetworkClient implements KafkaClient {
                     this.socketReceiveBuffer);
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
-            /* attempt failed, we'll try again after the backoff */
+            // Attempt failed, we'll try again after the backoff
             connectionStates.disconnected(nodeConnectionId, now);
-            /* maybe the problem is our metadata, update it */
-            metadataUpdater.requestUpdate();
+            // Notify metadata updater of the connection failure
+            metadataUpdater.handleServerDisconnect(now, nodeConnectionId, Optional.empty());
         }
     }
 
@@ -1018,7 +1011,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
+        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeFatalException) {
             Cluster cluster = metadata.fetch();
             // 'processDisconnection' generates warnings for misconfigured bootstrap server configuration
             // resulting in 'Connection Refused' and misconfigured security resulting in authentication failures.
@@ -1033,10 +1026,13 @@ public class NetworkClient implements KafkaClient {
 
             // If we have a disconnect while an update is due, we treat it as a failed update
             // so that we can backoff properly
-            if (!hasFetchInProgress() && isUpdateDue(now))
+            if (isUpdateDue(now))
                 handleFailedRequest(now, Optional.empty());
 
             maybeFatalException.ifPresent(metadata::fatalError);
+
+            // The disconnect may be the result of stale metadata, so request an update
+            metadata.requestUpdate();
         }
 
         @Override
@@ -1077,11 +1073,6 @@ public class NetworkClient implements KafkaClient {
             }
 
             inProgressRequestVersion = null;
-        }
-
-        @Override
-        public void requestUpdate() {
-            this.metadata.requestUpdate();
         }
 
         @Override
