@@ -1091,9 +1091,9 @@ class GroupCoordinator(val brokerId: Int,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
-            group.maybeInvokeJoinCallback(member, joinResult)
-            completeAndScheduleNextHeartbeatExpiration(group, member)
             member.isNew = false
+            completeAndScheduleNextHeartbeatExpiration(group, member)
+            group.maybeInvokeJoinCallback(member, joinResult)
           }
         }
       }
