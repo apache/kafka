@@ -46,14 +46,15 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.ThreadMetadata;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -1020,7 +1021,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Collection<StreamsMetadata> allMetadata() {
         validateIsRunning();
-        return streamsMetadataState.getAllActiveMetadata();
+        return streamsMetadataState.getAllMetadata();
     }
 
     /**
@@ -1076,6 +1077,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
      * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
      */
+    @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final Serializer<K> keySerializer) {
@@ -1107,6 +1109,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
      * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
      */
+    @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final StreamPartitioner<? super K, ?> partitioner) {
@@ -1115,21 +1118,30 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * [TENTATIVE]  Provide metadata for all hosts that have this key.
-     *
-     * @param storeName     the {@code storeName} to find metadata for
-     * @param key           the key to find metadata for
-     * @param keySerializer serializer for the key
-     * @param <K>           key type
-     * @return {@link List<StreamsMetadata>} for the key ordered active first and then standby or
-     *         {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store.
      */
-    public <K> List<StreamsMetadata> allMetadataWithKey(final String storeName,
-                                                        final K key,
-                                                        final Serializer<K> keySerializer) {
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final Serializer<K> keySerializer) {
         validateIsRunning();
-        return streamsMetadataState.getAllMetadataWithKey(storeName, key, keySerializer);
+        return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, keySerializer);
     }
+
+    /**
+     * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
+     * the supplied partitioner
+     */
+    public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
+                                                    final K key,
+                                                    final StreamPartitioner<? super K, ?> partitioner) {
+        validateIsRunning();
+        return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, partitioner);
+    }
+
+    /**
+     * Returns mapping from store name to another map of partition to offset lag info, for all stores local to this Streams instance. It includes both active and standby store partitions, with active partitions always reporting 0 lag.
+     */
+    //public Map<String, Map<Integer, Long>> allLocalOffsetLags() {}
 
     /**
      * Get a facade wrapping the local {@link StateStore} instances with the provided {@code storeName} if the Store's

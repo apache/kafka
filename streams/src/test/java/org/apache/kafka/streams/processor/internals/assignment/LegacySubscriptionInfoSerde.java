@@ -32,7 +32,7 @@ public class LegacySubscriptionInfoSerde {
 
     private static final Logger log = LoggerFactory.getLogger(LegacySubscriptionInfoSerde.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 5;
+    public static final int LATEST_SUPPORTED_VERSION = 6;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -95,7 +95,7 @@ public class LegacySubscriptionInfoSerde {
      * @throws TaskAssignmentException if method fails to encode the data
      */
     public ByteBuffer encode() {
-        if (usedVersion == 3 || usedVersion == 4 || usedVersion == 5) {
+        if (usedVersion == 3 || usedVersion == 4 || usedVersion == 5 || usedVersion == 6) {
             final byte[] endPointBytes = prepareUserEndPoint(this.userEndPoint);
 
             final ByteBuffer buf = ByteBuffer.allocate(

@@ -53,12 +53,12 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.internals.KeyQueryMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -270,14 +270,14 @@ public class QueryableStateIntegrationTest {
 
             for (final String key: keys) {
                 try {
-                    final StreamsMetadata metadata = streams
-                        .metadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
+                    final KeyQueryMetadata metadata = streams
+                        .queryMetadataForKey(storeName, key, new StringSerializer());
+                    if (metadata == null || metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
 
-                    final int index = metadata.hostInfo().port();
+                    final int index = metadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = streamsList.get(index);
                     final ReadOnlyKeyValueStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore());
@@ -321,14 +321,14 @@ public class QueryableStateIntegrationTest {
 
             for (final String key: keys) {
                 try {
-                    final StreamsMetadata metadata = streams
-                        .metadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
+                    final KeyQueryMetadata metadata = streams
+                        .queryMetadataForKey(storeName, key, new StringSerializer());
+                    if (metadata == null || metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
 
-                    final int index = metadata.hostInfo().port();
+                    final int index = metadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = streamsList.get(index);
                     final ReadOnlyWindowStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.windowStore());

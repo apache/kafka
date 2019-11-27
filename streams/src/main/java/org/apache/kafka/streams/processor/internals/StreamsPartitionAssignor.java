@@ -1144,6 +1144,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             case 3:
             case 4:
             case 5:
+            case 6:
                 processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
                 partitionsByHost = info.partitionsByHost();
                 standbyPartitionsByHost = info.standbyPartitionByHost();

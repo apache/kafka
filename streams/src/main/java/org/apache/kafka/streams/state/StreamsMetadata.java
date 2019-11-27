@@ -36,19 +36,35 @@ public class StreamsMetadata {
      */
     public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(new HostInfo("unavailable", -1),
                                                                             Collections.emptySet(),
+                                                                            Collections.emptySet(),
+                                                                            Collections.emptySet(),
                                                                             Collections.emptySet());
 
     private final HostInfo hostInfo;
     private final Set<String> stateStoreNames;
     private final Set<TopicPartition> topicPartitions;
+    private final Set<TopicPartition> standbyTopicPartitions;
+    private final Set<String> standbyStateStoreNames;
 
     public StreamsMetadata(final HostInfo hostInfo,
                            final Set<String> stateStoreNames,
-                           final Set<TopicPartition> topicPartitions) {
+                           final Set<TopicPartition> topicPartitions,
+                           final Set<TopicPartition> standbyTopicPartitions,
+                           final Set<String> standbyStateStoreNames) {
 
         this.hostInfo = hostInfo;
         this.stateStoreNames = stateStoreNames;
         this.topicPartitions = topicPartitions;
+        this.standbyTopicPartitions = standbyTopicPartitions;
+        this.standbyStateStoreNames = standbyStateStoreNames;
+    }
+
+    public Set<TopicPartition> getStandbyTopicPartitions() {
+        return standbyTopicPartitions;
+    }
+
+    public Set<String> getStandbyStateStoreNames() {
+        return standbyStateStoreNames;
     }
 
     public HostInfo hostInfo() {

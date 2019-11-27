@@ -55,12 +55,12 @@ public class AssignmentInfo {
     public AssignmentInfo(final int version,
                           final int commonlySupportedVersion) {
         this(version,
-            commonlySupportedVersion,
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            0);
+                commonlySupportedVersion,
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                0);
     }
 
     public AssignmentInfo(final int version,
@@ -89,7 +89,7 @@ public class AssignmentInfo {
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
-                + "; was: " + version);
+                    + "; was: " + version);
         }
     }
 
@@ -123,7 +123,7 @@ public class AssignmentInfo {
 
     /**
      * @throws TaskAssignmentException if method fails to encode the data, e.g., if there is an
-     * IO exception during encoding
+     *                                 IO exception during encoding
      */
     public ByteBuffer encode() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -157,12 +157,19 @@ public class AssignmentInfo {
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
                     encodePartitionsByHostAsDictionary(out);
+                    out.writeInt(errCode);
+                    break;
+                case 6:
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodePartitionsByHostAsDictionary(out);
                     encodeStandbyPartitionsByHostAsDictionary(out);
                     out.writeInt(errCode);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                        + "; latest commonly supported version: " + commonlySupportedVersion);
+                            + "; latest commonly supported version: " + commonlySupportedVersion);
             }
 
             out.flush();
@@ -202,7 +209,7 @@ public class AssignmentInfo {
     }
 
     private void encodeHostPartitionMapAsDictionary(final DataOutputStream out,
-        final Map<HostInfo, Set<TopicPartition>> hostPartitionMap) throws IOException {
+                                                    final Map<HostInfo, Set<TopicPartition>> hostPartitionMap) throws IOException {
 
         // Build a dictionary to encode topicNames
         int topicIndex = 0;
@@ -304,12 +311,20 @@ public class AssignmentInfo {
                     decodeActiveTasks(assignmentInfo, in);
                     decodeStandbyTasks(assignmentInfo, in);
                     decodePartitionsByHostUsingDictionary(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
+                    break;
+                case 6:
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodePartitionsByHostUsingDictionary(assignmentInfo, in);
                     decodeStandbyPartitionsByHostUsingDictionary(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
-                        "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                            "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
                     log.error(fatalException.getMessage(), fatalException);
                     throw fatalException;
             }
@@ -340,7 +355,7 @@ public class AssignmentInfo {
     }
 
     private static void decodePartitionsByHost(final AssignmentInfo assignmentInfo,
-                                                   final DataInputStream in) throws IOException {
+                                               final DataInputStream in) throws IOException {
         assignmentInfo.partitionsByHost = new HashMap<>();
         final int numEntries = in.readInt();
         for (int i = 0; i < numEntries; i++) {
@@ -359,7 +374,7 @@ public class AssignmentInfo {
     }
 
     private static Map<HostInfo, Set<TopicPartition>> decodeHostPartitionMapUsingDictionary(final AssignmentInfo assignmentInfo,
-        final DataInputStream in) throws IOException {
+                                                                                            final DataInputStream in) throws IOException {
         final Map<HostInfo, Set<TopicPartition>> hostPartitionMap = new HashMap<>();
         final int dictSize = in.readInt();
         final Map<Integer, String> topicIndexDict = new HashMap<>(dictSize);
@@ -376,17 +391,17 @@ public class AssignmentInfo {
     }
 
     private static void decodePartitionsByHostUsingDictionary(final AssignmentInfo assignmentInfo,
-        final DataInputStream in) throws IOException {
+                                                              final DataInputStream in) throws IOException {
         assignmentInfo.partitionsByHost = decodeHostPartitionMapUsingDictionary(assignmentInfo, in);
     }
 
     private static void decodeStandbyPartitionsByHostUsingDictionary(final AssignmentInfo assignmentInfo,
-        final DataInputStream in) throws IOException {
+                                                                     final DataInputStream in) throws IOException {
         assignmentInfo.standbyPartitionsByHost = decodeHostPartitionMapUsingDictionary(assignmentInfo, in);
     }
 
     private static Set<TopicPartition> readTopicPartitions(final DataInputStream in,
-        final Map<Integer, String> topicIndexDict) throws IOException {
+                                                           final Map<Integer, String> topicIndexDict) throws IOException {
         final int numPartitions = in.readInt();
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
@@ -399,7 +414,7 @@ public class AssignmentInfo {
     public int hashCode() {
         final int hostMapHashCode = partitionsByHost.hashCode() ^ standbyPartitionsByHost.hashCode();
         return usedVersion ^ commonlySupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
-            ^ hostMapHashCode ^ errCode;
+                ^ hostMapHashCode ^ errCode;
     }
 
     @Override
@@ -421,11 +436,11 @@ public class AssignmentInfo {
     @Override
     public String toString() {
         return "[version=" + usedVersion
-            + ", supported version=" + commonlySupportedVersion
-            + ", active tasks=" + activeTasks
-            + ", standby tasks=" + standbyTasks
-            + ", partitions by host=" + partitionsByHost
-            + ", standbyPartitions by host=" + standbyPartitionsByHost
-            + "]";
+                + ", supported version=" + commonlySupportedVersion
+                + ", active tasks=" + activeTasks
+                + ", standby tasks=" + standbyTasks
+                + ", partitions by host=" + partitionsByHost
+                + ", standbyPartitions by host=" + standbyPartitionsByHost
+                + "]";
     }
 }
