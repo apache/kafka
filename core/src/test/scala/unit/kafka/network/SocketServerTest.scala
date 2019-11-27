@@ -635,7 +635,7 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
-    // make sure the sockets ar e open
+    // make sure the sockets are open
     server.dataPlaneAcceptors.asScala.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     shutdownServerAndMetrics(server)
@@ -896,15 +896,10 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val expectedTotalTimeCount = totalTimeHistCount() + 1
+      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(0))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
 
-      // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
-      // On Mac OS X, the initial write seems to always succeed and it is able to write up to 102400 bytes on the initial
-      // write. If the buffer is smaller than this, the write is considered complete and the disconnection is not
-      // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
-      // IOException.
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, None, None))
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
