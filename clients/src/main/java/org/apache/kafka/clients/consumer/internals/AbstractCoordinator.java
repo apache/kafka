@@ -1216,8 +1216,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // brokers are available to connect to.
                                 AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
-                            // the session timeout has expired without seeing a successful heartbeat, so we should
-                            // probably make sure the coordinator is still healthy.
+                            // the session timeout has expired, so we should mark coordinator unknown.
                             markCoordinatorUnknown();
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
