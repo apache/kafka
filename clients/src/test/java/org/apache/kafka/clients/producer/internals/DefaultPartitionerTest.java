@@ -28,7 +28,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class DefaultPartitionerTest {
-    private final static byte[] KEY_BYTES = "key".getBytes();
+    private byte[] keyBytes = "key".getBytes();
     private final static Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
@@ -45,7 +45,7 @@ public class DefaultPartitionerTest {
         final Partitioner partitioner = new DefaultPartitioner();
         final Cluster cluster = new Cluster("clusterId", asList(NODES), PARTITIONS,
             Collections.<String>emptySet(), Collections.<String>emptySet());
-        int partition = partitioner.partition("test",  null, KEY_BYTES, null, null, cluster);
-        assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, KEY_BYTES, null, null, cluster));
+        int partition = partitioner.partition("test",  null, keyBytes, null, null, cluster);
+        assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, keyBytes, null, null, cluster));
     }
 }

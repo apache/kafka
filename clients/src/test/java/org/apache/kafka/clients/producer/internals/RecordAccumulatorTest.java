@@ -81,9 +81,9 @@ public class RecordAccumulatorTest {
     private PartitionInfo part2 = new PartitionInfo(topic, partition2, node1, null, null);
     private PartitionInfo part3 = new PartitionInfo(topic, partition3, node2, null, null);
     private MockTime time = new MockTime();
-    private byte[] key = "key".getBytes();
-    private byte[] value = "value".getBytes();
-    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length, Record.EMPTY_HEADERS);
+    private ByteBuffer key = ByteBuffer.wrap("key".getBytes());
+    private ByteBuffer value = ByteBuffer.wrap("value".getBytes());
+    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.remaining(), value.remaining(), Record.EMPTY_HEADERS);
     private Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3),
         Collections.emptySet(), Collections.emptySet());
     private Metrics metrics = new Metrics(time);
@@ -132,8 +132,8 @@ public class RecordAccumulatorTest {
         Iterator<Record> iter = batch.records().records().iterator();
         for (int i = 0; i < appends; i++) {
             Record record = iter.next();
-            assertEquals("Keys should match", ByteBuffer.wrap(key), record.key());
-            assertEquals("Values should match", ByteBuffer.wrap(value), record.value());
+            assertEquals("Keys should match", key, record.key());
+            assertEquals("Values should match", value, record.value());
         }
         assertFalse("No more records", iter.hasNext());
     }
@@ -150,7 +150,7 @@ public class RecordAccumulatorTest {
 
     private void testAppendLarge(CompressionType compressionType) throws Exception {
         int batchSize = 512;
-        byte[] value = new byte[2 * batchSize];
+        ByteBuffer value = ByteBuffer.allocate(2 * batchSize);
         RecordAccumulator accum = createTestRecordAccumulator(
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false);
@@ -167,8 +167,8 @@ public class RecordAccumulatorTest {
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
-        assertEquals(ByteBuffer.wrap(key), record.key());
-        assertEquals(ByteBuffer.wrap(value), record.value());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
         assertEquals(0L, record.timestamp());
     }
 
@@ -184,7 +184,7 @@ public class RecordAccumulatorTest {
 
     private void testAppendLargeOldMessageFormat(CompressionType compressionType) throws Exception {
         int batchSize = 512;
-        byte[] value = new byte[2 * batchSize];
+        ByteBuffer value = ByteBuffer.allocate(2 * batchSize);
 
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(node1.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
@@ -205,8 +205,8 @@ public class RecordAccumulatorTest {
         assertEquals(1, records.size());
         Record record = records.get(0);
         assertEquals(0L, record.offset());
-        assertEquals(ByteBuffer.wrap(key), record.key());
-        assertEquals(ByteBuffer.wrap(value), record.value());
+        assertEquals(key, record.key());
+        assertEquals(value, record.value());
         assertEquals(0L, record.timestamp());
     }
 
@@ -225,8 +225,8 @@ public class RecordAccumulatorTest {
 
         Iterator<Record> iter = batch.records().records().iterator();
         Record record = iter.next();
-        assertEquals("Keys should match", ByteBuffer.wrap(key), record.key());
-        assertEquals("Values should match", ByteBuffer.wrap(value), record.value());
+        assertEquals("Keys should match", key, record.key());
+        assertEquals("Values should match", value, record.value());
         assertFalse("No more records", iter.hasNext());
     }
 
@@ -721,7 +721,7 @@ public class RecordAccumulatorTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
 
-        byte[] value = new byte[1024];
+        ByteBuffer value = ByteBuffer.allocate(1024);
         final AtomicInteger acked = new AtomicInteger(0);
         Callback cb = new Callback() {
             @Override
@@ -806,7 +806,7 @@ public class RecordAccumulatorTest {
             CompressionRatioEstimator.resetEstimation(topic);
             for (int i = 0; i < numMessages; i++) {
                 int dice = random.nextInt(100);
-                byte[] value = (dice < goodCompRatioPercentage) ?
+                ByteBuffer value = (dice < goodCompRatioPercentage) ?
                         bytesWithGoodCompression(random) : bytesWithPoorCompression(random, 100);
                 accum.append(tp1, 0L, null, value, Record.EMPTY_HEADERS, null, 0, false);
                 BatchDrainedResult result = completeOrSplitBatches(accum, batchSize);
@@ -906,7 +906,7 @@ public class RecordAccumulatorTest {
         int expectedAppends = expectedNumAppendsNoKey(batchSize);
         
         // Create first batch
-        int partition = partitioner.partition(topic, null, null, "value", value, cluster);
+        int partition = partitioner.partition(topic, null, null, "value", "value".getBytes(), cluster);
         TopicPartition tp = new TopicPartition(topic, partition);
         accum.append(tp, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false);
         int appends = 1;
@@ -914,7 +914,7 @@ public class RecordAccumulatorTest {
         boolean switchPartition = false;
         while (!switchPartition) {
             // Append to the first batch
-            partition = partitioner.partition(topic, null, null, "value", value, cluster);
+            partition = partitioner.partition(topic, null, null, "value", "value".getBytes(), cluster);
             tp = new TopicPartition(topic, partition);
             RecordAccumulator.RecordAppendResult result = accum.append(tp, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true);
             Deque<ProducerBatch> partitionBatches1 = accum.batches().get(tp1);
@@ -939,14 +939,14 @@ public class RecordAccumulatorTest {
         
         // KafkaProducer would call this method in this case, make second batch
         partitioner.onNewBatch(topic, cluster, partition);
-        partition = partitioner.partition(topic, null, null, "value", value, cluster);
+        partition = partitioner.partition(topic, null, null, "value", "value".getBytes(), cluster);
         tp = new TopicPartition(topic, partition);
         accum.append(tp, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false);
         appends++;
         
         // These appends all go into the second batch
         while (!switchPartition) {
-            partition = partitioner.partition(topic, null, null, "value", value, cluster);
+            partition = partitioner.partition(topic, null, null, "value", "value".getBytes(), cluster);
             tp = new TopicPartition(topic, partition);
             RecordAccumulator.RecordAppendResult result = accum.append(tp, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true);
             Deque<ProducerBatch> partitionBatches1 = accum.batches().get(tp1);
@@ -1020,21 +1020,21 @@ public class RecordAccumulatorTest {
     /**
      * Generates the compression ratio at about 0.6
      */
-    private byte[] bytesWithGoodCompression(Random random) {
+    private ByteBuffer bytesWithGoodCompression(Random random) {
         byte[] value = new byte[100];
         ByteBuffer buffer = ByteBuffer.wrap(value);
         while (buffer.remaining() > 0)
             buffer.putInt(random.nextInt(1000));
-        return value;
+        return buffer;
     }
 
     /**
      * Generates the compression ratio at about 0.9
      */
-    private byte[] bytesWithPoorCompression(Random random, int size) {
+    private ByteBuffer bytesWithPoorCompression(Random random, int size) {
         byte[] value = new byte[size];
         random.nextBytes(value);
-        return value;
+        return ByteBuffer.wrap(value);
     }
 
     private class BatchDrainedResult {
@@ -1053,7 +1053,7 @@ public class RecordAccumulatorTest {
         int size = 0;
         int offsetDelta = 0;
         while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key.length, value.length,
+            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, key.remaining(), value.remaining(),
                 Record.EMPTY_HEADERS);
             if (size + recordSize > batchSize)
                 return offsetDelta;
@@ -1069,7 +1069,7 @@ public class RecordAccumulatorTest {
         int size = 0;
         int offsetDelta = 0;
         while (true) {
-            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.length,
+            int recordSize = DefaultRecord.sizeInBytes(offsetDelta, 0, 0, value.remaining(),
                 Record.EMPTY_HEADERS);
             if (size + recordSize > batchSize)
                 return offsetDelta;

@@ -56,7 +56,7 @@ public class ProducerBatchTest {
     @Test
     public void testChecksumNullForMagicV2() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, null, now);
         assertNotNull(future);
         assertNull(future.checksumOrNull());
     }
@@ -65,7 +65,7 @@ public class ProducerBatchTest {
     public void testBatchAbort() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, callback, now);
 
         KafkaException exception = new KafkaException();
         batch.abort(exception);
@@ -92,7 +92,7 @@ public class ProducerBatchTest {
     public void testBatchCannotAbortTwice() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, callback, now);
         KafkaException exception = new KafkaException();
         batch.abort(exception);
         assertEquals(1, callback.invocations);
@@ -120,7 +120,7 @@ public class ProducerBatchTest {
     public void testBatchCannotCompleteTwice() throws Exception {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         MockCallback callback = new MockCallback();
-        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, callback, now);
         batch.done(500L, 10L, null);
         assertEquals(1, callback.invocations);
         assertNull(callback.exception);
@@ -144,8 +144,8 @@ public class ProducerBatchTest {
             MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128), magic,
                     CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
-            byte[] key = "hi".getBytes();
-            byte[] value = "there".getBytes();
+            ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
+            ByteBuffer value = ByteBuffer.wrap("there".getBytes());
 
             FutureRecordMetadata future = batch.tryAppend(now, key, value, Record.EMPTY_HEADERS, null, now);
             assertNotNull(future);
@@ -169,7 +169,7 @@ public class ProducerBatchTest {
 
             while (true) {
                 FutureRecordMetadata future = batch.tryAppend(
-                        now, "hi".getBytes(), "there".getBytes(),
+                        now, ByteBuffer.wrap("hi".getBytes()), ByteBuffer.wrap("there".getBytes()),
                         new Header[]{header}, null, now);
                 if (future == null) {
                     break;
@@ -205,8 +205,8 @@ public class ProducerBatchTest {
 
                 ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
                 while (true) {
-                    FutureRecordMetadata future = batch.tryAppend(now, "hi".getBytes(), "there".getBytes(),
-                            Record.EMPTY_HEADERS, null, now);
+                    FutureRecordMetadata future = batch.tryAppend(now, ByteBuffer.wrap("hi".getBytes()),
+                            ByteBuffer.wrap("there".getBytes()), Record.EMPTY_HEADERS, null, now);
                     if (future == null)
                         break;
                 }
@@ -258,12 +258,12 @@ public class ProducerBatchTest {
     @Test
     public void testShouldNotAttemptAppendOnceRecordsBuilderIsClosedForAppends() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        FutureRecordMetadata result0 = batch.tryAppend(now, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, null, now);
         assertNotNull(result0);
         assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
         memoryRecordsBuilder.closeForRecordAppends();
         assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
-        assertEquals(null, batch.tryAppend(now + 1, null, new byte[10], Record.EMPTY_HEADERS, null, now + 1));
+        assertEquals(null, batch.tryAppend(now + 1, null, ByteBuffer.allocate(10), Record.EMPTY_HEADERS, null, now + 1));
     }
 
     private static class MockCallback implements Callback {

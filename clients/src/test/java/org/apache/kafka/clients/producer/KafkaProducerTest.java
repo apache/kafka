@@ -53,6 +53,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -540,10 +541,10 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(configs, keySerializer, valueSerializer, metadata,
                 null, null, Time.SYSTEM);
 
-        when(keySerializer.serialize(any(), any(), any())).then(invocation ->
-                invocation.<String>getArgument(2).getBytes());
-        when(valueSerializer.serialize(any(), any(), any())).then(invocation ->
-                invocation.<String>getArgument(2).getBytes());
+        when(keySerializer.serializeToBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
+        when(valueSerializer.serializeToBuffer(any(), any(), any())).then(invocation ->
+                ByteBuffer.wrap(invocation.<String>getArgument(2).getBytes()));
 
         String value = "value";
         String key = "key";
@@ -559,8 +560,8 @@ public class KafkaProducerTest {
         //ensure existing headers are not changed, and last header for key is still original value
         assertArrayEquals(record.headers().lastHeader("test").value(), "header2".getBytes());
 
-        verify(valueSerializer).serialize(topic, record.headers(), value);
-        verify(keySerializer).serialize(topic, record.headers(), key);
+        verify(valueSerializer).serializeToBuffer(topic, record.headers(), value);
+        verify(keySerializer).serializeToBuffer(topic, record.headers(), key);
 
         producer.close(Duration.ofMillis(0));
     }

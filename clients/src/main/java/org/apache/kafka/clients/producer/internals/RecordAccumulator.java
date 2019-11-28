@@ -185,8 +185,8 @@ public final class RecordAccumulator {
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
-                                     byte[] key,
-                                     byte[] value,
+                                     ByteBuffer key,
+                                     ByteBuffer value,
                                      Header[] headers,
                                      Callback callback,
                                      long maxTimeToBlock,
@@ -263,7 +263,7 @@ public final class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {

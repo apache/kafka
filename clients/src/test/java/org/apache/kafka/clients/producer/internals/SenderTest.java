@@ -152,8 +152,8 @@ public class SenderTest {
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
-        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce(); // connect
         sender.runOnce(); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
@@ -179,8 +179,8 @@ public class SenderTest {
         // start off support produce request v3
         apiVersions.update("0", NodeApiVersions.create());
 
-        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
@@ -218,14 +218,14 @@ public class SenderTest {
         // start off support produce request v3
         apiVersions.update("0", NodeApiVersions.create());
 
-        Future<RecordMetadata> future1 = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future1 = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // now the partition leader supports only v2
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
 
-        Future<RecordMetadata> future2 = accumulator.append(tp1, 0L, "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future2 = accumulator.append(tp1, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // start off support produce request v3
         apiVersions.update("0", NodeApiVersions.create());
@@ -320,7 +320,8 @@ public class SenderTest {
                 1, metricsRegistry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
 
         // Append a message so that topic metrics are created
-        accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+        accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()), ByteBuffer.wrap("value".getBytes()),
+                null, null, MAX_BLOCK_TIMEOUT, false);
         sender.runOnce(); // connect
         sender.runOnce(); // send produce request
         client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
@@ -347,7 +348,8 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // do a successful retry
-            Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+            Future<RecordMetadata> future = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                    ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
             String id = client.requests().peek().destination();
@@ -376,7 +378,8 @@ public class SenderTest {
             assertEquals(0, sender.inFlightBatches(tp0).size());
 
             // do an unsuccessful retry
-            future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+            future = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                    ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
             sender.runOnce(); // send produce request
             assertEquals(1, sender.inFlightBatches(tp0).size());
             for (int i = 0; i < maxRetries + 1; i++) {
@@ -410,7 +413,8 @@ public class SenderTest {
 
             // Send the first message.
             TopicPartition tp2 = new TopicPartition("test", 1);
-            accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+            accumulator.append(tp2, 0L, ByteBuffer.wrap("key1".getBytes()), ByteBuffer.wrap("value1".getBytes()),
+                    null, null, MAX_BLOCK_TIMEOUT, false);
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
             String id = client.requests().peek().destination();
@@ -423,7 +427,8 @@ public class SenderTest {
 
             time.sleep(900);
             // Now send another message to tp2
-            accumulator.append(tp2, 0L, "key2".getBytes(), "value2".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+            accumulator.append(tp2, 0L, ByteBuffer.wrap("key2".getBytes()), ByteBuffer.wrap("value2".getBytes()),
+                    null, null, MAX_BLOCK_TIMEOUT, false);
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
             MetadataResponse metadataUpdate2 = TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
@@ -444,8 +449,8 @@ public class SenderTest {
         int messagesPerBatch = 10;
         final AtomicInteger expiryCallbackCount = new AtomicInteger(0);
         final AtomicReference<Exception> unexpectedException = new AtomicReference<>();
-        final byte[] key = "key".getBytes();
-        final byte[] value = "value".getBytes();
+        final ByteBuffer key = ByteBuffer.wrap("key".getBytes());
+        final ByteBuffer value = ByteBuffer.wrap("value".getBytes());
         final long maxBlockTimeMs = 1000;
         Callback callback = new Callback() {
             @Override
@@ -496,7 +501,8 @@ public class SenderTest {
         long offset = 0;
         client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
 
-        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
         client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
@@ -513,7 +519,8 @@ public class SenderTest {
         time.sleep(ProducerMetadata.TOPIC_EXPIRY_MS);
         client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp0.topic()));
-        future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
         client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
@@ -555,7 +562,8 @@ public class SenderTest {
     @Test
     public void testCanRetryWithoutIdempotence() throws Exception {
         // do a successful retry
-        Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce(); // connect
         sender.runOnce(); // send produce request
         String id = client.requests().peek().destination();
@@ -594,7 +602,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -603,7 +612,8 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
@@ -644,7 +654,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -653,11 +664,13 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
          // Send third ProduceRequest
-        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         assertEquals(3, client.inFlightRequestCount());
@@ -672,7 +685,8 @@ public class SenderTest {
         sender.runOnce(); // receive response 0
 
         // Queue the fourth request, it shouldn't be sent until the first 3 complete.
-        Future<RecordMetadata> request4 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request4 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
@@ -744,7 +758,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -753,7 +768,8 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
@@ -803,8 +819,10 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest with multiple messages.
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false);
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -818,7 +836,8 @@ public class SenderTest {
         sender.runOnce();
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
@@ -845,7 +864,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -854,7 +874,8 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
@@ -927,14 +948,16 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
         assertFalse(request1.isDone());
@@ -995,7 +1018,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(10000L);
         client.disconnect(node.idString());
@@ -1017,13 +1041,15 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         // We separate the two appends by 1 second so that the two batches
         // don't expire at the same time.
         time.sleep(1000L);
 
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, sender.inFlightBatches(tp0).size());
@@ -1045,7 +1071,8 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
 
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
-        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         time.sleep(20);
         assertFalse(request2.isDone());
 
@@ -1084,11 +1111,13 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
 
         time.sleep(1000L);
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
 
         assertEquals(2, client.inFlightRequestCount());
@@ -1105,7 +1134,8 @@ public class SenderTest {
         assertFutureFailure(request1, TimeoutException.class);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
-        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         time.sleep(20);
         assertFalse(request2.isDone());
@@ -1137,7 +1167,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
 
@@ -1176,10 +1207,10 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect and send.
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1218,10 +1249,10 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, 10,
             senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-            "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-            "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+            ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+            ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect and send.
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1257,10 +1288,10 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, 10,
             senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-            "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-            "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+            ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+            ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect and send.
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1293,10 +1324,10 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> failedResponse = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect.
         sender.runOnce();  // send.
 
@@ -1340,7 +1371,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         String nodeId = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(nodeId), "localhost", 0);
@@ -1349,7 +1381,8 @@ public class SenderTest {
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, client.inFlightRequestCount());
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
@@ -1393,7 +1426,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1410,8 +1444,10 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest, a single batch with 2 records.
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false);
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
@@ -1451,7 +1487,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1468,7 +1505,8 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
@@ -1509,7 +1547,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1526,14 +1565,16 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
 
         // Send the third ProduceRequest, in parallel with the second. It should be retried even though the
         // lastAckedOffset > logStartOffset when its UnknownProducerResponse comes back.
-        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request3 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(3, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
@@ -1598,7 +1639,8 @@ public class SenderTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0).longValue());
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         assertEquals(1, client.inFlightRequestCount());
@@ -1615,7 +1657,8 @@ public class SenderTest {
         assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest,
-        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertEquals(2, transactionManager.sequenceNumber(tp0).longValue());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
@@ -1658,8 +1701,8 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
 
         // cluster authorization is a fatal error for the producer
-        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1685,12 +1728,12 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
 
         // cluster authorization is a fatal error for the producer
-        Future<RecordMetadata> future1 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
-        Future<RecordMetadata> future2 = accumulator.append(tp1, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future2 = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
 
         client.respond(new MockClient.RequestMatcher() {
@@ -1726,8 +1769,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1751,8 +1794,8 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
 
-        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1782,7 +1825,8 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1824,7 +1868,8 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect.
         sender.runOnce();  // send.
         String id = client.requests().peek().destination();
@@ -1863,7 +1908,8 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                 senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // connect.
         sender.runOnce();  // send.
 
@@ -1927,9 +1973,11 @@ public class SenderTest {
             client.prepareMetadataUpdate(metadataUpdate1);
             // Send the first message.
             Future<RecordMetadata> f1 =
-                    accumulator.append(tp, 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false).future;
+                    accumulator.append(tp, 0L, ByteBuffer.wrap("key1".getBytes()), ByteBuffer.allocate(batchSize / 2),
+                            null, null, MAX_BLOCK_TIMEOUT, false).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tp, 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false).future;
+                    accumulator.append(tp, 0L, ByteBuffer.wrap("key2".getBytes()), ByteBuffer.allocate(batchSize / 2),
+                            null, null, MAX_BLOCK_TIMEOUT, false).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -1999,7 +2047,8 @@ public class SenderTest {
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 =
-            accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+            accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                    ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
@@ -2024,7 +2073,8 @@ public class SenderTest {
         setupWithTransactionState(null, true, null);
 
         // Send first ProduceRequest
-        Future<RecordMetadata> request = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         assertEquals("Expect one in-flight batch in accumulator", 1, sender.inFlightBatches(tp0).size());
@@ -2050,7 +2100,8 @@ public class SenderTest {
         setupWithTransactionState(null, true, null);
 
         // Send first ProduceRequest
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+        accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false);
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
@@ -2058,7 +2109,8 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs / 2);
 
         // Send second ProduceRequest
-        accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false);
+        accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false);
         sender.runOnce();  // must not send request because the partition is muted
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
@@ -2082,8 +2134,8 @@ public class SenderTest {
 
         // Send first ProduceRequest
         Future<RecordMetadata> request1 =
-            accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null,
-                MAX_BLOCK_TIMEOUT, false).future;
+            accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         time.sleep(deliverTimeoutMs);
@@ -2111,11 +2163,11 @@ public class SenderTest {
         long deliverTimeoutMs = 1500L;
         // create a producer batch with more than one record so it is eligible for splitting
         Future<RecordMetadata> request1 =
-            accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
-                MAX_BLOCK_TIMEOUT, false).future;
+            accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key1".getBytes()),
+                ByteBuffer.wrap("value1".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         Future<RecordMetadata> request2 =
-            accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
-                MAX_BLOCK_TIMEOUT, false).future;
+            accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key2".getBytes()),
+                ByteBuffer.wrap("value2".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // send request
         sender.runOnce();
@@ -2143,8 +2195,8 @@ public class SenderTest {
 
         setupWithTransactionState(null);
 
-        accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null,
-                MAX_BLOCK_TIMEOUT, false);
+        accumulator.append(tp0, 0L, ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false);
 
         sender.runOnce();
         sender.runOnce();
@@ -2168,8 +2220,10 @@ public class SenderTest {
         setupWithTransactionState(null, true, null);
 
         // Send multiple ProduceRequest across multiple partitions.
-        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "k1".getBytes(), "v1".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
-        Future<RecordMetadata> request2 = accumulator.append(tp1, time.milliseconds(), "k2".getBytes(), "v2".getBytes(), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("k1".getBytes()),
+                ByteBuffer.wrap("v1".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp1, time.milliseconds(), ByteBuffer.wrap("k2".getBytes()),
+                ByteBuffer.wrap("v2".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // Send request.
         sender.runOnce();
@@ -2328,11 +2382,11 @@ public class SenderTest {
 
         // create a producer batch with more than one record so it is eligible for splitting
         Future<RecordMetadata> request1 =
-                accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
-                        MAX_BLOCK_TIMEOUT, false).future;
+                accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key1".getBytes()),
+                        ByteBuffer.wrap("value1".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         Future<RecordMetadata> request2 =
-                accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
-                        MAX_BLOCK_TIMEOUT, false).future;
+                accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key2".getBytes()),
+                        ByteBuffer.wrap("value2".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
 
         // send request
         sender.runOnce();
@@ -2484,8 +2538,8 @@ public class SenderTest {
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
-        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
-                null, null, MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), ByteBuffer.wrap("key".getBytes()),
+                ByteBuffer.wrap("value".getBytes()), null, null, MAX_BLOCK_TIMEOUT, false).future;
         sender.runOnce();
         assertTrue(future.isDone());
         try {

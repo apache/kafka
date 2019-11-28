@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.nio.ByteBuffer;
 
 public class ByteBufferSerializer implements Serializer<ByteBuffer> {
+    @Override
     public byte[] serialize(String topic, ByteBuffer data) {
         if (data == null)
             return null;
@@ -36,5 +37,14 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
         data.get(ret, 0, ret.length);
         data.rewind();
         return ret;
+    }
+
+    @Override
+    public ByteBuffer serializeToBuffer(String topic, ByteBuffer data) {
+        if (data == null) {
+            return null;
+        }
+        data.rewind();
+        return data;
     }
 }
