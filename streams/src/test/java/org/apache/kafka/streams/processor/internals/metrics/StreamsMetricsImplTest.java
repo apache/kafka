@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
 import org.easymock.IArgumentMatcher;
 import org.junit.Test;
@@ -37,16 +38,23 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.easymock.EasyMock.anyObject;
@@ -65,6 +73,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.createMock;
 
 @RunWith(PowerMockRunner.class)
@@ -85,6 +95,13 @@ public class StreamsMetricsImplTest {
     private final static String TASK_ID_TAG = "task-id";
     private final static String STORE_ID_TAG = "state-id";
     private final static String RECORD_CACHE_ID_TAG = "record-cache-id";
+    private final static String SCOPE_NAME = "test-scope";
+    private final static String ENTITY_NAME = "test-entity";
+    private final static String OPERATION_NAME = "test-operation";
+    private final static String CUSTOM_TAG_KEY1 = "test-key1";
+    private final static String CUSTOM_TAG_VALUE1 = "test-value1";
+    private final static String CUSTOM_TAG_KEY2 = "test-key2";
+    private final static String CUSTOM_TAG_VALUE2 = "test-value2";
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
@@ -433,6 +450,163 @@ public class StreamsMetricsImplTest {
             assertEquals(i, Math.round(totalMetric.measurable().measure(config, time.milliseconds())));
             sensor.record(latency, time.milliseconds());
         }
+    }
+
+    @Test
+    public void shouldAddLatencyRateTotalSensorWithBuiltInMetricsVersionLatest() {
+        shouldAddLatencyRateTotalSensor(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldAddLatencyRateTotalSensorWithBuiltInMetricsVersion0100To24() {
+        shouldAddLatencyRateTotalSensor(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldAddLatencyRateTotalSensor(final String builtInMetricsVersion) {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, builtInMetricsVersion);
+        shouldAddCustomSensor(
+            streamsMetrics.addLatencyRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
+            streamsMetrics,
+            Arrays.asList(
+                OPERATION_NAME + LATENCY_SUFFIX + AVG_SUFFIX,
+                OPERATION_NAME + LATENCY_SUFFIX + MAX_SUFFIX,
+                OPERATION_NAME + TOTAL_SUFFIX,
+                OPERATION_NAME + RATE_SUFFIX
+            )
+        );
+    }
+
+    @Test
+    public void shouldAddRateTotalSensorWithBuiltInMetricsVersionLatest() {
+        shouldAddRateTotalSensor(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldAddRateTotalSensorWithBuiltInMetricsVersion0100To24() {
+        shouldAddRateTotalSensor(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldAddRateTotalSensor(final String builtInMetricsVersion) {
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, builtInMetricsVersion);
+        shouldAddCustomSensor(
+            streamsMetrics.addRateTotalSensor(SCOPE_NAME, ENTITY_NAME, OPERATION_NAME, RecordingLevel.DEBUG),
+            streamsMetrics,
+            Arrays.asList(OPERATION_NAME + TOTAL_SUFFIX, OPERATION_NAME + RATE_SUFFIX)
+        );
+    }
+
+    @Test
+    public void shouldAddLatencyRateTotalSensorWithCustomTags() {
+        final Sensor sensor = streamsMetrics.addLatencyRateTotalSensor(
+            SCOPE_NAME,
+            ENTITY_NAME,
+            OPERATION_NAME,
+            RecordingLevel.DEBUG,
+            CUSTOM_TAG_KEY1,
+            CUSTOM_TAG_VALUE1,
+            CUSTOM_TAG_KEY2,
+            CUSTOM_TAG_VALUE2
+        );
+        final Map<String, String> tags = customTags(streamsMetrics);
+        shouldAddCustomSensorWithTags(
+            sensor,
+            Arrays.asList(
+                OPERATION_NAME + LATENCY_SUFFIX + AVG_SUFFIX,
+                OPERATION_NAME + LATENCY_SUFFIX + MAX_SUFFIX,
+                OPERATION_NAME + TOTAL_SUFFIX,
+                OPERATION_NAME + RATE_SUFFIX
+            ),
+            tags
+        );
+    }
+
+    @Test
+    public void shouldAddRateTotalSensorWithCustomTags() {
+        final Sensor sensor = streamsMetrics.addRateTotalSensor(
+            SCOPE_NAME,
+            ENTITY_NAME,
+            OPERATION_NAME,
+            RecordingLevel.DEBUG,
+            CUSTOM_TAG_KEY1,
+            CUSTOM_TAG_VALUE1,
+            CUSTOM_TAG_KEY2,
+            CUSTOM_TAG_VALUE2
+        );
+        final Map<String, String> tags = customTags(streamsMetrics);
+        shouldAddCustomSensorWithTags(
+            sensor,
+            Arrays.asList(
+                OPERATION_NAME + TOTAL_SUFFIX,
+                OPERATION_NAME + RATE_SUFFIX
+            ),
+            tags
+        );
+    }
+
+    private void shouldAddCustomSensor(final Sensor sensor,
+                                       final StreamsMetricsImpl streamsMetrics,
+                                       final List<String> metricsNames) {
+        final Map<String, String> tags = tags(streamsMetrics);
+        shouldAddCustomSensorWithTags(sensor, metricsNames, tags);
+    }
+
+    private void shouldAddCustomSensorWithTags(final Sensor sensor,
+                                               final List<String> metricsNames,
+                                               final Map<String, String> tags) {
+        final String group = "stream-" + SCOPE_NAME + "-metrics";
+        assertTrue(sensor.hasMetrics());
+        assertThat(
+            sensor.name(),
+            is("external." + Thread.currentThread().getName() + ".entity." + ENTITY_NAME + ".s." + OPERATION_NAME)
+        );
+        for (final String name : metricsNames) {
+            assertTrue(StreamsTestUtils.containsMetric(metrics, name, group, tags));
+        }
+    }
+
+    private Map<String, String> tags(final StreamsMetricsImpl streamsMetrics) {
+        return mkMap(
+            mkEntry(
+                streamsMetrics.version() == Version.LATEST ? THREAD_ID_TAG : CLIENT_ID_TAG,
+                Thread.currentThread().getName()
+            ),
+            mkEntry(SCOPE_NAME + "-id", ENTITY_NAME)
+        );
+    }
+
+    private Map<String, String> customTags(final StreamsMetricsImpl streamsMetrics) {
+        final Map<String, String> tags = tags(streamsMetrics);
+        tags.put(CUSTOM_TAG_KEY1, CUSTOM_TAG_VALUE1);
+        tags.put(CUSTOM_TAG_KEY2, CUSTOM_TAG_VALUE2);
+        return tags;
+    }
+
+    @Test
+    public void shouldThrowIfLatencyRateTotalSensorIsAddedWithOddTags() {
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> streamsMetrics.addLatencyRateTotalSensor(
+                SCOPE_NAME,
+                ENTITY_NAME,
+                OPERATION_NAME,
+                RecordingLevel.DEBUG,
+                "bad-tag")
+        );
+        assertThat(exception.getMessage(), is("Tags needs to be specified in key-value pairs"));
+    }
+
+    @Test
+    public void shouldThrowIfRateTotalSensorIsAddedWithOddTags() {
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> streamsMetrics.addRateTotalSensor(
+                SCOPE_NAME,
+                ENTITY_NAME,
+                OPERATION_NAME,
+                RecordingLevel.DEBUG,
+                "bad-tag")
+        );
+        assertThat(exception.getMessage(), is("Tags needs to be specified in key-value pairs"));
     }
 
     @Test
