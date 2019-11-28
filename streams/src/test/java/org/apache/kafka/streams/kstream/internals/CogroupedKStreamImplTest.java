@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -27,7 +26,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
@@ -136,60 +134,10 @@ public class CogroupedKStreamImplTest {
         customers.toStream().to(OUTPUT);
 
         String tops = builder.build().describe().toString();
-
-        assertThat(tops, containsString("test-cogroup-agg-0") );
-        assertThat(tops, containsString("test-cogroup-agg-1") );
+        
+        assertThat(tops, equalTo("Topologies:\n   Sub-topology: 0\n    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n      --> test-cogroup-agg-0\n    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n      --> test-cogroup-agg-1\n    Processor: test-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n      --> test\n      <-- KSTREAM-SOURCE-0000000000\n    Processor: test-cogroup-agg-1 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n      --> test\n      <-- KSTREAM-SOURCE-0000000001\n    Processor: test (stores: [])\n      --> KTABLE-TOSTREAM-0000000008\n      <-- test-cogroup-agg-0, test-cogroup-agg-1\n    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n      --> KSTREAM-SINK-0000000009\n      <-- test\n    Sink: KSTREAM-SINK-0000000009 (topic: output)\n      <-- KTABLE-TOSTREAM-0000000008\n\n") );
     }
 
-    @Test
-    public void shouldRepartitionStreamsUsingMap() {
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
-        final KStream<String, String> test3 = builder.stream("three", stringConsumed);
-
-        final KGroupedStream<String, String> groupedOne = test.map((k,v) -> new KeyValue<>(v,k)).groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
-        final KGroupedStream<String, String> groupedThree = test3.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .cogroup(groupedThree, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER, Named.as("test"));
-
-        customers.toStream().to(OUTPUT);
-
-        String tops = builder.build().describe().toString();
-
-        //System.out.println(tops);
-
-        //assertThat(tops, equalTo(""));
-
-    }
-
-    @Test
-    public void shouldRepartitionStreamsUsingTwoMaps() {
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
-        final KStream<String, String> test3 = builder.stream("three", stringConsumed);
-
-        final KGroupedStream<String, String> groupedOne = test.map(KeyValue::new).groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.map(KeyValue::new).groupByKey();
-        final KGroupedStream<String, String> groupedThree = test3.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .cogroup(groupedThree, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER, Named.as("test"));
-
-        customers.toStream().to(OUTPUT);
-
-        String tops = builder.build().describe().toString();
-
-        //System.out.println(tops);
-
-        //assertThat(tops, equalTo(""));
-
-    }
 
     @Test
     public void shouldCogroupAndAggregateSingleKStreams() {

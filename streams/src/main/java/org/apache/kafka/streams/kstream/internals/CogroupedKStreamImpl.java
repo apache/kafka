@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -43,7 +44,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
         super(name, null, null, sourceNodes, streamsGraphNode, builder);
-        this.groupPatterns = new HashMap<>();
+        this.groupPatterns = new LinkedHashMap<>();
         this.aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
 

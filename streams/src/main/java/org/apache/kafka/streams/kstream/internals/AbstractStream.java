@@ -91,7 +91,6 @@ public abstract class AbstractStream<K, V> {
         for (final AbstractStream<K, ?> other: otherStreams) {
             allSourceNodes.addAll(other.sourceNodes);
         }
-        System.err.println("calling: builder.internalTopologyBuilder.copartitionSources(allSourceNodes)");
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
         return allSourceNodes;
