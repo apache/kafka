@@ -886,7 +886,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
-        RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+        RequestFuture<Void> future = sendOffsetCommitRequestAndRefreshHeartbeat(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
             @Override
@@ -933,7 +933,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return false;
             }
 
-            RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+            RequestFuture<Void> future = sendOffsetCommitRequestAndRefreshHeartbeat(offsets);
             client.poll(future, timer);
 
             // We may have had in-flight offset commits when the synchronous commit began. If so, ensure that
@@ -1009,6 +1009,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (exception != null)
                 log.error("Offset commit with offsets {} failed", offsets, exception);
         }
+    }
+
+    private RequestFuture<Void> sendOffsetCommitRequestAndRefreshHeartbeat(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+
+        heartbeat().sentHeartbeat(time.milliseconds());
+        RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+
+        // every successful offset commit request is also a successful heart beat
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                heartbeat().receiveHeartbeat();
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                // just ignore
+            }
+        });
+        return future;
     }
 
     /**
