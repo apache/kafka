@@ -133,20 +133,12 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable throwable) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-            case 1:
-                List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
-                for (int i = 0; i < filters.size(); i++) {
-                    responses.add(new DeleteAclsResponse.AclFilterResponse(
-                        ApiError.fromThrowable(throwable), Collections.emptySet()));
-                }
-                return new DeleteAclsResponse(throttleTimeMs, responses);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.DELETE_ACLS.latestVersion()));
+        List<DeleteAclsResponse.AclFilterResponse> responses = new ArrayList<>();
+        for (int i = 0; i < filters.size(); i++) {
+            responses.add(new DeleteAclsResponse.AclFilterResponse(
+                ApiError.fromThrowable(throwable), Collections.emptySet()));
         }
+        return new DeleteAclsResponse(throttleTimeMs, responses);
     }
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {

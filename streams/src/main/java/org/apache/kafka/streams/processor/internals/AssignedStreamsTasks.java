@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -82,6 +83,15 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     boolean hasRestoringTasks() {
         return !restoring.isEmpty();
+    }
+
+    void clearRestoringPartitions() {
+        if (!restoring.isEmpty()) {
+            log.error("Tried to clear restoring partitions but was still restoring the stream tasks {}", restoring);
+            throw new IllegalStateException("Should not clear restoring partitions while set of restoring tasks is non-empty");
+        }
+        restoredPartitions.clear();
+        restoringByPartition.clear();
     }
     
     Set<TaskId> suspendedTaskIds() {
@@ -152,7 +162,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                         id, f);
                 }
             } finally {
-                removeTaskFromRunning(task);
+                removeTaskFromAllStateMaps(task, suspended);
                 taskChangelogs.addAll(task.changelogPartitions());
             }
         }
@@ -189,10 +199,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     private RuntimeException closeRunning(final boolean isZombie,
-                                          final StreamTask task,
-                                          final List<TopicPartition> closedTaskChangelogs) {
-        removeTaskFromRunning(task);
-        closedTaskChangelogs.addAll(task.changelogPartitions());
+                                          final StreamTask task) {
+        removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
         try {
             final boolean clean = !isZombie;
@@ -208,7 +216,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private RuntimeException closeNonRunning(final boolean isZombie,
                                              final StreamTask task,
                                              final List<TopicPartition> closedTaskChangelogs) {
-        created.remove(task.id());
+        removeTaskFromAllStateMaps(task, Collections.emptyMap());
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
@@ -221,10 +229,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
+    // Since a restoring task has not had its topology initialized yet, we need only close the state manager
     private RuntimeException closeRestoring(final boolean isZombie,
                                             final StreamTask task,
                                             final List<TopicPartition> closedTaskChangelogs) {
-        removeTaskFromRestoring(task);
+        removeTaskFromAllStateMaps(task, Collections.emptyMap());
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
@@ -240,7 +249,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     private RuntimeException closeSuspended(final boolean isZombie,
                                             final StreamTask task) {
-        suspended.remove(task.id());
+        removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
         try {
             final boolean clean = !isZombie;
@@ -269,37 +278,30 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return firstException.get();
     }
 
-    RuntimeException closeZombieTasks(final Set<TaskId> lostTasks, final List<TopicPartition> lostTaskChangelogs) {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+    RuntimeException closeAllTasksAsZombies() {
+        log.debug("Closing all active tasks as zombies, current state of active tasks: {}", toString());
 
-        for (final TaskId id : lostTasks) {
-            if (suspended.containsKey(id)) {
-                log.debug("Closing the zombie suspended stream task {}.", id);
-                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        final List<TopicPartition> changelogs = new ArrayList<>(); // not used, as we clear/unsubscribe all changelogs
+
+        for (final TaskId id : allAssignedTaskIds()) {
+            if (running.containsKey(id)) {
+                log.debug("Closing the zombie running stream task {}.", id);
+                firstException.compareAndSet(null, closeRunning(true, running.get(id)));
             } else if (created.containsKey(id)) {
                 log.debug("Closing the zombie created stream task {}.", id);
-                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
+                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), changelogs));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), lostTaskChangelogs));
-            } else if (running.containsKey(id)) {
-                log.debug("Closing the zombie running stream task {}.", id);
-                firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
-            } else {
-                log.warn("Skipping closing the zombie stream task {} as it was already removed.", id);
+                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), changelogs));
+            } else if (suspended.containsKey(id)) {
+                log.debug("Closing the zombie suspended stream task {}.", id);
+                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
             }
         }
 
-        // We always clear the prevActiveTasks and replace with current set of running tasks to encode in subscription
-        // We should exclude any tasks that were lost however, they will be counted as standbys for assignment purposes
-        prevActiveTasks.clear();
-        prevActiveTasks.addAll(running.keySet());
+        clear();
 
-        // With the current rebalance protocol, there should not be any running tasks left as they were all lost
-        if (!prevActiveTasks.isEmpty()) {
-            log.error("Found the still running stream tasks {} after closing all tasks lost as zombies", prevActiveTasks);
-            firstException.compareAndSet(null, new IllegalStateException("Not all lost tasks were closed as zombies"));
-        }
         return firstException.get();
     }
 
@@ -311,7 +313,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended stream task {}", taskId);
-            suspended.remove(taskId);
+            removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
             if (task.partitions().equals(partitions)) {
                 task.resume();
@@ -346,8 +348,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
                 it.remove();
-                restoringByPartition.keySet().removeAll(task.partitions());
-                restoringByPartition.keySet().removeAll(task.changelogPartitions());
+                // Note that because we add back all restored partitions at the top of this loop, clearing them from
+                // restoredPartitions here doesn't really matter. We do it anyway as it is the correct thing to do,
+                // and may matter with future changes.
+                removeFromRestoredPartitions(task);
+                removeFromRestoringByPartition(task);
+
                 log.debug("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
                     task.id(),
                     task.changelogPartitions());
@@ -372,6 +378,24 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
+    @Override
+     void removeTaskFromAllStateMaps(final StreamTask task, final Map<TaskId, StreamTask> currentStateMap) {
+        super.removeTaskFromAllStateMaps(task, currentStateMap);
+
+        final TaskId id = task.id();
+        final Set<TopicPartition> taskPartitions = new HashSet<>(task.partitions());
+        taskPartitions.addAll(task.changelogPartitions());
+
+        if (currentStateMap != restoring) {
+            restoring.remove(id);
+            restoringByPartition.keySet().removeAll(taskPartitions);
+            restoredPartitions.removeAll(taskPartitions);
+        }
+        if (currentStateMap != suspended) {
+            suspended.remove(id);
+        }
+    }
+
     void addTaskToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (final TopicPartition topicPartition : task.partitions()) {
@@ -382,16 +406,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
-    private void removeTaskFromRestoring(final StreamTask task) {
-        restoring.remove(task.id());
-        for (final TopicPartition topicPartition : task.partitions()) {
-            restoredPartitions.remove(topicPartition);
-            restoringByPartition.remove(topicPartition);
-        }
-        for (final TopicPartition topicPartition : task.changelogPartitions()) {
-            restoredPartitions.remove(topicPartition);
-            restoringByPartition.remove(topicPartition);
-        }
+    private void removeFromRestoringByPartition(final StreamTask task) {
+        restoringByPartition.keySet().removeAll(task.partitions());
+        restoringByPartition.keySet().removeAll(task.changelogPartitions());
+    }
+
+    private void removeFromRestoredPartitions(final StreamTask task) {
+        restoredPartitions.removeAll(task.partitions());
+        restoredPartitions.removeAll(task.changelogPartitions());
     }
 
     /**
@@ -497,6 +519,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         restoringByPartition.clear();
         restoredPartitions.clear();
         suspended.clear();
+        prevActiveTasks.clear();
     }
 
     @Override
@@ -511,26 +534,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         super.shutdown(clean);
     }
 
-    @Override
-    public boolean isEmpty() throws IllegalStateException {
-        if (restoring.isEmpty() && !restoringByPartition.isEmpty()) {
-            log.error("Assigned stream tasks in an inconsistent state: the set of restoring tasks is empty but the " +
-                      "restoring by partitions map contained {}", restoringByPartition);
-            throw new IllegalStateException("Found inconsistent state: no tasks restoring but nonempty restoringByPartition");
-        } else {
-            return super.isEmpty()
-                       && restoring.isEmpty()
-                       && restoringByPartition.isEmpty()
-                       && restoredPartitions.isEmpty()
-                       && suspended.isEmpty();
-        }
-    }
-
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append(super.toString(indent));
-        describe(builder, restoring.values(), indent, "Restoring:");
-        describe(builder, suspended.values(), indent, "Suspended:");
+        describeTasks(builder, restoring.values(), indent, "Restoring:");
+        describePartitions(builder, restoringByPartition.keySet(), indent, "Restoring Partitions:");
+        describePartitions(builder, restoredPartitions, indent, "Restored Partitions:");
+        describeTasks(builder, suspended.values(), indent, "Suspended:");
         return builder.toString();
     }
 

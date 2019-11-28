@@ -306,6 +306,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             Measurable numConnectors = new Measurable() {
                 @Override
                 public double measure(MetricConfig config, long now) {
+                    if (assignmentSnapshot == null) {
+                        return 0.0;
+                    }
                     return assignmentSnapshot.connectors().size();
                 }
             };
@@ -313,6 +316,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             Measurable numTasks = new Measurable() {
                 @Override
                 public double measure(MetricConfig config, long now) {
+                    if (assignmentSnapshot == null) {
+                        return 0.0;
+                    }
                     return assignmentSnapshot.tasks().size();
                 }
             };

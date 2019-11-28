@@ -18,7 +18,7 @@ set -ex
 
 # The version of Kibosh to use for testing.
 # If you update this, also update tests/docker/Dockerfile
-export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+export KIBOSH_VERSION=8841dd392e6fbf02986e2fb1f1ebf04df344b65a
 
 path_to_jdk_cache() {
   jdk_version=$1
@@ -107,6 +107,9 @@ popd
 popd
 popd
 
+# Install iperf
+apt-get install -y iperf traceroute
+
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
@@ -150,3 +153,11 @@ chmod a+rwx /mnt
 ntpdate -u pool.ntp.org
 # Install ntp daemon - it will automatically start on boot
 apt-get -y install ntp
+
+# Increase the ulimit
+mkdir -p /etc/security/limits.d
+echo "* soft nofile 128000" >> /etc/security/limits.d/nofile.conf
+echo "* hard nofile 128000" >> /etc/security/limits.d/nofile.conf
+
+ulimit -Hn 128000
+ulimit -Sn 128000
