@@ -30,13 +30,13 @@ import java.util.Collection;
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the api timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
+    public DeleteTopicsOptions apiTimeoutMs(Integer apiTimeoutMs) {
+        this.apiTimeoutMs = apiTimeoutMs;
         return this;
     }
 

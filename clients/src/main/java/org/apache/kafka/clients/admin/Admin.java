@@ -562,7 +562,7 @@ public interface Admin extends AutoCloseable {
      * <li>{@link org.apache.kafka.common.errors.AuthorizationException}
      * if the authenticated user is not authorized to alter the topic</li>
      * <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     * if the request was not completed in within the given {@link CreatePartitionsOptions#timeoutMs()}.</li>
+     * if the request was not completed in within the given {@link CreatePartitionsOptions#apiTimeoutMs()}.</li>
      * <li>{@link org.apache.kafka.common.errors.ReassignmentInProgressException}
      * if a partition reassignment is currently in progress</li>
      * <li>{@link org.apache.kafka.common.errors.BrokerNotAvailableException}
@@ -637,7 +637,7 @@ public interface Admin extends AutoCloseable {
      * <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
      * if the delegation token feature is disabled.</li>
      * <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     * if the request was not completed in within the given {@link CreateDelegationTokenOptions#timeoutMs()}.</li>
+     * if the request was not completed in within the given {@link CreateDelegationTokenOptions#apiTimeoutMs()}.</li>
      * </ul>
      *
      * @param options The options to use when creating delegation token.
@@ -678,7 +678,7 @@ public interface Admin extends AutoCloseable {
      * <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
      * if the delegation token is expired.</li>
      * <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     * if the request was not completed in within the given {@link RenewDelegationTokenOptions#timeoutMs()}.</li>
+     * if the request was not completed in within the given {@link RenewDelegationTokenOptions#apiTimeoutMs()}.</li>
      * </ul>
      *
      * @param hmac    HMAC of the Delegation token
@@ -719,7 +719,7 @@ public interface Admin extends AutoCloseable {
      * <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
      * if the delegation token is expired.</li>
      * <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     * if the request was not completed in within the given {@link ExpireDelegationTokenOptions#timeoutMs()}.</li>
+     * if the request was not completed in within the given {@link ExpireDelegationTokenOptions#apiTimeoutMs()}.</li>
      * </ul>
      *
      * @param hmac    HMAC of the Delegation token
@@ -753,7 +753,7 @@ public interface Admin extends AutoCloseable {
      * <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
      * if the delegation token feature is disabled.</li>
      * <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     * if the request was not completed in within the given {@link DescribeDelegationTokenOptions#timeoutMs()}.</li>
+     * if the request was not completed in within the given {@link DescribeDelegationTokenOptions#apiTimeoutMs()}.</li>
      * </ul>
      *
      * @param options The options to use when describing delegation tokens.
@@ -898,7 +898,7 @@ public interface Admin extends AutoCloseable {
     default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
                                                               ElectPreferredLeadersOptions options) {
         final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
+        newOptions.apiTimeoutMs(options.apiTimeoutMs());
         final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
 
         return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));

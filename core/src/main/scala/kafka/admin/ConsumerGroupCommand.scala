@@ -645,7 +645,7 @@ object ConsumerGroupCommand extends Logging {
 
     private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) =  {
       val t = opts.options.valueOf(opts.timeoutMsOpt).intValue()
-      options.timeoutMs(t)
+      options.apiTimeoutMs(t)
     }
 
     private def parseTopicPartitionsToReset(groupId: String, topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {

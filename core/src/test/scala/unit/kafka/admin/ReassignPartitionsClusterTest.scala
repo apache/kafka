@@ -66,7 +66,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def createAdminClient(servers: Seq[KafkaServer]): Admin = {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
-    props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000")
+    props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000")
     JAdminClient.create(props)
   }
 
