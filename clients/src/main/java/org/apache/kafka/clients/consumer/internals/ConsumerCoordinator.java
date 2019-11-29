@@ -1015,7 +1015,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         heartbeat().sentHeartbeat(time.milliseconds());
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-
         // every successful offset commit request is also a successful heart beat
         future.addListener(new RequestFutureListener<Void>() {
             @Override

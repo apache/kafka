@@ -2311,7 +2311,6 @@ public class ConsumerCoordinatorTest {
     public void testCommitOffsetWillRefreshTimeout() {
 
         final Heartbeat heartbeat = coordinator.heartbeat();
-
         heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(heartbeatIntervalMs);
         // should heartbeat after heartbeatIntervalMs
