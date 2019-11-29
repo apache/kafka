@@ -20,7 +20,6 @@ def job = {
 
     // Per KAFKA-7524, Scala 2.12 is the default, yet we currently support the previous minor version.
     stage("Check compilation compatibility with Scala 2.11") {
-        sh "gradle"
         sh "./gradlew clean compileJava compileScala compileTestJava compileTestScala " +
                 "--no-daemon --stacktrace -PscalaVersion=2.11"
     }
