@@ -1090,7 +1090,7 @@ public class StreamTaskTest {
             fail("should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) {
             task = null;
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertFalse(producer.transactionCommitted());
@@ -1111,7 +1111,7 @@ public class StreamTaskTest {
             fail("should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) {
             task = null;
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertTrue(producer.transactionCommitted());
@@ -1283,7 +1283,7 @@ public class StreamTaskTest {
             task.suspend();
             fail("Should have throws TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
         task = null;
 
@@ -1300,7 +1300,7 @@ public class StreamTaskTest {
             task.suspend();
             fail("Should have throws TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertTrue(producer.transactionCommitted());
