@@ -177,7 +177,6 @@ public abstract class AbstractTask implements Task {
             stateMgr.flush();
         } catch (final ProcessorStateException e) {
             if (e.getCause() instanceof RecoverableClientException) {
-                log.warn("Caught a recoverable Kafka exception while flushing state. Initiating a rebalance to attempt recovery.", e);
                 throw new TaskMigratedException(this, e);
             }
         }
