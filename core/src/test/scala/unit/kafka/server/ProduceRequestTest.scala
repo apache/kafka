@@ -78,9 +78,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
 
-    def createRecords(magicValue: Byte,
-                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                      codec: CompressionType): MemoryRecords = {
+    def createRecords(magicValue: Byte, timestamp: Long, codec: CompressionType): MemoryRecords = {
       val buf = ByteBuffer.allocate(512)
       val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
       builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
