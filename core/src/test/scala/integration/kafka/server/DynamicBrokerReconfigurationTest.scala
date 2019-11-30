@@ -254,10 +254,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testUpdatesUsingConfigProvider(): Unit = {
-    val PollingIntervalVal = "${file:polling.interval:interval}"
-    val PollingIntervalUpdateVal = "${file:polling.interval:updinterval}"
-    val SslTruststoreTypeVal = "${file:ssl.truststore.type:storetype}"
-    val SslKeystorePasswordVal = "${file:ssl.keystore.password:password}"
+    val PollingIntervalVal = f"$${file:polling.interval:interval}"
+    val PollingIntervalUpdateVal = f"$${file:polling.interval:updinterval}"
+    val SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}"
+    val SslKeystorePasswordVal = f"$${file:ssl.keystore.password:password}"
 
     val configPrefix = listenerPrefix(SecureExternal)
     val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
