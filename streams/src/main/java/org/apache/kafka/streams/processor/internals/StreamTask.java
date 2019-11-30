@@ -73,6 +73,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final Time time;
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
+    private final long retryBackoffMs;
     private final StreamsMetricsImpl streamsMetrics;
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
@@ -167,6 +168,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         systemTimePunctuationQueue = new PunctuationQueue();
         maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        retryBackoffMs  = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
@@ -906,21 +908,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void initializeTransactions() {
-        try {
-            producer.initTransactions();
-        } catch (final TimeoutException retriable) {
-            log.error(
-                "Timeout exception caught when initializing transactions for task {}. " +
-                    "This might happen if the broker is slow to respond, if the network connection to " +
-                    "the broker was interrupted, or if similar circumstances arise. " +
-                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
-                id,
-                retriable
-            );
-            throw new StreamsException(
-                format("%sFailed to initialize task %s due to timeout.", logPrefix, id),
-                retriable
-            );
+        while (true) {
+            try {
+                producer.initTransactions();
+                break;
+            } catch (final TimeoutException retriable) {
+                log.error(
+                    "Timeout exception caught when initializing transactions for task {}. " +
+                        "This might happen if the broker is slow to respond, if the network connection to " +
+                        "the broker was interrupted, or if similar circumstances arise. " +
+                        "You can increase producer parameter `max.block.ms` to increase this timeout." +
+                        "Retrying in {} ms",
+                    id,
+                    retryBackoffMs,
+                    retriable
+                );
+                time.sleep(retryBackoffMs);
+            }
         }
     }
 
