@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io.File
 import java.nio.ByteBuffer
-import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
@@ -239,36 +238,11 @@ object TimeIndex extends Logging {
   * for the the broker with a lot of log segments
   *
   */
-class LazyTimeIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  @volatile private var timeIndex: Option[TimeIndex] = None
-  private val lock = new ReentrantLock()
+class LazyTimeIndex(private val _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
+  extends AbstractLazyIndex[TimeIndex](_file) {
 
-  def file: File = {
-    inLock(lock) {
-      if (timeIndex.isDefined)
-        timeIndex.get.file
-      else
-        _file
-    }
+  override def initializeIndex(indexFile: File): TimeIndex = {
+    new TimeIndex(indexFile, baseOffset, maxIndexSize, writable)
   }
 
-  def file_=(f: File): Unit = {
-    inLock(lock) {
-      if (timeIndex.isDefined)
-        timeIndex.get.file = f
-      else
-        _file = f
-    }
-  }
-
-  def get: TimeIndex = {
-    if (timeIndex.isEmpty) {
-      inLock(lock) {
-        if (timeIndex.isEmpty) {
-          timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
-        }
-      }
-    }
-    timeIndex.get
-  }
 }
