@@ -134,8 +134,8 @@ get_kafka 2.0.1 2.12
 chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
 chmod a+rw /opt/kafka-2.1.1
-get_kafka 2.2.1 2.12
-chmod a+rw /opt/kafka-2.2.1
+get_kafka 2.2.2 2.12
+chmod a+rw /opt/kafka-2.2.2
 get_kafka 2.3.0 2.12
 chmod a+rw /opt/kafka-2.3.0
 
