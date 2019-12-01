@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -31,9 +27,15 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
     static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
+    static final String MERGE_NAME = "COGROUPKSTREAM-MERGE-";
 
     final private Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns;
     final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
@@ -43,8 +45,8 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
         super(name, null, null, sourceNodes, streamsGraphNode, builder);
-        this.groupPatterns = new LinkedHashMap<>();
-        this.aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
+        groupPatterns = new LinkedHashMap<>();
+        aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
 
     @SuppressWarnings("unchecked")
@@ -61,10 +63,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     @Override
     public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
                                      final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(materialized, "materialized can't be null");
-        final NamedInternal named = NamedInternal.empty();
-        return aggregate(initializer, named, materialized);
+        return aggregate(initializer, NamedInternal.empty(), materialized);
     }
 
     @Override
@@ -76,11 +75,13 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
                                      final Named named,
                                      final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(named, "named can't be null");
-        final NamedInternal namedInternal = new NamedInternal(named);
-        return doAggregate(initializer,
-                namedInternal,
-                new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME));
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        return doAggregate(
+            initializer,
+            new NamedInternal(named),
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME));
     }
 
     @Override
@@ -91,16 +92,16 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        return this.aggregateBuilder.build(
-                groupPatterns,
-                initializer,
-                named,
-                new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
-                materializedInternal.keySerde(),
-                materializedInternal.valueSerde(),
-                materializedInternal.queryableStoreName(),
-                null,
-                null,
-                null);
+        return aggregateBuilder.build(
+            groupPatterns,
+            initializer,
+            named,
+            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
+            materializedInternal.keySerde(),
+            materializedInternal.valueSerde(),
+            materializedInternal.queryableStoreName(),
+            null,
+            null,
+            null);
     }
 }

@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
-import java.util.Properties;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -31,10 +27,10 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -44,45 +40,43 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-public class CogroupedKStreamImplTest {
+import java.util.Properties;
 
-    private final Consumed<String, String> stringConsumed = Consumed
-            .with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+public class CogroupedKStreamImplTest {
+    private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private static final String TOPIC = "topic";
     private static final String OUTPUT = "output";
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
     private CogroupedKStream<String, String> cogroupedStream;
 
-    private final Properties props = StreamsTestUtils
-        .getStreamsConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    private static final Aggregator<String, String, String> STRING_AGGREGATOR = (key, value, aggregate) ->
-        aggregate + value;
+    private static final Aggregator<String, String, String> STRING_AGGREGATOR =
+        (key, value, aggregate) -> aggregate + value;
 
     private static final Initializer<String> STRING_INITIALIZER = () -> "";
 
-    private static final Aggregator<String, String, Integer> STRSUM_AGGREGATOR = (key, value, aggregate) ->
-        aggregate + Integer.parseInt(value);
+    private static final Aggregator<String, String, Integer> STRING_SUM_AGGREGATOR =
+        (key, value, aggregate) -> aggregate + Integer.parseInt(value);
 
-    private static final Aggregator<? super String, ? super Integer, Integer> SUM_AGGREGATOR = (key, value, aggregate) ->
-        aggregate + value;
+    private static final Aggregator<? super String, ? super Integer, Integer> SUM_AGGREGATOR =
+        (key, value, aggregate) -> aggregate + value;
 
     private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
 
 
     @Before
     public void setup() {
-
-        final StreamsBuilder builder2 = new StreamsBuilder();
-        final KStream<String, String> stream = builder2.stream(TOPIC, Consumed
-            .with(Serdes.String(), Serdes.String()));
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
 
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER);
@@ -100,60 +94,102 @@ public class CogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() {
+        cogroupedStream.aggregate(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullInitializerOnAggregateWitNamed() {
+        cogroupedStream.aggregate(null, Named.as("name"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullInitializerOnAggregateWitMaterialized() {
         cogroupedStream.aggregate(null, Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullMMaterializedOnAggregate() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+    public void shouldNotHaveNullInitializerOnAggregateWitNamedAndMaterialized() {
+        cogroupedStream.aggregate(null, Named.as("name"), Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullNamedOnAggregate() {
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Named) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullMaterializedOnAggregate() {
+        cogroupedStream.aggregate(STRING_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes, byte[]>>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullNamedOnAggregateWithMateriazlied() {
         cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullNamedOnAggregate2() {
-        cogroupedStream.aggregate(STRING_INITIALIZER, (Named) null);
+    public void shouldNotHaveNullMaterializedOnAggregateWithNames() {
+        cogroupedStream.aggregate(STRING_INITIALIZER, Named.as("name"), null);
     }
 
-
     @Test
-    public void shouldNameProcessorsBasedOnNamedParameter() {
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
+    public void shouldNameProcessorsAndStoreBasedOnNamedParameter() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> test2 = builder.stream("two", stringConsumed);
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
+        final KGroupedStream<String, String> groupedOne = stream1.groupByKey();
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER, Named.as("test"));
+        final KTable<String, String> customers = groupedOne
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER, Named.as("test"), Materialized.as("store"));
 
         customers.toStream().to(OUTPUT);
 
-        String tops = builder.build().describe().toString();
-        
-        assertThat(tops, equalTo("Topologies:\n   Sub-topology: 0\n    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n      --> test-cogroup-agg-0\n    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n      --> test-cogroup-agg-1\n    Processor: test-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n      --> test\n      <-- KSTREAM-SOURCE-0000000000\n    Processor: test-cogroup-agg-1 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n      --> test\n      <-- KSTREAM-SOURCE-0000000001\n    Processor: test (stores: [])\n      --> KTABLE-TOSTREAM-0000000008\n      <-- test-cogroup-agg-0, test-cogroup-agg-1\n    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n      --> KSTREAM-SINK-0000000009\n      <-- test\n    Sink: KSTREAM-SINK-0000000009 (topic: output)\n      <-- KTABLE-TOSTREAM-0000000008\n\n") );
-    }
+        final String topologyDescription = builder.build().describe().toString();
 
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> test-cogroup-agg-0\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> test-cogroup-agg-1\n" +
+                "    Processor: test-cogroup-agg-0 (stores: [store])\n" +
+                "      --> test-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: test-cogroup-agg-1 (stores: [store])\n" +
+                "      --> test-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: test-cogroup-merge (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000005\n" +
+                "      <-- test-cogroup-agg-0, test-cogroup-agg-1\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000005 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000006\n" +
+                "      <-- test-cogroup-merge\n" +
+                "    Sink: KSTREAM-SINK-0000000006 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000005\n\n"));
+    }
 
     @Test
     public void shouldCogroupAndAggregateSingleKStreams() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
 
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+        final KTable<String, String> customers = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k2", "B", 0);
             testInputTopic.pipeInput("k2", "B", 0);
@@ -168,13 +204,13 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void testCogroupHandleNullValues() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
 
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+        final KTable<String, String> customers = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
@@ -194,27 +230,28 @@ public class CogroupedKStreamImplTest {
         }
     }
 
-
     @Test
     public void shouldCogroupAndAggregateTwoKStreamsWithDistinctKeys() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, String> grouped2 = stream2.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-            .cogroup(groupedTwo, STRING_AGGREGATOR)
+        final KTable<String, String> customers = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(grouped2, STRING_AGGREGATOR)
             .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
             testInputTopic.pipeInput("k1", "A", 1);
@@ -240,26 +277,28 @@ public class CogroupedKStreamImplTest {
         }
     }
 
-
     @Test
     public void shouldCogroupAndAggregateTwoKStreamsWithSharedKeys() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, String> grouped2 = stream2.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-            .cogroup(groupedTwo, STRING_AGGREGATOR)
+        final KTable<String, String> customers = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(grouped2, STRING_AGGREGATOR)
             .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0L);
             testInputTopic.pipeInput("k2", "A", 1L);
@@ -289,24 +328,30 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldAllowDifferentOutputTypeInCoGroup() {
-        final Consumed<String, Integer> stringConsume = Consumed.with(Serdes.String(), Serdes.Integer());
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, String> grouped2 = stream2.groupByKey();
 
-        final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
-            .cogroup(groupedTwo, STRSUM_AGGREGATOR)
-            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+        final KTable<String, Integer> customers = grouped1
+            .cogroup(STRING_SUM_AGGREGATOR)
+            .cogroup(grouped2, STRING_SUM_AGGREGATOR)
+            .aggregate(
+                SUM_INITIALIZER,
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1")
+                    .withValueSerde(Serdes.Integer()));
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, Integer> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, Integer> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
+
             testInputTopic.pipeInput("k1", "1", 0L);
             testInputTopic.pipeInput("k2", "1", 1L);
             testInputTopic.pipeInput("k1", "1", 10L);
@@ -335,18 +380,20 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldCoGroupStreamsWithDifferentInputTypes() {
+        final Consumed<String, Integer> integerConsumed = Consumed.with(Serdes.String(), Serdes.Integer());
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, Integer> stream2 = builder.stream("two", integerConsumed);
 
-        final Consumed<String, Integer> intergerConsumed = Consumed.with(Serdes.String(), Serdes.Integer());
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, Integer> test2 = builder.stream("two", intergerConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, Integer> grouped2 = stream2.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, Integer> groupedTwo = test2.groupByKey();
-
-        final KTable<String, Integer> customers = groupedOne.cogroup(STRSUM_AGGREGATOR)
-            .cogroup(groupedTwo, SUM_AGGREGATOR)
-            .aggregate(SUM_INITIALIZER, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.Integer()));
+        final KTable<String, Integer> customers = grouped1
+            .cogroup(STRING_SUM_AGGREGATOR)
+            .cogroup(grouped2, SUM_AGGREGATOR)
+            .aggregate(
+                SUM_INITIALIZER,
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("store1")
+                    .withValueSerde(Serdes.Integer()));
 
         customers.toStream().to(OUTPUT);
 
@@ -384,24 +431,29 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void testCogroupKeyMixedAggregators() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, String> grouped2 = stream2.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(MockAggregator.TOSTRING_REMOVER)
-            .cogroup(groupedTwo, MockAggregator.TOSTRING_ADDER)
-            .aggregate(MockInitializer.STRING_INIT, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1").withValueSerde(Serdes.String()));
+        final KTable<String, String> customers = grouped1
+            .cogroup(MockAggregator.TOSTRING_REMOVER)
+            .cogroup(grouped2, MockAggregator.TOSTRING_ADDER)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store1")
+                    .withValueSerde(Serdes.String()));
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "1", 0L);
             testInputTopic.pipeInput("k2", "1", 1L);
@@ -422,30 +474,35 @@ public class CogroupedKStreamImplTest {
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2+2", 500L);
         }
     }
+
     @Test
     public void testCogroupWithThreeGroupedStreams() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> stream3 = builder.stream("three", stringConsumed);
 
-        final KStream<String, String> test = builder.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
-        final KStream<String, String> test3 = builder.stream("three", stringConsumed);
+        final KGroupedStream<String, String> grouped1 = stream1.groupByKey();
+        final KGroupedStream<String, String> grouped2 = stream2.groupByKey();
+        final KGroupedStream<String, String> grouped3 = stream3.groupByKey();
 
-        final KGroupedStream<String, String> groupedOne = test.groupByKey();
-        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
-        final KGroupedStream<String, String> groupedThree = test3.groupByKey();
-
-        final KTable<String, String> customers = groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .cogroup(groupedThree, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+        final KTable<String, String> customers = grouped1
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(grouped2, STRING_AGGREGATOR)
+            .cogroup(grouped3, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, String> testInputTopic3 = driver.createInputTopic("three", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic2 =
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> testInputTopic3 =
+                driver.createInputTopic("three", new StringSerializer(), new StringSerializer());
 
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0L);
             testInputTopic.pipeInput("k2", "A", 1L);
@@ -473,16 +530,22 @@ public class CogroupedKStreamImplTest {
             assertOutputKeyValueTimestamp(testOutputTopic, "k3", "B", 500);
         }
     }
+
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, String> outputTopic,
                                                final String expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertThat(
+            outputTopic.readRecord(),
+            equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
+
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, Integer> outputTopic,
                                                final String expectedKey,
                                                final Integer expectedValue,
                                                final long expectedTimestamp) {
-        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+        assertThat(
+            outputTopic.readRecord(),
+            equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 }
