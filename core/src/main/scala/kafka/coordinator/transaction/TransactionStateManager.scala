@@ -667,7 +667,7 @@ private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, met
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
                                                                transactionMetadata: TransactionMetadata)
 
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
+private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Long = TransactionStateManager.DefaultTransactionalIdExpirationMs,
                                                   transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
                                                   transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
                                                   transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
