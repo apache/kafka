@@ -130,7 +130,7 @@
     MessageSet (Version: 1) => [offset message_size message]
         offset => INT64
         message_size => INT32
-        message => crc magic_byte attributes key value
+        message => crc magic_byte attributes timestamp key value
             crc => INT32
             magic_byte => INT8
             attributes => INT8
@@ -143,7 +143,7 @@
                     0: create time
                     1: log append time
                 bit 4~7: unused
-            timestamp =>INT64
+            timestamp => INT64
             key => BYTES
             value => BYTES
     </pre></p>
