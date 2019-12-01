@@ -216,10 +216,10 @@ object OffsetIndex extends Logging {
   * for the the broker with a lot of log segments
   *
   */
-class LazyOffsetIndex(private val _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
+class LazyOffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
   extends AbstractLazyIndex[OffsetIndex](_file) {
 
-  override def initializeIndex(indexFile: File): OffsetIndex = {
+  override protected def loadIndex(indexFile: File): OffsetIndex = {
     new OffsetIndex(indexFile, baseOffset, maxIndexSize, writable)
   }
 

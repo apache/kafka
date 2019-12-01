@@ -238,10 +238,10 @@ object TimeIndex extends Logging {
   * for the the broker with a lot of log segments
   *
   */
-class LazyTimeIndex(private val _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
+class LazyTimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
   extends AbstractLazyIndex[TimeIndex](_file) {
 
-  override def initializeIndex(indexFile: File): TimeIndex = {
+  override protected def loadIndex(indexFile: File): TimeIndex = {
     new TimeIndex(indexFile, baseOffset, maxIndexSize, writable)
   }
 
