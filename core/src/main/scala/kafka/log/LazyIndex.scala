@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import LazyIndex._
 import kafka.utils.CoreUtils.inLock
+import kafka.utils.threadsafe
 
 /**
   * A wrapper over an `AbstractIndex` instance that provides a mechanism to defer loading (i.e. memory mapping) the
@@ -29,8 +30,12 @@ import kafka.utils.CoreUtils.inLock
   *
   * This is an important optimization with regards to broker start-up time if it has a large number of segments.
   *
+  * Methods of this class are thread safe. Make sure to check `AbstractIndex` subclasses documentation
+  * to establish their thread safety.
+  *
   * @param loadIndex A function that takes a `File` pointing to an index and returns a loaded `AbstractIndex` instance.
   */
+@threadsafe
 class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper: IndexWrapper, loadIndex: File => T) {
 
   private val lock = new ReentrantLock()
