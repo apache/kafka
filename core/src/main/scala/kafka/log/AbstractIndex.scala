@@ -38,8 +38,8 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable {
+abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+                             val writable: Boolean) extends Closeable {
   import AbstractIndex._
 
   // Length of the index file
@@ -144,11 +144,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * The maximum number of entries this index can hold
    */
   @volatile
-  private[this] var _maxEntries = mmap.limit() / entrySize
+  private[this] var _maxEntries: Int = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position() / entrySize
+  protected var _entries: Int = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
@@ -244,7 +244,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * The number of bytes actually used by this index
    */
-  def sizeInBytes = entrySize * _entries
+  def sizeInBytes: Int = entrySize * _entries
 
   /** Close the index */
   def close(): Unit = {
@@ -427,7 +427,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 }
 
 object AbstractIndex extends Logging {
-  override val loggerName: String = classOf[AbstractIndex[_, _]].getName
+  override val loggerName: String = classOf[AbstractIndex].getName
 }
 
 object IndexSearchType extends Enumeration {
