@@ -2776,7 +2776,8 @@ public class KafkaAdminClient extends AdminClient {
                     context.future().complete(consumerGroupDescription);
                 } else {
                     context.future().completeExceptionally(new IllegalArgumentException(
-                        "GroupId " + context.groupId() + " is not a consumer group."));
+                        String.format("GroupId {} is not a consumer group ({}).",
+                            context.groupId(), protocolType)));
                 }
             }
 
