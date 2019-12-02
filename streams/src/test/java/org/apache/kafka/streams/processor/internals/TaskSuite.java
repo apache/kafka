@@ -16,18 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
 
 /**
- * Denotes an exception that is recoverable by re-creating the client (ie, the client is no longer in a valid state),
- * as opposed to retriable (the failure was transient, so the same client can be used again later),
- * or fatal (the request was actually invalid, so retrying or recovering would not help)
+ * This suite runs all the tests related to task management. It's intended to simplify feature testing from IDEs.
  *
- * This class also serves the dual purpose of capturing the stack trace as early as possible,
- * at the site of the Producer call, since the exeptions that cause this don't record stack traces.
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
+ * these tests are already included in the `:streams:test` task.
  */
-public class RecoverableClientException extends KafkaException {
-    public RecoverableClientException(final String message, final Throwable cause) {
-        super(message, cause);
-    }
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+    AbstractTaskTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    AssignedStreamsTasksTest.class,
+})
+public class TaskSuite {
 }
+
+
