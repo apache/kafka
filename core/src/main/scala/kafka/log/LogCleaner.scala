@@ -634,6 +634,7 @@ private[log] class Cleaner(val id: Int,
    * @param retainDeletesAndTxnMarkers Should tombstones and markers be retained while cleaning this segment
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
+   * @param tombstoneRetentionMs Defines how long a tombstone should be kept as defined by log configuration
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
@@ -800,6 +801,7 @@ private[log] class Cleaner(val id: Int,
       val isRetainedValue = record.hasValue ||
                             (!batch.isDeleteHorizonSet() ||
                              time.milliseconds() < batch.deleteHorizonMs)
+
       latestOffsetForKey && isRetainedValue
     } else {
       stats.invalidMessage()

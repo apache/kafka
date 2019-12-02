@@ -89,6 +89,10 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * by the broker and is preserved after compaction. Additionally, the MaxTimestamp of an empty batch always retains
  * the previous value prior to becoming empty.
  *
+ * The delete horizon flag for the sixth bit is used to determine if the first timestamp of the batch had been set to
+ * the time for which tombstones / transaction markers needs to be removed. If it is true, then the first timestamp is
+ * the delete horizon, otherwise, it is merely the first timestamp of the record batch.
+ *
  * The current attributes are given below:
  *
  *  ---------------------------------------------------------------------------------------------------------------------------
@@ -258,9 +262,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public long deleteHorizonMs() {
-        if (isDeleteHorizonSet()) {
+        if (isDeleteHorizonSet())
             return firstTimestamp();
-        }
         return RecordBatch.NO_TIMESTAMP;
     }
 
@@ -444,17 +447,17 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     public static void writeEmptyHeader(ByteBuffer buffer,
-            byte magic,
-            long producerId,
-            short producerEpoch,
-            int baseSequence,
-            long baseOffset,
-            long lastOffset,
-            int partitionLeaderEpoch,
-            TimestampType timestampType,
-            long timestamp,
-            boolean isTransactional,
-            boolean isControlRecord) {
+                                        byte magic,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int baseSequence,
+                                        long baseOffset,
+                                        long lastOffset,
+                                        int partitionLeaderEpoch,
+                                        TimestampType timestampType,
+                                        long timestamp,
+                                        boolean isTransactional,
+                                        boolean isControlRecord) {
         int offsetDelta = (int) (lastOffset - baseOffset);
         writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
                     CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
@@ -768,9 +771,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         @Override
         public long deleteHorizonMs() {
-            if (isDeleteHorizonSet()) {
+            if (isDeleteHorizonSet())
                 return super.loadFullBatch().deleteHorizonMs();
-            }
             return RecordBatch.NO_TIMESTAMP;
         }
 

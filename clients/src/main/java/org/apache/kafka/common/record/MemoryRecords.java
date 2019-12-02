@@ -174,6 +174,7 @@ public class MemoryRecords extends AbstractRecords {
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
             boolean shouldSetDeleteHorizon = !batch.isDeleteHorizonSet() && firstTimestamp != RecordBatch.NO_TIMESTAMP;
+            boolean containsTombstones = false;
             List<Record> retainedRecords = new ArrayList<>();
 
             try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
@@ -194,13 +195,18 @@ public class MemoryRecords extends AbstractRecords {
                     } else {
                         writeOriginalBatch = false;
                     }
+
+                    if (!record.hasValue()) {
+                        containsTombstones = true;
+                    }
                 }
             }
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
-                if (writeOriginalBatch && !shouldSetDeleteHorizon) {
+                // if the batch does not contain tombstones, then we don't need to overwrite batch
+                if (writeOriginalBatch && (!shouldSetDeleteHorizon || !containsTombstones)) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
@@ -313,11 +319,30 @@ public class MemoryRecords extends AbstractRecords {
             DELETE_EMPTY  // Delete the batch if it is empty
         }
 
+        public class BatchInfo {
+            private final BatchRetention batchRetention;
+            private final boolean isControlBatchEmpty;
+            public BatchInfo(final BatchRetention batchRetention, final boolean isControlBatchEmpty) {
+                this.batchRetention = batchRetention;
+                this.isControlBatchEmpty = isControlBatchEmpty;
+            }
+            public BatchRetention batchRetention() {
+                return batchRetention;
+            }
+            public boolean isControlBatchEmpty() {
+                return isControlBatchEmpty;
+            }
+        }
+
         /**
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
+
+        protected BatchInfo shouldRetendBatch(RecordBatch batch) {
+            return new BatchInfo(checkBatchRetention(batch), false);
+        }
 
         /**
          * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}

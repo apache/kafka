@@ -433,7 +433,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         @Override
         public long deleteHorizonMs() {
-            return -1L;
+            return RecordBatch.NO_TIMESTAMP;
         }
 
         @Override

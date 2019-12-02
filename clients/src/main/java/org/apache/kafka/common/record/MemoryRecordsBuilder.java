@@ -422,11 +422,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
             if (firstTimestamp == null) {
-                if (isDeleteHorizonSet()) {
+                if (isDeleteHorizonSet())
                     firstTimestamp = deleteHorizonMs;
-                } else {
+                else
                     firstTimestamp = timestamp;
-                }
             }
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
