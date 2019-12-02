@@ -51,7 +51,7 @@ import org.apache.kafka.common.errors.InvalidOffsetException
  */
 // Avoid shadowing mutable `file` in AbstractIndex
 class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Int](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import OffsetIndex._
 
   override def entrySize = 8
@@ -204,23 +204,4 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
 object OffsetIndex extends Logging {
   override val loggerName: String = classOf[OffsetIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw OffsetIndex object to avoid initialization on construction. This defers the OffsetIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyOffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-  extends AbstractLazyIndex[OffsetIndex](_file) {
-
-  override protected def loadIndex(indexFile: File): OffsetIndex = {
-    new OffsetIndex(indexFile, baseOffset, maxIndexSize, writable)
-  }
-
 }

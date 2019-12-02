@@ -51,7 +51,7 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import TimeIndex._
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
@@ -226,23 +226,4 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
 object TimeIndex extends Logging {
   override val loggerName: String = classOf[TimeIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw TimeIndex object to avoid initialization on construction. This defers the TimeIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyTimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-  extends AbstractLazyIndex[TimeIndex](_file) {
-
-  override protected def loadIndex(indexFile: File): TimeIndex = {
-    new TimeIndex(indexFile, baseOffset, maxIndexSize, writable)
-  }
-
 }
