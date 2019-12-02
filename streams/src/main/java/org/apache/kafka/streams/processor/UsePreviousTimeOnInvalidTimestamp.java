@@ -37,13 +37,12 @@ import org.apache.kafka.streams.errors.StreamsException;
  * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
- * @deprecated UsePreviousTimeOnInvalidTimestamp will be deprecated in the future, please use
- * {@link UsePartitionTimeOnInvalidTimestamp} instead
- *
+ * @deprecated since 2.5. Use {@link UsePartitionTimeOnInvalidTimestamp} instead
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
+@SuppressWarnings("deprecation")
 @Deprecated
 public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
 
