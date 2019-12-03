@@ -731,9 +731,7 @@ public class Worker {
                 return;
             }
 
-            if (connectorStatusMetricsGroup != null) {
-                connectorStatusMetricsGroup.recordTaskRemoved(taskId);
-            }
+            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (!task.awaitStop(timeout)) {
                 log.error("Graceful stop of task {} failed.", task.id());
                 task.cancel();
