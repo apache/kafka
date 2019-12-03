@@ -159,7 +159,7 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
-            final long firstTimestamp = filter.retrieveDeleteHorizon(batch);
+            long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
             filterResult.bytesRead += batch.sizeInBytes();
 
             if (batchRetention == BatchRetention.DELETE)
@@ -173,44 +173,28 @@ public class MemoryRecords extends AbstractRecords {
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
-            boolean shouldSetDeleteHorizon = !batch.isDeleteHorizonSet() && firstTimestamp != RecordBatch.NO_TIMESTAMP;
-            boolean containsTombstones = false;
+            boolean shouldSetDeleteHorizon = !batch.isDeleteHorizonSet() && deleteHorizonMs != RecordBatch.NO_TIMESTAMP;
+            boolean containsTombstonesOrMarker = false;
             List<Record> retainedRecords = new ArrayList<>();
 
-            try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
-                while (iterator.hasNext()) {
-                    Record record = iterator.next();
-                    filterResult.messagesRead += 1;
-
-                    if (filter.shouldRetainRecord(batch, record)) {
-                        // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                        // the corrupted batch with correct data.
-                        if (!record.hasMagic(batchMagic))
-                            writeOriginalBatch = false;
-
-                        if (record.offset() > maxOffset)
-                            maxOffset = record.offset();
-
-                        retainedRecords.add(record);
-                    } else {
-                        writeOriginalBatch = false;
-                    }
-
-                    if (!record.hasValue()) {
-                        containsTombstones = true;
-                    }
-                }
-            }
+            final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
+                                                                          batchMagic, writeOriginalBatch, maxOffset, retainedRecords,
+                                                                          containsTombstonesOrMarker);
+            containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
+            writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
+            maxOffset = iterationResult.maxOffset();
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                if (writeOriginalBatch && (!shouldSetDeleteHorizon || !containsTombstones)) {
+                if (writeOriginalBatch && (!shouldSetDeleteHorizon || !containsTombstonesOrMarker)) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, firstTimestamp);
+                    if (!containsTombstonesOrMarker)
+                        deleteHorizonMs = RecordBatch.NO_TIMESTAMP;
+                    MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                     MemoryRecords records = builder.build();
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
@@ -245,6 +229,64 @@ public class MemoryRecords extends AbstractRecords {
         }
 
         return filterResult;
+    }
+
+    private static BatchIterationResult iterateOverBatch(RecordBatch batch,
+                                                         BufferSupplier decompressionBufferSupplier,
+                                                         FilterResult filterResult,
+                                                         RecordFilter filter,
+                                                         byte batchMagic,
+                                                         boolean writeOriginalBatch,
+                                                         long maxOffset,
+                                                         List<Record> retainedRecords,
+                                                         boolean containsTombstonesOrMarker) {
+        try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
+            while (iterator.hasNext()) {
+                Record record = iterator.next();
+                filterResult.messagesRead += 1;
+
+                if (filter.shouldRetainRecord(batch, record)) {
+                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+                    // the corrupted batch with correct data.
+                    if (!record.hasMagic(batchMagic))
+                        writeOriginalBatch = false;
+
+                    if (record.offset() > maxOffset)
+                        maxOffset = record.offset();
+
+                    retainedRecords.add(record);
+                } else {
+                    writeOriginalBatch = false;
+                }
+
+                if (!record.hasValue()) {
+                    containsTombstonesOrMarker = true;
+                }
+            }
+            return new BatchIterationResult(writeOriginalBatch, containsTombstonesOrMarker, maxOffset);
+        }
+    }
+
+    private static class BatchIterationResult {
+        private final boolean writeOriginalBatch;
+        private final boolean containsTombstonesOrMarker;
+        private final long maxOffset;
+        public BatchIterationResult(final boolean writeOriginalBatch,
+                                    final boolean containsTombstonesOrMarker,
+                                    final long maxOffset) {
+            this.writeOriginalBatch = writeOriginalBatch;
+            this.containsTombstonesOrMarker = containsTombstonesOrMarker;
+            this.maxOffset = maxOffset;
+        }
+        public boolean shouldWriteOriginalBatch() {
+            return this.writeOriginalBatch;
+        }
+        public boolean containsTombstonesOrMarker() {
+            return this.containsTombstonesOrMarker;
+        }
+        public long maxOffset() {
+            return this.maxOffset;
+        }
     }
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
@@ -319,30 +361,11 @@ public class MemoryRecords extends AbstractRecords {
             DELETE_EMPTY  // Delete the batch if it is empty
         }
 
-        public class BatchInfo {
-            private final BatchRetention batchRetention;
-            private final boolean isControlBatchEmpty;
-            public BatchInfo(final BatchRetention batchRetention, final boolean isControlBatchEmpty) {
-                this.batchRetention = batchRetention;
-                this.isControlBatchEmpty = isControlBatchEmpty;
-            }
-            public BatchRetention batchRetention() {
-                return batchRetention;
-            }
-            public boolean isControlBatchEmpty() {
-                return isControlBatchEmpty;
-            }
-        }
-
         /**
          * Check whether the full batch can be discarded (i.e. whether we even need to
          * check the records individually).
          */
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
-
-        protected BatchInfo shouldRetendBatch(RecordBatch batch) {
-            return new BatchInfo(checkBatchRetention(batch), false);
-        }
 
         /**
          * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}
