@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  */
 public class MetadataCache {
     private final String clusterId;
-    private final List<Node> nodes;
+    private final Collection<Node> nodes;
     private final Set<String> unauthorizedTopics;
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
@@ -49,7 +49,7 @@ public class MetadataCache {
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
-                  List<Node> nodes,
+                  Collection<Node> nodes,
                   Collection<PartitionInfoAndEpoch> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
@@ -59,7 +59,7 @@ public class MetadataCache {
     }
 
     MetadataCache(String clusterId,
-                  List<Node> nodes,
+                  Collection<Node> nodes,
                   Collection<PartitionInfoAndEpoch> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
