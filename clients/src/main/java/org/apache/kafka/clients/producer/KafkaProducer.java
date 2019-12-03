@@ -880,14 +880,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         try {
             throwIfProducerClosed();
             // first make sure the metadata for the topic is available
+            long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
             try {
-                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
+                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
             } catch (KafkaException e) {
                 if (metadata.isClosed())
                     throw new KafkaException("Producer closed while send in progress", e);
                 throw e;
             }
+            nowMs += clusterAndWaitTime.waitedOnMetadataMs;
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
@@ -915,7 +917,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
                     compressionType, serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
-            long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
+            long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
             if (log.isTraceEnabled()) {
                 log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
@@ -926,8 +928,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 transactionManager.failIfNotReadyForSend();
             }
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, true);
-            
+                    serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
+
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
                 partitioner.onNewBatch(record.topic(), cluster, prevPartition);
@@ -940,9 +942,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
                 result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, headers, interceptCallback, remainingWaitMs, false);
+                    serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
             }
-            
+
             if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
 
@@ -991,18 +993,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param partition A specific partition expected to exist in metadata, or null if there's no preference
+     * @param nowMs The current time in ms
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
      * @return The cluster containing topic metadata and the amount of time we waited in ms
      * @throws KafkaException for all Kafka-related exceptions, including the case where this method is called after producer close
      */
-    private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long maxWaitMs) throws InterruptedException {
+    private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long nowMs, long maxWaitMs) throws InterruptedException {
         // add topic to metadata topic list if it is not there already and reset expiry
         Cluster cluster = metadata.fetch();
 
         if (cluster.invalidTopics().contains(topic))
             throw new InvalidTopicException(topic);
 
-        metadata.add(topic);
+        metadata.add(topic, nowMs);
 
         Integer partitionsCount = cluster.partitionCountForTopic(topic);
         // Return cached metadata if we have it, and if the record's partition is either undefined
@@ -1010,9 +1013,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (partitionsCount != null && (partition == null || partition < partitionsCount))
             return new ClusterAndWaitTime(cluster, 0);
 
-        long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
-        long elapsed;
+        long elapsed = 0;
         // Issue metadata requests until we have metadata for the topic and the requested partition,
         // or until maxWaitTimeMs is exceeded. This is necessary in case the metadata
         // is stale and the number of partitions for this topic has increased in the meantime.
@@ -1022,7 +1024,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 log.trace("Requesting metadata update for topic {}.", topic);
             }
-            metadata.add(topic);
+            metadata.add(topic, nowMs + elapsed);
             int version = metadata.requestUpdate();
             sender.wakeup();
             try {
@@ -1034,7 +1036,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                 topic, maxWaitMs));
             }
             cluster = metadata.fetch();
-            elapsed = time.milliseconds() - begin;
+            elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
                 throw new TimeoutException(partitionsCount == null ?
                         String.format("Topic %s not present in metadata after %d ms.",
@@ -1124,7 +1126,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public List<PartitionInfo> partitionsFor(String topic) {
         Objects.requireNonNull(topic, "topic cannot be null");
         try {
-            return waitOnMetadata(topic, null, maxBlockTimeMs).cluster.partitionsForTopic(topic);
+            return waitOnMetadata(topic, null, time.milliseconds(), maxBlockTimeMs).cluster.partitionsForTopic(topic);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
