@@ -213,7 +213,7 @@ public class KafkaStreams implements AutoCloseable {
             this.validTransitions.addAll(Arrays.asList(validTransitions));
         }
 
-        public boolean isRunning() {
+        public boolean isRunningOrRebalancing() {
             return equals(RUNNING) || equals(REBALANCING);
         }
 
@@ -297,17 +297,18 @@ public class KafkaStreams implements AutoCloseable {
         return state;
     }
 
-    private boolean isRunning() {
+    private boolean isRunningOrRebalancing() {
         synchronized (stateLock) {
-            return state.isRunning();
+            return state.isRunningOrRebalancing();
         }
     }
 
-    private void validateIsRunning() {
-        if (!isRunning()) {
+    private void validateIsRunningOrRebalancing() {
+        if (!isRunningOrRebalancing()) {
             throw new IllegalStateException("KafkaStreams is not running. State is " + state + ".");
         }
     }
+
     /**
      * Listen to {@link State} change events.
      */
@@ -1004,7 +1005,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws StreamsException if cleanup failed
      */
     public void cleanUp() {
-        if (isRunning()) {
+        if (isRunningOrRebalancing()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
         stateDirectory.clean();
@@ -1020,7 +1021,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return {@link StreamsMetadata} for each {@code KafkaStreams} instances of this application
      */
     public Collection<StreamsMetadata> allMetadata() {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadata();
     }
 
@@ -1040,7 +1041,7 @@ public class KafkaStreams implements AutoCloseable {
      * this application
      */
     public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getAllMetadataForStore(storeName);
     }
 
@@ -1081,7 +1082,7 @@ public class KafkaStreams implements AutoCloseable {
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final Serializer<K> keySerializer) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getMetadataWithKey(storeName, key, keySerializer);
     }
 
@@ -1113,28 +1114,40 @@ public class KafkaStreams implements AutoCloseable {
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
                                               final StreamPartitioner<? super K, ?> partitioner) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }
 
     /**
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
+     *
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param keySerializer serializer for the key
+     * @param <K>           key type
      * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store.
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, keySerializer);
     }
 
     /**
+     * Finds the metadata containing the active hosts and standby hosts where the key being queried would reside.
+     *
+     * @param storeName     the {@code storeName} to find metadata for
+     * @param key           the key to find metadata for
+     * @param partitioner the partitioner to be use to locate the host for the key
+     * @param <K>           key type
      * Returns {@link KeyQueryMetadata} containing all metadata about hosting the given key for the given store, using the
      * the supplied partitioner
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
                                                     final StreamPartitioner<? super K, ?> partitioner) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, partitioner);
     }
 
@@ -1156,7 +1169,7 @@ public class KafkaStreams implements AutoCloseable {
      * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
     }
 
@@ -1166,7 +1179,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return the set of {@link ThreadMetadata}.
      */
     public Set<ThreadMetadata> localThreadsMetadata() {
-        validateIsRunning();
+        validateIsRunningOrRebalancing();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         for (final StreamThread thread : threads) {
             threadMetadata.add(thread.threadMetadata());

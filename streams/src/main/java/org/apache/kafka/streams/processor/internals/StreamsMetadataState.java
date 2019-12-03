@@ -116,7 +116,6 @@ public class StreamsMetadataState {
      * Find the {@link StreamsMetadata}s for a given storeName and key. This method will use the
      * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
      * please use {@link StreamsMetadataState#getMetadataWithKey(String, Object, StreamPartitioner)}
-     * <p>
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
@@ -161,7 +160,7 @@ public class StreamsMetadataState {
 
     /**
      * Find the {@link KeyQueryMetadata}s for a given storeName and key.
-     * <p>
+     *
      * Note: the key may not exist in the {@link StateStore},
      * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
@@ -187,9 +186,9 @@ public class StreamsMetadataState {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
             if (thisHost == UNKNOWN_HOST) {
-                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), null, 0);
+                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), -1);
             }
-            return new KeyQueryMetadata(myMetadata.hostInfo(), null, 0);
+            return new KeyQueryMetadata(myMetadata.hostInfo(), Collections.emptySet(), -1);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -203,7 +202,7 @@ public class StreamsMetadataState {
      * Find the {@link KeyQueryMetadata}s for a given storeName and key. This method will use the
      * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
      * please use {@link StreamsMetadataState#getKeyQueryMetadataWithKey(String, Object, Serializer)}
-     * <p>
+     *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link KeyQueryMetadata} it would exist on.
      *
@@ -229,9 +228,9 @@ public class StreamsMetadataState {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
             if (thisHost == UNKNOWN_HOST) {
-                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), null, 0);
+                return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), -1);
             }
-            return new KeyQueryMetadata(myMetadata.hostInfo(), null, 0);
+            return new KeyQueryMetadata(myMetadata.hostInfo(), Collections.emptySet(), -1);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -333,13 +332,13 @@ public class StreamsMetadataState {
             final Set<TopicPartition> activepartitionsForHost = new HashSet<>(entry.getValue());
             final Set<String> activeStoresOnHost = getStoresOnHost(stores, activepartitionsForHost);
             activeStoresOnHost.addAll(globalStores);
-            final Set<TopicPartition> standbypartitionsForHost = new HashSet<>();
+            final Set<TopicPartition> standbyPartitionsForHost = new HashSet<>();
             final Set<String> standbyStoresOnHost = new HashSet<>();
-            if (standbyPartitionHostMap != null && standbyPartitionHostMap.containsKey(key)) {
-                standbypartitionsForHost.addAll(standbyPartitionHostMap.get(key));
-                standbyStoresOnHost.addAll(getStoresOnHost(stores, standbypartitionsForHost));
+            if (!standbyPartitionHostMap.isEmpty() && standbyPartitionHostMap.containsKey(key)) {
+                standbyPartitionsForHost.addAll(standbyPartitionHostMap.get(key));
+                standbyStoresOnHost.addAll(getStoresOnHost(stores, standbyPartitionsForHost));
             }
-            final StreamsMetadata metadata = new StreamsMetadata(key, activeStoresOnHost, activepartitionsForHost, standbypartitionsForHost, standbyStoresOnHost);
+            final StreamsMetadata metadata = new StreamsMetadata(key, activeStoresOnHost, activepartitionsForHost, standbyPartitionsForHost, standbyStoresOnHost);
             if (activepartitionsForHost != null) {
                 allMetadata.add(metadata);
             }

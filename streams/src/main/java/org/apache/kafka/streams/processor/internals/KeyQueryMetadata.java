@@ -16,14 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Represents all the metadata where a particular key resides in a {@link KafkaStreams} application.
+ * It contains the user supplied {@link HostInfo} and the Set of standby Hosts where the key would be found in case an application
+ * has more than one standby. It also contains the partition number where the key belongs, this information would be useful in
+ * developing another apis on top, to fetch Offset Lag or Time based lag for the partition where the key belongs.
+ * NOTE: This is a point in time view. It may change when rebalances happen.
+ */
 public class KeyQueryMetadata {
     /**
-     * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
+     * Sentinel to indicate that the KeyQueryMetadata is currently unavailable. This can occur during rebalance
      * operations.
      */
     public final static KeyQueryMetadata NOT_AVAILABLE = new KeyQueryMetadata(new HostInfo("unavailable", -1),
@@ -58,20 +67,11 @@ public class KeyQueryMetadata {
 
     @Override
     public boolean equals(final Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || getClass() != obj.getClass()) {
+        if (!(obj instanceof KeyQueryMetadata)) {
             return false;
         }
-        final KeyQueryMetadata that = (KeyQueryMetadata) obj;
-        if (activeHost != that.activeHost) {
-            return false;
-        }
-        if (!standbyHosts.equals(that.standbyHosts)) {
-            return false;
-        }
-        return partition == that.partition;
+        KeyQueryMetadata keyQueryMetadata = (KeyQueryMetadata) obj;
+        return Objects.equals(keyQueryMetadata.activeHost, activeHost) && Objects.equals(keyQueryMetadata.standbyHosts, standbyHosts) && Objects.equals(keyQueryMetadata.partition, partition);
     }
 
     @Override
@@ -85,9 +85,6 @@ public class KeyQueryMetadata {
 
     @Override
     public int hashCode() {
-        int result = activeHost.hashCode();
-        result = 31 * result + standbyHosts.hashCode();
-        result = 31 * result + partition;
-        return result;
+      return Objects.hash(activeHost, standbyHosts, partition);
     }
 }
