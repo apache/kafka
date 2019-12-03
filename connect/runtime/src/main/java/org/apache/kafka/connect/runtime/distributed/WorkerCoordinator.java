@@ -245,6 +245,16 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
+    /**
+     * Return the current generation. The generation refers to this worker's knowledge with
+     * respect to which  generation is the latest one and, therefore, this information is local.
+     *
+     * @return the generation ID or -1 if no generation is defined
+     */
+    public int generationId() {
+        return super.generation().generationId;
+    }
+
     private boolean isLeader() {
         return assignmentSnapshot != null && memberId().equals(assignmentSnapshot.leader());
     }
