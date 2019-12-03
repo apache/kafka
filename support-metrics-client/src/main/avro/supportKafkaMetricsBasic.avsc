@@ -1,0 +1,42 @@
+{
+  "namespace": "io.confluent.support.metrics",
+  "type": "record",
+  "name": "SupportKafkaMetricsBasic",
+  "doc": "Represents basic metrics captured on a single Kafka broker",
+  "fields": [
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "Time when this data record was created on the broker (Unix time)."
+    },
+    {
+      "name": "kafkaVersion",
+      "type": "string",
+      "doc": "The version of Kafka this broker is running."
+    },
+    {
+      "name": "confluentPlatformVersion",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "The version of the Confluent Platform this broker is running."
+    },
+    {
+      "name": "collectorState",
+      "type": "int",
+      "doc": "The state of the collector (e.g., Running or Shutting down)."
+    },
+    {
+      "name": "brokerProcessUUID",
+      "type": "string",
+      "doc": "A unique identifier that is valid for the runtime of a broker.  The identifier is generated at broker startup and lost at shutdown/crash."
+    },
+    {
+      "name": "clusterId",
+      "type": "string",
+      "doc": "A unique identifier for the Kafka cluster.",
+      "default": "NA"
+    }
+  ]
+}

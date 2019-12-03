@@ -1,0 +1,42 @@
+<!DOCTYPE import-control PUBLIC
+"-//Puppy Crawl//DTD Import Control 1.1//EN"
+"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+
+<!--
+  //
+  // confluent-import-control.xml
+  //
+  // The import control file for Confluent code.
+  //
+  // Copyright Confluent, 2018-2019.
+  //
+-->
+
+<import-control pkg="io.confluent">
+  <!-- common library dependencies -->
+  <allow pkg="com" />
+  <allow pkg="java" />
+  <allow pkg="org.jose4j" />
+  <allow pkg="org.junit" />
+  <allow pkg="org.mockito" />
+  <allow pkg="org.slf4j" />
+  <allow pkg="scala" />
+
+  <subpackage name="support">
+    <subpackage name="metrics">
+      <allow pkg="io.confluent.command" />
+      <allow pkg="io.confluent.kafka.common.license" />
+      <allow pkg="io.confluent.license" />
+      <allow pkg="io.confluent.serializers" />
+      <allow pkg="io.confluent.support.metrics" />
+      <allow pkg="kafka" />
+      <allow pkg="org.apache.avro" />
+      <allow pkg="org.apache.commons.compress" />
+      <allow pkg="org.apache.http" />
+      <allow pkg="org.apache.kafka.clients" />
+      <allow pkg="org.apache.kafka.common" />
+      <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.zookeeper" />
+    </subpackage>
+  </subpackage>
+</import-control>
