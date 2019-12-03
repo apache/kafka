@@ -159,9 +159,10 @@ public class TestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Node> replicas = Collections.singletonList(leader);
+                List<Integer> replicas = Collections.singletonList(leader.id());
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, tp, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
+                        Errors.NONE, tp, leader.id(), Optional.ofNullable(epochSupplier.apply(tp)),
+                        replicas, replicas, replicas));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
@@ -181,11 +182,11 @@ public class TestUtils {
     public interface PartitionMetadataSupplier {
         MetadataResponse.PartitionMetadata supply(Errors error,
                               TopicPartition partition,
-                              Node leader,
+                              int leaderId,
                               Optional<Integer> leaderEpoch,
-                              List<Node> replicas,
-                              List<Node> isr,
-                              List<Node> offlineReplicas);
+                              List<Integer> replicas,
+                              List<Integer> isr,
+                              List<Integer> offlineReplicas);
     }
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {

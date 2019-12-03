@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.StaleMetadataException;
@@ -484,7 +485,7 @@ public class Fetcher<K, V> implements Closeable {
 
         // Validate each partition against the current leader and epoch
         subscriptions.assignedPartitions().forEach(topicPartition -> {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
+            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeaderOrEmpty(topicPartition);
             subscriptions.maybeValidatePositionForCurrentLeader(topicPartition, leaderAndEpoch);
         });
 
@@ -715,7 +716,7 @@ public class Fetcher<K, V> implements Closeable {
 
     private void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
+                offsetData.offset, offsetData.leaderEpoch, metadata.currentLeaderOrEmpty(partition));
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
         subscriptions.maybeSeekUnvalidated(partition, position.offset, requestedResetStrategy);
     }
@@ -903,20 +904,16 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             Long offset = entry.getValue();
-            Optional<MetadataResponse.PartitionMetadata> currentInfo = metadata.partitionMetadataIfCurrent(tp);
-            if (!currentInfo.isPresent()) {
+            Optional<Metadata.LeaderAndEpoch> leaderAndEpochOpt = metadata.currentLeader(tp);
+            if (!leaderAndEpochOpt.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
             } else {
-                MetadataResponse.PartitionMetadata partitionMetadata = currentInfo.get();
-                Node leader = partitionMetadata.leader();
+                Metadata.LeaderAndEpoch leaderAndEpoch = leaderAndEpochOpt.get();
+                Node leader = leaderAndEpoch.leader;
 
-                if (leader == null) {
-                    log.debug("Leader for partition {} is unavailable for fetching offset {}", tp, offset);
-                    metadata.requestUpdate();
-                    partitionsToRetry.add(tp);
-                } else if (client.isUnavailable(leader)) {
+                if (client.isUnavailable(leader)) {
                     client.maybeThrowAuthFailure(leader);
 
                     // The connection has failed and we need to await the blackout period before we can
@@ -926,8 +923,7 @@ public class Fetcher<K, V> implements Closeable {
                             leader, tp);
                     partitionsToRetry.add(tp);
                 } else {
-                    partitionDataMap.put(tp,
-                            new ListOffsetRequest.PartitionData(offset, partitionMetadata.leaderEpoch()));
+                    partitionDataMap.put(tp, new ListOffsetRequest.PartitionData(offset, leaderAndEpoch.epoch));
                 }
             }
         }
@@ -1104,7 +1100,7 @@ public class Fetcher<K, V> implements Closeable {
 
         // Ensure the position has an up-to-date leader
         subscriptions.assignedPartitions().forEach(
-            tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+            tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.currentLeaderOrEmpty(tp)));
 
         long currentTimeMs = time.milliseconds();
 

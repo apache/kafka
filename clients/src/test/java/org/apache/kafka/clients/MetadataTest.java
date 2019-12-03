@@ -43,10 +43,8 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
@@ -198,7 +196,7 @@ public class MetadataTest {
             metadata.update(response, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
             MetadataResponse.PartitionMetadata metadata = this.metadata.partitionMetadataIfCurrent(tp).get();
-            assertEquals(Optional.empty(), metadata.leaderEpoch());
+            assertEquals(Optional.empty(), metadata.leaderEpoch);
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
@@ -208,7 +206,7 @@ public class MetadataTest {
             metadata.update(response, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
             MetadataResponse.PartitionMetadata info = metadata.partitionMetadataIfCurrent(tp).get();
-            assertEquals(Optional.of(10), info.leaderEpoch());
+            assertEquals(Optional.of(10), info.leaderEpoch);
         }
     }
 
@@ -258,10 +256,8 @@ public class MetadataTest {
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
         MetadataResponse.PartitionMetadata metadata = this.metadata.partitionMetadataIfCurrent(tp).get();
 
-        List<Integer> cachedIsr = metadata.isr().stream()
-                .map(Node::id).collect(Collectors.toList());
-        assertEquals(Arrays.asList(1, 2, 3), cachedIsr);
-        assertEquals(Optional.of(10), metadata.leaderEpoch());
+        assertEquals(Arrays.asList(1, 2, 3), metadata.inSyncReplicaIds);
+        assertEquals(Optional.of(10), metadata.leaderEpoch);
     }
 
     @Test
@@ -452,7 +448,7 @@ public class MetadataTest {
         // still works
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
         assertEquals(metadata.partitionMetadataIfCurrent(tp).get().partition(), 0);
-        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().leader().id(), 0);
+        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().leaderId, 0);
     }
 
     @Test
@@ -611,8 +607,9 @@ public class MetadataTest {
 
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
             (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                new MetadataResponse.PartitionMetadata(error, partition, node0, leaderEpoch,
-                    Collections.singletonList(node0), Collections.emptyList(), Collections.singletonList(node1)));
+                new MetadataResponse.PartitionMetadata(error, partition, node0.id(), leaderEpoch,
+                    Collections.singletonList(node0.id()), Collections.emptyList(),
+                        Collections.singletonList(node1.id())));
         metadata.update(emptyMetadataResponse(), 0L);
         metadata.update(metadataResponse, 10L);
 

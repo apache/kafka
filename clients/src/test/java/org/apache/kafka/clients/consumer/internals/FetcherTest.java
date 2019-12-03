@@ -1946,14 +1946,14 @@ public class FetcherTest {
             List<MetadataResponse.PartitionMetadata> altPartitions = new ArrayList<>();
             for (MetadataResponse.PartitionMetadata p : partitions) {
                 altPartitions.add(new MetadataResponse.PartitionMetadata(
-                    p.error(),
-                    new TopicPartition(item.topic(), p.partition()),
-                    null, //no leader
+                    p.error,
+                    p.topicPartition,
+                    -1, //no leader
                     Optional.empty(),
-                    p.replicas(),
-                    p.isr(),
-                    p.offlineReplicas())
-                );
+                    p.replicaIds,
+                    p.inSyncReplicaIds,
+                    p.offlineReplicaIds
+                ));
             }
             MetadataResponse.TopicMetadata alteredTopic = new MetadataResponse.TopicMetadata(
                 item.error(),
@@ -3023,8 +3023,8 @@ public class FetcherTest {
 
         List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
-        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.leaderAndEpoch(tp0)));
-        subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp1)));
+        subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeaderOrEmpty(tp0)));
+        subscriptions.seekValidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.currentLeaderOrEmpty(tp1)));
 
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions1 = new LinkedHashMap<>();
@@ -3503,7 +3503,7 @@ public class FetcherTest {
 
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
-                metadata.leaderAndEpoch(tp0).leader, Optional.of(epochOne));
+                metadata.currentLeaderOrEmpty(tp0).leader, Optional.of(epochOne));
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
         assertFalse(client.isConnected(node.idString()));
         assertTrue(subscriptions.awaitingValidation(tp0));
@@ -3552,7 +3552,7 @@ public class FetcherTest {
 
         // Seek with a position and leader+epoch
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
-                metadata.leaderAndEpoch(tp0).leader, Optional.of(epochOne));
+                metadata.currentLeaderOrEmpty(tp0).leader, Optional.of(epochOne));
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
@@ -3580,7 +3580,7 @@ public class FetcherTest {
         Node node = metadata.fetch().nodes().get(0);
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(epochOne));
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeaderOrEmpty(tp0).leader, Optional.of(epochOne));
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         fetcher.validateOffsetsIfNeeded();
@@ -3623,7 +3623,7 @@ public class FetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
         // Seek with a position and leader+epoch
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(epochOne));
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeaderOrEmpty(tp0).leader, Optional.of(epochOne));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
@@ -3693,7 +3693,7 @@ public class FetcherTest {
         apiVersions.update(node.idString(), NodeApiVersions.create());
 
         // Seek
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.currentLeaderOrEmpty(tp0).leader, Optional.of(1));
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
 
         // Check for truncation, this should cause tp0 to go into validation

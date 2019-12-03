@@ -1290,8 +1290,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           val coordinatorEndpoint = topicMetadata.partitionMetadata.asScala
             .find(_.partition == partition)
-            .map(_.leader)
-            .flatMap(p => Option(p))
+            .flatMap(metadata => metadataCache.getAliveBroker(metadata.leaderId))
+            .flatMap(_.getNode(request.context.listenerName))
 
           coordinatorEndpoint match {
             case Some(endpoint) if !endpoint.isEmpty =>

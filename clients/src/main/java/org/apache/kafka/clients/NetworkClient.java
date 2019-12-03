@@ -1055,7 +1055,7 @@ public class NetworkClient implements KafkaClient {
             // This could be a transient issue if listeners were added dynamically to brokers.
             List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
                 topicMetadata.partitionMetadata().stream()
-                    .filter(partitionMetadata -> partitionMetadata.error() == Errors.LISTENER_NOT_FOUND)
+                    .filter(partitionMetadata -> partitionMetadata.error == Errors.LISTENER_NOT_FOUND)
                     .map(partitionMetadata -> new TopicPartition(topicMetadata.topic(), partitionMetadata.partition())))
                 .collect(Collectors.toList());
             if (!missingListenerPartitions.isEmpty()) {
