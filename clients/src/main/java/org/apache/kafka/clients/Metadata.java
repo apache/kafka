@@ -19,14 +19,12 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -199,11 +197,11 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    public synchronized Optional<MetadataCache.PartitionInfoAndEpoch> partitionInfoIfCurrent(TopicPartition topicPartition) {
+    public synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
         if (epoch == null) {
             // old cluster format (no epochs)
-            return cache.getPartitionInfo(topicPartition);
+            return cache.partitionMetadata(topicPartition);
         } else {
             return cache.getPartitionInfoHavingEpoch(topicPartition, epoch);
         }
@@ -289,7 +287,7 @@ public class Metadata implements Closeable {
     private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse,
                                                  Predicate<MetadataResponse.TopicMetadata> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
-        List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
+        List<MetadataResponse.PartitionMetadata> partitions = new ArrayList<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             if (!topicsToRetain.test(metadata))
                 continue;
@@ -305,7 +303,7 @@ public class Metadata implements Closeable {
 
                     if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
-                                new TopicPartition(metadata.topic(), partitionMetadata.partition()), partitionMetadata.error());
+                                partitionMetadata.topicPartition, partitionMetadata.error());
                         requestUpdate();
                     }
                 }
@@ -315,10 +313,13 @@ public class Metadata implements Closeable {
             }
         }
 
-        return new MetadataCache(metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
+        return new MetadataCache(metadataResponse.clusterId(),
+                new ArrayList<>(metadataResponse.brokers()),
+                partitions,
                 metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 metadataResponse.topicsByError(Errors.INVALID_TOPIC_EXCEPTION),
-                internalTopics, metadataResponse.controller());
+                internalTopics,
+                metadataResponse.controller());
     }
 
     /**
@@ -327,25 +328,22 @@ public class Metadata implements Closeable {
     private void updatePartitionInfo(String topic,
                                      MetadataResponse.PartitionMetadata partitionMetadata,
                                      boolean hasReliableLeaderEpoch,
-                                     Consumer<MetadataCache.PartitionInfoAndEpoch> partitionInfoConsumer) {
+                                     Consumer<MetadataResponse.PartitionMetadata> partitionInfoConsumer) {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
 
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
             // If the received leader epoch is at least the same as the previous one, update the metadata
             if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
-                PartitionInfo info = MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
-                partitionInfoConsumer.accept(new MetadataCache.PartitionInfoAndEpoch(info, newEpoch));
+                partitionInfoConsumer.accept(partitionMetadata);
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
-                cache.getPartitionInfo(tp).ifPresent(partitionInfoConsumer);
+                cache.partitionMetadata(partitionMetadata.topicPartition).ifPresent(partitionInfoConsumer);
             }
         } else {
             // Handle old cluster formats as well as error responses where leader and epoch are missing
             lastSeenLeaderEpochs.remove(tp);
-            PartitionInfo info = MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
-            partitionInfoConsumer.accept(new MetadataCache.PartitionInfoAndEpoch(info,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH));
+            partitionInfoConsumer.accept(partitionMetadata.withoutLeaderEpoch());
         }
     }
 
@@ -492,10 +490,10 @@ public class Metadata implements Closeable {
     }
 
     public synchronized LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
-        return partitionInfoIfCurrent(tp)
-                .map(infoAndEpoch -> {
-                    Node leader = infoAndEpoch.partitionInfo().leader();
-                    return new LeaderAndEpoch(leader == null ? Node.noNode() : leader, Optional.of(infoAndEpoch.epoch()));
+        return partitionMetadataIfCurrent(tp)
+                .map(partitionMetadata -> {
+                    Node leader = partitionMetadata.leader();
+                    return new LeaderAndEpoch(leader == null ? Node.noNode() : leader, partitionMetadata.leaderEpoch());
                 })
                 .orElse(new LeaderAndEpoch(Node.noNode(), lastSeenLeaderEpoch(tp)));
     }

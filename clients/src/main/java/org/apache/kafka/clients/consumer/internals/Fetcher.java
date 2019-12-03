@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.StaleMetadataException;
@@ -904,27 +903,32 @@ public class Fetcher<K, V> implements Closeable {
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             Long offset = entry.getValue();
-            Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
+            Optional<MetadataResponse.PartitionMetadata> currentInfo = metadata.partitionMetadataIfCurrent(tp);
             if (!currentInfo.isPresent()) {
                 log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (currentInfo.get().partitionInfo().leader() == null) {
-                log.debug("Leader for partition {} is unavailable for fetching offset {}", tp, offset);
-                metadata.requestUpdate();
-                partitionsToRetry.add(tp);
-            } else if (client.isUnavailable(currentInfo.get().partitionInfo().leader())) {
-                client.maybeThrowAuthFailure(currentInfo.get().partitionInfo().leader());
-
-                // The connection has failed and we need to await the blackout period before we can
-                // try again. No need to request a metadata update since the disconnect will have
-                // done so already.
-                log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                        currentInfo.get().partitionInfo().leader(), tp);
-                partitionsToRetry.add(tp);
             } else {
-                partitionDataMap.put(tp,
-                        new ListOffsetRequest.PartitionData(offset, Optional.of(currentInfo.get().epoch())));
+                MetadataResponse.PartitionMetadata partitionMetadata = currentInfo.get();
+                Node leader = partitionMetadata.leader();
+
+                if (leader == null) {
+                    log.debug("Leader for partition {} is unavailable for fetching offset {}", tp, offset);
+                    metadata.requestUpdate();
+                    partitionsToRetry.add(tp);
+                } else if (client.isUnavailable(leader)) {
+                    client.maybeThrowAuthFailure(leader);
+
+                    // The connection has failed and we need to await the blackout period before we can
+                    // try again. No need to request a metadata update since the disconnect will have
+                    // done so already.
+                    log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
+                            leader, tp);
+                    partitionsToRetry.add(tp);
+                } else {
+                    partitionDataMap.put(tp,
+                            new ListOffsetRequest.PartitionData(offset, partitionMetadata.leaderEpoch()));
+                }
             }
         }
         return regroupPartitionMapByNode(partitionDataMap);

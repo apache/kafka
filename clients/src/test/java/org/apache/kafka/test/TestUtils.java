@@ -161,7 +161,7 @@ public class TestUtils {
                 Node leader = nodes.get(i % nodes.size());
                 List<Node> replicas = Collections.singletonList(leader);
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, i, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
+                        Errors.NONE, tp, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
@@ -180,7 +180,7 @@ public class TestUtils {
     @FunctionalInterface
     public interface PartitionMetadataSupplier {
         MetadataResponse.PartitionMetadata supply(Errors error,
-                              int partition,
+                              TopicPartition partition,
                               Node leader,
                               Optional<Integer> leaderEpoch,
                               List<Node> replicas,

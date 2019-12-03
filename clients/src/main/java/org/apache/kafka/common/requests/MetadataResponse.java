@@ -19,10 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -314,8 +315,9 @@ public class MetadataResponse extends AbstractResponse {
 
     // This is used to describe per-partition state in the MetadataResponse
     public static class PartitionMetadata {
+        public final TopicPartition topicPartition;
+
         private final Errors error;
-        private final int partition;
         private final Node leader;
         private final Optional<Integer> leaderEpoch;
         private final List<Node> replicas;
@@ -323,14 +325,14 @@ public class MetadataResponse extends AbstractResponse {
         private final List<Node> offlineReplicas;
 
         public PartitionMetadata(Errors error,
-                                 int partition,
+                                 TopicPartition topicPartition,
                                  Node leader,
                                  Optional<Integer> leaderEpoch,
                                  List<Node> replicas,
                                  List<Node> isr,
                                  List<Node> offlineReplicas) {
             this.error = error;
-            this.partition = partition;
+            this.topicPartition = topicPartition;
             this.leader = leader;
             this.leaderEpoch = leaderEpoch;
             this.replicas = replicas;
@@ -338,12 +340,26 @@ public class MetadataResponse extends AbstractResponse {
             this.offlineReplicas = offlineReplicas;
         }
 
+        public PartitionMetadata withoutLeaderEpoch() {
+            return new PartitionMetadata(error,
+                    topicPartition,
+                    leader,
+                    Optional.empty(),
+                    replicas,
+                    isr,
+                    offlineReplicas);
+        }
+
         public Errors error() {
             return error;
         }
 
         public int partition() {
-            return partition;
+            return topicPartition.partition();
+        }
+
+        public String topic() {
+            return topicPartition.topic();
         }
 
         public int leaderId() {
@@ -372,9 +388,9 @@ public class MetadataResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(type=PartitionMetadata" +
+            return "PartitionMetadata(" +
                     ", error=" + error +
-                    ", partition=" + partition +
+                    ", partition=" + topicPartition +
                     ", leader=" + leader +
                     ", leaderEpoch=" + leaderEpoch +
                     ", replicas=" + Utils.join(replicas, ",") +
@@ -417,8 +433,9 @@ public class MetadataResponse extends AbstractResponse {
                     List<Node> replicaNodes = convertToNodes(brokerMap, partitionMetadata.replicaNodes());
                     List<Node> isrNodes = convertToNodes(brokerMap, partitionMetadata.isrNodes());
                     List<Node> offlineNodes = convertToNodes(brokerMap, partitionMetadata.offlineReplicas());
-                    partitionMetadataList.add(new PartitionMetadata(partitionError, partitionIndex, leaderNode, leaderEpoch,
-                            replicaNodes, isrNodes, offlineNodes));
+                    TopicPartition topicPartition = new TopicPartition(topic, partitionIndex);
+                    partitionMetadataList.add(new PartitionMetadata(partitionError, topicPartition, leaderNode,
+                            leaderEpoch, replicaNodes, isrNodes, offlineNodes));
                 }
 
                 topicMetadataList.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadataList,
@@ -469,7 +486,7 @@ public class MetadataResponse extends AbstractResponse {
             for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
                 metadataResponseTopic.partitions().add(new MetadataResponsePartition()
                     .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition)
+                    .setPartitionIndex(partitionMetadata.partition())
                     .setLeaderId(partitionMetadata.leader == null ? -1 : partitionMetadata.leader.id())
                     .setLeaderEpoch(partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setReplicaNodes(partitionMetadata.replicas.stream().map(Node::id).collect(Collectors.toList()))

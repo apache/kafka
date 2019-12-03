@@ -196,9 +196,9 @@ public class MetadataTest {
             MetadataResponse response = new MetadataResponse(struct, version);
             assertFalse(response.hasReliableLeaderEpochs());
             metadata.update(response, 100);
-            assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
-            MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
-            assertEquals(-1, info.epoch());
+            assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
+            MetadataResponse.PartitionMetadata metadata = this.metadata.partitionMetadataIfCurrent(tp).get();
+            assertEquals(Optional.empty(), metadata.leaderEpoch());
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
@@ -206,9 +206,9 @@ public class MetadataTest {
             MetadataResponse response = new MetadataResponse(struct, version);
             assertTrue(response.hasReliableLeaderEpochs());
             metadata.update(response, 100);
-            assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
-            MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
-            assertEquals(10, info.epoch());
+            assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
+            MetadataResponse.PartitionMetadata info = metadata.partitionMetadataIfCurrent(tp).get();
+            assertEquals(Optional.of(10), info.leaderEpoch());
         }
     }
 
@@ -255,13 +255,13 @@ public class MetadataTest {
         metadata.update(new MetadataResponse(data), 101);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
-        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
-        MetadataCache.PartitionInfoAndEpoch info = metadata.partitionInfoIfCurrent(tp).get();
+        assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
+        MetadataResponse.PartitionMetadata metadata = this.metadata.partitionMetadataIfCurrent(tp).get();
 
-        List<Integer> cachedIsr = Arrays.stream(info.partitionInfo().inSyncReplicas())
+        List<Integer> cachedIsr = metadata.isr().stream()
                 .map(Node::id).collect(Collectors.toList());
         assertEquals(Arrays.asList(1, 2, 3), cachedIsr);
-        assertEquals(10, info.epoch());
+        assertEquals(Optional.of(10), metadata.leaderEpoch());
     }
 
     @Test
@@ -419,14 +419,14 @@ public class MetadataTest {
         // Cache of partition stays, but current partition info is not available since it's stale
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
-        assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
+        assertFalse(metadata.partitionMetadataIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Metadata with older epoch is rejected, metadata state is unchanged
         metadata.update(metadataResponse, 20L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
-        assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
+        assertFalse(metadata.partitionMetadataIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Metadata with equal or newer epoch is accepted
@@ -434,7 +434,7 @@ public class MetadataTest {
         metadata.update(metadataResponse, 30L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
-        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
+        assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
     }
 
@@ -450,9 +450,9 @@ public class MetadataTest {
         assertFalse(metadata.lastSeenLeaderEpoch(tp).isPresent());
 
         // still works
-        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
-        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partitionInfo().partition(), 0);
-        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partitionInfo().leader().id(), 0);
+        assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
+        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().partition(), 0);
+        assertEquals(metadata.partitionMetadataIfCurrent(tp).get().leader().id(), 0);
     }
 
     @Test
