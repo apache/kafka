@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -66,6 +67,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private volatile ConnectProtocolCompatibility currentConnectProtocol;
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
+    private final int coordinatorDiscoveryTimeoutMs;
 
     /**
      * Initialize the coordination manager.
@@ -98,6 +100,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, time, maxDelay);
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
+        this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
     }
 
     @Override
@@ -124,7 +127,22 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+                log.debug("Broker coordinator is marked unknown. Attempting discovery with a timeout of {}ms",
+                        coordinatorDiscoveryTimeoutMs);
+                if (ensureCoordinatorReady(time.timer(coordinatorDiscoveryTimeoutMs))) {
+                    log.debug("Broker coordinator is ready");
+                } else {
+                    log.debug("Can not connect to broker coordinator");
+                    if (assignmentSnapshot != null && !assignmentSnapshot.failed()) {
+                        log.info("Broker coordinator was unreachable for {}ms. Revoking previous assignment {} to " +
+                                "avoid running tasks while not being a member the group", coordinatorDiscoveryTimeoutMs, assignmentSnapshot);
+                        listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
+                        assignmentSnapshot.connectors().clear();
+                        assignmentSnapshot.tasks().clear();
+                        assignmentSnapshot.revokedConnectors().clear();
+                        assignmentSnapshot.revokedTasks().clear();
+                    }
+                }
                 now = time.milliseconds();
             }
 
