@@ -463,7 +463,7 @@ class LogManager(logDirs: Seq[File],
         CoreUtils.runnable {
           // flush the log to ensure latest possible recovery point
           log.flush()
-          log.close()
+          log.closeWithProducerStateSnapshot()
         }
       }
 
@@ -884,7 +884,7 @@ class LogManager(logDirs: Seq[File],
         sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        sourceLog.close()
+        sourceLog.closeWithProducerStateSnapshot()
         checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.dir.getParentFile, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
         addLogToBeDeleted(sourceLog)

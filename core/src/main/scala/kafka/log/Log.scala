@@ -936,6 +936,23 @@ class Log(@volatile var dir: File,
   def numberOfSegments: Int = segments.size
 
   /**
+   * Closes this log after taking the snapshot of state of this log (epochs, offsets etc).
+   */
+  def closeWithProducerStateSnapshot(): Unit = {
+    debug("Taking snapshot before closing log.")
+    lock synchronized {
+      checkIfMemoryMappedBufferClosed()
+      maybeHandleIOException(s"Error while taking snapshot for $topicPartition in dir ${dir.getParent}") {
+        // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
+        // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
+        // (the clean shutdown file is written after the logs are all closed).
+        producerStateManager.takeSnapshot()
+      }
+      close()
+    }
+  }
+
+  /**
    * Close this log.
    * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
@@ -944,11 +961,8 @@ class Log(@volatile var dir: File,
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
-      maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
-        // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
-        // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
-        // (the clean shutdown file is written after the logs are all closed).
-        producerStateManager.takeSnapshot()
+      removeLogMetrics()
+      maybeHandleIOException(s"Error while closing log segments for $topicPartition in dir ${dir.getParent}") {
         logSegments.foreach(_.close())
       }
     }
@@ -2004,8 +2018,7 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-        removeLogMetrics()
-        producerExpireCheck.cancel(true)
+        close()
         removeAndDeleteSegments(logSegments, asyncDelete = false)
         leaderEpochCache.foreach(_.clear())
         Utils.delete(dir)
