@@ -151,8 +151,21 @@ public class WorkerGroupMember {
         stop(false);
     }
 
+    /**
+     * Ensure that the connection to the broker coordinator is up and that the worker is an
+     * active member of the group.
+     */
     public void ensureActive() {
         coordinator.poll(0);
+    }
+
+    /**
+     * A lightweight wrapper call that answers whether there's an active connection to the broker
+     * coordinator.
+     * @return true if there is no active connection to a broker coordinator
+     */
+    public boolean coordinatorUnknown() {
+        return coordinator.coordinatorUnknown();
     }
 
     public void poll(long timeout) {
