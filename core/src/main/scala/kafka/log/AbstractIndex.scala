@@ -317,14 +317,8 @@ abstract class AbstractIndex(@volatile var file: File, val baseOffset: Long, val
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap(): Unit = {
-    try {
-      // Only mmap if mapped. If its already unmapped do nothing
-      if (mmap != null) {
-        ByteBufferUnmapper.unmap(file.getAbsolutePath, mmap)
-      }
-    } finally {
-      mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
-    }
+    try ByteBufferUnmapper.unmap(file.getAbsolutePath, mmap)
+    finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
   /**
