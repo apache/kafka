@@ -273,7 +273,6 @@ public interface CogroupedKStream<K, VOut> {
      */
     SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows);
 
-
     /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
