@@ -734,7 +734,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
-            this.metadata.bootstrap(addresses, time.milliseconds());
+            this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "consumer";
 
             FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);

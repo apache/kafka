@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
@@ -31,6 +34,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -48,11 +52,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -81,6 +87,12 @@ public class NetworkClientTest {
         return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
@@ -532,15 +544,18 @@ public class NetworkClientTest {
     }
 
     private int sendEmptyProduceRequest() {
+        return sendEmptyProduceRequest(node.idString());
+    }
+
+    private int sendEmptyProduceRequest(String nodeId) {
         ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
                 Collections.emptyMap());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
         client.send(request, time.milliseconds());
         return request.correlationId();
     }
-
 
     private void sendResponse(ResponseHeader respHeader, Struct response) {
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -585,6 +600,49 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
+    public void testAuthenticationFailureWithInFlightMetadataRequest() {
+        int refreshBackoffMs = 50;
+
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(2, Collections.emptyMap());
+        Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
+        metadata.update(metadataResponse, time.milliseconds());
+
+        Cluster cluster = metadata.fetch();
+        Node node1 = cluster.nodes().get(0);
+        Node node2 = cluster.nodes().get(1);
+
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
+
+        awaitReady(client, node1);
+
+        metadata.requestUpdate();
+        time.sleep(refreshBackoffMs);
+
+        client.poll(0, time.milliseconds());
+
+        Optional<Node> nodeWithPendingMetadataOpt = cluster.nodes().stream()
+                .filter(node -> client.hasInFlightRequests(node.idString()))
+                .findFirst();
+        assertEquals(Optional.of(node1), nodeWithPendingMetadataOpt);
+
+        assertFalse(client.ready(node2, time.milliseconds()));
+        selector.serverAuthenticationFailed(node2.idString());
+        client.poll(0, time.milliseconds());
+        assertNotNull(client.authenticationException(node2));
+
+        ByteBuffer requestBuffer = selector.completedSendBuffers().get(0).buffer();
+        RequestHeader header = parseHeader(requestBuffer);
+        assertEquals(ApiKeys.METADATA, header.apiKey());
+
+        ByteBuffer responseBuffer = metadataResponse.serialize(ApiKeys.METADATA, header.apiVersion(), header.correlationId());
+        selector.delayedReceive(new DelayedReceive(node1.idString(), new NetworkReceive(node1.idString(), responseBuffer)));
+
+        int initialUpdateVersion = metadata.updateVersion();
+        client.poll(0, time.milliseconds());
+        assertEquals(initialUpdateVersion + 1, metadata.updateVersion());
     }
 
     @Test
@@ -840,9 +898,18 @@ public class NetworkClientTest {
         }
 
         @Override
-        public void handleFatalException(KafkaException exception) {
-            failure = exception;
-            super.handleFatalException(exception);
+        public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeAuthException) {
+            maybeAuthException.ifPresent(exception -> {
+                failure = exception;
+            });
+            super.handleServerDisconnect(now, destinationId, maybeAuthException);
+        }
+
+        @Override
+        public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
+            maybeFatalException.ifPresent(exception -> {
+                failure = exception;
+            });
         }
 
         public KafkaException getAndClearFailure() {

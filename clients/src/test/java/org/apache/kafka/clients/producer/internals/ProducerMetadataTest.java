@@ -22,7 +22,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -37,9 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.junit.Assert.assertThrows;
 
 public class ProducerMetadataTest {
 
@@ -178,9 +177,8 @@ public class ProducerMetadataTest {
     }
 
     @Test
-    public void testMetadataWaitAbortedOnFatalException() throws Exception {
-        Time time = new MockTime();
-        metadata.failedUpdate(time.milliseconds(), new AuthenticationException("Fatal exception from test"));
+    public void testMetadataWaitAbortedOnFatalException() {
+        metadata.fatalError(new AuthenticationException("Fatal exception from test"));
         assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, 1000));
     }
 
