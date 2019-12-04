@@ -224,14 +224,21 @@ public class ConnectWorkerIntegrationTest {
         waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
                 WORKER_SETUP_DURATION_MS, "Group of workers did not remain the same after broker shutdown");
 
+        // Allow for the workers to discover that the coordinator is unavailable, wait is
+        // heartbeat timeout * 2 + 4sec
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
         connect.kafka().startOnlyKafkaOnSamePorts();
 
-        // Allow for the workers to discover that the coordinator is unavailable
+        // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
         waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
                 WORKER_SETUP_DURATION_MS, "Group of workers did not remain the same within the "
                         + "designated time.");
+
+        // Allow for the workers to rebalance and reach a steady state
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
         waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
