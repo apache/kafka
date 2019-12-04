@@ -212,11 +212,14 @@ public class Metadata implements Closeable {
     }
 
     public synchronized Optional<LeaderAndEpoch> currentLeader(TopicPartition topicPartition) {
-        return partitionMetadataIfCurrent(topicPartition).flatMap(partitionMetadata -> {
-            Optional<Integer> leaderEpoch = partitionMetadata.leaderEpoch;
-            Optional<Node> leaderNodeOpt = cache.nodeById(partitionMetadata.leaderId);
-            return leaderNodeOpt.map(leaderNode -> new LeaderAndEpoch(leaderNode, leaderEpoch));
-        });
+        Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
+        if (!maybeMetadata.isPresent())
+            return Optional.empty();
+
+        MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
+        Optional<Integer> leaderEpoch = partitionMetadata.leaderEpoch;
+        Optional<Node> leaderNodeOpt = cache.nodeById(partitionMetadata.leaderId);
+        return leaderNodeOpt.map(leaderNode -> new LeaderAndEpoch(leaderNode, leaderEpoch));
     }
 
     public synchronized LeaderAndEpoch currentLeaderOrEmpty(TopicPartition tp) {
