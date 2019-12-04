@@ -159,15 +159,6 @@ public class WorkerGroupMember {
         coordinator.poll(0);
     }
 
-    /**
-     * A lightweight wrapper call that answers whether there's an active connection to the broker
-     * coordinator.
-     * @return true if there is no active connection to a broker coordinator
-     */
-    public boolean coordinatorUnknown() {
-        return coordinator.coordinatorUnknown();
-    }
-
     public void poll(long timeout) {
         if (timeout < 0)
             throw new IllegalArgumentException("Timeout must not be negative");
