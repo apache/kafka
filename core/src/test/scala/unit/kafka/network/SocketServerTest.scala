@@ -32,8 +32,6 @@ import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.SaslAuthenticateRequestData
-import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
@@ -689,7 +687,7 @@ class SocketServerTest extends JUnitSuite {
       val correlationId = -1
       val clientId = ""
       // send a SASL handshake request
-      val saslHandshakeRequest = new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
+      val saslHandshakeRequest = new SaslHandshakeRequest.Builder("PLAIN")
         .build()
       val saslHandshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE, saslHandshakeRequest.version, clientId,
         correlationId)
@@ -698,8 +696,7 @@ class SocketServerTest extends JUnitSuite {
 
       // now send credentials within a SaslAuthenticateRequest
       val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
-      val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
-        .setAuthBytes(authBytes)).build()
+      val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(ByteBuffer.wrap(authBytes)).build()
       val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
         clientId, correlationId)
       sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
