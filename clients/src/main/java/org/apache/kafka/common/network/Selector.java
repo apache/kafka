@@ -20,15 +20,15 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.metrics.IntGaugeSuite;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.IntGaugeSuite;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -563,9 +563,9 @@ public class Selector implements Selectable, AutoCloseable {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
                             if (!channel.connectedClientSupportsReauthentication())
                                 sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
-                            Optional<SslInformation> sslInformation = channel.sslInformation();
-                            if (sslInformation.isPresent()) {
-                                sensors.connectionsByCipher.increment(sslInformation.get());
+                            Optional<CipherInformation> cipherInformation = channel.cipherInformation();
+                            if (cipherInformation.isPresent()) {
+                                sensors.connectionsByCipher.increment(cipherInformation.get());
                             }
                         }
                         log.debug("Successfully {}authenticated with {}", isReauthentication ?
@@ -926,9 +926,9 @@ public class Selector implements Selectable, AutoCloseable {
             key.attach(null);
         }
 
-        Optional<SslInformation> sslInformation = channel.sslInformation();
-        if (sslInformation.isPresent()) {
-            sensors.connectionsByCipher.decrement(sslInformation.get());
+        Optional<CipherInformation> cipherInformation = channel.cipherInformation();
+        if (cipherInformation.isPresent()) {
+            sensors.connectionsByCipher.decrement(cipherInformation.get());
         }
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
@@ -1093,7 +1093,7 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor responsesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
-        public final IntGaugeSuite<SslInformation> connectionsByCipher;
+        public final IntGaugeSuite<CipherInformation> connectionsByCipher;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
@@ -1191,10 +1191,10 @@ public class Selector implements Selectable, AutoCloseable {
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
-                sslInformation -> {
+                cipherInformation -> {
                     Map<String, String> tags = new LinkedHashMap<>();
-                    tags.put("cipher", sslInformation.cipher());
-                    tags.put("protocol", sslInformation.protocol());
+                    tags.put("cipher", cipherInformation.cipher());
+                    tags.put("protocol", cipherInformation.protocol());
                     tags.putAll(metricTags);
                     return metrics.metricName("connections", metricGrpName, "The number of connections with this SSL cipher and protocol.", tags);
                 }, 100);

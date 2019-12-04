@@ -217,7 +217,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     }
 
     @Override
-    public Optional<SslInformation> sslInformation() {
+    public Optional<CipherInformation> cipherInformation() {
         return Optional.empty();
     }
 }

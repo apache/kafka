@@ -54,6 +54,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -255,6 +256,21 @@ public class SelectorTest {
                     selector.send(createSend(dest, dest + "-" + requests.get(dest)));
             }
         }
+        if (channelBuilder instanceof PlaintextChannelBuilder) {
+            assertEquals(0, cipherMetrics(metrics).size());
+        } else {
+            TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+                "Waiting for cipher metrics to be created.");
+            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+        }
+    }
+
+    static List<KafkaMetric> cipherMetrics(Metrics metrics) {
+        return metrics.metrics().entrySet().stream().
+            filter(e -> e.getKey().description().
+                contains("The number of connections with this SSL cipher and protocol.")).
+            map(e -> e.getValue()).
+            collect(Collectors.toList());
     }
 
     /**
@@ -904,5 +920,4 @@ public class SelectorTest {
         assertNotNull(metric);
         return metric;
     }
-
 }

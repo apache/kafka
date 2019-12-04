@@ -72,7 +72,7 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
-    private SslInformation sslInformation;
+    private CipherInformation cipherInformation;
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         return new SslTransportLayer(channelId, key, sslEngine);
@@ -428,7 +428,7 @@ public class SslTransportLayer implements TransportLayer {
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
                         session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
-                if (sslInformation == null) {
+                if (cipherInformation == null) {
                     String cipherSuiteName = session.getCipherSuite();
                     if (cipherSuiteName == null || cipherSuiteName.isEmpty()) {
                         cipherSuiteName = "unknown";
@@ -437,7 +437,7 @@ public class SslTransportLayer implements TransportLayer {
                     if (protocolName == null || protocolName.isEmpty()) {
                         protocolName = "unknown";
                     }
-                    sslInformation = new SslInformation(cipherSuiteName, protocolName);
+                    cipherInformation = new CipherInformation(cipherSuiteName, protocolName);
                 }
             }
 
@@ -975,7 +975,7 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
-    public Optional<SslInformation> sslInformation() {
-        return Optional.ofNullable(sslInformation);
+    public Optional<CipherInformation> cipherInformation() {
+        return Optional.ofNullable(cipherInformation);
     }
 }

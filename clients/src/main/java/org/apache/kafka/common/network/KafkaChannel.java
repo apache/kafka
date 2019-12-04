@@ -653,7 +653,7 @@ public class KafkaChannel implements AutoCloseable {
         authenticator.reauthenticate(reauthenticationContext);
     }
 
-    public Optional<SslInformation> sslInformation() {
-        return transportLayer.sslInformation();
+    public Optional<CipherInformation> cipherInformation() {
+        return transportLayer.cipherInformation();
     }
 }

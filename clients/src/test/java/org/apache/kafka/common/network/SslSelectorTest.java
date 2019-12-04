@@ -125,16 +125,16 @@ public class SslSelectorTest extends SelectorTest {
         selector.send(createSend(node, request));
 
         waitForBytesBuffered(selector, node);
-        assertEquals(1, metrics.metrics().keySet().stream().
-            filter(n -> n.description().contains("The number of connections with this SSL cipher and protocol.")).
-            count());
+
+        TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            "Waiting for cipher metrics to be created.");
+        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
 
         selector.close(node);
         super.verifySelectorEmpty(selector);
 
-        assertEquals(0, metrics.metrics().keySet().stream().
-            filter(n -> n.description().contains("The number of connections with this SSL cipher and protocol.")).
-            count());
+        assertEquals(1, cipherMetrics(metrics).size());
+        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();

@@ -116,8 +116,8 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
 
     /**
-     * Get information about the SSL connection that this transport layer is using, or None if this
-     * transport layer is not using SSL.
+     * Get information about the ciphers that this transport layer is using.  If this transport layer is not
+     * using SSL, or the SSL handshake has not been completed, returns empty.
      */
-    Optional<SslInformation> sslInformation();
+    Optional<CipherInformation> cipherInformation();
 }
