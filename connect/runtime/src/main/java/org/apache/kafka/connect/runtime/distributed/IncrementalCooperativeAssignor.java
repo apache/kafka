@@ -401,7 +401,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         }
     }
 
-    private void resetDelay(){
+    private void resetDelay() {
         candidateWorkersForReassignment.clear();
         scheduledRebalance = 0;
         if (delay != 0) {
