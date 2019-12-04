@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -91,9 +90,6 @@ public abstract class AbstractJoinIntegrationTest {
     static final String OUTPUT_TOPIC = "outputTopic";
     static final long ANY_UNIQUE_KEY = 0L;
 
-    private final static Properties PRODUCER_CONFIG = new Properties();
-    private KafkaStreams streams;
-
     StreamsBuilder builder;
     int numRecordsExpected = 0;
     AtomicBoolean finalResultReached = new AtomicBoolean(false);
@@ -119,8 +115,6 @@ public abstract class AbstractJoinIntegrationTest {
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
     final boolean cacheEnabled;
-
-    private static final long TIMEOUT = 30000;
 
     AbstractJoinIntegrationTest(final boolean cacheEnabled) {
         this.cacheEnabled = cacheEnabled;
