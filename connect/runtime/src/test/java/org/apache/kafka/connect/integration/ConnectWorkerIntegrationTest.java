@@ -158,7 +158,7 @@ public class ConnectWorkerIntegrationTest {
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
 
         waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
-                WORKER_SETUP_DURATION_MS, "Initial group of workers di not start in time.");
+                WORKER_SETUP_DURATION_MS, "Initial group of workers did not start in time.");
 
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
