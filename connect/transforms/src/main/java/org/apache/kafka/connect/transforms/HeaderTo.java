@@ -82,9 +82,7 @@ public abstract class HeaderTo<R extends ConnectRecord<R>> implements Transforma
 
     @Override
     public R apply(R record) {
-        if (isTombstoneRecord(record)) {
-            return record;
-        } else if (operatingSchema(record) == null) {
+        if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
             return applyWithSchema(record);
@@ -96,7 +94,14 @@ public abstract class HeaderTo<R extends ConnectRecord<R>> implements Transforma
     }
 
     private R applySchemaless(R record) {
-        final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
+        final Map<String, Object> value;
+
+        Object rawValue = operatingValue(record);
+        if (rawValue == null) {
+            value = new HashMap<>();
+        } else {
+            value = requireMap(rawValue, PURPOSE);
+        }
 
         final Map<String, Object> updatedValue = new HashMap<>(value);
 
