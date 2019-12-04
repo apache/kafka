@@ -1,0 +1,45 @@
+{
+  "namespace": "io.confluent.controlcenter.version.metrics",
+  "type": "record",
+  "name": "ControlCenterMetrics",
+  "doc": "Information used to report anonymous data about Control Center usage.",
+  "fields": [
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "Time when this data record was created."
+    },
+    {
+      "name": "confluentPlatformVersion",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "The version of the Confluent Platform."
+    },
+    {
+      "name": "clusterId",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "The cluster we are running on."
+    },
+    {
+      "name": "controlCenterInstance",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "ID of Control Center."
+    },
+    {
+      "name": "session",
+      "type": [
+        "null",
+        "string"
+      ],
+      "doc": "UUID for each start."
+    }
+  ]
+}
