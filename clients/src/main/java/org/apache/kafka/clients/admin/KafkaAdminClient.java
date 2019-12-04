@@ -2608,6 +2608,10 @@ public class KafkaAdminClient extends AdminClient {
                                         fcResponse.node(),
                                         authorizedOperations);
                                 future.complete(consumerGroupDescription);
+                            } else {
+                                future.completeExceptionally(new IllegalArgumentException(
+                                        String.format("GroupId {} is not a consumer group ({}).",
+                                                groupId, protocolType)));
                             }
                         }
 
