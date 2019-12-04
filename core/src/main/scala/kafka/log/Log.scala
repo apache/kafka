@@ -465,25 +465,25 @@ class Log(@volatile var dir: File,
     Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
-  newGauge("NumLogSegments",
+  newGauge(LogMetricNames.NumLogSegments,
     new Gauge[Int] {
       def value = numberOfSegments
     },
     tags)
 
-  newGauge("LogStartOffset",
+  newGauge(LogMetricNames.LogStartOffset,
     new Gauge[Long] {
       def value = logStartOffset
     },
     tags)
 
-  newGauge("LogEndOffset",
+  newGauge(LogMetricNames.LogEndOffset,
     new Gauge[Long] {
       def value = logEndOffset
     },
     tags)
 
-  newGauge("Size",
+  newGauge(LogMetricNames.Size,
     new Gauge[Long] {
       def value = size
     },
@@ -2297,10 +2297,10 @@ class Log(@volatile var dir: File,
    * remove deleted log metrics
    */
   private[log] def removeLogMetrics(): Unit = {
-    removeMetric("NumLogSegments", tags)
-    removeMetric("LogStartOffset", tags)
-    removeMetric("LogEndOffset", tags)
-    removeMetric("Size", tags)
+    removeMetric(LogMetricNames.NumLogSegments, tags)
+    removeMetric(LogMetricNames.LogStartOffset, tags)
+    removeMetric(LogMetricNames.LogEndOffset, tags)
+    removeMetric(LogMetricNames.Size, tags)
   }
 
   /**
@@ -2623,4 +2623,15 @@ object Log {
   private def isLogFile(file: File): Boolean =
     file.getPath.endsWith(LogFileSuffix)
 
+}
+
+object LogMetricNames {
+  val NumLogSegments: String = "NumLogSegments"
+  val LogStartOffset: String = "LogStartOffset"
+  val LogEndOffset: String = "LogEndOffset"
+  val Size: String = "Size"
+
+  def allMetricNames: List[String] = {
+    List(NumLogSegments, LogStartOffset, LogEndOffset, Size)
+  }
 }
