@@ -943,6 +943,7 @@ class Log(@volatile var dir: File,
     debug("Closing log")
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
+      removeLogMetrics()
       producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
