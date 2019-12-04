@@ -1798,6 +1798,7 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
+        producerExpireCheck.cancel(true)
         logSegments.foreach(_.deleteIfExists())
         segments.clear()
         leaderEpochCache.foreach(_.clear())
