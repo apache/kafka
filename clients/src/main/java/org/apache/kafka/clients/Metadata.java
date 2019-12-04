@@ -292,6 +292,8 @@ public class Metadata implements Closeable {
                                                  Predicate<MetadataResponse.TopicMetadata> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
         List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
+        Map<Integer, Node> brokersById = metadataResponse.brokersById();
+
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             if (!topicsToRetain.test(metadata))
                 continue;
@@ -299,12 +301,30 @@ public class Metadata implements Closeable {
             if (metadata.error() == Errors.NONE) {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
-                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
 
+                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
                     // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
                     updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
+                        Node leader = partitionInfo.leader();
+
+                        if (leader != null && !leader.equals(brokersById.get(leader.id()))) {
+                            // If we are reusing metadata from a previous response (which is possible if it
+                            // contained a larger epoch), we may not have leader information available in the
+                            // latest response. To keep the state consistent, we override the partition metadata
+                            // so that the leader is set consistently with the broker metadata
+
+                            PartitionInfo partitionInfoWithoutLeader = new PartitionInfo(
+                                    partitionInfo.topic(),
+                                    partitionInfo.partition(),
+                                    brokersById.get(leader.id()),
+                                    partitionInfo.replicas(),
+                                    partitionInfo.inSyncReplicas(),
+                                    partitionInfo.offlineReplicas());
+                            partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfoWithoutLeader, epoch));
+                        } else {
+                            partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
+                        }
                     });
 
                     if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
@@ -319,7 +339,7 @@ public class Metadata implements Closeable {
             }
         }
 
-        return new MetadataCache(metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
+        return new MetadataCache(metadataResponse.clusterId(), brokersById.values(), partitions,
                 metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 metadataResponse.topicsByError(Errors.INVALID_TOPIC_EXCEPTION),
                 internalTopics, metadataResponse.controller());
