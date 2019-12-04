@@ -415,7 +415,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         logContext,
                         clusterResourceListeners,
                         Time.SYSTEM);
-                this.metadata.bootstrap(addresses, time.milliseconds());
+                this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
