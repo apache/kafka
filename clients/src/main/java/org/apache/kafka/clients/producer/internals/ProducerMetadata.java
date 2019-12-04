@@ -107,10 +107,9 @@ public class ProducerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized void failedUpdate(long now, KafkaException fatalException) {
-        super.failedUpdate(now, fatalException);
-        if (fatalException != null)
-            notifyAll();
+    public synchronized void fatalError(KafkaException fatalException) {
+        super.fatalError(fatalException);
+        notifyAll();
     }
 
     /**
