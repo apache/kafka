@@ -90,7 +90,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes,byte[]>>) null);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes, byte[]>>) null);
     }
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullNamedOnAggregate() {
