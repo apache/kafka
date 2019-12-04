@@ -148,7 +148,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 // swallow and move on since we are rebalancing
                 log.info("Failed to suspend stream task {} since it got migrated to another thread already. " +
                     "Closing it as zombie and moving on.", id);
-                firstException.compareAndSet(null, closeZombieTask(task));
+                tryCloseZombieTask(task);
                 prevActiveTasks.remove(id);
             } catch (final RuntimeException e) {
                 log.error("Suspending stream task {} failed due to the following error:", id, e);
