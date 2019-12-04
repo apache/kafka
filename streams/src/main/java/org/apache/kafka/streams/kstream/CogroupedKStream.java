@@ -264,6 +264,14 @@ public interface CogroupedKStream<K, VOut> {
     KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
                               final Named named,
                               final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+    /**
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
+     * windowed aggregations.
+     *
+     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows);
 
 
     /**

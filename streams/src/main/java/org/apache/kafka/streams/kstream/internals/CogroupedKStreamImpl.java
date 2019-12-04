@@ -31,6 +31,8 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -102,6 +104,20 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
                 aggregateBuilder,
                 streamsGraphNode,
                 groupPatterns);
+    }
+
+    @Override
+    public SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows) {
+        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
+        return new SessionWindowedCogroupedKStreamImpl<>(sessionWindows,
+            builder,
+            sourceNodes,
+            name,
+            keySerde,
+            null,
+            aggregateBuilder,
+            streamsGraphNode,
+            groupPatterns);
     }
 
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
