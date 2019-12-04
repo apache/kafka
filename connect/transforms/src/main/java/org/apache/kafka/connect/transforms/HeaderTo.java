@@ -102,7 +102,7 @@ public abstract class HeaderTo<R extends ConnectRecord<R>> implements Transforma
         } else {
             value = requireMap(rawValue, PURPOSE);
         }
-
+            
         final Map<String, Object> updatedValue = new HashMap<>(value);
 
         Headers updatedHeaders = new ConnectHeaders(record.headers());
@@ -131,7 +131,7 @@ public abstract class HeaderTo<R extends ConnectRecord<R>> implements Transforma
         Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {
             updatedSchema = makeUpdatedSchema(value.schema());
-            schemaUpdateCache.put(value.schema( ), updatedSchema);
+            schemaUpdateCache.put(value.schema(), updatedSchema);
         }
 
         final Struct updatedValue = new Struct(updatedSchema);
