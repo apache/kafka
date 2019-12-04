@@ -136,10 +136,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                         log.info("Broker coordinator was unreachable for {}ms. Revoking previous assignment {} to " +
                                 "avoid running tasks while not being a member the group", coordinatorDiscoveryTimeoutMs, assignmentSnapshot);
                         listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
-                        assignmentSnapshot.connectors().clear();
-                        assignmentSnapshot.tasks().clear();
-                        assignmentSnapshot.revokedConnectors().clear();
-                        assignmentSnapshot.revokedTasks().clear();
+                        assignmentSnapshot = null;
                     }
                 }
                 now = time.milliseconds();
