@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -337,8 +338,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (eosEnabled) {
             try {
                 this.producer.beginTransaction();
-            } catch (final ProducerFencedException fatal) {
-                throw new TaskMigratedException(this, fatal);
+            } catch (final ProducerFencedException | UnknownProducerIdException e) {
+                throw new TaskMigratedException(this, e);
             }
             transactionInFlight = true;
         }
@@ -438,8 +439,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (recordInfo.queue().size() == maxBufferedSize) {
                 consumer.resume(singleton(partition));
             }
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         } catch (final KafkaException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(format("Exception caught in process. taskId=%s, " +
@@ -488,8 +489,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         try {
             node.punctuate(timestamp, punctuator);
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
@@ -558,7 +559,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             } else {
                 consumer.commitSync(consumedOffsetsAndMetadata);
             }
-        } catch (final CommitFailedException | ProducerFencedException error) {
+        } catch (final CommitFailedException | ProducerFencedException | UnknownProducerIdException error) {
             throw new TaskMigratedException(this, error);
         }
 
@@ -581,8 +582,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         super.flushState();
         try {
             recordCollector.flush();
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         }
     }
 
@@ -664,7 +665,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                     try {
                         recordCollector.close();
-                    } catch (final ProducerFencedException e) {
+                    } catch (final RecoverableClientException e) {
                         taskMigratedException = new TaskMigratedException(this, e);
                     } finally {
                         producer = null;

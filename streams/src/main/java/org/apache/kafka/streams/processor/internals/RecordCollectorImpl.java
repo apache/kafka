@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.header.Headers;
@@ -179,13 +180,13 @@ public class RecordCollectorImpl implements RecordCollector {
                         offsets.put(tp, metadata.offset());
                     } else {
                         if (sendException == null) {
-                            if (exception instanceof ProducerFencedException) {
+                            if (exception instanceof ProducerFencedException || exception instanceof UnknownProducerIdException) {
                                 log.warn(LOG_MESSAGE, topic, exception.getMessage(), exception);
 
                                 // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
                                 log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
 
-                                sendException = new ProducerFencedException(
+                                sendException = new RecoverableClientException(
                                     String.format(
                                         EXCEPTION_MESSAGE,
                                         logPrefix,
@@ -193,7 +194,8 @@ public class RecordCollectorImpl implements RecordCollector {
                                         timestamp,
                                         topic,
                                         exception.toString()
-                                    )
+                                    ),
+                                    exception
                                 );
                             } else {
                                 if (productionExceptionIsFatal(exception)) {
@@ -233,13 +235,13 @@ public class RecordCollectorImpl implements RecordCollector {
                 String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic),
                 e
             );
-        } catch (final Exception uncaughtException) {
+        } catch (final RuntimeException uncaughtException) {
             if (uncaughtException instanceof KafkaException &&
                 uncaughtException.getCause() instanceof ProducerFencedException) {
                 final KafkaException kafkaException = (KafkaException) uncaughtException;
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw (ProducerFencedException) kafkaException.getCause();
+                throw new RecoverableClientException("Caught a wrapped ProducerFencedException", kafkaException);
             } else {
                 throw new StreamsException(
                     String.format(
@@ -264,7 +266,11 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("Flushing producer");
-        producer.flush();
+        try {
+            producer.flush();
+        } catch (final ProducerFencedException | UnknownProducerIdException e) {
+            throw new RecoverableClientException("Caught a recoverable exception while flushing", e);
+        }
         checkForException();
     }
 
@@ -272,7 +278,11 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         if (producer != null) {
-            producer.close();
+            try {
+                producer.close();
+            } catch (final ProducerFencedException | UnknownProducerIdException e) {
+                throw new RecoverableClientException("Caught a recoverable exception while closing", e);
+            }
             producer = null;
         }
         checkForException();
