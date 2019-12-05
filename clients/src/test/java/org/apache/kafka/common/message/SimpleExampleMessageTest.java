@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.message;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -31,6 +32,7 @@ import java.util.function.Consumer;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SimpleExampleMessageTest {
@@ -51,6 +53,16 @@ public class SimpleExampleMessageTest {
         assertNull(out.nullableZeroCopyByteBuffer());
         out.setNullableZeroCopyByteBuffer(buf);
         assertEquals(buf, out.nullableZeroCopyByteBuffer());
+    }
+
+    @Test
+    public void shouldThrowIfCannotWriteNonIgnorableField() {
+        // processId is not supported in v0 and is not marked as ignorable
+
+        final SimpleExampleMessageData out = new SimpleExampleMessageData().setProcessId(UUID.randomUUID());
+        assertThrows(UnsupportedVersionException.class, () ->
+                out.write(new ByteBufferAccessor(ByteBuffer.allocate(64)), new ObjectSerializationCache(), (short) 0));
+        assertThrows(UnsupportedVersionException.class, () -> out.toStruct((short) 0));
     }
 
     @Test

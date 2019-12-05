@@ -18,16 +18,14 @@
 package kafka.admin
 
 import kafka.controller.ReplicaAssignment
-import kafka.network.SocketServer
-import org.junit.Assert._
-import kafka.utils.TestUtils._
-import kafka.utils.TestUtils
 import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
@@ -96,7 +94,8 @@ class AddPartitionsTest extends BaseRequestTest {
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic1).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val partitions = response.topicMetadata.asScala.head.partitionMetadata.asScala.sortBy(_.partition)
     assertEquals(partitions.size, 3)
@@ -123,7 +122,8 @@ class AddPartitionsTest extends BaseRequestTest {
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     val partitionMetadata = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
@@ -149,7 +149,8 @@ class AddPartitionsTest extends BaseRequestTest {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
 
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic3).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     validateLeaderAndReplicas(topicMetadata, 0, 2, Set(2, 3, 0, 1))
@@ -169,7 +170,8 @@ class AddPartitionsTest extends BaseRequestTest {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
 
-    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
+    val response = connectAndReceive[MetadataResponse](
+      new MetadataRequest.Builder(Seq(topic2).asJava, false).build)
     assertEquals(1, response.topicMetadata.size)
     val topicMetadata = response.topicMetadata.asScala.head
     validateLeaderAndReplicas(topicMetadata, 0, 1, Set(1, 2))
@@ -188,8 +190,4 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals("Replica set should match", expectedReplicas, partition.replicas.asScala.map(_.id).toSet)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
-    MetadataResponse.parse(response, request.version)
-  }
 }

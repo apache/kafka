@@ -677,7 +677,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final NamedInternal renamed = new NamedInternal(joinName);
         final String joinMergeName = renamed.orElseGenerateWithPrefix(builder, MERGE_NAME);
-        final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K, VO>) other);
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
 
         if (leftOuter) {
             enableSendingOldValues();

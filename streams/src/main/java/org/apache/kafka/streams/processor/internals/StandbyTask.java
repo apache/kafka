@@ -120,6 +120,9 @@ public class StandbyTask extends AbstractTask {
     }
 
     private void flushAndCheckpointState() {
+        // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
+        // but in practice this shouldn't happen for standby tasks, since they don't produce to changelog topics
+        // or downstream topics.
         stateMgr.flush();
         stateMgr.checkpoint(Collections.emptyMap());
     }
