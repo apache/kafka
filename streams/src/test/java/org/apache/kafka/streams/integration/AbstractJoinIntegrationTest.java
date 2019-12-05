@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -83,6 +84,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     static String appID;
 
+    private final MockTime time = new MockTime();
     private static final Long COMMIT_INTERVAL = 100L;
     static final Properties STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
@@ -160,11 +162,11 @@ public abstract class AbstractJoinIntegrationTest {
 
             TestRecord<Long, String> expectedFinalResult = null;
 
-            final long firstTimestamp = System.currentTimeMillis();
-            long ts = firstTimestamp;
+            final long firstTimestamp = time.milliseconds();
+            long eventTimestamp = firstTimestamp;
             final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
             for (final Input<String> singleInputRecord : input) {
-                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++ts);
+                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
 
                 final List<TestRecord<Long, String>> expected = resultIterator.next();
                 if (expected != null) {
@@ -195,11 +197,11 @@ public abstract class AbstractJoinIntegrationTest {
             testInputTopicMap.put(INPUT_TOPIC_RIGHT, right);
             testInputTopicMap.put(INPUT_TOPIC_LEFT, left);
 
-            final long firstTimestamp = System.currentTimeMillis();
-            long ts = firstTimestamp;
+            final long firstTimestamp = time.milliseconds();
+            long eventTimestamp = firstTimestamp;
 
             for (final Input<String> singleInputRecord : input) {
-                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++ts);
+                testInputTopicMap.get(singleInputRecord.topic).pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
             }
 
             final TestRecord<Long, String> updatedExpectedFinalResult =
