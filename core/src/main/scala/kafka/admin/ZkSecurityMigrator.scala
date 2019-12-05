@@ -31,7 +31,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.util.control.Breaks.{break, breakable}
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 
@@ -223,12 +222,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     try {
       setAclIndividually("/")
       for (path <- ZkData.SecureRootPaths) {
-        breakable{
-          debug("Going to set ACL for %s".format(path))
-          if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
-            debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
-            break()
-          }
+        debug("Going to set ACL for %s".format(path))
+        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+          debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
+        } else {
           zkClient.makeSurePersistentPathExists(path)
           setAclsRecursively(path)
         }
