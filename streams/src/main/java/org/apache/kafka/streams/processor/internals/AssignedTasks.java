@@ -97,14 +97,12 @@ abstract class AssignedTasks<T extends Task> {
         return running.values();
     }
 
-    RuntimeException closeZombieTask(final T task) {
+    void tryCloseZombieTask(final T task) {
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
             log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
-            return e;
         }
-        return null;
     }
 
     boolean hasRunningTasks() {
@@ -259,7 +257,7 @@ abstract class AssignedTasks<T extends Task> {
             } catch (final TaskMigratedException e) {
                 log.info("Failed to close {} {} since it got migrated to another thread already. " +
                     "Closing it as zombie and move on.", taskTypeName, task.id());
-                firstException.compareAndSet(null, closeZombieTask(task));
+                tryCloseZombieTask(task);
             } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",
                     task.getClass().getSimpleName(),

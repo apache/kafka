@@ -22,8 +22,11 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -51,7 +54,9 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -1244,7 +1249,7 @@ public class StreamTaskTest {
             fail("should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) {
             task = null;
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertFalse(producer.transactionCommitted());
@@ -1265,7 +1270,7 @@ public class StreamTaskTest {
             fail("should have thrown TaskMigratedException");
         } catch (final TaskMigratedException expected) {
             task = null;
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertTrue(producer.transactionCommitted());
@@ -1310,6 +1315,190 @@ public class StreamTaskTest {
         assertFalse(producer.transactionAborted());
         assertFalse(producer.transactionCommitted());
         assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldMigrateTaskIfFencedDuringFlush() {
+        final StateStore stateStore = new MockKeyValueStore(storeName, true, true);
+
+        final Map<String, String> storeToChangelogTopic = true ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap();
+        final ProcessorTopology topology1 = new ProcessorTopology(
+            asList(source1, source2),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
+            Collections.emptyMap(),
+            singletonList(stateStore),
+            Collections.emptyList(),
+            storeToChangelogTopic,
+            Collections.emptySet()
+        );
+
+        task = new StreamTask(
+            taskId00,
+            partitions,
+            topology1,
+            consumer,
+            changelogReader,
+            createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)
+        );
+        task.initializeStateStores();
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        try {
+            task.flushState();
+            fail("Expected a TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertThat(expected.migratedTask(), is(task));
+        }
+    }
+
+    @Test
+    public void shouldMigrateTaskIfFencedDuringProcess() {
+        final StateStore stateStore = new MockKeyValueStore(storeName, true, true);
+
+        final Map<String, String> storeToChangelogTopic = true ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap();
+        final SourceNode<Integer, Integer> sourceNode = new SourceNode<>("test", singletonList(topic1), new WallclockTimestampExtractor(), intDeserializer, intDeserializer);
+        final SinkNode<Integer, Integer> sinkNode = new SinkNode<>("test-sink", new StaticTopicNameExtractor<>("out-topic"), intSerializer, intSerializer, new StreamPartitioner<Integer, Integer>() {
+            @Override
+            public Integer partition(final String topic,
+                                     final Integer key,
+                                     final Integer value,
+                                     final int numPartitions) {
+                return 1;
+            }
+        });
+
+        sourceNode.addChild(sinkNode);
+
+        final ProcessorTopology topology1 = new ProcessorTopology(
+            asList(sourceNode, sinkNode),
+            mkMap(mkEntry(topic1, sourceNode), mkEntry(topic2, sourceNode)),
+            mkMap(mkEntry("out-topic", sinkNode)),
+            singletonList(stateStore),
+            Collections.emptyList(),
+            storeToChangelogTopic,
+            Collections.emptySet()
+        );
+
+        task = new StreamTask(
+            taskId00,
+            partitions,
+            topology1,
+            consumer,
+            changelogReader,
+            createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer = new MockProducer<byte[], byte[]>(
+                Cluster.empty(),
+                false,
+                new DefaultPartitioner(),
+                bytesSerializer,
+                bytesSerializer
+            ) {
+                @Override
+                public List<PartitionInfo> partitionsFor(final String topic) {
+                    return singletonList(null);
+                }
+            }
+        );
+        task.initializeStateStores();
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        try {
+
+            task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+            task.process();
+            fail("Expected a TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertThat(expected.migratedTask(), is(task));
+        }
+    }
+
+    @Test
+    public void shouldMigrateTaskIfFencedDuringPunctuate() {
+        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
+
+        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
+                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+        recordCollector.init(producer);
+
+        task.initializeStateStores();
+        task.initializeTopology();
+        producer.fenceProducer();
+        try {
+            task.punctuate(
+                processorSystemTime,
+                5,
+                PunctuationType.WALL_CLOCK_TIME,
+                timestamp -> recordCollector.send(
+                    "result-topic1",
+                    3,
+                    5,
+                    null,
+                    0,
+                    time.milliseconds(),
+                    new IntegerSerializer(),
+                    new IntegerSerializer()
+                )
+            );
+            fail("Expected a TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertThat(expected.migratedTask(), is(task));
+        }
+    }
+
+    @Test
+    public void shouldMigrateTaskIfFencedDuringCommit() {
+        final ProcessorTopology topology1 = withSources(
+            asList(source1, source2, processorStreamTime, processorSystemTime),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
+        );
+
+        source1.addChild(processorStreamTime);
+        source2.addChild(processorStreamTime);
+        source1.addChild(processorSystemTime);
+        source2.addChild(processorSystemTime);
+
+        task = new StreamTask(
+            taskId00,
+            partitions,
+            topology1,
+            consumer,
+            changelogReader,
+            createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)) {
+            @Override
+            protected void flushState() {
+                // do nothing so that we actually make it to the commit interaction.
+            }
+        };
+
+        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
+                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+        recordCollector.init(producer);
+
+        task.initializeStateStores();
+        task.initializeTopology();
+        producer.fenceProducer();
+        try {
+            task.commit();
+            fail("Expected a TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            assertThat(expected.migratedTask(), is(task));
+        }
     }
 
     @Test
@@ -1437,7 +1626,7 @@ public class StreamTaskTest {
             task.suspend();
             fail("Should have throws TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
         task = null;
 
@@ -1454,7 +1643,7 @@ public class StreamTaskTest {
             task.suspend();
             fail("Should have throws TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
+            assertTrue(expected.getCause() instanceof RecoverableClientException);
         }
 
         assertTrue(producer.transactionCommitted());

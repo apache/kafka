@@ -18,9 +18,11 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -41,11 +43,22 @@ public class MockKeyValueStore implements KeyValueStore {
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
     public final ArrayList<byte[]> values = new ArrayList<>();
+    private final boolean simulateForwardOnFlush;
+    private RecordCollector collector;
 
     public MockKeyValueStore(final String name,
                              final boolean persistent) {
         this.name = name;
         this.persistent = persistent;
+        simulateForwardOnFlush = false;
+    }
+
+    public MockKeyValueStore(final String name,
+                             final boolean persistent,
+                             final boolean simulateForwardOnFlush) {
+        this.name = name;
+        this.persistent = persistent;
+        this.simulateForwardOnFlush = simulateForwardOnFlush;
     }
 
     @Override
@@ -57,12 +70,18 @@ public class MockKeyValueStore implements KeyValueStore {
     public void init(final ProcessorContext context,
                      final StateStore root) {
         context.register(root, stateRestoreCallback);
+        if (simulateForwardOnFlush) {
+            collector = ((RecordCollector.Supplier) context).recordCollector();
+        }
         initialized = true;
         closed = false;
     }
 
     @Override
     public void flush() {
+        if (simulateForwardOnFlush) {
+            collector.send("any", "anykey", "anyvalue", null, 0, 0L, new StringSerializer(), new StringSerializer());
+        }
         instanceLastFlushCount.set(GLOBAL_FLUSH_COUNTER.getAndIncrement());
         flushed = true;
     }

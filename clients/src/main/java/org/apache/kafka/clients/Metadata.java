@@ -209,10 +209,8 @@ public class Metadata implements Closeable {
         }
     }
 
-    public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
+    public synchronized void bootstrap(List<InetSocketAddress> addresses) {
         this.needUpdate = true;
-        this.lastRefreshMs = now;
-        this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
     }
@@ -419,9 +417,18 @@ public class Metadata implements Closeable {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, KafkaException fatalException) {
+    public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
-        this.fatalException = fatalException;
+    }
+
+    /**
+     * Propagate a fatal error which affects the ability to fetch metadata for the cluster.
+     * Two examples are authentication and unsupported version exceptions.
+     *
+     * @param exception The fatal exception
+     */
+    public synchronized void fatalError(KafkaException exception) {
+        this.fatalException = exception;
     }
 
     /**

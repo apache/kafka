@@ -390,7 +390,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       getTopicMetadata(client, topic, expectedNumPartitionsOpt = expectedNumPartitionsOpt).partitions
     }
 
-    def numPartitions(topic: String): Int = partitions(topic).size
+    def numPartitions(topic: String, expectedNumPartitionsOpt: Option[Int] = None): Int = partitions(topic, expectedNumPartitionsOpt).size
 
     // validateOnly: try creating a new partition (no assignments), to bring the total to 3 partitions
     var alterResult = client.createPartitions(Map(topic1 ->
@@ -447,7 +447,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a newCount which would be a noop (where the assignment matches current state)
@@ -459,7 +459,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a newCount which would be a noop (where the assignment doesn't match current state)
@@ -471,7 +471,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a bad topic name
