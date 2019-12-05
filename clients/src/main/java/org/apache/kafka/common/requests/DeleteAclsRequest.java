@@ -46,8 +46,14 @@ public class DeleteAclsRequest extends AbstractRequest {
             this.data = data;
         }
 
+        public Builder(List<AclBindingFilter> filters) {
+            this(new DeleteAclsRequestData().setFilters(filters.stream()
+                    .map(DeleteAclsRequest::deleteAclsFilter).collect(Collectors.toList())));
+        }
+
         @Override
         public DeleteAclsRequest build(short version) {
+            validate(version);
             return new DeleteAclsRequest(version, data);
         }
 
@@ -55,17 +61,37 @@ public class DeleteAclsRequest extends AbstractRequest {
         public String toString() {
             return "(type=DeleteAclsRequest, filters=" + Utils.join(data.filters(), ", ") + ")";
         }
+
+        private void validate(short version) {
+            if (version == 0) {
+                for (DeleteAclsRequestData.DeleteAclsFilter filter : data.filters()) {
+                    PatternType patternType = PatternType.fromCode(filter.patternTypeFilter());
+
+                    // If ANY is specified, we override it to the default of LITERAL
+                    if (patternType == PatternType.ANY)
+                        filter.setPatternTypeFilter(PatternType.LITERAL.code());
+                    else if (patternType != PatternType.LITERAL)
+                        throw new UnsupportedVersionException("Version 0 does not support pattern type " +
+                                patternType + " (only LITERAL and ANY are supported)");
+                }
+            }
+
+            final boolean unknown = data.filters().stream().anyMatch(filter ->
+                    filter.patternTypeFilter() == PatternType.UNKNOWN.code()
+                            || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
+                            || filter.operation() == AclOperation.UNKNOWN.code()
+                            || filter.permissionType() == AclPermissionType.UNKNOWN.code()
+            );
+
+            if (unknown) {
+                throw new IllegalArgumentException("Filters contain UNKNOWN elements");
+            }
+        }
     }
 
     private final DeleteAclsRequestData data;
 
-    DeleteAclsRequest(short version, List<AclBindingFilter> filters) {
-        this(version, new DeleteAclsRequestData()
-                .setFilters(filters.stream().map(DeleteAclsRequest::toDeleteFilter).collect(Collectors.toList())));
-        validate(version, filters);
-    }
-
-    DeleteAclsRequest(short version, DeleteAclsRequestData data) {
+    private DeleteAclsRequest(short version, DeleteAclsRequestData data) {
         super(ApiKeys.DELETE_ACLS, version);
         this.data = data;
     }
@@ -76,7 +102,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     }
 
     public List<AclBindingFilter> filters() {
-        return data.filters().stream().map(DeleteAclsRequest::toAclBindingFilter).collect(Collectors.toList());
+        return data.filters().stream().map(DeleteAclsRequest::aclBindingFilter).collect(Collectors.toList());
     }
 
     @Override
@@ -98,25 +124,7 @@ public class DeleteAclsRequest extends AbstractRequest {
         return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
     }
 
-    private void validate(short version, List<AclBindingFilter> filters) {
-        if (version == 0) {
-            final boolean unsupported = filters.stream()
-                .map(AclBindingFilter::patternFilter)
-                .map(ResourcePatternFilter::patternType)
-                .anyMatch(patternType -> patternType != PatternType.LITERAL && patternType != PatternType.ANY);
-            if (unsupported) {
-                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
-            }
-        }
-
-        final boolean unknown = filters.stream().anyMatch(AclBindingFilter::isUnknown);
-        if (unknown) {
-            throw new IllegalArgumentException("Filters contain UNKNOWN elements");
-        }
-    }
-
-    //FIXME Make naming consistent with Create...
-    public static DeleteAclsRequestData.DeleteAclsFilter toDeleteFilter(AclBindingFilter filter) {
+    public static DeleteAclsRequestData.DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {
         return new DeleteAclsRequestData.DeleteAclsFilter()
             .setResourceNameFilter(filter.patternFilter().name())
             .setResourceTypeFilter(filter.patternFilter().resourceType().code())
@@ -127,8 +135,7 @@ public class DeleteAclsRequest extends AbstractRequest {
             .setPrincipalFilter(filter.entryFilter().principal());
     }
 
-    //FIXME Make naming consistent with Create...
-    private static AclBindingFilter toAclBindingFilter(DeleteAclsRequestData.DeleteAclsFilter filter) {
+    private static AclBindingFilter aclBindingFilter(DeleteAclsRequestData.DeleteAclsFilter filter) {
         ResourcePatternFilter patternFilter = new ResourcePatternFilter(
             ResourceType.fromCode(filter.resourceTypeFilter()),
             filter.resourceNameFilter(),

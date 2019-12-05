@@ -1799,7 +1799,7 @@ public class KafkaAdminClient extends AdminClient {
         final List<DeleteAclsRequestData.DeleteAclsFilter> filterList = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
             if (futures.get(filter) == null) {
-                filterList.add(DeleteAclsRequest.toDeleteFilter(filter));
+                filterList.add(DeleteAclsRequest.deleteAclsFilter(filter));
                 futures.put(filter, new KafkaFutureImpl<>());
             }
         }

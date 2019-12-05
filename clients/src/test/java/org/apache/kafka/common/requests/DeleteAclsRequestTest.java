@@ -51,17 +51,17 @@ public class DeleteAclsRequestTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfPrefixed() {
-        new DeleteAclsRequest(V0, aclFilters(PREFIXED_FILTER));
+        new DeleteAclsRequest.Builder(aclFilters(PREFIXED_FILTER)).build(V0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnUnknownElements() {
-        new DeleteAclsRequest(V1, aclFilters(UNKNOWN_FILTER));
+        new DeleteAclsRequest.Builder(aclFilters(UNKNOWN_FILTER)).build(V1);
     }
 
     @Test
     public void shouldRoundTripLiteralV0() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(LITERAL_FILTER));
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(aclFilters(LITERAL_FILTER)).build(V0);
         final Struct struct = original.toStruct();
 
         final DeleteAclsRequest result = new DeleteAclsRequest(struct, V0);
@@ -71,13 +71,14 @@ public class DeleteAclsRequestTest {
 
     @Test
     public void shouldRoundTripAnyV0AsLiteral() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(ANY_FILTER));
-        final DeleteAclsRequest expected = new DeleteAclsRequest(V0, aclFilters(
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(aclFilters(ANY_FILTER)).build(V0);
+        final DeleteAclsRequest expected = new DeleteAclsRequest.Builder(aclFilters(
             new AclBindingFilter(new ResourcePatternFilter(
                 ANY_FILTER.patternFilter().resourceType(),
                 ANY_FILTER.patternFilter().name(),
                 PatternType.LITERAL),
-                ANY_FILTER.entryFilter())));
+                ANY_FILTER.entryFilter()))
+        ).build(V0);
 
         final DeleteAclsRequest result = new DeleteAclsRequest(original.toStruct(), V0);
 
@@ -86,7 +87,9 @@ public class DeleteAclsRequestTest {
 
     @Test
     public void shouldRoundTripV1() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V1, aclFilters(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER));
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
+                aclFilters(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
+        ).build(V1);
         final Struct struct = original.toStruct();
 
         final DeleteAclsRequest result = new DeleteAclsRequest(struct, V1);
