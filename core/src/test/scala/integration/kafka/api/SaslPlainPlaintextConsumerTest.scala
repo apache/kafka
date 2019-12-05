@@ -14,9 +14,6 @@ package kafka.api
 
 import java.io.File
 import java.util.{Locale, Properties}
-
-import scala.collection.Seq
-
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName

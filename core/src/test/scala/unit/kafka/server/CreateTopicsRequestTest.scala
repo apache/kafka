@@ -23,6 +23,7 @@ import org.junit.Assert._
 import org.junit.Test
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
+
   @Test
   def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments

@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{Errors, ApiKeys}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -369,8 +369,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
-    MetadataResponse.parse(response, request.version)
+    connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
   }
 
 }
