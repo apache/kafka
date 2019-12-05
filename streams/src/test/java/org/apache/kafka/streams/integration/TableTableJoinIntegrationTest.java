@@ -70,33 +70,13 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             .withCachingDisabled()
             .withLoggingDisabled();
 
-    final private class CountingPeek implements ForeachAction<Long, String> {
-        final private TestRecord<Long, String> expected;
-
-        CountingPeek(final boolean multiJoin) {
-            this.expected = multiJoin ? expectedFinalMultiJoinResult : expectedFinalJoinResult;
-        }
-
-        @Override
-        public void apply(final Long key, final String value) {
-            numRecordsExpected++;
-            if (expected.value().equals(value)) {
-                final boolean ret = finalResultReached.compareAndSet(false, true);
-
-                if (!ret) {
-                    // do nothing; it is possible that we will see multiple duplicates of final results due to KAFKA-4309
-                    // TODO: should be removed when KAFKA-4309 is fixed
-                }
-            }
-        }
-    }
-
     @Test
     public void testInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -117,7 +97,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -126,8 +105,9 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -148,7 +128,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -157,8 +136,9 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -179,7 +159,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -188,12 +167,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             // FIXME: the duplicate below for all the multi-joins
@@ -223,10 +202,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -235,12 +210,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -267,11 +242,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -280,12 +250,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInnerOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.join(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.join(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -317,10 +287,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.join(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -329,12 +295,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -361,11 +327,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -374,12 +335,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -410,11 +371,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -423,12 +379,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeftOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.leftJoin(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -461,10 +417,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.leftJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream().to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -473,12 +425,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .join(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -507,11 +459,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .join(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -520,12 +467,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .leftJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -558,11 +505,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
 
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .leftJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }
@@ -571,12 +513,12 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testOuterOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
+        leftTable.outerJoin(rightTable, valueJoiner)
+                 .outerJoin(rightTable, valueJoiner, materialized)
+                 .toStream()
+                 .to(OUTPUT_TOPIC);
+
         if (cacheEnabled) {
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .peek(new CountingPeek(true))
-                    .to(OUTPUT_TOPIC);
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
@@ -610,12 +552,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
             );
-
-            leftTable.outerJoin(rightTable, valueJoiner)
-                    .outerJoin(rightTable, valueJoiner, materialized)
-                    .toStream()
-                    .to(OUTPUT_TOPIC);
-
             runTestWithDriver(expectedResult, storeName);
         }
     }

@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -176,7 +177,7 @@ public abstract class AbstractJoinIntegrationTest {
                     }
 
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
-                    assertEquals(output, updatedExpected);
+                    assertThat(output, equalTo(updatedExpected));
                     expectedFinalResult = updatedExpected.get(expected.size() - 1);
                 }
             }
@@ -211,10 +212,9 @@ public abstract class AbstractJoinIntegrationTest {
                     null,
                     firstTimestamp + expectedFinalResult.timestamp());
 
-            TestUtils.waitForCondition(() -> finalResultReached.get(), "Never received expected final result.");
             final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
 
-            assertEquals(output.get(output.size() - 1), updatedExpectedFinalResult);
+            assertThat(output.get(output.size() - 1), equalTo(updatedExpectedFinalResult));
 
             if (storeName != null) {
                 checkQueryableStore(storeName, updatedExpectedFinalResult, driver);
