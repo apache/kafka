@@ -1024,7 +1024,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             @Override
             public void onFailure(RuntimeException e) {
-                // just ignore
+                heartbeat().failHeartbeat();
             }
         });
         return future;
