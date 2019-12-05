@@ -32,7 +32,6 @@ import java.util.Objects;
 import java.util.Set;
 
 public class ProducerMetadata extends Metadata {
-    private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
     static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
 
     /* Topics with expiry time */
@@ -55,9 +54,9 @@ public class ProducerMetadata extends Metadata {
         return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), true);
     }
 
-    public synchronized void add(String topic) {
+    public synchronized void add(String topic, long nowMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
-        if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
+        if (topics.put(topic, nowMs + TOPIC_EXPIRY_MS) == null) {
             requestUpdateForNewTopics();
         }
     }
@@ -76,9 +75,6 @@ public class ProducerMetadata extends Metadata {
         Long expireMs = topics.get(topic);
         if (expireMs == null) {
             return false;
-        } else if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE) {
-            topics.put(topic, nowMs + TOPIC_EXPIRY_MS);
-            return true;
         } else if (expireMs <= nowMs) {
             log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", topic, expireMs, nowMs);
             topics.remove(topic);
@@ -111,10 +107,9 @@ public class ProducerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized void failedUpdate(long now, KafkaException fatalException) {
-        super.failedUpdate(now, fatalException);
-        if (fatalException != null)
-            notifyAll();
+    public synchronized void fatalError(KafkaException fatalException) {
+        super.fatalError(fatalException);
+        notifyAll();
     }
 
     /**

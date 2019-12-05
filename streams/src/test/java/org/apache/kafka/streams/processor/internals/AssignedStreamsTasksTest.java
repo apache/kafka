@@ -37,6 +37,7 @@ import org.apache.kafka.test.MockSourceNode;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -44,8 +45,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.junit.function.ThrowingRunnable;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -235,12 +236,43 @@ public class AssignedStreamsTasksTest {
         t1.suspend();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().andThrow(new RuntimeException("any exception"));
         EasyMock.replay(t1);
 
         assertThat(suspendTask(), nullValue());
         assertTrue(assignedTasks.runningTaskIds().isEmpty());
         EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseUncleanAndThenRethrowOnShutdownIfRuntimeException() {
+        mockTaskInitialization();
+
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new RuntimeException("any first exception"));
+        t1.close(false, false);
+        EasyMock.expectLastCall().andThrow(new RuntimeException("any second exception"));
+        EasyMock.replay(t1);
+        addAndInitTask();
+        try {
+            assignedTasks.shutdown(true);
+            fail("expected a runtime exception");
+        } catch (final RuntimeException e) {
+            assertThat(e.getMessage(), is("any first exception"));
+        }
+    }
+
+    @Test
+    public void shouldCloseWithoutExceptionOnShutdownIfTaskMigratedException() {
+        mockTaskInitialization();
+
+        t1.close(true, false);
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
+        t1.close(false, true);
+        EasyMock.expectLastCall().andThrow(new RuntimeException("any second exception"));
+        EasyMock.replay(t1);
+        addAndInitTask();
+        assignedTasks.shutdown(true);
     }
 
     @Test
@@ -603,7 +635,7 @@ public class AssignedStreamsTasksTest {
             public Set<TaskId> taskIds() {
                 return assignedTasks.suspendedTaskIds();
             }
-            
+
         }.createTaskAndClear();
     }
 

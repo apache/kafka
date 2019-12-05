@@ -466,6 +466,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
             'topic': topic
         }
+        self.logger.info("Running topic delete command...\n%s" % cmd)
+        node.account.ssh(cmd)
 
     def describe_topic(self, topic, node=None):
         if node is None:

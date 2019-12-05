@@ -92,9 +92,9 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(value, context().timestamp());
                 final ValueAndTimestamp<SubscriptionWrapper<K>> oldValue = store.get(subscriptionKey);
 
-                //If the subscriptionWrapper hash indicates a null, must delete from statestore.
                 //This store is used by the prefix scanner in ForeignJoinSubscriptionProcessorSupplier
-                if (value.getHash() == null) {
+                if (value.getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||
+                    value.getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE)) {
                     store.delete(subscriptionKey);
                 } else {
                     store.put(subscriptionKey, newValue);

@@ -106,6 +106,18 @@ public class MetadataTest {
     }
 
     @Test
+    public void testUpdateMetadataAllowedImmediatelyAfterBootstrap() {
+        MockTime time = new MockTime();
+
+        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
+                new ClusterResourceListeners());
+        metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9002)));
+
+        assertEquals(0, metadata.timeToAllowUpdate(time.milliseconds()));
+        assertEquals(0, metadata.timeToNextUpdate(time.milliseconds()));
+    }
+
+    @Test
     public void testTimeToNextUpdate() {
         checkTimeToNextUpdate(100, 1000);
         checkTimeToNextUpdate(1000, 100);
@@ -119,7 +131,7 @@ public class MetadataTest {
         long now = 10000;
 
         // lastRefreshMs updated to now.
-        metadata.failedUpdate(now, null);
+        metadata.failedUpdate(now);
 
         // Backing off. Remaining time until next try should be returned.
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
@@ -141,7 +153,7 @@ public class MetadataTest {
         metadata.update(emptyMetadataResponse(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
-        metadata.failedUpdate(1100, null);
+        metadata.failedUpdate(1100);
 
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());
@@ -152,14 +164,13 @@ public class MetadataTest {
 
     @Test
     public void testClusterListenerGetsNotifiedOfUpdate() {
-        long time = 0;
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);
         metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), listeners);
 
         String hostName = "www.example.com";
-        metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)), time);
+        metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
         assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
                 MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
 
