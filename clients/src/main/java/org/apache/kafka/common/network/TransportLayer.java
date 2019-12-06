@@ -31,6 +31,7 @@ import java.nio.channels.ScatteringByteChannel;
 import java.nio.channels.GatheringByteChannel;
 
 import java.security.Principal;
+import java.util.Optional;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 
@@ -113,4 +114,10 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
     long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
+
+    /**
+     * Get information about the ciphers that this transport layer is using.  If this transport layer is not
+     * using SSL, or the SSL handshake has not been completed, returns empty.
+     */
+    Optional<CipherInformation> cipherInformation();
 }
