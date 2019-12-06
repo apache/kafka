@@ -39,7 +39,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Meter
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{ControllerContext, LeaderIsrAndControllerEpoch}
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1683,5 +1683,34 @@ object TestUtils extends Logging {
   def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments", pause = pause)
+  }
+
+  /**
+   * Initializes a new ControllerContext
+   */
+  def initContext(brokers: Seq[Int],
+                  topics: scala.collection.Set[String],
+                  numPartitions: Int,
+                  replicationFactor: Int): ControllerContext = {
+    val context = new ControllerContext
+    val brokerEpochs = brokers.map { brokerId =>
+      val endpoint = new EndPoint("localhost", 9900 + brokerId, new ListenerName("blah"),
+        SecurityProtocol.PLAINTEXT)
+      Broker(brokerId, Seq(endpoint), rack = None) -> 1L
+    }.toMap
+    context.setLiveBrokerAndEpochs(brokerEpochs)
+
+    // Simple round-robin replica assignment
+    var leaderIndex = 0
+    for (topic <- topics; partitionId <- 0 until numPartitions) {
+      val partition = new TopicPartition(topic, partitionId)
+      val replicas = (0 until replicationFactor).map { i =>
+        val replica = brokers((i + leaderIndex) % brokers.size)
+        replica
+      }
+      context.updatePartitionReplicaAssignment(partition, replicas)
+      leaderIndex += 1
+    }
+    context
   }
 }
