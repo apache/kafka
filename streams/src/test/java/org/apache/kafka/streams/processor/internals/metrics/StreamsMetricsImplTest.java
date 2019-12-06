@@ -311,16 +311,16 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addSensor(sensorName, RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
 
-        final Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
+        final Sensor sensor1a = streamsMetrics.addSensor(sensorName, RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
 
-        final Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor2 = streamsMetrics.addLatencyRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
 
-        final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor3 = streamsMetrics.addRateTotalSensor(scope, entity, operation, RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
 
         assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
@@ -341,13 +341,13 @@ public class StreamsMetricsImplTest {
         final String processorNodeName = "processorNodeName";
         final Map<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
 
-        final Sensor parent1 = metrics.taskLevelSensor(THREAD_ID, taskName, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor parent1 = metrics.taskLevelSensor(THREAD_ID, taskName, operation, RecordingLevel.DEBUG);
         addAvgAndMaxLatencyToSensor(parent1, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation);
         addInvocationRateAndCountToSensor(parent1, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation, "", "");
 
         final int numberOfTaskMetrics = registry.metrics().size();
 
-        final Sensor sensor1 = metrics.nodeLevelSensor(THREAD_ID, taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent1);
+        final Sensor sensor1 = metrics.nodeLevelSensor(THREAD_ID, taskName, processorNodeName, operation, RecordingLevel.DEBUG, parent1);
         addAvgAndMaxLatencyToSensor(sensor1, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
         addInvocationRateAndCountToSensor(sensor1, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation, "", "");
 
@@ -357,13 +357,13 @@ public class StreamsMetricsImplTest {
 
         assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
 
-        final Sensor parent2 = metrics.taskLevelSensor(THREAD_ID, taskName, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor parent2 = metrics.taskLevelSensor(THREAD_ID, taskName, operation, RecordingLevel.DEBUG);
         addAvgAndMaxLatencyToSensor(parent2, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation);
         addInvocationRateAndCountToSensor(parent2, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation, "", "");
 
         assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
 
-        final Sensor sensor2 = metrics.nodeLevelSensor(THREAD_ID, taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent2);
+        final Sensor sensor2 = metrics.nodeLevelSensor(THREAD_ID, taskName, processorNodeName, operation, RecordingLevel.DEBUG, parent2);
         addAvgAndMaxLatencyToSensor(sensor2, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation);
         addInvocationRateAndCountToSensor(sensor2, PROCESSOR_NODE_LEVEL_GROUP, nodeTags, operation, "", "");
 
@@ -379,6 +379,7 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testLatencyMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -386,7 +387,7 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, RecordingLevel.DEBUG);
 
         // 2 meters and 4 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
@@ -398,6 +399,7 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testThroughputMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -405,7 +407,7 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, RecordingLevel.DEBUG);
 
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
         // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
@@ -426,11 +428,11 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "op";
 
-        final Sensor sensor = streamsMetrics.addLatencyAndThroughputSensor(
+        final Sensor sensor = streamsMetrics.addLatencyRateTotalSensor(
             scope,
             entity,
             operation,
-            Sensor.RecordingLevel.INFO
+            RecordingLevel.INFO
         );
 
         final double latency = 100.0;
