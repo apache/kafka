@@ -314,7 +314,7 @@ class ConnectDistributedTest(Test):
         if connect_protocol == 'compatible':
             timeout_sec = 120
         else:
-            timeout_sec = 30
+            timeout_sec = 70
 
         # we should still be paused after restarting
         for node in self.cc.nodes:
