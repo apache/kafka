@@ -302,7 +302,7 @@ class ConnectDistributedTest(Test):
 
         # we should still be paused after restarting
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=70,
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=5)
