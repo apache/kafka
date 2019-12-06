@@ -16,18 +16,11 @@
  */
 package org.apache.kafka.common.errors;
 
-
 /**
  * Server disconnected before a request could be completed.
  */
 public class DisconnectException extends RetriableException {
-    public static final DisconnectException INSTANCE = new DisconnectException();
-
     private static final long serialVersionUID = 1L;
-
-    public DisconnectException() {
-        super();
-    }
 
     public DisconnectException(String message, Throwable cause) {
         super(message, cause);
@@ -40,5 +33,4 @@ public class DisconnectException extends RetriableException {
     public DisconnectException(Throwable cause) {
         super(cause);
     }
-
 }
