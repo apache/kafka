@@ -536,14 +536,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                      final Sensor.RecordingLevel recordingLevel,
                                      final String... tags) {
         final String threadId = Thread.currentThread().getName();
-        final String group = groupNameFromScope(scopeName);
         final Map<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
-        return customInvocationRateAndCountSensor(threadId, group, entityName, operationName, tagMap, recordingLevel);
+        return customInvocationRateAndCountSensor(
+            threadId,
+            groupNameFromScope(scopeName),
+            entityName,
+            operationName,
+            tagMap,
+            recordingLevel
+        );
     }
 
     /**
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
+    @Deprecated
     @Override
     public Sensor addLatencyAndThroughputSensor(final String scopeName,
                                                 final String entityName,
@@ -579,6 +586,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     /**
      * @throws IllegalArgumentException if tags is not constructed in key-value pairs
      */
+    @Deprecated
     @Override
     public Sensor addThroughputSensor(final String scopeName,
                                       final String entityName,

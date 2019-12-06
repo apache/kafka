@@ -39,18 +39,17 @@ public interface StreamsMetrics {
      * <ol>
      * <li>average latency</li>
      * <li>max latency</li>
-     * <li>invocation rate (num.operations / time unit)</li>
+     * <li>invocation rate (num.operations / seconds)</li>
      * <li>total invocation count</li>
      * </ol>
-     * Whenever a user record this sensor via {@link Sensor#record(double)} etc, it will be counted as one invocation
+     * Whenever a user records this sensor via {@link Sensor#record(double)} etc, it will be counted as one invocation
      * of the operation, and hence the rate / count metrics will be updated accordingly; and the recorded latency value
      * will be used to update the average / max latency as well.
-     * The time unit of the latency can be defined by the user.
      *
      * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
-     * {@link Sensor#record(double)} calls; but additional user-customized metrics will not be managed by {@link StreamsMetrics}.
+     * {@link Sensor#record(double)} calls.
      *
-     * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
+     * @param scopeName          name of the scope, which will be used as part of the metric type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
      * @param operationName      name of the operation, which will be used as the name of the metric, e.g.: "[operation]-latency-avg".
      * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
@@ -69,11 +68,11 @@ public interface StreamsMetrics {
      * <li>invocation rate (num.operations / time unit)</li>
      * <li>total invocation count</li>
      * </ol>
-     * Whenever a user record this sensor via {@link Sensor#record(double)} etc,
+     * Whenever a user records this sensor via {@link Sensor#record(double)} etc,
      * it will be counted as one invocation of the operation, and hence the rate / count metrics will be updated accordingly.
      *
-     * Note that you can add more metrics to this sensor after created it, which can then be updated upon {@link Sensor#record(double)} calls;
-     * but additional user-customized metrics will not be managed by {@link StreamsMetrics}.
+     * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
+     * {@link Sensor#record(double)} calls.
      *
      * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
@@ -104,7 +103,10 @@ public interface StreamsMetrics {
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags           additional tags of the sensor
      * @return The added sensor.
+     * @deprecated since 2.5. Use {@link #addLatencyRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...) addLatencyRateTotalSensor()}
+     * instead.
      */
+    @Deprecated
     Sensor addLatencyAndThroughputSensor(final String scopeName,
                                          final String entityName,
                                          final String operationName,
@@ -120,6 +122,7 @@ public interface StreamsMetrics {
      * @param sensor  sensor whose latency we are recording.
      * @param startNs start of measurement time in nanoseconds.
      * @param endNs   end of measurement time in nanoseconds.
+     * @deprecated since 2.5. Use {@link Sensor#record(double) Sensor#record()} instead.
      */
     @Deprecated
     void recordLatency(final Sensor sensor,
@@ -142,7 +145,10 @@ public interface StreamsMetrics {
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags           additional tags of the sensor
      * @return The added sensor.
+     * @deprecated since 2.5. Use {@link #addRateTotalSensor(String, String, String, Sensor.RecordingLevel, String...)
+     * addRateTotalSensor()} instead.
      */
+    @Deprecated
     Sensor addThroughputSensor(final String scopeName,
                                final String entityName,
                                final String operationName,
@@ -154,6 +160,7 @@ public interface StreamsMetrics {
      *
      * @param sensor add Sensor whose throughput we are recording
      * @param value  throughput value
+     * @deprecated since 2.5. Use {@link Sensor#record() Sensor#record()} instead.
      */
     @Deprecated
     void recordThroughput(final Sensor sensor,
