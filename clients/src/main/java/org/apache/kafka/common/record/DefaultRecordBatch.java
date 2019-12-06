@@ -256,13 +256,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public boolean isDeleteHorizonSet() {
+    public boolean deleteHorizonSet() {
         return (attributes() & DELETE_HORIZON_FLAG_MASK) > 0;
     }
 
     @Override
     public long deleteHorizonMs() {
-        if (isDeleteHorizonSet())
+        if (deleteHorizonSet())
             return firstTimestamp();
         return RecordBatch.NO_TIMESTAMP;
     }
@@ -382,7 +382,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch(), isDeleteHorizonSet());
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch(), deleteHorizonSet());
         buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
@@ -765,14 +765,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         }
 
         @Override
-        public boolean isDeleteHorizonSet() {
-            return loadBatchHeader().isDeleteHorizonSet();
+        public boolean deleteHorizonSet() {
+            return loadBatchHeader().deleteHorizonSet();
         }
 
         @Override
         public long deleteHorizonMs() {
-            if (isDeleteHorizonSet())
-                return super.loadFullBatch().deleteHorizonMs();
+            if (deleteHorizonSet())
+                return super.loadBatchHeader().deleteHorizonMs();
             return RecordBatch.NO_TIMESTAMP;
         }
 

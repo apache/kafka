@@ -653,9 +653,14 @@ private[log] class Cleaner(val id: Int,
       override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
-        val (shouldDiscardBatchRecords, canDiscardBatch) = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
-        discardBatchRecords = shouldDiscardBatchRecords
+        val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
         isControlBatchEmpty = canDiscardBatch
+
+        if (batch.isControlBatch) {
+          discardBatchRecords = canDiscardBatch && !retainDeletesAndTxnMarkers
+        } else {
+          discardBatchRecords = canDiscardBatch
+        }
 
         def isBatchLastRecordOfProducer: Boolean = {
           // We retain the batch in order to preserve the state of active producers. There are three cases:
@@ -689,7 +694,7 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
-        if (batch.isDeleteHorizonSet())
+        if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
         // check that the control batch has been emptied of records
@@ -773,14 +778,11 @@ private[log] class Cleaner(val id: Int,
 
   private def shouldDiscardBatch(batch: RecordBatch,
                                  transactionMetadata: CleanedTransactionMetadata,
-                                 retainTxnMarkers: Boolean): (Boolean, Boolean) = {
-    if (batch.isControlBatch) {
-      val canDiscardControlBatch = transactionMetadata.onControlBatchRead(batch)
-      (canDiscardControlBatch && !retainTxnMarkers, canDiscardControlBatch)
-    } else {
-      val canDiscardBatch = transactionMetadata.onBatchRead(batch)
-      (canDiscardBatch, false)
-    }
+                                 retainTxnMarkers: Boolean): Boolean = {
+    if (batch.isControlBatch)
+      transactionMetadata.onControlBatchRead(batch)
+    else
+      transactionMetadata.onBatchRead(batch)
   }
 
   private def shouldRetainRecord(map: kafka.log.OffsetMap,
@@ -802,11 +804,11 @@ private[log] class Cleaner(val id: Int,
        */
       val latestOffsetForKey = record.offset() >= foundOffset
       val isLatestVersion = batch.magic() < RecordBatch.MAGIC_VALUE_V2
-      val shouldRetainDeletes = isLatestVersion match {
-        case true => (!batch.isDeleteHorizonSet() ||
-                      time.milliseconds() < batch.deleteHorizonMs)
-        case false => retainDeletes
-      }
+      var shouldRetainDeletes = true
+      if (isLatestVersion)
+        shouldRetainDeletes = (!batch.deleteHorizonSet() || time.milliseconds() < batch.deleteHorizonMs)
+      else
+        shouldRetainDeletes = retainDeletes
       val isRetainedValue = record.hasValue || shouldRetainDeletes
 
       latestOffsetForKey && isRetainedValue

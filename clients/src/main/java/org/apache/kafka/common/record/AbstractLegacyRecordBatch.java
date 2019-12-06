@@ -437,7 +437,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public boolean isDeleteHorizonSet() {
+        public boolean deleteHorizonSet() {
             return false;
         }
 
@@ -484,7 +484,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public boolean isDeleteHorizonSet() {
+        public boolean deleteHorizonSet() {
             return false;
         }
 
@@ -579,12 +579,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         @Override
         public long deleteHorizonMs() {
-            return loadFullBatch().deleteHorizonMs();
+            return RecordBatch.NO_TIMESTAMP;
         }
 
         @Override
-        public boolean isDeleteHorizonSet() {
-            return loadFullBatch().isDeleteHorizonSet();
+        public boolean deleteHorizonSet() {
+            return false;
         }
 
         @Override

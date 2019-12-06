@@ -159,7 +159,7 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
-            long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+            long deleteHorizonMs = batch.deleteHorizonMs();
             filterResult.bytesRead += batch.sizeInBytes();
 
             if (batchRetention == BatchRetention.DELETE)
@@ -173,7 +173,7 @@ public class MemoryRecords extends AbstractRecords {
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
-            boolean shouldSetDeleteHorizon = !batch.isDeleteHorizonSet() && deleteHorizonMs != RecordBatch.NO_TIMESTAMP;
+            boolean shouldSetDeleteHorizon = !batch.deleteHorizonSet() && batch.magic() >= RecordBatch.MAGIC_VALUE_V2;
             boolean containsTombstonesOrMarker = false;
             List<Record> retainedRecords = new ArrayList<>();
 
@@ -183,6 +183,10 @@ public class MemoryRecords extends AbstractRecords {
             containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
+
+            if (containsTombstonesOrMarker && !batch.deleteHorizonSet()) {
+                deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+            }
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value
@@ -304,7 +308,6 @@ public class MemoryRecords extends AbstractRecords {
                 originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
                 originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
                 originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit());
-        builder.setDeleteHorizonMs(deleteHorizonMs);
 
         for (Record record : retainedRecords)
             builder.append(record);
