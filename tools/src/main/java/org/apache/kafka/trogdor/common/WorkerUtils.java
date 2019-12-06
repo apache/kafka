@@ -277,7 +277,7 @@ public final class WorkerUtils {
         for (int i = 0; i < retryCount; i++) {
             try {
                 DescribeTopicsResult topicsResult = adminClient.describeTopics(
-                        topicsToVerify, new DescribeTopicsOptions().apiTimeoutMs(ADMIN_REQUEST_TIMEOUT));
+                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
                 return topicsResult.all().get();
             } catch (ExecutionException exception) {
                 if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
@@ -307,7 +307,7 @@ public final class WorkerUtils {
         // first get list of matching topics
         List<String> matchedTopics = new ArrayList<>();
         ListTopicsResult res = adminClient.listTopics(
-            new ListTopicsOptions().apiTimeoutMs(ADMIN_REQUEST_TIMEOUT));
+            new ListTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicListing> topicListingMap = res.namesToListings().get();
         for (Map.Entry<String, TopicListing> topicListingEntry: topicListingMap.entrySet()) {
             if (!topicListingEntry.getValue().isInternal()
@@ -319,7 +319,7 @@ public final class WorkerUtils {
         // create a list of topic/partitions
         List<TopicPartition> out = new ArrayList<>();
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            matchedTopics, new DescribeTopicsOptions().apiTimeoutMs(ADMIN_REQUEST_TIMEOUT));
+            matchedTopics, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
             List<TopicPartitionInfo> partitions = desc.partitions();
@@ -337,7 +337,7 @@ public final class WorkerUtils {
         Map<String, String> commonClientConf, Map<String, String> adminClientConf) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, ADMIN_REQUEST_TIMEOUT);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, ADMIN_REQUEST_TIMEOUT);
         // first add common client config, and then admin client config to properties, possibly
         // over-writing default or common properties.
         addConfigsToProperties(props, commonClientConf, adminClientConf);

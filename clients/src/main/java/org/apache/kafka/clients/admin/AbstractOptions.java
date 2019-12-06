@@ -23,15 +23,15 @@ package org.apache.kafka.clients.admin;
  */
 public abstract class AbstractOptions<T extends AbstractOptions> {
 
-    protected Integer apiTimeoutMs = null;
+    protected Integer timeoutMs = null;
 
     /**
      * Set the api timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      */
     @SuppressWarnings("unchecked")
-    public T apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public T timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return (T) this;
     }
 
@@ -39,8 +39,8 @@ public abstract class AbstractOptions<T extends AbstractOptions> {
      * The api timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      */
-    public Integer apiTimeoutMs() {
-        return apiTimeoutMs;
+    public Integer timeoutMs() {
+        return timeoutMs;
     }
 
 

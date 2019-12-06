@@ -53,6 +53,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -260,12 +261,12 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The default timeout to use for an operation.
      */
-    private final int defaultTimeoutMs;
+    private int defaultTimeoutMs;
 
     /**
      * The timeout to use for a single request.
      */
-    private final int requestTimeoutMs;
+    private int requestTimeoutMs;
 
     /**
      * The name of this AdminClient instance.
@@ -502,11 +503,9 @@ public class KafkaAdminClient extends AdminClient {
                              KafkaClient client,
                              TimeoutProcessorFactory timeoutProcessorFactory,
                              LogContext logContext) {
-        this.defaultTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-        // Normally, the default api timeout should be equal or larger than the request timeout.
-        this.requestTimeoutMs = Math.min(defaultTimeoutMs, config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG));
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
+        configureDefaultApiTimeoutMsAndRequestTimeoutMs(config);
         this.time = time;
         this.metadataManager = metadataManager;
         this.metrics = metrics;
@@ -524,8 +523,40 @@ public class KafkaAdminClient extends AdminClient {
         thread.start();
     }
 
+    /**
+     * If a default.api.timeout.ms has been explicitly specified, raise an error if it conflicts with request.timeout.ms.
+     * If no default.api.timeout.ms has been configured, then set its value as the max of the default and request.timeout.ms. Also we should probably log a warning.
+     * Otherwise, use the provided values for both configurations.
+     *
+     * @param config
+     */
+    private void configureDefaultApiTimeoutMsAndRequestTimeoutMs(AdminClientConfig config) {
+        this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.defaultTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+
+        if (this.defaultTimeoutMs < this.requestTimeoutMs) {
+            if (config.originals().containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
+                throw new ConfigException("The specified value of " + AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG +
+                        " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
+            } else {
+                log.warn("Overriding the default value for {} to {}.", AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.requestTimeoutMs);
+                this.defaultTimeoutMs = Math.max(this.defaultTimeoutMs, this.requestTimeoutMs);
+            }
+        }
+    }
+
     Time time() {
         return time;
+    }
+
+    // package level visibility for testing only
+    int defaultTimeoutMs() {
+        return this.defaultTimeoutMs;
+    }
+
+    // package level visibility for testing only
+    int requestTimeoutMs() {
+        return this.requestTimeoutMs;
     }
 
     @Override
@@ -1360,7 +1391,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        Call call = new Call("createTopics", calcDeadlineMs(now, options.apiTimeoutMs()),
+        Call call = new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -1457,7 +1488,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        Call call = new Call("deleteTopics", calcDeadlineMs(now, options.apiTimeoutMs()),
+        Call call = new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -1517,7 +1548,7 @@ public class KafkaAdminClient extends AdminClient {
     public ListTopicsResult listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("listTopics", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -1562,7 +1593,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        Call call = new Call("describeTopics", calcDeadlineMs(now, options.apiTimeoutMs()),
+        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             private boolean supportsDisablingTopicCreation = true;
@@ -1646,7 +1677,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Set<AclOperation>> authorizedOperationsFuture = new KafkaFutureImpl<>();
 
         final long now = time.milliseconds();
-        runnable.call(new Call("listNodes", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -1698,7 +1729,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
-        runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -1742,7 +1773,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         }
-        runnable.call(new Call("createAcls", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -1790,7 +1821,7 @@ public class KafkaAdminClient extends AdminClient {
                 futures.put(filter, new KafkaFutureImpl<>());
             }
         }
-        runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -1856,7 +1887,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         if (!unifiedRequestResources.isEmpty()) {
-            runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.apiTimeoutMs()),
+            runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
 
                 @Override
@@ -1903,7 +1934,7 @@ public class KafkaAdminClient extends AdminClient {
             final KafkaFutureImpl<Config> brokerFuture = entry.getValue();
             final ConfigResource resource = entry.getKey();
             final int nodeId = Integer.parseInt(resource.name());
-            runnable.call(new Call("describeBrokerConfigs", calcDeadlineMs(now, options.apiTimeoutMs()),
+            runnable.call(new Call("describeBrokerConfigs", calcDeadlineMs(now, options.timeoutMs()),
                     new ConstantNodeIdProvider(nodeId)) {
 
                 @Override
@@ -2018,7 +2049,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long now = time.milliseconds();
-        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.apiTimeoutMs()), nodeProvider) {
+        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
             public AlterConfigsRequest.Builder createRequest(int timeoutMs) {
@@ -2078,7 +2109,7 @@ public class KafkaAdminClient extends AdminClient {
             futures.put(resource, new KafkaFutureImpl<>());
 
         final long now = time.milliseconds();
-        runnable.call(new Call("incrementalAlterConfigs", calcDeadlineMs(now, options.apiTimeoutMs()), nodeProvider) {
+        runnable.call(new Call("incrementalAlterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
             public IncrementalAlterConfigsRequest.Builder createRequest(int timeoutMs) {
@@ -2153,7 +2184,7 @@ public class KafkaAdminClient extends AdminClient {
             final int brokerId = entry.getKey();
             final Map<TopicPartition, String> assignment = entry.getValue();
 
-            runnable.call(new Call("alterReplicaLogDirs", calcDeadlineMs(now, options.apiTimeoutMs()),
+            runnable.call(new Call("alterReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
@@ -2199,7 +2230,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         for (final Integer brokerId: brokers) {
-            runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.apiTimeoutMs()),
+            runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
@@ -2253,7 +2284,7 @@ public class KafkaAdminClient extends AdminClient {
             for (TopicPartition topicPartition: topicPartitions)
                 replicaDirInfoByPartition.put(topicPartition, new ReplicaLogDirInfo());
 
-            runnable.call(new Call("describeReplicaLogDirs", calcDeadlineMs(now, options.apiTimeoutMs()),
+            runnable.call(new Call("describeReplicaLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
@@ -2324,7 +2355,7 @@ public class KafkaAdminClient extends AdminClient {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> partitionDetails(e.getValue())));
 
         final long now = time.milliseconds();
-        runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
             @Override
@@ -2380,7 +2411,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long nowMetadata = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowMetadata, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
         // asking for topics metadata for getting partitions leaders
         runnable.call(new Call("topicsMetadata", deadline,
                 new LeastLoadedNodeProvider()) {
@@ -2477,7 +2508,7 @@ public class KafkaAdminClient extends AdminClient {
                     .setPrincipalName(principal.getName())
                     .setPrincipalType(principal.getPrincipalType()));
         }
-        runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -2515,7 +2546,7 @@ public class KafkaAdminClient extends AdminClient {
     public RenewDelegationTokenResult renewDelegationToken(final byte[] hmac, final RenewDelegationTokenOptions options) {
         final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("renewDelegationToken", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("renewDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -2549,7 +2580,7 @@ public class KafkaAdminClient extends AdminClient {
     public ExpireDelegationTokenResult expireDelegationToken(final byte[] hmac, final ExpireDelegationTokenOptions options) {
         final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("expireDelegationToken", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("expireDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -2583,7 +2614,7 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeDelegationTokenResult describeDelegationToken(final DescribeDelegationTokenOptions options) {
         final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
@@ -2659,7 +2690,7 @@ public class KafkaAdminClient extends AdminClient {
             final String groupId = entry.getKey();
 
             final long startFindCoordinatorMs = time.milliseconds();
-            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
             ConsumerGroupOperationContext<ConsumerGroupDescription, DescribeConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, futures.get(groupId));
             Call findCoordinatorCall = getFindCoordinatorCall(context,
@@ -2904,7 +2935,7 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
         final long nowMetadata = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowMetadata, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
             MetadataRequest.Builder createRequest(int timeoutMs) {
@@ -2984,7 +3015,7 @@ public class KafkaAdminClient extends AdminClient {
                                                                    final ListConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
         final long startFindCoordinatorMs = time.milliseconds();
-        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         ConsumerGroupOperationContext<Map<TopicPartition, OffsetAndMetadata>, ListConsumerGroupOffsetsOptions> context =
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, groupOffsetListingFuture);
@@ -3058,7 +3089,7 @@ public class KafkaAdminClient extends AdminClient {
                 continue;
 
             final long startFindCoordinatorMs = time.milliseconds();
-            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+            final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
             ConsumerGroupOperationContext<Void, DeleteConsumerGroupsOptions> context =
                     new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
             Call findCoordinatorCall = getFindCoordinatorCall(context,
@@ -3118,7 +3149,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long startFindCoordinatorMs = time.milliseconds();
-        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
         ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context =
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
@@ -3199,7 +3230,7 @@ public class KafkaAdminClient extends AdminClient {
             ElectLeadersOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
             @Override
@@ -3264,7 +3295,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long now = time.milliseconds();
-        Call call = new Call("alterPartitionReassignments", calcDeadlineMs(now, options.apiTimeoutMs()),
+        Call call = new Call("alterPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
             @Override
@@ -3399,7 +3430,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("listPartitionReassignments", calcDeadlineMs(now, options.apiTimeoutMs()),
+        runnable.call(new Call("listPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -3478,7 +3509,7 @@ public class KafkaAdminClient extends AdminClient {
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
         final long startFindCoordinatorMs = time.milliseconds();
-        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         KafkaFutureImpl<Map<MemberIdentity, Errors>> future = new KafkaFutureImpl<>();
 
@@ -3542,7 +3573,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Map<TopicPartition, Errors>> future = new KafkaFutureImpl<>();
 
         final long startFindCoordinatorMs = time.milliseconds();
-        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         ConsumerGroupOperationContext<Map<TopicPartition, Errors>, AlterConsumerGroupOffsetsOptions> context =
                 new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
@@ -3646,7 +3677,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long nowMetadata = time.milliseconds();
-        final long deadline = calcDeadlineMs(nowMetadata, options.apiTimeoutMs());
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
 
         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> context =
                 new MetadataOperationContext<>(topics, options, deadline, futures);

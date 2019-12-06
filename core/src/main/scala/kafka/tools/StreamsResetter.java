@@ -182,7 +182,7 @@ public class StreamsResetter {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
             Collections.singleton(groupId),
-            new DescribeConsumerGroupsOptions().apiTimeoutMs(10 * 1000));
+            new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
         final List<MemberDescription> members =
             new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
         if (!members.isEmpty()) {

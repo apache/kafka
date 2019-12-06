@@ -34,8 +34,8 @@ public class DescribeAclsOptions extends AbstractOptions<DescribeAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DescribeAclsOptions apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public DescribeAclsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return this;
     }
 

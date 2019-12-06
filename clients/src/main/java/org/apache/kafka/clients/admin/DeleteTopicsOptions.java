@@ -35,8 +35,8 @@ public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public DeleteTopicsOptions apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return this;
     }
 

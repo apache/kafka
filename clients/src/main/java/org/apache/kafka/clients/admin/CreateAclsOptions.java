@@ -35,8 +35,8 @@ public class CreateAclsOptions extends AbstractOptions<CreateAclsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public CreateAclsOptions apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public CreateAclsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return this;
     }
 

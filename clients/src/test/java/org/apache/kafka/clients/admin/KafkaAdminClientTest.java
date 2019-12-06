@@ -38,6 +38,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -175,6 +176,22 @@ public class KafkaAdminClientTest {
     final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
+    public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
+        AdminClientConfig config = newConfMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500");
+        try (Admin client = KafkaAdminClient.createInternal(config, null)) {
+            fail("Expected KafkaException");
+        } catch (KafkaException e) {
+            assertTrue(e.getCause() instanceof ConfigException);
+        }
+
+        config = newConfMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "3000000");
+        try (KafkaAdminClient client = KafkaAdminClient.createInternal(config, null)) {
+            // default api timeout should be overridden to request timeout.
+            assertEquals(client.defaultTimeoutMs(), client.requestTimeoutMs());
+        }
+    }
+
+    @Test
     public void testGetOrCreateListValue() {
         Map<String, List<String>> map = new HashMap<>();
         List<String> fooList = KafkaAdminClient.getOrCreateListValue(map, "foo");
@@ -209,7 +226,7 @@ public class KafkaAdminClientTest {
     private static Map<String, Object> newStrMap(String... vals) {
         Map<String, Object> map = new HashMap<>();
         map.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8121");
-        map.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1000");
+        map.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000");
         if (vals.length % 2 != 0) {
             throw new IllegalStateException();
         }
@@ -340,12 +357,12 @@ public class KafkaAdminClientTest {
     @Test
     public void testTimeoutWithoutMetadata() throws Exception {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, mockBootstrapCluster(),
-                newStrMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10"))) {
+                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareCreateTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(1000)).all();
+                    new CreateTopicsOptions().timeoutMs(1000)).all();
             TestUtils.assertFutureError(future, TimeoutException.class);
         }
     }
@@ -368,7 +385,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
 
             future.get();
         }
@@ -393,7 +410,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
 
             future.get();
         }
@@ -407,14 +424,14 @@ public class KafkaAdminClientTest {
         Cluster cluster = mockCluster(0);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8121",
-                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10"))) {
+                    AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodeById(0),
                     TimeUnit.DAYS.toMillis(1));
             env.kafkaClient().prepareResponse(prepareCreateTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                 Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                new CreateTopicsOptions().apiTimeoutMs(1000)).all();
+                new CreateTopicsOptions().timeoutMs(1000)).all();
             TestUtils.assertFutureError(future, SaslAuthenticationException.class);
         }
     }
@@ -427,7 +444,7 @@ public class KafkaAdminClientTest {
                     prepareCreateTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
     }
@@ -459,7 +476,7 @@ public class KafkaAdminClientTest {
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
 
             // Wait until the first attempt has failed, then advance the time
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,
@@ -495,7 +512,7 @@ public class KafkaAdminClientTest {
                 env.cluster().nodeById(1));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all();
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
     }
@@ -600,7 +617,7 @@ public class KafkaAdminClientTest {
     public void testAdminClientApisAuthenticationFailure() throws Exception {
         Cluster cluster = mockBootstrapCluster();
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
-                newStrMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1000"))) {
+                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
@@ -612,7 +629,7 @@ public class KafkaAdminClientTest {
         try {
             env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().apiTimeoutMs(10000)).all().get();
+                    new CreateTopicsOptions().timeoutMs(10000)).all().get();
             fail("Expected an authentication error.");
         } catch (ExecutionException e) {
             assertTrue("Expected an authentication error, but got " + Utils.stackTrace(e),
@@ -818,7 +835,7 @@ public class KafkaAdminClientTest {
                 results = env.adminClient().electLeaders(
                         electionType,
                         new HashSet<>(asList(topic1, topic2)),
-                        new ElectLeadersOptions().apiTimeoutMs(100));
+                        new ElectLeadersOptions().timeoutMs(100));
                 TestUtils.assertFutureError(results.partitions(), TimeoutException.class);
             }
         }
@@ -846,7 +863,7 @@ public class KafkaAdminClientTest {
             // Make a request with an extremely short timeout.
             // Then wait for it to fail by not supplying any response.
             log.info("Starting AdminClient#listTopics...");
-            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().apiTimeoutMs(1000));
+            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {

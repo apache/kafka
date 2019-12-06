@@ -119,7 +119,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
     static Map<String, Object> clientConfigs(String... overrides) {
         Map<String, Object> map = new HashMap<>();
         map.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8121");
-        map.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "1000");
+        map.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000");
         if (overrides.length % 2 != 0) {
             throw new IllegalStateException();
         }

@@ -80,6 +80,7 @@ object LeaderElectionCommand extends Logging {
         commandOptions.options.valueOf(commandOptions.bootstrapServer)
       )
       props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, timeout.toMillis.toString)
+      props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, (timeout.toMillis / 2).toString)
 
       JAdminClient.create(props)
     }

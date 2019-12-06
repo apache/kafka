@@ -37,8 +37,8 @@ public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public CreateTopicsOptions apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public CreateTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return this;
     }
 

@@ -142,7 +142,7 @@ public class CommonClientConfigs {
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
-    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs that could block. " +
+    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not explicitly accept a <code>timeout</code> parameter.";
 
     /**

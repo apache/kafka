@@ -37,8 +37,8 @@ public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
      *
      */
     // This method is retained to keep binary compatibility with 0.11
-    public AlterConfigsOptions apiTimeoutMs(Integer apiTimeoutMs) {
-        this.apiTimeoutMs = apiTimeoutMs;
+    public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
         return this;
     }
 

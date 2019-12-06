@@ -957,7 +957,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
     // cancelled by the close operation.
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().apiTimeoutMs(900000)).all()
+      new CreateTopicsOptions().timeoutMs(900000)).all()
     client.close(time.Duration.ZERO)
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
   }
@@ -970,11 +970,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testMinimumRequestTimeouts(): Unit = {
     val config = createConfig()
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
-    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "0")
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = AdminClient.create(config)
     val startTimeMs = Time.SYSTEM.milliseconds()
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().apiTimeoutMs(2)).all()
+      new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
     assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs)
@@ -1349,7 +1349,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     // ... now what happens if we try to elect the preferred leader and it's down?
-    val shortTimeout = new ElectLeadersOptions().apiTimeoutMs(10000)
+    val shortTimeout = new ElectLeadersOptions().timeoutMs(10000)
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava, shortTimeout)
     assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
     exception = electResult.partitions.get.get(partition1).get

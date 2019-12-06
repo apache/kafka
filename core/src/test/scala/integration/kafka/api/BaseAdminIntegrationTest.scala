@@ -202,7 +202,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   def createConfig(): util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "20000")
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
