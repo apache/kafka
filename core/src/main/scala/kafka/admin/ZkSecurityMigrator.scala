@@ -227,8 +227,12 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
       checkPathExistenceAndMaybeExit(enablePathCheck)
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        zkClient.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
+        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+          debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
+        } else {
+          zkClient.makeSurePersistentPathExists(path)
+          setAclsRecursively(path)
+        }
       }
 
       @tailrec
