@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
@@ -175,6 +176,56 @@ public class CogroupedKStreamImplTest {
                 "      <-- test-cogroup-merge\n" +
                 "    Sink: KSTREAM-SINK-0000000006 (topic: output)\n" +
                 "      <-- KTABLE-TOSTREAM-0000000005\n\n"));
+    }
+
+    @Test
+    public void shouldNameProcessorsAndStoreBasedOnNamedParameterRepartition() {
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
+        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
+
+        final KTable<String, String> customers = groupedOne
+                .cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER, Named.as("test"), Materialized.as("store"));
+
+        customers.toStream().to(OUTPUT);
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+                topologyDescription,
+                equalTo("Topologies:\n" +
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                        "      --> KSTREAM-MAP-0000000002\n" +
+                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                        "      --> KSTREAM-FILTER-0000000004\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Processor: KSTREAM-FILTER-0000000004 (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000003\n" +
+                        "      <-- KSTREAM-MAP-0000000002\n" +
+                        "    Sink: KSTREAM-SINK-0000000003 (topic: KSTREAM-MAP-0000000002-repartition)\n" +
+                        "      <-- KSTREAM-FILTER-0000000004\n\n" +
+                        "  Sub-topology: 1\n" +
+                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                        "      --> test-cogroup-agg-1\n" +
+                        "    Source: KSTREAM-SOURCE-0000000005 (topics: [KSTREAM-MAP-0000000002-repartition])\n" +
+                        "      --> test-cogroup-agg-0\n    Processor: test-cogroup-agg-0 (stores: [store])\n" +
+                        "      --> test-cogroup-merge\n      <-- KSTREAM-SOURCE-0000000005\n" +
+                        "    Processor: test-cogroup-agg-1 (stores: [store])\n " +
+                        "     --> test-cogroup-merge\n  " +
+                        "    <-- KSTREAM-SOURCE-0000000001\n" +
+                        "    Processor: test-cogroup-merge (stores: [])\n" +
+                        "      --> KTABLE-TOSTREAM-0000000009\n" +
+                        "      <-- test-cogroup-agg-0, test-cogroup-agg-1\n" +
+                        "    Processor: KTABLE-TOSTREAM-0000000009 (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000010\n  " +
+                        "    <-- test-cogroup-merge\n " +
+                        "   Sink: KSTREAM-SINK-0000000010 (topic: output)\n " +
+                        "     <-- KTABLE-TOSTREAM-0000000009\n\n"));
     }
 
     @Test
