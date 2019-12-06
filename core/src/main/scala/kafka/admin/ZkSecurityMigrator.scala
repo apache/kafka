@@ -18,7 +18,7 @@
 package kafka.admin
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
-import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
+import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -223,8 +223,12 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
       setAclIndividually("/")
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        zkClient.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
+        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+          debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
+        } else {
+          zkClient.makeSurePersistentPathExists(path)
+          setAclsRecursively(path)
+        }
       }
 
       @tailrec
