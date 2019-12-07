@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream.internals;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
 
 import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
@@ -43,7 +42,6 @@ import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
@@ -98,7 +96,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
     }
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, Named.as("test") );
+        windowedCogroupedStream.aggregate(null, Named.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -265,9 +263,9 @@ public class TimeWindowedCogroupedKStreamImplTest {
                                                final String expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        TestRecord<Windowed<String>, String> realRecord = outputTopic.readRecord();
-        TestRecord<String, String> nonWindowedRecord = new TestRecord<>(realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
-        TestRecord<String, String> testRecord = new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp);
+        final TestRecord<Windowed<String>, String> realRecord = outputTopic.readRecord();
+        final TestRecord<String, String> nonWindowedRecord = new TestRecord<>(realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
+        final TestRecord<String, String> testRecord = new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp);
         assertThat(nonWindowedRecord, equalTo(testRecord));
     }
 }
