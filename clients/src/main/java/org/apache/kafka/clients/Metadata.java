@@ -299,11 +299,14 @@ public class Metadata implements Closeable {
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
 
-                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
-                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                    Consumer<PartitionInfo> addToPartitions = partitionInfo -> {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
                         partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
-                    });
+                    };
+
+                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
+                    updatePartitionInfo(metadata.topic(), partitionMetadata,
+                            metadataResponse.hasReliableLeaderEpochs(), addToPartitions);
 
                     if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
@@ -328,10 +331,10 @@ public class Metadata implements Closeable {
      */
     private void updatePartitionInfo(String topic,
                                      MetadataResponse.PartitionMetadata partitionMetadata,
+                                     boolean hasReliableLeaderEpoch,
                                      Consumer<PartitionInfo> partitionInfoConsumer) {
-
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
-        if (partitionMetadata.leaderEpoch().isPresent()) {
+        if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
             // If the received leader epoch is at least the same as the previous one, update the metadata
             if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
