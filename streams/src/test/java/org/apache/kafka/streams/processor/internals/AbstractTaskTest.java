@@ -219,6 +219,11 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
+            public long offsetLimit(TopicPartition partition) {
+                return 0;
+            }
+
+            @Override
             public void initializeMetadata() {}
 
             @Override

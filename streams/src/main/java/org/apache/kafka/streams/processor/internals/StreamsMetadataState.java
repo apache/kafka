@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
@@ -70,6 +69,16 @@ public class StreamsMetadataState {
         builder.append(indent).append(clusterMetadata).append("\n");
 
         return builder.toString();
+    }
+
+    /**
+     * Get the {@link StreamsMetadata}s for local instance in a
+     * {@link KafkaStreams application}
+     *
+     * @return the {@link StreamsMetadata}s for the local instance in a {@link KafkaStreams} application
+     */
+    public synchronized StreamsMetadata getMyMetadata() {
+        return myMetadata;
     }
 
     /**
@@ -376,15 +385,6 @@ public class StreamsMetadataState {
             }
         }
 
-        // would need these below changes to send TopicGroupId instead of partition in KeyQueryMetadata
-        int myTopicGroupId;
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
-        for (Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
-                if (topicGroup.getValue().sourceTopics.contains(sourceTopicsInfo.sourceTopics)) {
-                    myTopicGroupId = topicGroup.getKey();
-            }
-        }
-
         return new KeyQueryMetadata(activeHost, standbyHosts, partition.intValue());
     }
 
@@ -418,6 +418,10 @@ public class StreamsMetadataState {
             return null;
         }
         return new SourceTopicsInfo(sourceTopics);
+    }
+
+    public String getChangelogTopicForStore(final String storeName) {
+      return builder.getStoreToChangelogTopic().get(storeName);
     }
 
     private boolean isInitialized() {

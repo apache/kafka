@@ -57,6 +57,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
@@ -1155,19 +1156,35 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Returns mapping from store name to another map of partition to offset lag info, for all stores local to this Streams instance. It includes both active and standby store partitions, with active partitions always reporting 0 lag.
+     * Returns mapping from store name to another map of partition to offset lag info, for all stores local to this Streams instance. It includes both active and standby store partitions.
      */
-    public Long storeLocalOffsetLag(final TaskId taskId, final TopicPartition topicPartition) {
+    public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
+        final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
+        final Map<TaskId, Map<String, Long>> localOffsetLimits = new HashMap<>();
         for (int i = 0; i < this.threads.length; i++) {
             final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
-            final Map<TaskId, StandbyTask> standyTaskMap = this.threads[i].standbyTasks();
-            if (streamTaskMap.containsKey(taskId)) {
-                return streamTaskMap.get(taskId).offsetLimit(topicPartition);
-            } else if (standyTaskMap.containsKey(taskId)) {
-                return standyTaskMap.get(taskId).offsetLimit(topicPartition);
+            final Map<TaskId, StandbyTask> standbyTaskMap = this.threads[i].standbyTasks();
+            final Set<String> activeStateStores = streamsMetadataState.getMyMetadata().stateStoreNames();
+            final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().getStandbyStateStoreNames();
+            for (TaskId taskId : streamTaskMap.keySet()) {
+                localOffsetLimits.put(taskId, getStoreNameToOffsetMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
+            }
+            for (TaskId taskId : standbyTaskMap.keySet()) {
+                localOffsetLimits.put(taskId, getStoreNameToOffsetMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
             }
         }
-        return -1L;
+
+        //TODO: Need to calculate lags from diff(offset limit - current offsets) and recreate map with storeNames as key
+        return localOffsetLags;
+    }
+
+    private Map<String, Long> getStoreNameToOffsetMap(final Set<String> stateStores, final int partition, final AbstractTask task) {
+        final Map<String, Long> storeNameToOffsetMap = new HashMap<>();
+        for (String storeName : stateStores) {
+            final TopicPartition topicPartition = new TopicPartition(streamsMetadataState.getChangelogTopicForStore(storeName), partition);
+            storeNameToOffsetMap.put(storeName, task.offsetLimit(topicPartition));
+        }
+        return storeNameToOffsetMap;
     }
 
     /**

@@ -99,6 +99,8 @@ public abstract class AbstractTask implements Task {
         return id;
     }
 
+    public abstract long offsetLimit(final TopicPartition partition);
+
     @Override
     public String applicationId() {
         return applicationId;

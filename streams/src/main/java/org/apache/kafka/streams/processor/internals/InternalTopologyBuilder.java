@@ -599,6 +599,10 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
+    public Map<String, String> getStoreToChangelogTopic() {
+        return storeToChangelogTopic;
+    }
+
     public void connectSourceStoreAndTopic(final String sourceStoreName,
                                             final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
