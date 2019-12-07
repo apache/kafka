@@ -403,7 +403,8 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(SyncGroupResult(Array.empty, Errors.REBALANCE_IN_PROGRESS))
 
           case CompletingRebalance =>
-            group.get(memberId).awaitingSyncCallback = responseCallback
+            val member = group.get(memberId)
+            member.awaitingSyncCallback = responseCallback
 
             // if this is the leader, then we can attempt to persist state and transition to stable
             if (group.isLeader(memberId)) {
@@ -421,7 +422,9 @@ class GroupCoordinator(val brokerId: Int,
                   if (group.is(CompletingRebalance) && generationId == group.generationId) {
                     if (error != Errors.NONE) {
                       resetAndPropagateAssignmentError(group, error)
-                      maybePrepareRebalance(group, s"error when storing group assignment during SyncGroup (member: $memberId)")
+                      maybePrepareRebalance(group,
+                        "error when storing group assignment during SyncGroup member {memberId: %s,clientId: %s,clientHost: %s}"
+                            .format(member.memberId, member.clientId, member.clientHost))
                     } else {
                       setAndPropagateAssignment(group, assignment)
                       group.transitionTo(Stable)
@@ -490,7 +493,8 @@ class GroupCoordinator(val brokerId: Int,
                     removeHeartbeatForLeavingMember(group, member)
                     info(s"Member[group.instance.id ${member.groupInstanceId}, member.id ${member.memberId}] " +
                       s"in group ${group.groupId} has left, removing it from the group")
-                    removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
+                    removeMemberAndUpdateGroup(group, member, "removing member {memberId: %s,clientId: %s,clientHost: %s} on LeaveGroup"
+                        .format(member.memberId, member.clientId, member.clientHost))
                     memberLeaveError(leavingMember, Errors.NONE)
                   }
                 }
@@ -961,7 +965,9 @@ class GroupCoordinator(val brokerId: Int,
       group.addStaticMember(groupInstanceId, memberId)
     else
       group.removePendingMember(memberId)
-    maybePrepareRebalance(group, s"Adding new member $memberId with group instanceid $groupInstanceId")
+    maybePrepareRebalance(group,
+      "Adding new member {memberId: %s,clientId: %s,clientHost: %s} with group instanceid %s"
+        .format(member.memberId, member.clientId, member.clientHost, groupInstanceId))
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
@@ -969,7 +975,9 @@ class GroupCoordinator(val brokerId: Int,
                                        protocols: List[(String, Array[Byte])],
                                        callback: JoinCallback): Unit = {
     group.updateMember(member, protocols, callback)
-    maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
+    maybePrepareRebalance(group,
+      "Updating metadata for member {memberId: %s,clientId: %s,clientHost: %s} with group instanceid %s"
+        .format(member.memberId, member.clientId, member.clientHost, member.groupInstanceId))
   }
 
   private def maybePrepareRebalance(group: GroupMetadata, reason: String): Unit = {
@@ -1141,7 +1149,9 @@ class GroupCoordinator(val brokerId: Int,
         val member = group.get(memberId)
         if (!member.shouldKeepAlive(heartbeatDeadline)) {
           info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
-          removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
+          removeMemberAndUpdateGroup(group, member,
+            "removing member {memberId: %s,clientId: %s,clientHost: %s} on heartbeat expiration"
+              .format(member.memberId, member.clientId, member.clientHost))
         }
       }
     }
