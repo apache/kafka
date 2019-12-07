@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -41,9 +42,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
-    AbstractStream<K, V> implements
-        TimeWindowedCogroupedKStream<K, V> {
+public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
+        implements TimeWindowedCogroupedKStream<K, V> {
 
     private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
     private final Windows<W> windows;
@@ -55,11 +55,10 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
                                      final Set<String> sourceNodes,
                                      final String name,
                                      final Serde<K> keySerde,
-                                     final Serde<V> valSerde,
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                      final StreamsGraphNode streamsGraphNode,
                                      final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, sourceNodes, streamsGraphNode, builder);
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;
         this.groupPatterns = groupPatterns;
@@ -99,12 +98,9 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
             initializer,
             NamedInternal.empty(),
             materialize(materializedInternal),
-            materializedInternal.keySerde()
-                    != null
-                    ? new FullTimeWindowedSerde<>(
-                    materializedInternal
-                            .keySerde(),
-                    windows.size()) : null,
+            materializedInternal.keySerde() != null ?
+                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
+                    : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             windows,
@@ -114,7 +110,8 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends
 
     @SuppressWarnings("deprecation")
     // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private StoreBuilder<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
+    private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
+            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             if (materialized.retention() != null) {

@@ -24,10 +24,12 @@ import static org.junit.Assert.assertNotNull;
 
 import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -38,10 +40,12 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -55,6 +59,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
     private final MockProcessorSupplier<Windowed<String>, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
     private static final String TOPIC2 = "topic2";
+    private static final String OUTPUT = "output";
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
 
@@ -78,187 +83,191 @@ public class TimeWindowedCogroupedKStreamImplTest {
         windowedCogroupedStream = cogroupedStream.windowedBy(TimeWindows.of(ofMillis(500L)));
     }
 
-    @Test
-    public void timeWindowTest() {
-        assertNotNull(windowedCogroupedStream);
-    }
-
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnAggregate() {
         windowedCogroupedStream.aggregate(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullMaterializedOnAggregate() {
+    public void shouldNotHaveNullMaterializedOnTwoOptionAggregate() {
         windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes, byte[]>>) null);
     }
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullNamedOnAggregate() {
+    public void shouldNotHaveNullNamedTwoOptionOnAggregate() {
         windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null);
     }
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullNamedAndMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, null);
+    public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate() {
+        windowedCogroupedStream.aggregate(null, Named.as("test") );
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullInitializerNamedAndMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, null, null);
+    public void shouldNotHaveNullInitializerTwoOptionMaterializedOnAggregate() {
+        windowedCogroupedStream.aggregate(null, Materialized.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullInitializerAndNamedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, null, Materialized.as("test"));
+    public void shouldNotHaveNullInitializerThreeOptionOnAggregate() {
+        windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullInitializerAndMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(null, NamedInternal.empty(), null);
+    public void shouldNotHaveNullMaterializedOnAggregate() {
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullNamedOnAggregate() {
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test"));
     }
 
     @Test
     public void timeWindowAggregateTest() {
-        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
-        customers.toStream().process(processorSupplier);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
+                .windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 1);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 2);
         }
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A", 2)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A", 1)));
+
     }
 
     @Test
     public void timeWindowAggregateTest2StreamsTest() {
 
-        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
-        customers.toStream().process(processorSupplier);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
-            testInputTopic.pipeInput("1", "B", 3);
-            testInputTopic.pipeInput("11", "B", 3);
-            testInputTopic.pipeInput("11", "B", 4);
-            testInputTopic.pipeInput("1", "B", 4);
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+            testInputTopic.pipeInput("k1", "B", 3);
+            testInputTopic.pipeInput("k2", "B", 3);
+            testInputTopic.pipeInput("k2", "B", 4);
+            testInputTopic.pipeInput("k1", "B", 4);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 1);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A+B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A+B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A+B+B", 4);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A+B+B", 4);
         }
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A+B+B", 4)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A+B+B", 4)));
+
     }
 
     @Test
     public void timeWindowMixAggregatorsTest() {
 
-        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
-        customers.toStream().process(processorSupplier);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
-            testInputTopic2.pipeInput("1", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 4);
-            testInputTopic2.pipeInput("1", "B", 4);
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+            testInputTopic2.pipeInput("k1", "B", 3);
+            testInputTopic2.pipeInput("k2", "B", 3);
+            testInputTopic2.pipeInput("k2", "B", 4);
+            testInputTopic2.pipeInput("k1", "B", 4);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 1);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A-B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A-B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A-B-B", 4);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A-B-B", 4);
         }
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A-B-B", 4)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A-B-B", 4)));
+
     }
 
     @Test
     public void timeWindowAggregateManyWindowsTest() {
 
-        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER).windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT);
-        customers.toStream().process(processorSupplier);
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
+                .windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 501L);
-            testInputTopic.pipeInput("1", "A", 501L);
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 501L);
+            testInputTopic.pipeInput("k1", "A", 501L);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 501);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 501);
         }
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A", 0)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A", 0)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(500, 1000))),
-            equalTo(ValueAndTimestamp.make("0+A", 501)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(500, 1000))),
-            equalTo(ValueAndTimestamp.make("0+A", 501)));
     }
 
 
     @Test
     public void timeWindowMixAggregatorsManyWindowsTest() {
 
-        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT);
-        customers.toStream().process(processorSupplier);
+        final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> testInputTopic2 = driver.createInputTopic(TOPIC2, new StringSerializer(), new StringSerializer());
-            testInputTopic.pipeInput("1", "A", 0);
-            testInputTopic.pipeInput("11", "A", 0);
-            testInputTopic.pipeInput("11", "A", 1);
-            testInputTopic.pipeInput("1", "A", 2);
-            testInputTopic2.pipeInput("1", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 3);
-            testInputTopic2.pipeInput("11", "B", 501);
-            testInputTopic2.pipeInput("1", "B", 501);
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 1);
+            testInputTopic.pipeInput("k1", "A", 2);
+            testInputTopic2.pipeInput("k1", "B", 3);
+            testInputTopic2.pipeInput("k2", "B", 3);
+            testInputTopic2.pipeInput("k2", "B", 501);
+            testInputTopic2.pipeInput("k1", "B", 501);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 1);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A-B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A-B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-B", 501);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-B", 501);
         }
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A-B", 3)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(0, 500))),
-            equalTo(ValueAndTimestamp.make("0+A+A-B", 3)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(500, 1000))),
-            equalTo(ValueAndTimestamp.make("0-B", 501)));
-        assertThat(
-            processorSupplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("11", new TimeWindow(500, 1000))),
-            equalTo(ValueAndTimestamp.make("0-B", 501)));
     }
 
+    private void assertOutputKeyValueTimestamp(final TestOutputTopic<Windowed<String>, String> outputTopic,
+                                               final String expectedKey,
+                                               final String expectedValue,
+                                               final long expectedTimestamp) {
+        TestRecord<Windowed<String>, String> realRecord = outputTopic.readRecord();
+        TestRecord<String, String> nonWindowedRecord = new TestRecord<>(realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
+        TestRecord<String, String> testRecord = new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp);
+        assertThat(nonWindowedRecord, equalTo(testRecord));
+    }
 }
