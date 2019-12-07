@@ -97,6 +97,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean transactionInFlight = false;
 
     private final String threadId;
+    private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
 
     public interface ProducerSupplier {
         Producer<byte[], byte[]> get();
@@ -245,6 +246,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         stateMgr.putOffsetLimits(committedOffsetsForChangelogs);
+        offsetLimits.putAll(committedOffsetsForChangelogs);
+    }
+
+    public long offsetLimit(final TopicPartition partition) {
+        final Long limit = offsetLimits.get(partition);
+        return limit != null ? limit : Long.MAX_VALUE;
     }
 
     private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {

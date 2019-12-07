@@ -55,6 +55,9 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.KeyQueryMetadata;
+import org.apache.kafka.streams.processor.internals.StandbyTask;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -1154,7 +1157,18 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Returns mapping from store name to another map of partition to offset lag info, for all stores local to this Streams instance. It includes both active and standby store partitions, with active partitions always reporting 0 lag.
      */
-    //public Map<String, Map<Integer, Long>> allLocalOffsetLags() {}
+    public Long storeLocalOffsetLag(final TaskId taskId, final TopicPartition topicPartition) {
+        for (int i = 0; i < this.threads.length; i++) {
+            final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
+            final Map<TaskId, StandbyTask> standyTaskMap = this.threads[i].standbyTasks();
+            if (streamTaskMap.containsKey(taskId)) {
+                return streamTaskMap.get(taskId).offsetLimit(topicPartition);
+            } else if (standyTaskMap.containsKey(taskId)) {
+                return standyTaskMap.get(taskId).offsetLimit(topicPartition);
+            }
+        }
+        return -1L;
+    }
 
     /**
      * Get a facade wrapping the local {@link StateStore} instances with the provided {@code storeName} if the Store's

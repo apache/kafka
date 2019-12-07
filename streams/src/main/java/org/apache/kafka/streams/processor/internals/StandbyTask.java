@@ -221,6 +221,11 @@ public class StandbyTask extends AbstractTask {
         return offsetLimits.get(partition);
     }
 
+    public long offsetLimit(final TopicPartition partition) {
+        final Long limit = offsetLimits.get(partition);
+        return limit != null ? limit : Long.MAX_VALUE;
+    }
+
     private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
         try {
             // those do not have a committed offset would default to 0

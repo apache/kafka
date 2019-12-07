@@ -55,6 +55,8 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         }
         final List<T> stores = new ArrayList<>();
         final Set<Task> tasks = new HashSet<>(streamThread.tasks().values());
+
+        //During rebalancing are standby tasks in running state?
         if (streamThread.standbyTasks() != null) {
             tasks.addAll(streamThread.standbyTasks().values());
         }

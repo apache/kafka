@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
@@ -372,6 +373,15 @@ public class StreamsMetadataState {
             } else if (standbyStateStoreNames.contains(storeName)
                     && !topicPartitions.isEmpty()) {
                 standbyHosts.add(streamsMetadata.hostInfo());
+            }
+        }
+
+        // would need these below changes to send TopicGroupId instead of partition in KeyQueryMetadata
+        int myTopicGroupId;
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+        for (Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
+                if (topicGroup.getValue().sourceTopics.contains(sourceTopicsInfo.sourceTopics)) {
+                    myTopicGroupId = topicGroup.getKey();
             }
         }
 
