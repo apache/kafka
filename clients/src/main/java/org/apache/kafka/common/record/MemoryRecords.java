@@ -173,7 +173,6 @@ public class MemoryRecords extends AbstractRecords {
             byte batchMagic = batch.magic();
             // we want to check if the delete horizon has been set or stayed the same
             boolean writeOriginalBatch = true;
-            boolean shouldSetDeleteHorizon = !batch.deleteHorizonSet() && batch.magic() >= RecordBatch.MAGIC_VALUE_V2;
             boolean containsTombstonesOrMarker = false;
             List<Record> retainedRecords = new ArrayList<>();
 
@@ -184,6 +183,12 @@ public class MemoryRecords extends AbstractRecords {
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
 
+            if (!containsTombstonesOrMarker && !batch.deleteHorizonSet()) {
+                batchRetention = filter.checkBatchRetention(batch, false);
+                if (batchRetention == BatchRetention.DELETE)
+                    continue;
+            }
+
             if (containsTombstonesOrMarker && !batch.deleteHorizonSet()) {
                 deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
             }
@@ -192,14 +197,14 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                if (writeOriginalBatch && (!shouldSetDeleteHorizon || !containsTombstonesOrMarker)) {
+                System.out.println("Delete horizon has been set to: " + deleteHorizonMs + ", and batch's is " + batch.deleteHorizonMs() + " where it contains tombstones: " + containsTombstonesOrMarker);
+                if (writeOriginalBatch && (deleteHorizonMs == RecordBatch.NO_TIMESTAMP || deleteHorizonMs == batch.deleteHorizonMs())) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    if (!containsTombstonesOrMarker)
-                        deleteHorizonMs = RecordBatch.NO_TIMESTAMP;
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                     MemoryRecords records = builder.build();
+                    System.out.println("Delete horizon ms is: " + records.firstBatch().deleteHorizonMs());
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                         log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
@@ -307,7 +312,7 @@ public class MemoryRecords extends AbstractRecords {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
                 originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
                 originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
-                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit());
+                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(), deleteHorizonMs);
 
         for (Record record : retainedRecords)
             builder.append(record);
@@ -369,6 +374,10 @@ public class MemoryRecords extends AbstractRecords {
          * check the records individually).
          */
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
+
+        protected BatchRetention checkBatchRetention(RecordBatch batch, boolean containsTombstonesOrMarker) {
+            return checkBatchRetention(batch);
+        }
 
         /**
          * Check whether a record should be retained in the log. Note that {@link #checkBatchRetention(RecordBatch)}
