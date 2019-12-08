@@ -34,6 +34,7 @@ public class InternalProcessorContextMock {
         private String applicationId;
         private TaskId taskId;
         private Serde<?> keySerde;
+        private Serde<?> valueSerde;
 
         private InternalProcessorContext mock;
 
@@ -43,15 +44,21 @@ public class InternalProcessorContextMock {
             applicationId = processorContext.applicationId();
             taskId = processorContext.taskId();
             keySerde = processorContext.keySerde();
+            valueSerde = processorContext.valueSerde();
         }
 
         public InternalProcessorContext build() {
             applicationId();
             taskId();
             keySerde();
+            valueSerde();
 
             EasyMock.replay(mock);
             return mock;
+        }
+
+        private void valueSerde() {
+            EasyMock.expect((Serde) mock.valueSerde()).andReturn(valueSerde);
         }
 
         private void keySerde() {

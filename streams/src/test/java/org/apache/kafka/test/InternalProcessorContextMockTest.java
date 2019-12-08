@@ -59,6 +59,16 @@ public class InternalProcessorContextMockTest {
         assertThat(keySerde, samePropertyValuesAs(processorContext.keySerde()));
     }
 
+    @Test
+    public void shouldReturnDefaultValueSerde() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+
+        final Serde<?> valueSerde = mock.valueSerde();
+
+        assertThat(valueSerde, samePropertyValuesAs(processorContext.valueSerde()));
+    }
+
     private static ProcessorContext createProcessorContext() {
         return new MockProcessorContext();
     }
