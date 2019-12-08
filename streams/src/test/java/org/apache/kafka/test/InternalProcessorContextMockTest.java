@@ -17,8 +17,11 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -27,10 +30,15 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
 import java.io.File;
+import java.time.Duration;
+import java.util.List;
 
+import static org.apache.kafka.streams.processor.MockProcessorContext.CapturedPunctuator;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.in;
 import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class InternalProcessorContextMockTest {
 
@@ -95,7 +103,7 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldRegisterStateStore() {
+    public void shouldRegisterAndReturnStore() {
         final InternalProcessorContext mock = defaultMock();
         final String storeName = "store_name";
         final StateStore stateStore = new MockKeyValueStore(storeName, false);
@@ -107,8 +115,43 @@ public class InternalProcessorContextMockTest {
         assertEquals(stateStore, store);
     }
 
+    @Test
+    public void shouldCapturePunctuatorOnSchedule() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+        final Duration interval = Duration.ofMillis(1);
+        final PunctuationType type = PunctuationType.WALL_CLOCK_TIME;
+        final Punctuator punctuator = timestamp -> { };
+
+        final int size = 2;
+        for ( int i = 0; i < size; i++) {
+            final Cancellable cancellable = mock.schedule(interval, type, punctuator);
+            assertNotNull(cancellable);
+        }
+
+        final List<CapturedPunctuator> punctuatorList = punctuatorList(processorContext);
+        assertEquals(size, punctuatorList.size());
+        capturedPunctuatorListElementsEqualToDurationTypeAndPunctuator(punctuatorList, interval, type, punctuator);
+    }
+
+    private static void capturedPunctuatorListElementsEqualToDurationTypeAndPunctuator(
+            final List<CapturedPunctuator> punctuatorList,
+            final Duration interval,
+            final PunctuationType type,
+            final Punctuator punctuator) {
+        for ( CapturedPunctuator capturedPunctuator : punctuatorList ) {
+            assertEquals(interval.toMillis(), capturedPunctuator.getIntervalMs());
+            assertEquals(type, capturedPunctuator.getType());
+            assertEquals(punctuator, capturedPunctuator.getPunctuator());
+        }
+    }
+
     private static ProcessorContext createProcessorContext() {
         return new MockProcessorContext();
+    }
+
+    private static List<CapturedPunctuator> punctuatorList(final ProcessorContext processorContext) {
+        return ((MockProcessorContext) processorContext).scheduledPunctuators();
     }
 
     private static InternalProcessorContext defaultMock() {

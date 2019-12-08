@@ -19,17 +19,25 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
-import org.easymock.EasyMock;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
 
 public class InternalProcessorContextMock {
 
@@ -40,6 +48,7 @@ public class InternalProcessorContextMock {
     public static class Builder {
 
         private InternalProcessorContext mock;
+        private ProcessorContext processorContext;
 
         private String applicationId;
         private TaskId taskId;
@@ -51,7 +60,9 @@ public class InternalProcessorContextMock {
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
 
         Builder(final ProcessorContext processorContext) {
-            mock = EasyMock.mock(InternalProcessorContext.class);
+            mock = mock(InternalProcessorContext.class);
+            this.processorContext = processorContext;
+
             stateStoreMap = new HashMap<>();
             stateRestoreCallbackMap = new HashMap<>();
 
@@ -72,53 +83,63 @@ public class InternalProcessorContextMock {
             metrics();
             register();
             getStateStore();
+            schedule();
 
-            EasyMock.replay(mock);
+            replay(mock);
             return mock;
+        }
+
+        private void schedule() {
+            final Capture<Duration> interval = Capture.newInstance();
+            final Capture<PunctuationType> type = Capture.newInstance();
+            final Capture<Punctuator> punctuator = Capture.newInstance();
+            expect(mock.schedule(capture(interval), capture(type), capture(punctuator)))
+                .andAnswer(() -> processorContext.schedule(interval.getValue(), type.getValue(), punctuator.getValue()))
+                .anyTimes();
         }
 
         private void getStateStore() {
             final Capture<String> stateStoreNameCapture = Capture.newInstance();
-            EasyMock.expect(mock.getStateStore(EasyMock.capture(stateStoreNameCapture)))
-                    .andAnswer(() -> stateStoreMap.get(stateStoreNameCapture.getValue()));
+            expect(mock.getStateStore(capture(stateStoreNameCapture)))
+                    .andAnswer(() -> stateStoreMap.get(stateStoreNameCapture.getValue())).anyTimes();
         }
 
         private void register() {
             final Capture<StateStore> storeCapture = Capture.newInstance();
             final Capture<StateRestoreCallback> restoreCallbackCapture = Capture.newInstance();
 
-            mock.register(EasyMock.capture(storeCapture), EasyMock.capture(restoreCallbackCapture));
+            mock.register(capture(storeCapture), capture(restoreCallbackCapture));
 
-            EasyMock.expectLastCall()
+            expectLastCall()
                     .andAnswer(() -> {
                         stateStoreMap.put(storeCapture.getValue().name(), storeCapture.getValue());
                         stateRestoreCallbackMap.put(storeCapture.getValue().name(), restoreCallbackCapture.getValue());
                         return null;
-                    });
+                    }).anyTimes();
         }
 
         private void metrics() {
-            EasyMock.expect(mock.metrics()).andReturn(metrics);
+            expect(mock.metrics()).andReturn(metrics).anyTimes();
         }
 
         private void stateDir() {
-            EasyMock.expect(mock.stateDir()).andReturn(stateDir);
+            expect(mock.stateDir()).andReturn(stateDir).anyTimes();
         }
 
         private void valueSerde() {
-            EasyMock.expect((Serde) mock.valueSerde()).andReturn(valueSerde);
+            expect((Serde) mock.valueSerde()).andReturn(valueSerde).anyTimes();
         }
 
         private void keySerde() {
-            EasyMock.expect((Serde) mock.keySerde()).andReturn(keySerde);
+            expect((Serde) mock.keySerde()).andReturn(keySerde).anyTimes();
         }
 
         private void taskId() {
-            EasyMock.expect(mock.taskId()).andReturn(taskId);
+            expect(mock.taskId()).andReturn(taskId).anyTimes();
         }
 
         private void applicationId() {
-            EasyMock.expect(mock.applicationId()).andReturn(applicationId);
+            expect(mock.applicationId()).andReturn(applicationId).anyTimes();
         }
     }
 
