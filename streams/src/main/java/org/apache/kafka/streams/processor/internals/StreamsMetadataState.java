@@ -421,7 +421,7 @@ public class StreamsMetadataState {
     }
 
     public String getChangelogTopicForStore(final String storeName) {
-      return builder.getStoreToChangelogTopic().get(storeName);
+        return builder.getStoreToChangelogTopic().get(storeName);
     }
 
     private boolean isInitialized() {

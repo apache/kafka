@@ -1158,25 +1158,34 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Returns mapping from partition to another map of store name to offset lag info, for all {partitions, stores} local to this Streams instance. It includes both active and standby store partitions.
      */
-    public Map<Integer, Map<String, Long>> allLocalOffsetLags() {
-        final Map<Integer, Map<String, Long>> localOffsetLags = new HashMap<>();
+    public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
+        final Map<TaskId, Map<String, Long>> localOffsetLags = new HashMap<>();
+        final Map<String, Map<Integer, Long>> finalLocalOffsetLags = new HashMap<>();
         for (int i = 0; i < this.threads.length; i++) {
             final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
             final Map<TaskId, StandbyTask> standbyTaskMap = this.threads[i].standbyTasks();
             final Set<String> activeStateStores = streamsMetadataState.getMyMetadata().stateStoreNames();
             final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().getStandbyStateStoreNames();
             for (final TaskId taskId : streamTaskMap.keySet()) {
-                localOffsetLags.put(taskId.partition, getStoreNameToLagMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
+                localOffsetLags.put(taskId, getStoreNameToLagMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
             }
             for (final TaskId taskId : standbyTaskMap.keySet()) {
-                localOffsetLags.put(taskId.partition, getStoreNameToLagMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
+                localOffsetLags.put(taskId, getStoreNameToLagMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
             }
         }
 
-        // I feel returning Map<Integer, Map<String, Long>> vs Map<String, Map<Integer, Long>> are almost equivalent in this case and recreating
-        // Map<String, Map<Integer, Long>> is more cumbersome, let me know if this makes sense. Also, even in folder structures, stores are
-        // present inside tasks and not vice verse.
-        return localOffsetLags;
+        // Converting the Map<TaskId, Map<String, Long>> to Map<String, Map<Integer, Long>>
+        for (final Map.Entry<TaskId, Map<String, Long>> entry : localOffsetLags.entrySet()) {
+            for (final Map.Entry<String, Long> storeToLagMap : entry.getValue().entrySet()) {
+                Map<Integer, Long> partitionToLagMap = finalLocalOffsetLags.get(storeToLagMap.getKey());
+                if (partitionToLagMap == null) {
+                    partitionToLagMap = new HashMap<>();
+                }
+                partitionToLagMap.put(entry.getKey().partition, storeToLagMap.getValue());
+                finalLocalOffsetLags.put(storeToLagMap.getKey(), partitionToLagMap);
+            }
+        }
+        return finalLocalOffsetLags;
     }
 
     private Map<String, Long> getStoreNameToLagMap(final Set<String> stateStores, final int partition, final AbstractTask task) {

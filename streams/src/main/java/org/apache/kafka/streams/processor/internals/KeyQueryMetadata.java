@@ -70,7 +70,7 @@ public class KeyQueryMetadata {
         if (!(obj instanceof KeyQueryMetadata)) {
             return false;
         }
-        KeyQueryMetadata keyQueryMetadata = (KeyQueryMetadata) obj;
+        final KeyQueryMetadata keyQueryMetadata = (KeyQueryMetadata) obj;
         return Objects.equals(keyQueryMetadata.activeHost, activeHost) && Objects.equals(keyQueryMetadata.standbyHosts, standbyHosts) && Objects.equals(keyQueryMetadata.partition, partition);
     }
 
@@ -85,6 +85,6 @@ public class KeyQueryMetadata {
 
     @Override
     public int hashCode() {
-      return Objects.hash(activeHost, standbyHosts, partition);
+        return Objects.hash(activeHost, standbyHosts, partition);
     }
 }

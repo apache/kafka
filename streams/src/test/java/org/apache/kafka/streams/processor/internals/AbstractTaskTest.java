@@ -219,7 +219,7 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
-            public long offsetLimit(TopicPartition partition) {
+            public long offsetLimit(final TopicPartition partition) {
                 return 0;
             }
 
