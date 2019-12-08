@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -32,6 +33,7 @@ public class InternalProcessorContextMock {
 
         private String applicationId;
         private TaskId taskId;
+        private Serde<?> keySerde;
 
         private InternalProcessorContext mock;
 
@@ -40,14 +42,20 @@ public class InternalProcessorContextMock {
 
             applicationId = processorContext.applicationId();
             taskId = processorContext.taskId();
+            keySerde = processorContext.keySerde();
         }
 
         public InternalProcessorContext build() {
             applicationId();
             taskId();
+            keySerde();
 
             EasyMock.replay(mock);
             return mock;
+        }
+
+        private void keySerde() {
+            EasyMock.expect((Serde) mock.keySerde()).andReturn(keySerde);
         }
 
         private void taskId() {

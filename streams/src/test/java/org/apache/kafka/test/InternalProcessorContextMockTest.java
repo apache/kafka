@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.Test;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
 
 public class InternalProcessorContextMockTest {
@@ -46,6 +49,15 @@ public class InternalProcessorContextMockTest {
         assertEquals(processorContext.taskId(), taskId);
     }
 
+    @Test
+    public void shouldReturnDefaultKeySerde() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+
+        final Serde<?> keySerde = mock.keySerde();
+
+        assertThat(keySerde, samePropertyValuesAs(processorContext.keySerde()));
+    }
 
     private static ProcessorContext createProcessorContext() {
         return new MockProcessorContext();
