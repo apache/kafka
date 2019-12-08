@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.easymock.EasyMock;
 
@@ -30,6 +31,7 @@ public class InternalProcessorContextMock {
     public static class Builder {
 
         private String applicationId;
+        private TaskId taskId;
 
         private InternalProcessorContext mock;
 
@@ -37,12 +39,19 @@ public class InternalProcessorContextMock {
             mock = EasyMock.mock(InternalProcessorContext.class);
 
             applicationId = processorContext.applicationId();
+            taskId = processorContext.taskId();
         }
 
         public InternalProcessorContext build() {
             applicationId();
+            taskId();
+
             EasyMock.replay(mock);
             return mock;
+        }
+
+        private void taskId() {
+            EasyMock.expect(mock.taskId()).andReturn(taskId);
         }
 
         private void applicationId() {

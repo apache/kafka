@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.Test;
 
@@ -34,6 +35,17 @@ public class InternalProcessorContextMockTest {
 
         assertEquals(processorContext.applicationId(), applicationId);
     }
+
+    @Test
+    public void shouldReturnDefaultTaskId() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+
+        final TaskId taskId = mock.taskId();
+
+        assertEquals(processorContext.taskId(), taskId);
+    }
+
 
     private static ProcessorContext createProcessorContext() {
         return new MockProcessorContext();
