@@ -19,6 +19,8 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -92,8 +94,25 @@ public class InternalProcessorContextMockTest {
         assertEquals(processorContext.metrics(), metrics);
     }
 
+    @Test
+    public void shouldRegisterStateStore() {
+        final InternalProcessorContext mock = defaultMock();
+        final String storeName = "store_name";
+        final StateStore stateStore = new MockKeyValueStore(storeName, false);
+        final StateRestoreCallback stateRestoreCallback = new MockRestoreCallback();
+
+        mock.register(stateStore, stateRestoreCallback);
+        final StateStore store = mock.getStateStore(storeName);
+
+        assertEquals(stateStore, store);
+    }
+
     private static ProcessorContext createProcessorContext() {
         return new MockProcessorContext();
+    }
+
+    private static InternalProcessorContext defaultMock() {
+        return defaultMock(createProcessorContext());
     }
 
     private static InternalProcessorContext defaultMock(final ProcessorContext processorContext) {
