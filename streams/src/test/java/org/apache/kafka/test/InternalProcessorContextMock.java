@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.EasyMock;
 
 import java.io.File;
@@ -33,13 +34,14 @@ public class InternalProcessorContextMock {
 
     public static class Builder {
 
+        private InternalProcessorContext mock;
+
         private String applicationId;
         private TaskId taskId;
         private Serde<?> keySerde;
         private Serde<?> valueSerde;
         private File stateDir;
-
-        private InternalProcessorContext mock;
+        private StreamsMetricsImpl metrics;
 
         Builder(final ProcessorContext processorContext) {
             mock = EasyMock.mock(InternalProcessorContext.class);
@@ -49,6 +51,7 @@ public class InternalProcessorContextMock {
             keySerde = processorContext.keySerde();
             valueSerde = processorContext.valueSerde();
             stateDir = processorContext.stateDir();
+            metrics = (StreamsMetricsImpl) processorContext.metrics();
         }
 
         public InternalProcessorContext build() {
@@ -57,9 +60,14 @@ public class InternalProcessorContextMock {
             keySerde();
             valueSerde();
             stateDir();
+            metrics();
 
             EasyMock.replay(mock);
             return mock;
+        }
+
+        private void metrics() {
+            EasyMock.expect(mock.metrics()).andReturn(metrics);
         }
 
         private void stateDir() {

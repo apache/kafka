@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
 import java.io.File;
@@ -79,6 +80,16 @@ public class InternalProcessorContextMockTest {
         final File stateDir = mock.stateDir();
 
         assertEquals(processorContext.stateDir(), stateDir);
+    }
+
+    @Test
+    public void shouldReturnDefaultMetrics() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+
+        final StreamsMetricsImpl metrics =  mock.metrics();
+
+        assertEquals(processorContext.metrics(), metrics);
     }
 
     private static ProcessorContext createProcessorContext() {
