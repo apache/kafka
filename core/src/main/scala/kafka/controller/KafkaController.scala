@@ -947,7 +947,9 @@ class KafkaController(val config: KafkaConfig,
             zkClient.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch, controllerContext.epochZkVersion)
           if (successfulUpdates.contains(partition)) {
             val finalLeaderAndIsr = successfulUpdates(partition)
-            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(finalLeaderAndIsr, epoch))
+            val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(finalLeaderAndIsr, epoch)
+            controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+            finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
             info(s"Updated leader epoch for partition $partition to ${finalLeaderAndIsr.leaderEpoch}")
             true
           } else if (failedUpdates.contains(partition)) {
