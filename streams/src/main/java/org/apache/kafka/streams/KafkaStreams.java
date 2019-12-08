@@ -1156,35 +1156,39 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Returns mapping from store name to another map of partition to offset lag info, for all stores local to this Streams instance. It includes both active and standby store partitions.
+     * Returns mapping from partition to another map of store name to offset lag info, for all {partitions, stores} local to this Streams instance. It includes both active and standby store partitions.
      */
-    public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
-        final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
-        final Map<TaskId, Map<String, Long>> localOffsetLimits = new HashMap<>();
+    public Map<Integer, Map<String, Long>> allLocalOffsetLags() {
+        final Map<Integer, Map<String, Long>> localOffsetLags = new HashMap<>();
         for (int i = 0; i < this.threads.length; i++) {
             final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
             final Map<TaskId, StandbyTask> standbyTaskMap = this.threads[i].standbyTasks();
             final Set<String> activeStateStores = streamsMetadataState.getMyMetadata().stateStoreNames();
             final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().getStandbyStateStoreNames();
-            for (TaskId taskId : streamTaskMap.keySet()) {
-                localOffsetLimits.put(taskId, getStoreNameToOffsetMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
+            for (final TaskId taskId : streamTaskMap.keySet()) {
+                localOffsetLags.put(taskId.partition, getStoreNameToLagMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
             }
-            for (TaskId taskId : standbyTaskMap.keySet()) {
-                localOffsetLimits.put(taskId, getStoreNameToOffsetMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
+            for (final TaskId taskId : standbyTaskMap.keySet()) {
+                localOffsetLags.put(taskId.partition, getStoreNameToLagMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
             }
         }
 
-        //TODO: Need to calculate lags from diff(offset limit - current offsets) and recreate map with storeNames as key
+        // I feel returning Map<Integer, Map<String, Long>> vs Map<String, Map<Integer, Long>> are almost equivalent in this case and recreating
+        // Map<String, Map<Integer, Long>> is more cumbersome, let me know if this makes sense. Also, even in folder structures, stores are
+        // present inside tasks and not vice verse.
         return localOffsetLags;
     }
 
-    private Map<String, Long> getStoreNameToOffsetMap(final Set<String> stateStores, final int partition, final AbstractTask task) {
-        final Map<String, Long> storeNameToOffsetMap = new HashMap<>();
-        for (String storeName : stateStores) {
+    private Map<String, Long> getStoreNameToLagMap(final Set<String> stateStores, final int partition, final AbstractTask task) {
+        final Map<String, Long> storeNameToLagMap = new HashMap<>();
+        for (final String storeName : stateStores) {
             final TopicPartition topicPartition = new TopicPartition(streamsMetadataState.getChangelogTopicForStore(storeName), partition);
-            storeNameToOffsetMap.put(storeName, task.offsetLimit(topicPartition));
+            final long offsetLimit = task.offsetLimit(topicPartition);
+            final long checkpointedOffset = task.checkpointedOffsets().get(topicPartition);
+            final long offsetLag = offsetLimit - checkpointedOffset;
+            storeNameToLagMap.put(storeName, offsetLag);
         }
-        return storeNameToOffsetMap;
+        return storeNameToLagMap;
     }
 
     /**

@@ -224,6 +224,11 @@ public class AbstractTaskTest {
             }
 
             @Override
+            public Map<TopicPartition, Long> checkpointedOffsets() {
+                return null;
+            }
+
+            @Override
             public void initializeMetadata() {}
 
             @Override

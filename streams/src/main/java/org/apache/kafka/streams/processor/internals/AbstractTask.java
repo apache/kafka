@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -100,6 +101,8 @@ public abstract class AbstractTask implements Task {
     }
 
     public abstract long offsetLimit(final TopicPartition partition);
+
+    public abstract Map<TopicPartition, Long> checkpointedOffsets();
 
     @Override
     public String applicationId() {
