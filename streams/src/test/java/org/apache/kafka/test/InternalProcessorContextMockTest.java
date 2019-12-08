@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.Test;
 
+import java.io.File;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
@@ -67,6 +69,16 @@ public class InternalProcessorContextMockTest {
         final Serde<?> valueSerde = mock.valueSerde();
 
         assertThat(valueSerde, samePropertyValuesAs(processorContext.valueSerde()));
+    }
+
+    @Test
+    public void shouldReturnDefaultStateDir() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = defaultMock(processorContext);
+
+        final File stateDir = mock.stateDir();
+
+        assertEquals(processorContext.stateDir(), stateDir);
     }
 
     private static ProcessorContext createProcessorContext() {
