@@ -770,8 +770,10 @@ public final class RecordAccumulator {
 
     /**
      * Abort any batches which have not been drained
+     * @return if one or more batches were aborted
      */
-    void abortUndrainedBatches(RuntimeException reason) {
+    boolean abortUndrainedBatches(RuntimeException reason) {
+        boolean abortedSomeBatches = false;
         for (ProducerBatch batch : incomplete.copyAll()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             boolean aborted = false;
@@ -785,8 +787,10 @@ public final class RecordAccumulator {
             if (aborted) {
                 batch.abort(reason);
                 deallocate(batch);
+                abortedSomeBatches = true;
             }
         }
+        return abortedSomeBatches;
     }
 
     public void mutePartition(TopicPartition tp) {

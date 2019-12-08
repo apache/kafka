@@ -322,7 +322,9 @@ public class Sender implements Runnable {
                     client.poll(retryBackoffMs, time.milliseconds());
                     return;
                 } else if (transactionManager.hasAbortableError()) {
-                    accumulator.abortUndrainedBatches(transactionManager.lastError());
+                    if (accumulator.abortUndrainedBatches(transactionManager.lastError())) {
+                        return;
+                    }
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
