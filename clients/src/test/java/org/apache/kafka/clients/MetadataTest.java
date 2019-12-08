@@ -158,6 +158,11 @@ public class MetadataTest {
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
     }
 
+    /**
+     * Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker does not propagate leader epoch
+     * information accurately while a reassignment is in progress, so we cannot rely on it. This is explained in more
+     * detail in MetadataResponse's constructor.
+     */
     @Test
     public void testIgnoreLeaderEpochInOlderMetadataResponse() {
         TopicPartition tp = new TopicPartition("topic", 0);
@@ -196,7 +201,7 @@ public class MetadataTest {
             assertEquals(-1, info.epoch());
         }
 
-        for (short version = 9; version <= ApiKeys.METADATA.oldestVersion(); version++) {
+        for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
             Struct struct = data.toStruct(version);
             MetadataResponse response = new MetadataResponse(struct, version);
             assertTrue(response.hasReliableLeaderEpochs());
