@@ -74,6 +74,7 @@ import javax.security.auth.kerberos.KerberosPrincipal;
 
 public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
+    static final String GSS_NATIVE_PROP = "sun.security.jgss.native";
 
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
@@ -340,8 +341,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     // or Subject.doAsPrivileged(...), the to-be-used GSSCredential should be added to Subject's
     // private credential set. Otherwise, the GSS operations will fail since no credential is found."
     private void maybeAddNativeGssapiCredentials(Subject subject) {
-        boolean usingNativeJgss = Boolean.getBoolean("sun.security.jgss.native");
-        if (usingNativeJgss) {
+        boolean usingNativeJgss = Boolean.getBoolean(GSS_NATIVE_PROP);
+        if (usingNativeJgss && subject.getPrivateCredentials(GSSCredential.class).isEmpty()) {
 
             final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
             KerberosName kerberosName;
@@ -354,7 +355,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             final String serviceHostname = kerberosName.hostName();
 
             try {
-                GSSManager manager = GSSManager.getInstance();
+                GSSManager manager = gssManager();
                 // This Oid is used to represent the Kerberos version 5 GSS-API mechanism. It is defined in
                 // RFC 1964.
                 Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
@@ -362,9 +363,20 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 GSSCredential cred = manager.createCredential(gssName,
                         GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
                 subject.getPrivateCredentials().add(cred);
+                log.info("Configured native GSSAPI private credentials for {}@{}", serviceHostname, serviceHostname);
             } catch (GSSException ex) {
                 log.warn("Cannot add private credential to subject; clients authentication may fail", ex);
             }
         }
+    }
+
+    // Visibility to override for testing
+    protected GSSManager gssManager() {
+        return GSSManager.getInstance();
+    }
+
+    // Visibility for testing
+    protected Subject subject(String saslMechanism) {
+        return subjects.get(saslMechanism);
     }
 }
