@@ -215,6 +215,30 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
+   * Add partitions to existing topic with optional replica assignment and no constraints on whether brokers can be
+   * assigned new replicas.
+   *
+   * This method ensures that the API consistency is maintained with the upstream Kafka -- i.e. Originally this API
+   * exists in Apache Kafka 2.3, but has been removed from LinkedIn Kafka 2.3.
+   *
+   * @param topic Topic for adding partitions to
+   * @param existingAssignment A map from partition id to its assigned replicas
+   * @param allBrokers All brokers in the cluster
+   * @param numPartitions Number of partitions to be set
+   * @param replicaAssignment Manual replica assignment, or none
+   * @param validateOnly If true, validate the parameters without actually adding the partitions
+   * @return the updated replica assignment
+   */
+  def addPartitions(topic: String,
+                    existingAssignment: Map[Int, ReplicaAssignment],
+                    allBrokers: Seq[BrokerMetadata],
+                    numPartitions: Int = 1,
+                    replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
+                    validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
+    addPartitions(topic, existingAssignment, allBrokers, numPartitions, replicaAssignment, validateOnly, Set.empty[Int])
+  }
+
+  /**
   * Add partitions to existing topic with optional replica assignment
   *
   * @param topic Topic for adding partitions to
@@ -229,10 +253,10 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   def addPartitions(topic: String,
                     existingAssignment: Map[Int, ReplicaAssignment],
                     allBrokers: Seq[BrokerMetadata],
-                    numPartitions: Int = 1,
-                    replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
-                    validateOnly: Boolean = false,
-                    noNewPartitionBrokerIds: Set[Int] = Set.empty[Int]): Map[Int, Seq[Int]] = {
+                    numPartitions: Int,
+                    replicaAssignment: Option[Map[Int, Seq[Int]]],
+                    validateOnly: Boolean,
+                    noNewPartitionBrokerIds: Set[Int]): Map[Int, Seq[Int]] = {
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
         s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
