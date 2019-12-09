@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -46,11 +45,6 @@ public class DeleteAclsRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public Builder(List<AclBindingFilter> filters) {
-            this(new DeleteAclsRequestData().setFilters(filters.stream()
-                    .map(DeleteAclsRequest::deleteAclsFilter).collect(Collectors.toList())));
-        }
-
         @Override
         public DeleteAclsRequest build(short version) {
             validate(version);
@@ -59,7 +53,7 @@ public class DeleteAclsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return "(type=DeleteAclsRequest, filters=" + Utils.join(data.filters(), ", ") + ")";
+            return data.toString();
         }
 
         private void validate(short version) {
