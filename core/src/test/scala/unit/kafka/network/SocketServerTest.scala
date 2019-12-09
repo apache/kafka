@@ -759,15 +759,17 @@ class SocketServerTest {
       sendApiRequest(socket, saslHandshakeRequest, saslHandshakeHeader)
       receiveResponse(socket)
 
-      // now send credentials within a SaslAuthenticateRequest
+      // now send credentials
       val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
       if (leverageKip152SaslAuthenticateRequest) {
+        // send credentials within a SaslAuthenticateRequest
         val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
           .setAuthBytes(authBytes)).build()
         val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
           clientId, correlationId)
         sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
       } else {
+        // send credentials directly, without a SaslAuthenticateRequest
         sendRequest(socket, authBytes)
       }
       receiveResponse(socket)
