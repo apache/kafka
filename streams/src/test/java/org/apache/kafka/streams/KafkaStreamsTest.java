@@ -305,6 +305,8 @@ public class KafkaStreamsTest {
             return null;
         }).anyTimes();
         EasyMock.expect(thread.isRunning()).andReturn(state.get() == StreamThread.State.RUNNING).anyTimes();
+        thread.interrupt();
+        EasyMock.expectLastCall().anyTimes();
         thread.join();
         if (terminable)
             EasyMock.expectLastCall().anyTimes();

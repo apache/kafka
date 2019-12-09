@@ -87,7 +87,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close(Duration.ofSeconds(5));
+        streams.close(Duration.ofSeconds(60));
         // do not remove these printouts since they are needed for health scripts
         if (!uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");

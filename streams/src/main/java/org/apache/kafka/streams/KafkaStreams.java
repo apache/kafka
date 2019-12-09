@@ -869,6 +869,9 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
+     *
+     * Calling this version of close is the equivalent of calling {@code close(Long.MAX_VALUE)} essentially
+     * in infinite timeout for closing.
      */
     public void close() {
         close(Long.MAX_VALUE);
@@ -962,6 +965,7 @@ public class KafkaStreams implements AutoCloseable {
             return true;
         } else {
             log.info("Streams client cannot stop completely within the timeout");
+            Arrays.stream(threads).forEach(StreamThread::interrupt);
             return false;
         }
     }
@@ -971,6 +975,10 @@ public class KafkaStreams implements AutoCloseable {
      * threads to join.
      * A {@code timeout} of Duration.ZERO (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
+     *
+     * Note that if the {@code timeout} is reached and all threads have not stopped, {@code Thread.interrupt()} is called
+     * on each {@code StreamThread} that is still alive.  Threads that don't respond to interrupts will continue
+     * to run so this cancellation is done on a best effort basis.
      *
      * @param timeout  how long to wait for the threads to shutdown
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
