@@ -63,7 +63,7 @@ public class SslTransportLayer implements TransportLayer {
         HANDSHAKE,
         // SSL handshake failed, connection will be terminated
         HANDSHAKE_FAILED,
-        // SSLEngine has completed handshake, post-handshake messages may be pending for TLSv.3
+        // SSLEngine has completed handshake, post-handshake messages may be pending for TLSv1.3
         POST_HANDSHAKE,
         // SSLEngine has completed handshake, any post-handshake messages have been processed for TLSv1.3
         // For TLSv1.3, we move the channel to READY state when incoming data is processed after handshake
