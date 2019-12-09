@@ -85,7 +85,7 @@ public class HeaderToTest {
     }
 
     @Test
-    public void insertHeaderAsField() {
+    public void insertHeaderAsFieldWithCopy() {
         final Map<String, Object> props = new HashMap<>();
         props.put("headers", "header");
         props.put("fields", "field");
@@ -107,5 +107,35 @@ public class HeaderToTest {
 
         assertEquals(1, actualValue.size());
         assertEquals(expectedValue, actualValue);
+        assertEquals(headers, transformedRecord.headers());
+    }
+
+    @Test
+    public void insertHeaderAsFieldWithMove() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("headers", "header");
+        props.put("fields", "field");
+        props.put("operation", "move");
+
+        xform.configure(props);
+
+        final Headers headers = new ConnectHeaders().add("header", "value", null);
+
+        final SourceRecord record = new SourceRecord(null, null, "test",
+            0, null, null, null, null, null, headers);
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertNotNull(transformedRecord.value());
+
+        final Map<String, Object> expectedValue = new HashMap<>();
+        expectedValue.put("field", "value");
+
+        final Map<String, Object> actualValue = requireMap(transformedRecord.value(), "");
+
+        final Headers expectedHeaders = new ConnectHeaders();
+
+        assertEquals(1, actualValue.size());
+        assertEquals(expectedValue, actualValue);
+        assertEquals(expectedHeaders, transformedRecord.headers());
     }
 }
