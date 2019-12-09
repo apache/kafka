@@ -24,29 +24,29 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("deprecation")
-public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTest {
+public class UsePartitionTimeOnInvalidTimestampTest extends TimestampExtractorTest {
+
     @Test
     public void extractMetadataTimestamp() {
-        testExtractMetadataTimestamp(new UsePreviousTimeOnInvalidTimestamp());
+        testExtractMetadataTimestamp(new UsePartitionTimeOnInvalidTimestamp());
     }
 
     @Test
-    public void usePreviousTimeOnInvalidTimestamp() {
-        final long previousTime = 42;
+    public void usePartitionTimeOnInvalidTimestamp() {
+        final long partitionTime = 42;
 
-        final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
+        final TimestampExtractor extractor = new UsePartitionTimeOnInvalidTimestamp();
         final long timestamp = extractor.extract(
             new ConsumerRecord<>("anyTopic", 0, 0, null, null),
-            previousTime
+                partitionTime
         );
 
-        assertThat(timestamp, is(previousTime));
+        assertThat(timestamp, is(partitionTime));
     }
 
     @Test
     public void shouldThrowStreamsException() {
-        final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
+        final TimestampExtractor extractor = new UsePartitionTimeOnInvalidTimestamp();
         final ConsumerRecord<Object, Object> record = new ConsumerRecord<>("anyTopic", 0, 0, null, null);
         try {
             extractor.extract(record, -1);
