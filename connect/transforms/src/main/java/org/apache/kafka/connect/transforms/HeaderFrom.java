@@ -135,7 +135,9 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         final Struct updatedValue = new Struct(updatedSchema);
 
         for (Field field : value.schema().fields()) {
-            updatedValue.put(field.name(), value.get(field));
+            if (operationConfig == OPERATION_COPY || !fieldsConfig.contains(field.name())) {
+                updatedValue.put(field.name(), value.get(field));
+            }
         }
 
         Headers updatedHeaders = new ConnectHeaders(record.headers());
