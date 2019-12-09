@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -222,5 +223,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde());
+    }
+
+    @Override
+    public <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator) {
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        return new CogroupedKStreamImpl<K, Vout>(name, sourceNodes, streamsGraphNode, builder)
+            .cogroup(this, aggregator);
     }
 }

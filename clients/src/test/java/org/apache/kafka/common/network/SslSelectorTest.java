@@ -126,8 +126,15 @@ public class SslSelectorTest extends SelectorTest {
 
         waitForBytesBuffered(selector, node);
 
+        TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            "Waiting for cipher metrics to be created.");
+        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
+
         selector.close(node);
         super.verifySelectorEmpty(selector);
+
+        assertEquals(1, cipherMetrics(metrics).size());
+        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
@@ -401,5 +408,4 @@ public class SslSelectorTest extends SelectorTest {
             }
         }
     }
-
 }

@@ -530,12 +530,13 @@ public class KafkaProducerTest {
         @SuppressWarnings("unchecked")
         Serializer<String> valueSerializer = mock(serializerClassToMock);
 
+        long nowMs = Time.SYSTEM.milliseconds();
         String topic = "topic";
         ProducerMetadata metadata = newMetadata(0, 90000);
-        metadata.add(topic);
+        metadata.add(topic, nowMs);
 
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
-        metadata.update(initialUpdateResponse, Time.SYSTEM.milliseconds());
+        metadata.update(initialUpdateResponse, nowMs);
 
         KafkaProducer<String, String> producer = new KafkaProducer<>(configs, keySerializer, valueSerializer, metadata,
                 null, null, Time.SYSTEM);
@@ -596,10 +597,11 @@ public class KafkaProducerTest {
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
 
+        long nowMs = Time.SYSTEM.milliseconds();
         ProducerMetadata metadata = newMetadata(0, 90000);
-        metadata.add(topic);
+        metadata.add(topic, nowMs);
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
-        metadata.update(initialUpdateResponse, Time.SYSTEM.milliseconds());
+        metadata.update(initialUpdateResponse, nowMs);
 
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
                 ProducerInterceptors<String, String> interceptors = mock(ProducerInterceptors.class);

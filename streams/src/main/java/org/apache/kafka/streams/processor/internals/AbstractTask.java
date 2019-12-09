@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -172,7 +173,13 @@ public abstract class AbstractTask implements Task {
      * Flush all state stores owned by this task
      */
     void flushState() {
-        stateMgr.flush();
+        try {
+            stateMgr.flush();
+        } catch (final ProcessorStateException e) {
+            if (e.getCause() instanceof RecoverableClientException) {
+                throw new TaskMigratedException(this, e);
+            }
+        }
     }
 
     /**

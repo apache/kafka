@@ -31,7 +31,9 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -52,6 +54,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -72,6 +75,9 @@ import static org.mockito.Mockito.when;
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
 public class SelectorTest {
+    @Rule
+    final public Timeout globalTimeout = Timeout.millis(240000);
+
     protected static final int BUFFER_SIZE = 4 * 1024;
     private static final String METRIC_GROUP = "MetricGroup";
 
@@ -250,6 +256,21 @@ public class SelectorTest {
                     selector.send(createSend(dest, dest + "-" + requests.get(dest)));
             }
         }
+        if (channelBuilder instanceof PlaintextChannelBuilder) {
+            assertEquals(0, cipherMetrics(metrics).size());
+        } else {
+            TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+                "Waiting for cipher metrics to be created.");
+            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+        }
+    }
+
+    static List<KafkaMetric> cipherMetrics(Metrics metrics) {
+        return metrics.metrics().entrySet().stream().
+            filter(e -> e.getKey().description().
+                contains("The number of connections with this SSL cipher and protocol.")).
+            map(e -> e.getValue()).
+            collect(Collectors.toList());
     }
 
     /**
@@ -830,7 +851,6 @@ public class SelectorTest {
             // do the i/o
             selector.poll(0L);
             assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
-
             // handle requests and responses of the fast node
             for (NetworkReceive receive : selector.completedReceives()) {
                 assertEquals(requestPrefix + "-" + responses, asString(receive));
@@ -900,5 +920,4 @@ public class SelectorTest {
         assertNotNull(metric);
         return metric;
     }
-
 }

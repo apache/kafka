@@ -108,6 +108,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   def testArgumentParse(entityType: String, zkConfig: Boolean=true): Unit = {
+    val shortFlag: String = s"--${entityType.dropRight(1)}"
+
     val connectOpts = if (zkConfig)
       ("--zookeeper", zkConnect)
     else
@@ -120,10 +122,21 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--describe"))
     createOpts.checkArgs()
 
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--describe"))
+    createOpts.checkArgs()
+
     // For --alter and added config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       "--entity-name", "1",
       "--entity-type", entityType,
+      "--alter",
+      "--add-config", "a=b,c=d"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
       "--alter",
       "--add-config", "a=b,c=d"))
     createOpts.checkArgs()
@@ -136,10 +149,23 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--delete-config", "a,b,c"))
     createOpts.checkArgs()
 
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--delete-config", "a,b,c"))
+    createOpts.checkArgs()
+
     // For alter and both added, deleted config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       "--entity-name", "1",
       "--entity-type", entityType,
+      "--alter",
+      "--add-config", "a=b,c=d",
+      "--delete-config", "a"))
+    createOpts.checkArgs()
+
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
       "--alter",
       "--add-config", "a=b,c=d",
       "--delete-config", "a"))
@@ -161,12 +187,46 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--add-config", "a=b,c=,d=e,f="))
     createOpts.checkArgs()
 
+    createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a=b,c=,d=e,f="))
+    createOpts.checkArgs()
+
     val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(4, addedProps2.size())
     assertEquals("b", addedProps2.getProperty("a"))
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+  }
+
+  @Test
+  def testOptionEntityTypeNames(): Unit = {
+    def testExpectedEntityTypeNames(expectedTypes: List[String], expectedNames: List[String], args: String*): Unit = {
+      val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect, "--describe") ++ args)
+      createOpts.checkArgs()
+      assertEquals(createOpts.entityTypes, expectedTypes)
+      assertEquals(createOpts.entityNames, expectedNames)
+    }
+
+    testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
+    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
+      "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
+    testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
+      "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients")
+
+    testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
+    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
+    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
+    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
+    testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
+      "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A")
+
+    testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
+    testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
+    testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
   }
 
   @Test(expected = classOf[IllegalArgumentException])
@@ -181,6 +241,20 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfShortBrokerEntityTypeIsNotAnInteger(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--broker", "A", "--alter", "--add-config", "a=b,c=d"))
+    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfMixedEntityTypeFlags(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"))
+    createOpts.checkArgs()
   }
 
   @Test
