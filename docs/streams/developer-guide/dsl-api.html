@@ -823,11 +823,11 @@
                 </tr>
                 <tr class="row-even"><td><p class="first"><strong></strong></p>
                     <ul class="last simple">
-                        <li>KGroupedStream &rarr; KCogroupedStream</li>
-                        <li>KCogroupedStream &rarr; KCogroupedStream</li>
+                        <li>KGroupedStream &rarr; CogroupedKStream</li>
+                        <li>CogroupedKStream &rarr; CogroupedKStream</li>
                     </ul>
                 </td>
-                    <td><p class="first">Groups the records by the existing key across multiple already grouped streams. From a Cogroup it is possible to Window or to Aggregate. Details (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KCogroupedStream.html#aggregate--">details</a>) and (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KCogroupedStream.html#windowedBy--">details</a>)<p>
+                    <td><p class="first">Groups the records by the existing key across multiple already grouped streams. From a Cogroup it is possible to preform Window or to Aggregate. Details (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate--">details</a>) and (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy--">details</a>)<p>
 
                         <p class="first">Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.</p>
                         <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
@@ -839,7 +839,7 @@
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream2</span> <span class="o">=</span> <span class="n">stream2</span><span class="o">.</span><span class="na">groupByKey</span><span class="o">();</span>
 
 
-<span class="n">KCogroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">cogroupedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">cogroup</span><span class="o">(aggregator1)</span>.</span><span class="na">cogroup</span><span class="o">(groupedStream2, aggregator2);</span>
+<span class="n">CogroupedKStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">cogroupedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">cogroup</span><span class="o">(aggregator1)</span>.</span><span class="na">cogroup</span><span class="o">(groupedStream2, aggregator2);</span>
 
 <span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="n">cogroupedStream</span><span class="o">.</span><span class="na">aggregate</span><span class="o">(initializer);</span>
 

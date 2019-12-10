@@ -18,7 +18,12 @@ package org.apache.kafka.streams.kstream.internals;
 
 import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.optimizableRepartitionNodeBuilder;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -35,12 +40,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Map.Entry;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
     private final InternalStreamsBuilder builder;
@@ -60,15 +59,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final SessionWindows sessionWindows,
                                                        final Merger<? super K, VOut> sessionMerger) {
 
-        final Collection<? extends AbstractStream<K, ?>> groupedStreams = new ArrayList<>(groupPatterns.keySet());
-        final AbstractStream<K, ?> kGrouped = groupedStreams.iterator().next();
-        groupedStreams.remove(kGrouped);
-        kGrouped.ensureCopartitionWith(groupedStreams);
-
         final Map<KGroupedStreamImpl<K, ?>, StreamsGraphNode> parentNodes = new LinkedHashMap<>();
 
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
-            parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
             if (repartitionReqs.repartitionRequired) {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
@@ -77,11 +70,18 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
                 final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
 
-
                 builder.addGraphNode(parentNodes.get(repartitionReqs), repartitionNode);
+
                 parentNodes.put(repartitionReqs, repartitionNode);
+            }else {
+                parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
             }
         }
+
+        final Collection<? extends AbstractStream<K, ?>> groupedStreams = new ArrayList<>(parentNodes.keySet());
+        final AbstractStream<K, ?> kGrouped = groupedStreams.iterator().next();
+        groupedStreams.remove(kGrouped);
+        kGrouped.ensureCopartitionWith(groupedStreams);
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
@@ -163,14 +163,15 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         }
         return statefulProcessorNode;
     }
+
     /**
      * @return the new sourceName of the repartitioned source
      */
     @SuppressWarnings("unchecked")
     private <VIn> String createRepartitionSource(final String repartitionTopicNamePrefix,
-                                           final OptimizableRepartitionNodeBuilder<K, ?> optimizableRepartitionNodeBuilder,
-                                           final Serde<K> keySerde,
-                                           final Serde<?> valueSerde) {
+                                                 final OptimizableRepartitionNodeBuilder<K, ?> optimizableRepartitionNodeBuilder,
+                                                 final Serde<K> keySerde,
+                                                 final Serde<?> valueSerde) {
 
         return KStreamImpl.createRepartitionedSource(builder,
                 keySerde,

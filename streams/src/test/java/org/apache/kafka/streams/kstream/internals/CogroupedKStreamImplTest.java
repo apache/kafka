@@ -179,7 +179,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @Test
-    public void shouldNameProcessorsAndStoreBasedOnNamedParameterRepartition() {
+    public void shouldInsertRepartitionsTopicForUpstreamKeyModification() {
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> test2 = builder.stream("two", stringConsumed);
 
@@ -213,8 +213,10 @@ public class CogroupedKStreamImplTest {
                         "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
                         "      --> test-cogroup-agg-1\n" +
                         "    Source: KSTREAM-SOURCE-0000000005 (topics: [KSTREAM-MAP-0000000002-repartition])\n" +
-                        "      --> test-cogroup-agg-0\n    Processor: test-cogroup-agg-0 (stores: [store])\n" +
-                        "      --> test-cogroup-merge\n      <-- KSTREAM-SOURCE-0000000005\n" +
+                        "      --> test-cogroup-agg-0\n   " +
+                        " Processor: test-cogroup-agg-0 (stores: [store])\n" +
+                        "      --> test-cogroup-merge\n   " +
+                        "   <-- KSTREAM-SOURCE-0000000005\n" +
                         "    Processor: test-cogroup-agg-1 (stores: [store])\n " +
                         "     --> test-cogroup-merge\n  " +
                         "    <-- KSTREAM-SOURCE-0000000001\n" +
