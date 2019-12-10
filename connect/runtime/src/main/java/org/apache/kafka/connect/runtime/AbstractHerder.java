@@ -49,6 +49,7 @@ import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,6 +63,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
@@ -562,6 +564,40 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             );
         }
         return hasErrors;
+    }
+
+    /**
+     * Extract all of the properties related to a connector's converters and Kafka clients,
+     * retaining any prefixes such as "key.converter." or "admin.override.".
+     * @param connProps the connector's configuration; may not be null
+     * @return the properties for the connector's converters and Kafka clients; never null
+     */
+    protected static Map<String, String> clientAndConverterConfigs(Map<String, String> connProps) {
+        final Iterable<String> prefixes = Arrays.asList(
+            ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+            ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+            ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+            WorkerConfig.KEY_CONVERTER_CLASS_CONFIG + ".",
+            WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG + "."
+        );
+        Map<String, String> result = new HashMap<>();
+        for (String prefix : prefixes) {
+            Map<String, String> propsWithPrefix = connProps.entrySet().stream()
+                .filter(s -> s.getKey().startsWith(prefix))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            result.putAll(propsWithPrefix);
+        }
+        // Don't forget the key and value converter classes themselves
+        String keyConverterClass = connProps.get(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
+        if (keyConverterClass != null) {
+            result.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, keyConverterClass);
+        }
+        String valueConverterClass = connProps.get(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        if (valueConverterClass != null) {
+            result.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, valueConverterClass);
+        }
+
+        return result;
     }
 
     private String trace(Throwable t) {

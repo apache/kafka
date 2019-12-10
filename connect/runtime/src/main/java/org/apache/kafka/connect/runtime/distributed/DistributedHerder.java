@@ -76,6 +76,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -159,6 +160,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private ExtendedAssignment assignment;
     private boolean canReadConfigs;
     private ClusterConfigState configState;
+    // The configs for each running connector's Kafka clients and key/value converters.
+    // Package-private for unit testing.
+    Map<String, Map<String, String>> connectorClientAndConverterConfigs;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
@@ -246,6 +250,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         scheduledRebalance = Long.MAX_VALUE;
         keyExpiration = Long.MAX_VALUE;
         sessionKey = null;
+        connectorClientAndConverterConfigs = new ConcurrentHashMap<>();
 
         currentProtocolVersion = ConnectProtocolCompatibility.compatibility(
             config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)
@@ -1181,12 +1186,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final ConnectorContext ctx = new HerderConnectorContext(this, connectorName);
         final TargetState initialState = configState.targetState(connectorName);
         boolean started = worker.startConnector(connectorName, configProps, ctx, this, initialState);
+        final Map<String, String> clientAndConverterConfigs = clientAndConverterConfigs(configProps);
+        final Map<String, String> priorClientAndConverterConfigs =
+            connectorClientAndConverterConfigs.put(connectorName, clientAndConverterConfigs);
 
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.
-        if (started && initialState == TargetState.STARTED)
-            reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName);
+        if (started && initialState == TargetState.STARTED) {
+            boolean forceReconfigure = !clientAndConverterConfigs.equals(priorClientAndConverterConfigs);
+            reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName, forceReconfigure);
+        }
 
         return started;
     }
@@ -1222,7 +1232,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void reconfigureConnectorTasksWithRetry(long initialRequestTime, final String connName) {
-        reconfigureConnector(connName, new Callback<Void>() {
+        reconfigureConnectorTasksWithRetry(initialRequestTime, connName, false);
+    }
+    
+    private void reconfigureConnectorTasksWithRetry(
+        long initialRequestTime,
+        final String connName,
+        final boolean forceReconfiguration) {
+        reconfigureConnector(connName, forceReconfiguration, new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 // If we encountered an error, we don't have much choice but to just retry. If we don't, we could get
@@ -1266,7 +1283,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Updates configurations for a connector by requesting them from the connector, filling in parameters provided
     // by the system, then checks whether any configs have actually changed before submitting the new configs to storage
-    private void reconfigureConnector(final String connName, final Callback<Void> cb) {
+    // Submission of task configs can be forced in the event that non-connector-supplied configs (such as those for its
+    // converters or Kafka clients) have changed
+    private void reconfigureConnector(
+        final String connName,
+        final boolean forceReconfiguration,
+        final Callback<Void> cb) {
         try {
             if (!worker.isRunning(connName)) {
                 log.info("Skipping reconfiguration of connector {} since it is not running", connName);
@@ -1283,23 +1305,27 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
 
             final List<Map<String, String>> taskProps = worker.connectorTaskConfigs(connName, connConfig);
-            boolean changed = false;
-            int currentNumTasks = configState.taskCount(connName);
-            if (taskProps.size() != currentNumTasks) {
-                log.debug("Change in connector task count from {} to {}, writing updated task configurations", currentNumTasks, taskProps.size());
-                changed = true;
+            boolean reconfigure = forceReconfiguration;
+            if (reconfigure) {
+                log.debug("Forcing task reconfiguration for connector {}", connName);
             } else {
-                int index = 0;
-                for (Map<String, String> taskConfig : taskProps) {
-                    if (!taskConfig.equals(configState.taskConfig(new ConnectorTaskId(connName, index)))) {
-                        log.debug("Change in task configurations, writing updated task configurations");
-                        changed = true;
-                        break;
+                int currentNumTasks = configState.taskCount(connName);
+                if (taskProps.size() != currentNumTasks) {
+                    log.debug("Change in connector task count from {} to {}, writing updated task configurations", currentNumTasks, taskProps.size());
+                    reconfigure = true;
+                } else {
+                    int index = 0;
+                    for (Map<String, String> taskConfig : taskProps) {
+                        if (!taskConfig.equals(configState.taskConfig(new ConnectorTaskId(connName, index)))) {
+                            log.debug("Change in task configurations, writing updated task configurations");
+                            reconfigure = true;
+                            break;
+                        }
+                        index++;
                     }
-                    index++;
                 }
             }
-            if (changed) {
+            if (reconfigure) {
                 List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
                 if (isLeader()) {
                     configBackingStore.putTaskConfigs(connName, rawTaskProps);

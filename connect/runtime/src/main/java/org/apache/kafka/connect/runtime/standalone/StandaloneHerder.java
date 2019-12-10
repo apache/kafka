@@ -47,6 +47,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -64,6 +65,10 @@ public class StandaloneHerder extends AbstractHerder {
     private final ScheduledExecutorService requestExecutorService;
 
     private ClusterConfigState configState;
+
+    // The configs for each running connector's Kafka clients and key/value converters.
+    // Package-private for unit testing.
+    Map<String, Map<String, String>> connectorClientAndConverterConfigs;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
@@ -85,6 +90,7 @@ public class StandaloneHerder extends AbstractHerder {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
+        this.connectorClientAndConverterConfigs = new ConcurrentHashMap<>();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -213,7 +219,12 @@ public class StandaloneHerder extends AbstractHerder {
                 return;
             }
 
-            updateConnectorTasks(connName);
+            final Map<String, String> clientAndConverterConfigs = clientAndConverterConfigs(config);
+            final Map<String, String> priorClientAndConverterConfigs =
+                connectorClientAndConverterConfigs.put(connName, clientAndConverterConfigs);
+            boolean forceReconfigure = !clientAndConverterConfigs.equals(priorClientAndConverterConfigs);
+
+            updateConnectorTasks(connName, forceReconfigure);
             callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
         } catch (ConnectException e) {
             callback.onCompletion(e, null);
@@ -323,6 +334,10 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private void updateConnectorTasks(String connName) {
+        updateConnectorTasks(connName, false);
+    }
+
+    private void updateConnectorTasks(String connName, boolean forceReconfiguration) {
         if (!worker.isRunning(connName)) {
             log.info("Skipping update of connector {} since it is not running", connName);
             return;
@@ -331,7 +346,7 @@ public class StandaloneHerder extends AbstractHerder {
         List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
         List<Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
 
-        if (!newTaskConfigs.equals(oldTaskConfigs)) {
+        if (forceReconfiguration || !newTaskConfigs.equals(oldTaskConfigs)) {
             removeConnectorTasks(connName);
             List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
             configBackingStore.putTaskConfigs(connName, rawTaskConfigs);

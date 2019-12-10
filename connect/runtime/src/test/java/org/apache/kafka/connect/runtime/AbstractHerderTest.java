@@ -63,7 +63,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.BATCH_SIZE_CONFIG;
 import static org.apache.kafka.connect.runtime.AbstractHerder.keysWithVariableValues;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.powermock.api.easymock.PowerMock.verifyAll;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.easymock.EasyMock.strictMock;
@@ -422,7 +430,7 @@ public class AbstractHerderTest {
         config.put(maxBlockConfigKey, "28980");
         String idempotenceConfigKey = producerOverrideKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
         config.put(idempotenceConfigKey, "true");
-        String bootstrapServersConfigKey = producerOverrideKey(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        String bootstrapServersConfigKey = producerOverrideKey(BOOTSTRAP_SERVERS_CONFIG);
         config.put(bootstrapServersConfigKey, "SASL_PLAINTEXT://localhost:12345,SASL_PLAINTEXT://localhost:23456");
         String loginCallbackHandlerConfigKey = producerOverrideKey(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
         config.put(loginCallbackHandlerConfigKey, OAuthBearerUnsecuredLoginCallbackHandler.class.getName());
@@ -490,6 +498,23 @@ public class AbstractHerderTest {
         testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} not null");
         testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} password=${file:/tmp/somefile.txt:othervar}");
         testConfigProviderRegex("plain.PlainLoginModule required username", false);
+    }
+
+    @Test
+    public void testConverterAndClientConfigExtraction() {
+        Map<String, String> connProps = new HashMap<>(CONN1_CONFIG);
+        assertEquals(Collections.emptyMap(), AbstractHerder.clientAndConverterConfigs(connProps));
+
+        Map<String, String> converterAndClientProps = new HashMap<>();
+        converterAndClientProps.put(KEY_CONVERTER_CLASS_CONFIG, "Rot13Converter");
+        converterAndClientProps.put(KEY_CONVERTER_CLASS_CONFIG + ".crowded.train", "true");
+        converterAndClientProps.put(VALUE_CONVERTER_CLASS_CONFIG, "AesonConverter");
+        converterAndClientProps.put(VALUE_CONVERTER_CLASS_CONFIG + ".hs", "100");
+        converterAndClientProps.put(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "http://localhost:4761");
+        converterAndClientProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BATCH_SIZE_CONFIG, "42069");
+        converterAndClientProps.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + CLIENT_ID_CONFIG, "boofar");
+        connProps.putAll(converterAndClientProps);
+        assertEquals(converterAndClientProps, AbstractHerder.clientAndConverterConfigs(connProps));
     }
 
     private void testConfigProviderRegex(String rawConnConfig) {

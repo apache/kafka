@@ -16,13 +16,21 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.file.FileStreamSourceConnector;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.storage.StringConverterConfig;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestCondition;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,6 +38,8 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -49,6 +59,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -62,6 +73,7 @@ public class ConnectWorkerIntegrationTest {
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long TOPIC_CONSUME_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-source";
@@ -85,8 +97,7 @@ public class ConnectWorkerIntegrationTest {
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
                 .workerProps(workerProps)
-                .brokerProps(brokerProps)
-                .maskExitProcedures(true); // true is the default, setting here as example
+                .brokerProps(brokerProps);
     }
 
     @After
@@ -188,7 +199,7 @@ public class ConnectWorkerIntegrationTest {
     }
 
     /**
-     * Verify that a set of tasks restarts correctly after a broker goes offline and back online
+     * Verify that a set of tasks restarts correctly after a broker goes offline and back online.
      */
     @Test
     public void testBrokerCoordinator() throws Exception {
@@ -242,6 +253,101 @@ public class ConnectWorkerIntegrationTest {
 
         waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+    }
+
+    /**
+     * Verify that reconfiguring a connector's converters gets propagated to its running tasks.
+     */
+    @Test
+    public void testReconfigureConverter() throws Exception {
+        workerProps.put(
+            CONNECTOR_CLIENT_POLICY_CLASS_CONFIG,
+            AllConnectorClientConfigOverridePolicy.class.getName());
+        connect = connectBuilder.workerProps(workerProps).build();
+
+        // start the clusters
+        connect.start();
+        int numTasks = 1;
+        String topic = "test-topic";
+        // create test topic with only one partition for guaranteed ordering of messages
+        connect.kafka().createTopic(topic, 1);
+
+        // setup up props for the source connector
+        Map<String, String> connectorProps = new HashMap<>();
+        File sourceFile = File.createTempFile("ConnectWorkerIntegrationTest-testReconfigureConverter", ".txt");
+        sourceFile.deleteOnExit();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, FileStreamSourceConnector.class.getName());
+        connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(numTasks));
+        connectorProps.put(FileStreamSourceConnector.TOPIC_CONFIG, topic);
+        connectorProps.put(FileStreamSourceConnector.FILE_CONFIG, sourceFile.getAbsolutePath());
+        connectorProps.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+
+        waitForCondition(() -> assertWorkersUp(NUM_WORKERS).orElse(false),
+            WORKER_SETUP_DURATION_MS, "Initial group of workers did not start in time.");
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
+            CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+
+        FileWriter sourceFileWriter = new FileWriter(sourceFile);
+        final String initialMessage = "initialMessage";
+        sourceFileWriter.append(initialMessage).append(System.lineSeparator()).flush();
+
+        ConsumerRecords<byte[], byte[]> initialRecords =
+            connect.kafka().consume(1, TOPIC_CONSUME_DURATION_MS, topic);
+        for (ConsumerRecord<byte[], byte[]> record : initialRecords) {
+            String value = new String(record.value(), StringConverterConfig.ENCODING_DEFAULT);
+            log.trace("Read initial value: {}", value);
+            assertEquals(
+                "Value should match expected format",
+                initialMessage,
+                value
+            );
+        }
+
+        connectorProps.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+        connectorProps.put(VALUE_CONVERTER_CLASS_CONFIG + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
+        // Reconfigure the connector's value converter
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        // Wait for the connector to be started again
+        waitForCondition(() -> assertConnectorAndTasksRunning(CONNECTOR_NAME, numTasks).orElse(false),
+            CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+
+        // And consume records until the converter reconfiguration can be confirmed (or a timeout occurs)
+        final String subsequentMessage = "subsequent message";
+        waitForCondition(
+            // Construct a TestCondition class inline instead of using a lambda in order to track the number
+            // of messages that should be read across calls to conditionMet()
+            new TestCondition() {
+                int numMessages = 2;
+                
+                @Override
+                public boolean conditionMet() throws Exception {
+                    sourceFileWriter.append(subsequentMessage).append(System.lineSeparator()).flush();
+                    ConsumerRecords<byte[], byte[]> nextRecords =
+                        connect.kafka().consume(numMessages++, TOPIC_CONSUME_DURATION_MS, topic);
+                    for (ConsumerRecord<byte[], byte[]> record : nextRecords) {
+                        String value = new String(record.value());
+                        log.trace("Read subsequent value: {}", value);
+                        // The schemaless JSON converter serializes strings by wrapping them in
+                        // double quotes, so use the message we wrote but wrapped in double quotes.
+                        // This should be sufficient to determine that the schemaless JSON converter is now being used.
+                        if (value.equals('"' + subsequentMessage + '"')) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            },
+            TOPIC_CONSUME_DURATION_MS,
+            "Converter reconfiguration did not occur in time"
+        );
+        if (!sourceFile.delete()) {
+            log.warn("Failed to delete temporary file {}", sourceFile.getAbsolutePath());
+        }
     }
 
     /**

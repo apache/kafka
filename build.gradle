@@ -1690,6 +1690,7 @@ project(':connect:runtime') {
     compile project(':connect:api')
     compile project(':clients')
     compile project(':tools')
+    compile project(':connect:file')
     compile project(':connect:json')
     compile project(':connect:transforms')
 
