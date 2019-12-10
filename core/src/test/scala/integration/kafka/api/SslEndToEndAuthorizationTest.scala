@@ -54,19 +54,13 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   import kafka.api.SslEndToEndAuthorizationTest.TestPrincipalBuilder
 
   override protected def securityProtocol = SecurityProtocol.SSL
-  // Since there are other E2E tests that enable SSL, running this test with TLSv1.3 if possible
+  // Since there are other E2E tests that enable SSL, running this test with TLSv1.3 if supported
   private  val tlsProtocol = if (Java.IS_JAVA11_COMPATIBLE) "TLSv1.3" else "TLSv1.2"
 
   this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
   this.serverConfig.setProperty(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol)
   this.serverConfig.setProperty(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, tlsProtocol)
-  this.consumerConfig.setProperty(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol)
-  this.consumerConfig.setProperty(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, tlsProtocol)
-  this.producerConfig.setProperty(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol)
-  this.producerConfig.setProperty(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, tlsProtocol)
-  this.adminClientConfig.setProperty(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol)
-  this.adminClientConfig.setProperty(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, tlsProtocol)
   // Escaped characters in DN attribute values: from http://www.ietf.org/rfc/rfc2253.txt
   // - a space or "#" character occurring at the beginning of the string
   // - a space character occurring at the end of the string
@@ -84,7 +78,8 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, clientCn, clientSaslProperties)
+    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
+      certAlias, clientCn, clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
