@@ -628,9 +628,50 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
 
+  @Test
+  def testProduceAndConsumeWithReassignmentInProgress(): Unit = {
+    val tp0 = new TopicPartition(topicName, 0)
+
+    startBrokers(Seq(100, 101))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 100 * 1000)
+
+    val command = new ReassignPartitionsCommand(zkClient, None,
+      Map(tp0 -> Seq(100, 101)),
+      adminZkClient = adminZkClient)
+    command.reassignPartitions(Throttle(interBrokerLimit = 1, -1))
+
+    awaitReassignmentInProgress(tp0)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 64)
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
+    try {
+      consumer.assign(Seq(tp0).asJava)
+      pollUntilAtLeastNumRecords(consumer, numRecords = 1000)
+    } finally {
+      consumer.close()
+    }
+
+    command.maybeLimit(Throttle(interBrokerLimit = Int.MaxValue, -1))
+
+    waitForReassignmentToComplete()
+    assertEquals(Seq(100, 101), zkClient.getReplicasForPartition(tp0))
+  }
+
   def waitForReassignmentToComplete(pause: Long = 100L) {
     waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
       s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", pause = pause)
+  }
+
+  def awaitReassignmentInProgress(topicPartition: TopicPartition): Unit = {
+    waitUntilTrue(() => isAssignmentInProgress(topicPartition),
+      "Timed out waiting for expected reassignment to begin")
+  }
+
+  def isAssignmentInProgress(topicPartition: TopicPartition): Boolean = {
+    zkClient.getPartitionReassignment.contains(topicPartition)
   }
 
   def json(topic: String*): String = {

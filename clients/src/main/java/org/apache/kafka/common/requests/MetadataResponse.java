@@ -59,13 +59,25 @@ public class MetadataResponse extends AbstractResponse {
 
     private final MetadataResponseData data;
     private volatile Holder holder;
+    private final boolean hasReliableLeaderEpochs;
 
     public MetadataResponse(MetadataResponseData data) {
-        this.data = data;
+        this(data, true);
     }
 
     public MetadataResponse(Struct struct, short version) {
-        this(new MetadataResponseData(struct, version));
+        // Kafka versions 2.3 and below do not support a sufficient Metadata version to
+        // be able to leverage leader epochs correctly for validation. Specifically, the
+        // brokers cannot be relied on to propagate leader epoch information accurately
+        // while a reassignment is in progress. Relying on a stale epoch can lead to
+        // FENCED_LEADER_EPOCH errors which can prevent consumption throughout the course
+        // of a reassignment. Hence it is safer to disable this validation.
+        this(new MetadataResponseData(struct, version), false);
+    }
+
+    private MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        this.data = data;
+        this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
 
     @Override
@@ -210,6 +222,18 @@ public class MetadataResponse extends AbstractResponse {
      */
     public String clusterId() {
         return this.data.clusterId();
+    }
+
+    /**
+     * Check whether the leader epochs returned from the response can be relied on
+     * for epoch validation in Fetch, ListOffsets, and OffsetsForLeaderEpoch requests.
+     * If not, then the client will not retain the leader epochs and hence will not
+     * forward them in requests.
+     *
+     * @return true if the epoch can be used for validation
+     */
+    public boolean hasReliableLeaderEpochs() {
+        return hasReliableLeaderEpochs;
     }
 
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
