@@ -178,7 +178,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: FatalExitError => throw e
       case e: Throwable => handleError(request, e)
     } finally {
-      request.apiLocalCompleteTimeNanos = time.nanoseconds
+      if (request.apiLocalCompleteTimeNanos < 0)
+        request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
   }
 
