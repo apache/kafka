@@ -37,7 +37,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -545,6 +544,7 @@ public class Fetcher<K, V> implements Closeable {
                 result.fetchedOffsets.putAll(value.fetchedOffsets);
                 if (value.partitionsToRetry.isEmpty())
                     return result;
+                
                 metadata.requestUpdate();
                 remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
