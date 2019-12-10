@@ -544,7 +544,7 @@ public class Fetcher<K, V> implements Closeable {
                 result.fetchedOffsets.putAll(value.fetchedOffsets);
                 if (value.partitionsToRetry.isEmpty())
                     return result;
-                
+
                 remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
                 throw future.exception();
