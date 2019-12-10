@@ -545,13 +545,13 @@ public class Fetcher<K, V> implements Closeable {
                 result.fetchedOffsets.putAll(value.fetchedOffsets);
                 if (value.partitionsToRetry.isEmpty())
                     return result;
-
+                metadata.requestUpdate();
                 remainingToSearch.keySet().retainAll(value.partitionsToRetry);
             } else if (!future.isRetriable()) {
                 throw future.exception();
             }
 
-            if (metadata.updateRequested() || (future.failed() && future.exception() instanceof InvalidMetadataException))
+            if (metadata.updateRequested())
                 client.awaitMetadataUpdate(timer);
             else
                 timer.sleep(retryBackoffMs);
