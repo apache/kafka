@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -34,30 +34,32 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
-import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -68,15 +70,11 @@ import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -87,6 +85,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
@@ -210,12 +210,11 @@ public class RequestResponseTest {
         checkRequest(createDeleteGroupsRequest(), true);
         checkErrorResponse(createDeleteGroupsRequest(), new UnknownServerException(), true);
         checkResponse(createDeleteGroupsResponse(), 0, true);
-        checkRequest(createListOffsetRequest(1), true);
-        checkErrorResponse(createListOffsetRequest(1), new UnknownServerException(), true);
-        checkResponse(createListOffsetResponse(1), 1, true);
-        checkRequest(createListOffsetRequest(2), true);
-        checkErrorResponse(createListOffsetRequest(2), new UnknownServerException(), true);
-        checkResponse(createListOffsetResponse(2), 2, true);
+        for (int i = 0; i < ApiKeys.LIST_OFFSETS.latestVersion(); i++) {
+            checkRequest(createListOffsetRequest(i), true);
+            checkErrorResponse(createListOffsetRequest(i), new UnknownServerException(), true);
+            checkResponse(createListOffsetResponse(i), i, true);
+        }
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2), true);
         checkRequest(createMetadataRequest(1, Collections.singletonList("topic1")), true);
         checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
@@ -872,6 +871,20 @@ public class RequestResponseTest {
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
+    @Test
+    public void testInitProducerIdRequestVersions() {
+        InitProducerIdRequest.Builder bld = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000).
+                setTransactionalId("abracadabra").
+                setProducerId(123));
+        final UnsupportedVersionException exception = assertThrows(
+            UnsupportedVersionException.class, () -> {
+                bld.build((short) 2).toStruct();
+            });
+        assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
+        bld.build((short) 3);
+    }
+
     private ResponseHeader createResponseHeader(short headerVersion) {
         return new ResponseHeader(10, headerVersion);
     }
@@ -1040,12 +1053,12 @@ public class RequestResponseTest {
         DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId", null,
                 clientId, clientHost, new byte[0], new byte[0]);
         DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group",
-                                                                       Errors.NONE,
-                                                                       "STABLE",
-                                                                       "consumer",
-                                                                       "roundrobin",
-                                                                       Collections.singletonList(member),
-                                                                       Collections.emptySet());
+                Errors.NONE,
+                "STABLE",
+                "consumer",
+                "roundrobin",
+                Collections.singletonList(member),
+                DescribeGroupsResponse.AUTHORIZED_OPERATIONS_OMITTED);
         describeGroupsResponseData.groups().add(metadata);
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
@@ -1097,7 +1110,7 @@ public class RequestResponseTest {
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(offsetData)
                     .build((short) version);
-        } else if (version == 2) {
+        } else if (version >= 2 && version <= 5) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
                     new ListOffsetRequest.PartitionData(1000000L, Optional.of(5)));
@@ -1117,7 +1130,7 @@ public class RequestResponseTest {
             responseData.put(new TopicPartition("test", 0),
                     new ListOffsetResponse.PartitionData(Errors.NONE, asList(100L)));
             return new ListOffsetResponse(responseData);
-        } else if (version == 1 || version == 2) {
+        } else if (version >= 1 && version <= 5) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
             responseData.put(new TopicPartition("test", 0),
                     new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L, Optional.of(27)));

@@ -561,5 +561,4 @@ public class Struct {
         }
         return true;
     }
-
 }

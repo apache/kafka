@@ -535,4 +535,22 @@ public interface KGroupedStream<K, V> {
      */
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 
+    /**
+     * Create a new {@link CogroupedKStream} from the this grouped KStream to allow cogrouping other
+     * {@code KGroupedStream} to it.
+     * {@link CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
+     * It is an intermediate representation after a grouping of {@link KStream}s, before the
+     * aggregations are applied to the new partitions resulting in a {@link KTable}.
+     * <p>
+     * The specified {@link Aggregator} is applied in the actual {@link CogroupedKStream#aggregate(Initializer)
+     * aggregation} step for each input record and computes a new aggregate using the current aggregate (or for the very
+     * first record per key using the initial intermediate aggregation result provided via the {@link Initializer} that
+     * is passed into {@link CogroupedKStream#aggregate(Initializer)}) and the record's value.
+     *
+     * @param aggregator an {@link Aggregator} that computes a new aggregate result
+     * @param <Vout> the type of the output values
+     * @return a {@link CogroupedKStream}
+     */
+    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
+
 }

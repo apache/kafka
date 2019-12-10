@@ -130,7 +130,7 @@ class KafkaScheduler(val threads: Int,
   /**
    * Package private for testing.
    */
-  private[utils] def taskRunning(task: ScheduledFuture[_]): Boolean = {
+  private[kafka] def taskRunning(task: ScheduledFuture[_]): Boolean = {
     executor.getQueue().contains(task)
   }
 

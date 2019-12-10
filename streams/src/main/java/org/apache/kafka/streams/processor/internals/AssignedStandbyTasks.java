@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,10 +34,10 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
     @Override
     public void shutdown(final boolean clean) {
         final String shutdownType = clean ? "Clean" : "Unclean";
-        log.debug(shutdownType + " shutdown of all standby tasks" + "\n" +
+        log.debug("{} shutdown of all standby tasks" + "\n" +
                       "non-initialized standby tasks to close: {}" + "\n" +
                       "running standby tasks to close: {}",
-            clean, created.keySet(), running.keySet());
+            shutdownType, created.keySet(), running.keySet());
         super.shutdown(clean);
     }
 
@@ -79,7 +80,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             } catch (final RuntimeException e) {
                 log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {
-                removeTaskFromRunning(task);
+                removeTaskFromAllStateMaps(task, Collections.emptyMap());
                 revokedChangelogs.addAll(task.changelogPartitions());
             }
         }

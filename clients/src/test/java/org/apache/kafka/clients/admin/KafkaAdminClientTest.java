@@ -1513,6 +1513,43 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeNonConsumerGroups() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                "group-0",
+                Errors.NONE,
+                "",
+                "non-consumer",
+                "",
+                asList(),
+                Collections.emptySet()));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+
+            TestUtils.assertFutureError(result.describedGroups().get("group-0"), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
     public void testDescribeConsumerGroupOffsets() throws Exception {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
@@ -2040,7 +2077,7 @@ public class KafkaAdminClientTest {
             TopicPartition tp2 = new TopicPartition("B", 0);
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
             reassignments.put(tp1, Optional.empty());
-            reassignments.put(tp2, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
+            reassignments.put(tp2, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
 
             // 1. server returns less responses than number of partitions we sent
             AlterPartitionReassignmentsResponseData responseData1 = new AlterPartitionReassignmentsResponseData();
@@ -2131,9 +2168,9 @@ public class KafkaAdminClientTest {
             TopicPartition invalidTopicTP = new TopicPartition("", 0);
             TopicPartition invalidPartitionTP = new TopicPartition("ABC", -1);
             Map<TopicPartition, Optional<NewPartitionReassignment>> invalidTopicReassignments = new HashMap<>();
-            invalidTopicReassignments.put(invalidPartitionTP, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
-            invalidTopicReassignments.put(invalidTopicTP, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
-            invalidTopicReassignments.put(tp1, NewPartitionReassignment.of(Arrays.asList(1, 2, 3)));
+            invalidTopicReassignments.put(invalidPartitionTP, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
+            invalidTopicReassignments.put(invalidTopicTP, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
+            invalidTopicReassignments.put(tp1, Optional.of(new NewPartitionReassignment(Arrays.asList(1, 2, 3))));
 
             AlterPartitionReassignmentsResponseData singlePartResponseData =
                     new AlterPartitionReassignmentsResponseData()

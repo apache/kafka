@@ -99,8 +99,8 @@ class ProducerStateManagerTest {
     }
 
     // If the transaction marker is the only thing left in the log, then an attempt to write using a
-    // non-zero sequence number should cause an UnknownProducerId, so that the producer can reset its state
-    assertThrows[UnknownProducerIdException] {
+    // non-zero sequence number should cause an OutOfOrderSequenceException, so that the producer can reset its state
+    assertThrows[OutOfOrderSequenceException] {
       append(stateManager, producerId, producerEpoch, 17, 0L, 4L)
     }
 
@@ -430,7 +430,7 @@ class ProducerStateManagerTest {
     append(recoveredMapping, producerId, epoch, 2, 2L)
   }
 
-  @Test(expected = classOf[UnknownProducerIdException])
+  @Test
   def testRemoveExpiredPidsOnReload(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, 0)
@@ -441,8 +441,12 @@ class ProducerStateManagerTest {
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
-    // we should get an out of order sequence exception.
+    // we should accept the append and add the pid back in
     append(recoveredMapping, producerId, epoch, 2, 2L, 70001)
+
+    assertEquals(1, recoveredMapping.activeProducers.size)
+    assertEquals(2, recoveredMapping.activeProducers.head._2.lastSeq)
+    assertEquals(3L, recoveredMapping.mapEndOffset)
   }
 
   @Test
@@ -601,30 +605,16 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testStartOffset(): Unit = {
-    val epoch = 0.toShort
-    val pid2 = 2L
-    append(stateManager, pid2, epoch, 0, 0L, 1L)
-    append(stateManager, producerId, epoch, 0, 1L, 2L)
-    append(stateManager, producerId, epoch, 1, 2L, 3L)
-    append(stateManager, producerId, epoch, 2, 3L, 4L)
-    stateManager.takeSnapshot()
-
-    assertThrows[UnknownProducerIdException] {
-      val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
-      recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
-      append(recoveredMapping, pid2, epoch, 1, 4L, 5L)
-    }
-  }
-
-  @Test(expected = classOf[UnknownProducerIdException])
   def testPidExpirationTimeout(): Unit = {
     val epoch = 5.toShort
     val sequence = 37
     append(stateManager, producerId, epoch, sequence, 1L)
     time.sleep(maxPidExpirationMs + 1)
     stateManager.removeExpiredProducers(time.milliseconds)
-    append(stateManager, producerId, epoch, sequence + 1, 1L)
+    append(stateManager, producerId, epoch, sequence + 1, 2L)
+    assertEquals(1, stateManager.activeProducers.size)
+    assertEquals(sequence + 1, stateManager.activeProducers.head._2.lastSeq)
+    assertEquals(3L, stateManager.mapEndOffset)
   }
 
   @Test

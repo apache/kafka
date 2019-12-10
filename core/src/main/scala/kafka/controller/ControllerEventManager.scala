@@ -133,8 +133,11 @@ class ControllerEventManager(controllerId: Int,
           eventQueueTimeHist.update(time.milliseconds() - dequeued.enqueueTimeMs)
 
           try {
-            rateAndTimeMetrics(state).time {
-              dequeued.process(processor)
+            def process(): Unit = dequeued.process(processor)
+
+            rateAndTimeMetrics.get(state) match {
+              case Some(timer) => timer.time { process() }
+              case None => process()
             }
           } catch {
             case e: Throwable => error(s"Uncaught error processing event $controllerEvent", e)

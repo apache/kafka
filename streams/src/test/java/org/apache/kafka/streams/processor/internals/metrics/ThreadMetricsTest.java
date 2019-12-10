@@ -265,17 +265,15 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of skipped records";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO))
             .andReturn(expectedSensor);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
-            StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                expectedSensor,
-                threadLevelGroup,
-                tagMap,
-                operation,
-                rateDescription,
-                totalDescription
-            );
-        }
+        expect(streamsMetrics.threadLevelTagMap(THREAD_ID)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            threadLevelGroup,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics);
@@ -297,25 +295,23 @@ public class ThreadMetricsTest {
         final String maxLatencyDescription =
             "The maximum commit latency over all tasks assigned to one stream thread";
         expect(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.DEBUG)).andReturn(expectedSensor);
-        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
-            expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
-            StreamsMetricsImpl.addInvocationRateAndCountToSensor(
-                expectedSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                operation,
-                rateDescription,
-                totalDescription
-            );
-            StreamsMetricsImpl.addAvgAndMaxToSensor(
-                expectedSensor,
-                TASK_LEVEL_GROUP,
-                tagMap,
-                operationLatency,
-                avgLatencyDescription,
-                maxLatencyDescription
-            );
-        }
+        expect(streamsMetrics.taskLevelTagMap(THREAD_ID, ROLLUP_VALUE)).andReturn(tagMap);
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operation,
+            rateDescription,
+            totalDescription
+        );
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
+            expectedSensor,
+            TASK_LEVEL_GROUP,
+            tagMap,
+            operationLatency,
+            avgLatencyDescription,
+            maxLatencyDescription
+        );
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ThreadMetrics.commitOverTasksSensor(THREAD_ID, streamsMetrics);

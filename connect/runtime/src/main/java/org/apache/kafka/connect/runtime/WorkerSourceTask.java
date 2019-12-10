@@ -39,9 +39,9 @@ import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -75,7 +75,7 @@ class WorkerSourceTask extends WorkerTask {
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
-    private final OffsetStorageReader offsetReader;
+    private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -105,7 +105,7 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
+                            CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             ClusterConfigState configState,
@@ -170,6 +170,12 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     protected void releaseResources() {
         sourceTaskMetricsGroup.close();
+    }
+
+    @Override
+    public void cancel() {
+        super.cancel();
+        offsetReader.close();
     }
 
     @Override

@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -58,6 +60,7 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -134,9 +137,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         threadId = Thread.currentThread().getName();
         final String taskId = id.toString();
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
-        final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-        commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics, parent);
-        enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
+            commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics, parent);
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
+        } else {
+            commitSensor = TaskMetrics.commitSensor(threadId, taskId, streamsMetrics);
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
+        }
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         recordLatenessSensor = TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics);
@@ -203,7 +211,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void initializeMetadata() {
         try {
-            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions);
+            final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
+                .filter(e -> e.getValue() != null)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeCommittedOffsets(offsetsAndMetadata);
             initializeTaskTime(offsetsAndMetadata);
         } catch (final AuthorizationException e) {
@@ -246,7 +256,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 final long committedTimestamp = decodeTimestamp(metadata.metadata());
                 partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                    + " to {} in stream task {}", partition, committedTimestamp, this);
+                    + " to {} in stream task {}", partition, committedTimestamp, id);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
@@ -281,8 +291,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (eosEnabled) {
             try {
                 this.producer.beginTransaction();
-            } catch (final ProducerFencedException fatal) {
-                throw new TaskMigratedException(this, fatal);
+            } catch (final ProducerFencedException | UnknownProducerIdException e) {
+                throw new TaskMigratedException(this, e);
             }
             transactionInFlight = true;
         }
@@ -372,13 +382,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode);
-            StreamsMetricsImpl.maybeMeasureLatency(
-                () -> {
-                    currNode.process(record.key(), record.value());
-                },
-                time,
-                processLatencySensor
-            );
+            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -391,8 +395,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (recordInfo.queue().size() == maxBufferedSize) {
                 consumer.resume(singleton(partition));
             }
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         } catch (final KafkaException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(format("Exception caught in process. taskId=%s, " +
@@ -440,15 +444,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(
-                () -> {
-                    node.punctuate(timestamp, punctuator);
-                },
-                time,
-                punctuateLatencySensor
-            );
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+            maybeMeasureLatency(() -> node.punctuate(timestamp, punctuator), time, punctuateLatencySensor);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
         } finally {
@@ -517,7 +515,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             } else {
                 consumer.commitSync(consumedOffsetsAndMetadata);
             }
-        } catch (final CommitFailedException | ProducerFencedException error) {
+        } catch (final CommitFailedException | ProducerFencedException | UnknownProducerIdException error) {
             throw new TaskMigratedException(this, error);
         }
 
@@ -540,8 +538,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         super.flushState();
         try {
             recordCollector.flush();
-        } catch (final ProducerFencedException fatal) {
-            throw new TaskMigratedException(this, fatal);
+        } catch (final RecoverableClientException e) {
+            throw new TaskMigratedException(this, e);
         }
     }
 
@@ -623,7 +621,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                     try {
                         recordCollector.close();
-                    } catch (final ProducerFencedException e) {
+                    } catch (final RecoverableClientException e) {
                         taskMigratedException = new TaskMigratedException(this, e);
                     } finally {
                         producer = null;

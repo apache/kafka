@@ -68,15 +68,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                 log.debug(
                     "Skipping task creation in rebalance because we are already in {} state.",
-                    streamThread.state()
-                );
-            } else if (streamThread.getAssignmentErrorCode() != AssignorError.NONE.code()) {
-                log.debug(
-                    "Encountered assignment error during partition assignment: {}. Skipping task initialization and "
-                        + "pausing any partitions we may have been assigned.",
-                    streamThread.getAssignmentErrorCode()
-                );
-                taskManager.pausePartitions();
+                    streamThread.state());
             } else {
                 // Close non-reassigned tasks before initializing new ones as we may have suspended active
                 // tasks that become standbys or vice versa
@@ -151,8 +143,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         Set<TaskId> lostTasks = new HashSet<>();
         final long start = time.milliseconds();
         try {
-            // close lost active tasks but don't try to commit offsets as we no longer own them
-            lostTasks = taskManager.closeLostTasks(lostPartitions);
+            // close all active tasks as lost but don't try to commit offsets as we no longer own them
+            lostTasks = taskManager.closeLostTasks();
         } catch (final Throwable t) {
             log.error(
                 "Error caught during partitions lost, " +
@@ -162,7 +154,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             streamThread.setRebalanceException(t);
         } finally {
             log.info("partitions lost took {} ms.\n" +
-                    "\tsuspended lost active tasks: {}\n",
+                    "\tclosed lost active tasks: {}\n",
                 time.milliseconds() - start,
                 lostTasks);
         }

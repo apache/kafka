@@ -622,7 +622,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!totalAddedPartitions.isEmpty()) {
             log.error("With the COOPERATIVE protocol, owned partitions cannot be " +
                 "reassigned to other members; however the assignor has reassigned partitions {} which are still owned " +
-                "by some members; return the error code to all members to let them stop", totalAddedPartitions);
+                "by some members", totalAddedPartitions);
 
             throw new IllegalStateException("Assignor supporting the COOPERATIVE protocol violates its requirements");
         }
@@ -692,6 +692,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void onLeavePrepare() {
+        // Save the current Generation and use that to get the memberId, as the hb thread can change it at any time
+        final Generation currentGeneration = generation();
+        final String memberId = currentGeneration.memberId;
+
+        log.debug("Executing onLeavePrepare with generation {} and memberId {}", currentGeneration, memberId);
+
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
@@ -747,14 +753,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
-            final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+            if (offsetAndMetadata != null) {
+                final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+                final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
                     leaderAndEpoch);
 
-            log.info("Setting offset for partition {} to the committed offset {}", tp, position);
-            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-            this.subscriptions.seekUnvalidated(tp, position);
+                log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
+                this.subscriptions.seekUnvalidated(tp, position);
+            }
         }
         return true;
     }
@@ -1226,10 +1234,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return;
                     }
                 } else if (data.offset >= 0) {
-                    // record the position with the offset (-1 indicates no committed offset to fetch)
+                    // record the position with the offset (-1 indicates no committed offset to fetch);
+                    // if there's no committed offset, record as null
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
                     log.info("Found no committed offset for partition {}", tp);
+                    offsets.put(tp, null);
                 }
             }
 

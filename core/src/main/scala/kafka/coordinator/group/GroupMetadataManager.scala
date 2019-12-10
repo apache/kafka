@@ -766,7 +766,7 @@ class GroupMetadataManager(brokerId: Int,
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
-    offsetCommitsSensor.record(numOffsetsRemoved)
+    offsetExpiredSensor.record(numOffsetsRemoved)
     info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 

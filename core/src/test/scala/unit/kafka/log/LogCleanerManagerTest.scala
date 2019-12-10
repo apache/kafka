@@ -213,6 +213,54 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(10L, filthiestLog.firstDirtyOffset)
   }
 
+  @Test
+  def testLogStartOffsetLargerThanActiveSegmentBaseOffset(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val log = createLog(segmentSize = 2048, LogConfig.Compact, tp)
+
+    val logs = new Pool[TopicPartition, Log]()
+    logs.put(tp, log)
+
+    appendRecords(log, numRecords = 3)
+    appendRecords(log, numRecords = 3)
+    appendRecords(log, numRecords = 3)
+
+    assertEquals(1, log.logSegments.size)
+
+    log.maybeIncrementLogStartOffset(2L)
+
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 0L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(2L, filthiestLog.firstDirtyOffset)
+  }
+
+  @Test
+  def testDirtyOffsetLargerThanActiveSegmentBaseOffset(): Unit = {
+    // It is possible in the case of an unclean leader election for the checkpoint
+    // dirty offset to get ahead of the active segment base offset, but still be
+    // within the range of the log.
+
+    val tp = new TopicPartition("foo", 0)
+
+    val logs = new Pool[TopicPartition, Log]()
+    val log = createLog(2048, LogConfig.Compact, topicPartition = tp)
+    logs.put(tp, log)
+
+    appendRecords(log, numRecords = 3)
+    appendRecords(log, numRecords = 3)
+
+    assertEquals(1, log.logSegments.size)
+    assertEquals(0L, log.activeSegment.baseOffset)
+
+    val cleanerManager = createCleanerManagerMock(logs)
+    cleanerCheckpoints.put(tp, 3L)
+
+    val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(3L, filthiestLog.firstDirtyOffset)
+  }
+
   /**
     * When checking for logs with segments ready for deletion
     * we shouldn't consider logs where cleanup.policy=delete
@@ -373,8 +421,8 @@ class LogCleanerManagerTest extends Logging {
     while(log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
 
-    val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val lastCleanOffset = Some(0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
@@ -403,8 +451,8 @@ class LogCleanerManagerTest extends Logging {
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1), leaderEpoch = 0)
 
-    val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val lastCleanOffset = Some(0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
   }
@@ -428,8 +476,8 @@ class LogCleanerManagerTest extends Logging {
 
     time.sleep(compactionLag + 1)
 
-    val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val lastCleanOffset = Some(0L)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, time.milliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
@@ -456,8 +504,7 @@ class LogCleanerManagerTest extends Logging {
 
     time.sleep(compactionLag + 1)
     // although the compaction lag has been exceeded, the undecided data should not be cleaned
-    var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+    var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(0L, cleanableOffsets._2)
 
@@ -467,16 +514,14 @@ class LogCleanerManagerTest extends Logging {
     log.updateHighWatermark(4L)
 
     // the first segment should now become cleanable immediately
-    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(3L, cleanableOffsets._2)
 
     time.sleep(compactionLag + 1)
 
     // the second segment becomes cleanable after the compaction lag
-    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, Some(0L), time.milliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(4L, cleanableOffsets._2)
   }
@@ -571,24 +616,26 @@ class LogCleanerManagerTest extends Logging {
                            recordsPerBatch: Int,
                            batchesPerSegment: Int): Unit = {
     for (i <- 0 until numBatches) {
-      val startOffset = i * recordsPerBatch
-      val endOffset = startOffset + recordsPerBatch
-      var lastTimestamp = 0L
-      val records = (startOffset until endOffset).map { offset =>
-        val currentTimestamp = time.milliseconds()
-        if (offset == endOffset - 1)
-          lastTimestamp = currentTimestamp
-
-        new SimpleRecord(currentTimestamp, s"key-$offset".getBytes, s"value-$offset".getBytes)
-      }
-
-      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
-      log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
-
+      appendRecords(log, recordsPerBatch)
       if (i % batchesPerSegment == 0)
         log.roll()
     }
     log.roll()
+  }
+
+  private def appendRecords(log: Log, numRecords: Int): Unit = {
+    val startOffset = log.logEndOffset
+    val endOffset = startOffset + numRecords
+    var lastTimestamp = 0L
+    val records = (startOffset until endOffset).map { offset =>
+      val currentTimestamp = time.milliseconds()
+      if (offset == endOffset - 1)
+        lastTimestamp = currentTimestamp
+      new SimpleRecord(currentTimestamp, s"key-$offset".getBytes, s"value-$offset".getBytes)
+    }
+
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig) =

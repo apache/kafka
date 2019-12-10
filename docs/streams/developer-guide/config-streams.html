@@ -511,7 +511,7 @@
                   silently drop the record.
                   This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an
                   invalid built-in timestamp in your input data.</li>
-                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/UsePreviousTimeOnInvalidTimestamp.html">UsePreviousTimeOnInvalidTimestamp</a>.
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/UsePartitionTimeOnInvalidTimestamp.html">UsePartitionTimeOnInvalidTimestamp</a>.
                   This extractor returns the record&#8217;s built-in timestamp if it is valid (i.e. not negative).  If the record does not
                   have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the
                   same topic partition as the current record as a timestamp estimation.  In case that no timestamp can be estimated, it
