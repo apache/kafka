@@ -18,7 +18,7 @@
 package kafka.admin
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
-import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
+import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -31,7 +31,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.io.StdIn
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 
@@ -228,8 +227,12 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
       checkPathExistenceAndMaybeExit(enablePathCheck)
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        zkClient.makeSurePersistentPathExists(path)
-        setAclsRecursively(path)
+        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+          debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
+        } else {
+          zkClient.makeSurePersistentPathExists(path)
+          setAclsRecursively(path)
+        }
       }
 
       @tailrec
