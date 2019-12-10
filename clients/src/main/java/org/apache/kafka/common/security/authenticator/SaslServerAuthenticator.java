@@ -414,8 +414,11 @@ public class SaslServerAuthenticator implements Authenticator {
     private void handleSaslToken(byte[] clientToken) throws IOException {
         if (!enableKafkaSaslAuthenticateHeaders) {
             byte[] response = saslServer.evaluateResponse(clientToken);
-            if (reauthInfo.reauthenticating() && saslServer.isComplete())
-                reauthInfo.ensurePrincipalUnchanged(principal());
+            if (saslServer.isComplete()) {
+                reauthInfo.calcCompletionTimesAndReturnSessionLifetimeMs();
+                if (reauthInfo.reauthenticating())
+                    reauthInfo.ensurePrincipalUnchanged(principal());
+            }
             if (response != null) {
                 netOutBuffer = new NetworkSend(connectionId, ByteBuffer.wrap(response));
                 flushNetOutBufferAndUpdateInterestOps();

@@ -716,7 +716,16 @@ class SocketServerTest {
   }
 
   @Test
-  def testSaslReauthenticationFailure(): Unit = {
+  def testSaslReauthenticationFailureWithKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(true)
+  }
+
+  @Test
+  def testSaslReauthenticationFailureNoKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(false)
+  }
+
+  def checkSaslReauthenticationFailure(leverageKip152SaslAuthenticateRequest : Boolean): Unit = {
     shutdownServerAndMetrics(server) // we will use our own instance because we require custom configs
     val username = "admin"
     val password = "admin-secret"
@@ -742,20 +751,27 @@ class SocketServerTest {
       val correlationId = -1
       val clientId = ""
       // send a SASL handshake request
+      val version : Short = if (leverageKip152SaslAuthenticateRequest) ApiKeys.SASL_HANDSHAKE.latestVersion else 0
       val saslHandshakeRequest = new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
-        .build()
+        .build(version)
       val saslHandshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE, saslHandshakeRequest.version, clientId,
         correlationId)
       sendApiRequest(socket, saslHandshakeRequest, saslHandshakeHeader)
       receiveResponse(socket)
 
-      // now send credentials within a SaslAuthenticateRequest
+      // now send credentials
       val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
-      val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
-        .setAuthBytes(authBytes)).build()
-      val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
-        clientId, correlationId)
-      sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      if (leverageKip152SaslAuthenticateRequest) {
+        // send credentials within a SaslAuthenticateRequest
+        val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
+          .setAuthBytes(authBytes)).build()
+        val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
+          clientId, correlationId)
+        sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      } else {
+        // send credentials directly, without a SaslAuthenticateRequest
+        sendRequest(socket, authBytes)
+      }
       receiveResponse(socket)
       assertEquals(1, overrideServer.testableSelector.channels.size)
 
