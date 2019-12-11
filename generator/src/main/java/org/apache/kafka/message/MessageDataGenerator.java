@@ -80,7 +80,7 @@ public final class MessageDataGenerator {
         generateFieldDeclarations(struct, isSetElement);
         buffer.printf("%n");
         schemaGenerator.writeSchema(className, buffer);
-        generateClassConstructors(className, struct, isSetElement);
+        generateClassConstructors(className, struct);
         buffer.printf("%n");
         if (isTopLevel) {
             generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().orElse((short) -1));
@@ -385,16 +385,11 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateClassConstructors(String className, StructSpec struct, boolean isSetElement) {
+    private void generateClassConstructors(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("public %s(Readable _readable, short _version) {%n", className);
         buffer.incrementIndent();
         buffer.printf("read(_readable, _version);%n");
-        if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
-            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
-            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
-        }
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -402,11 +397,6 @@ public final class MessageDataGenerator {
         buffer.printf("public %s(Struct struct, short _version) {%n", className);
         buffer.incrementIndent();
         buffer.printf("fromStruct(struct, _version);%n");
-        if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
-            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
-            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
-        }
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.printf("%n");
@@ -415,11 +405,6 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             buffer.printf("this.%s = %s;%n",
                 field.camelCaseName(), fieldDefault(field));
-        }
-        if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_COLLECTION_CLASS);
-            buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
-            buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");

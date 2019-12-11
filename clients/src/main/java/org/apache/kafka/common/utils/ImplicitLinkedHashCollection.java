@@ -380,9 +380,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         if (newElement == null) {
             return false;
         }
-        if (newElement.prev() != INVALID_INDEX || newElement.next() != INVALID_INDEX) {
-            return false;
-        }
         if ((size + 1) >= elements.length / 2) {
             changeCapacity(calculateCapacity(elements.length));
         }
