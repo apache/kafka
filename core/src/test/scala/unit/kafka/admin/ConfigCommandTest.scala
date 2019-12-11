@@ -342,7 +342,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     var alteredConfigs = false
 
     def newConfigEntry(name: String, value: String): ConfigEntry =
-      new ConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.empty[ConfigEntry.ConfigSynonym].asJava)
+      ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.empty[ConfigEntry.ConfigSynonym].asJava)
 
     val resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
     val configEntries = List(newConfigEntry("min.insync.replicas", "1"), newConfigEntry("unclean.leader.election.enable", "1")).asJava
