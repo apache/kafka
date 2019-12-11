@@ -55,7 +55,7 @@ public class AssignmentInfoTest {
 
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {
-        final AssignmentInfo info = new AssignmentInfo(activeTasks, standbyTasks, globalAssignment);
+        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 0);
         assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 
@@ -101,6 +101,15 @@ public class AssignmentInfoTest {
     public void shouldEncodeAndDecodeVersion5() {
         final AssignmentInfo info = new AssignmentInfo(5, activeTasks, standbyTasks, globalAssignment, 2);
         final AssignmentInfo expectedInfo = new AssignmentInfo(5, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
+        final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
+        final int commonlySupportedVersion = LATEST_SUPPORTED_VERSION - 1;
+        final AssignmentInfo info = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 }

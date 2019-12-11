@@ -18,14 +18,24 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class SourceNodeTest {
     @Test
@@ -53,6 +63,55 @@ public class SourceNodeTest {
         @Override
         public String deserialize(final String topic, final byte[] data) {
             return deserialize(topic, null, data);
+        }
+    }
+
+    @Test
+    public void shouldExposeProcessMetricsWithBuiltInMetricsVersionLatest() {
+        shouldExposeProcessMetrics(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldExposeProcessWithBuiltInMetricsVersion0100To24() {
+        shouldExposeProcessMetrics(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldExposeProcessMetrics(final String builtInMetricsVersion) {
+        final Metrics metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test-client", builtInMetricsVersion);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
+        final SourceNode<String, String> node =
+            new SourceNode<>(context.currentNode().name(), Collections.singletonList("topic"), new TheDeserializer(), new TheDeserializer());
+        node.init(context);
+
+        final String threadId = Thread.currentThread().getName();
+        final String groupName = "stream-processor-node-metrics";
+        final String threadIdTagKey =
+            StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? "client-id" : "thread-id";
+        final Map<String, String> metricTags = mkMap(
+            mkEntry(threadIdTagKey, threadId),
+            mkEntry("task-id", context.taskId().toString()),
+            mkEntry("processor-node-id", node.name())
+        );
+
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-rate", groupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-total", groupName, metricTags));
+
+            // test parent sensors
+            metricTags.put("processor-node-id", StreamsMetricsImpl.ROLLUP_VALUE);
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-rate", groupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "forward-total", groupName, metricTags));
+
+        } else {
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", groupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", groupName, metricTags));
+
+            // test parent sensors
+            metricTags.put("processor-node-id", StreamsMetricsImpl.ROLLUP_VALUE);
+            final String parentGroupName = "stream-task-metrics";
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-rate", parentGroupName, metricTags));
+            assertTrue(StreamsTestUtils.containsMetric(metrics, "process-total", parentGroupName, metricTags));
         }
     }
 }

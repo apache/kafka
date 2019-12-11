@@ -37,9 +37,11 @@ object Serdes {
   implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
 
-  implicit def timeWindowedSerde[T]: WindowedSerdes.TimeWindowedSerde[T] = new WindowedSerdes.TimeWindowedSerde[T]()
-  implicit def sessionWindowedSerde[T]: WindowedSerdes.SessionWindowedSerde[T] =
-    new WindowedSerdes.SessionWindowedSerde[T]()
+  implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
+    new WindowedSerdes.TimeWindowedSerde[T](tSerde)
+
+  implicit def sessionWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.SessionWindowedSerde[T] =
+    new WindowedSerdes.SessionWindowedSerde[T](tSerde)
 
   def fromFn[T >: Null](serializer: T => Array[Byte], deserializer: Array[Byte] => Option[T]): Serde[T] =
     JSerdes.serdeFrom(

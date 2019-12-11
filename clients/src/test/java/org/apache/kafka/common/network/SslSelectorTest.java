@@ -31,7 +31,6 @@ import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -127,8 +126,15 @@ public class SslSelectorTest extends SelectorTest {
 
         waitForBytesBuffered(selector, node);
 
+        TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            "Waiting for cipher metrics to be created.");
+        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
+
         selector.close(node);
         super.verifySelectorEmpty(selector);
+
+        assertEquals(1, cipherMetrics(metrics).size());
+        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
@@ -157,15 +163,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     private void waitForBytesBuffered(Selector selector, String node) throws Exception {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(0L);
-                    return selector.channel(node).hasBytesBuffered();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(0L);
+                return selector.channel(node).hasBytesBuffered();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 2000L, "Failed to reach socket state with bytes buffered");
     }
@@ -405,5 +408,4 @@ public class SslSelectorTest extends SelectorTest {
             }
         }
     }
-
 }

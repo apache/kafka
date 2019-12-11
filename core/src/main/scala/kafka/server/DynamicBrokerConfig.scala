@@ -612,6 +612,18 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
     // validation, no additional validation is performed.
   }
 
+  private def updateLogsConfig(newBrokerDefaults: Map[String, Object]): Unit = {
+    logManager.brokerConfigUpdated()
+    logManager.allLogs.foreach { log =>
+      val props = mutable.Map.empty[Any, Any]
+      props ++= newBrokerDefaults
+      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
+
+      val logConfig = LogConfig(props.asJava)
+      log.updateConfig(logConfig)
+    }
+  }
+
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val currentLogConfig = logManager.currentDefaultConfig
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
@@ -626,14 +638,8 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
 
     logManager.reconfigureDefaultLogConfig(LogConfig(newBrokerDefaults))
 
-    logManager.allLogs.foreach { log =>
-      val props = mutable.Map.empty[Any, Any]
-      props ++= newBrokerDefaults.asScala
-      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
+    updateLogsConfig(newBrokerDefaults.asScala)
 
-      val logConfig = LogConfig(props.asJava)
-      log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
-    }
     if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
       server.kafkaController.enableDefaultUncleanLeaderElection()
     }

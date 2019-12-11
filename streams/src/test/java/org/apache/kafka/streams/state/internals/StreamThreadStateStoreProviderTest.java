@@ -304,7 +304,7 @@ public class StreamThreadStateStoreProviderTest {
         final Metrics metrics = new Metrics();
         return new StreamTask(
             taskId,
-            Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
+            Collections.singleton(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
             new StoreChangelogReader(
@@ -317,10 +317,7 @@ public class StreamThreadStateStoreProviderTest {
             stateDirectory,
             null,
             new MockTime(),
-            () -> clientSupplier.getProducer(new HashMap<>())) {
-            @Override
-            protected void updateOffsetLimits() {}
-        };
+            () -> clientSupplier.getProducer(new HashMap<>()));
     }
 
     private void mockThread(final boolean initialized) {

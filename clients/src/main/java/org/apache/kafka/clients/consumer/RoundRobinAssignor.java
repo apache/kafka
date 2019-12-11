@@ -75,9 +75,9 @@ import java.util.TreeSet;
  * </ul>
  *
  * After one rolling bounce, group coordinator will attempt to assign new <code>member.id</code> towards consumers,
- * for example <code>C0</code> -> <code>C5</code> <code>C1</code> -> <code>C3</code>, <code>C2</code> -> <code>C4</code>.
+ * for example <code>C0</code> -&gt; <code>C5</code> <code>C1</code> -&gt; <code>C3</code>, <code>C2</code> -&gt; <code>C4</code>.
  *
- * <p>the assignment could be completely shuffled to:
+ * <p>The assignment could be completely shuffled to:
  * <ul>
  * <li><code>C3 (was C1): [t0p0, t1p0] (before was [t0p1, t1p1])</code>
  * <li><code>C4 (was C2): [t0p1, t1p1] (before was [t0p2, t1p2])</code>
@@ -88,6 +88,7 @@ import java.util.TreeSet;
  * <code>I1</code>, <code>I2</code>, <code>I3</code>. As long as
  * 1. Number of members remain the same across generation
  * 2. Static members' identities persist across generation
+ * 3. Subscription pattern doesn't change for any member
  *
  * <p>The assignment will always be:
  * <ul>

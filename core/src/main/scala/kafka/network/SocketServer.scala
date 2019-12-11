@@ -22,6 +22,7 @@ import java.net._
 import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
 import java.util
+import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.function.Supplier
@@ -209,11 +210,9 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
     orderedAcceptors.foreach { acceptor =>
       val endpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
-      authorizerFutures.get(endpoint).foreach { future =>
-        future.join()
-      }
-      debug(s"Start processors on listener ${endpoint.listener}")
+      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
+      waitForAuthorizerFuture(acceptor, authorizerFutures)
+      debug(s"Start processors on listener ${endpoint.listenerName}")
       acceptor.startProcessors(DataPlaneThreadPrefix)
     }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
@@ -226,7 +225,7 @@ class SocketServer(val config: KafkaConfig,
    */
   def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      authorizerFutures.get(controlPlaneAcceptor.endPoint).foreach(_.get)
+      waitForAuthorizerFuture(controlPlaneAcceptor, authorizerFutures)
       controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }
@@ -377,6 +376,15 @@ class SocketServer(val config: KafkaConfig,
     if (maxConnections != oldConfig.maxConnections) {
       info(s"Updating broker-wide maxConnections: $maxConnections")
       connectionQuotas.updateBrokerMaxConnections(maxConnections)
+    }
+  }
+
+  private def waitForAuthorizerFuture(acceptor: Acceptor,
+                                      authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
+    //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
+    authorizerFutures.foreach { case (endpoint, future) =>
+      if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
+        future.join()
     }
   }
 
@@ -899,8 +907,9 @@ private[kafka] class Processor(val id: Int,
             else {
               val nowNanos = time.nanoseconds()
               if (channel.serverAuthenticationSessionExpired(nowNanos)) {
-                channel.disconnect()
-                debug(s"Disconnected expired channel: $channel : $header")
+                // be sure to decrease connection count and drop any in-flight responses
+                debug(s"Disconnecting expired channel: $channel : $header")
+                close(channel.id)
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val connectionId = receive.source

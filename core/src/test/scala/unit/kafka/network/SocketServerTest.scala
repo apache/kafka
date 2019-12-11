@@ -27,19 +27,20 @@ import java.util.{HashMap, Properties, Random}
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
 import javax.net.ssl._
-
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.{Endpoint, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.SaslAuthenticateRequestData
+import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
@@ -105,6 +106,14 @@ class SocketServerTest {
     outgoing.write(request)
     if (flush)
       outgoing.flush()
+  }
+
+  def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader) = {
+    val byteBuffer = request.serialize(header)
+    byteBuffer.rewind()
+    val serializedBytes = new Array[Byte](byteBuffer.remaining)
+    byteBuffer.get(serializedBytes)
+    sendRequest(socket, serializedBytes)
   }
 
   def receiveResponse(socket: Socket): Array[Byte] = {
@@ -202,6 +211,10 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startupProcessors = false)
+    val updatedEndPoints = config.advertisedListeners.map { endpoint =>
+      endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
+    }.map(_.toJava)
+
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
 
@@ -221,7 +234,7 @@ class SocketServerTest {
       sendAndReceiveControllerRequest(socket1, testableServer)
 
       val externalListener = new ListenerName("EXTERNAL")
-      val externalEndpoint = new Endpoint(externalListener.value, SecurityProtocol.PLAINTEXT, "localhost", 0)
+      val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
       val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
@@ -506,7 +519,7 @@ class SocketServerTest {
     assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -521,7 +534,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted after sending out the response.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -533,7 +546,7 @@ class SocketServerTest {
 
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.MUTED_AND_THROTTLED), "fail")
     // Channel should still be muted.
-    assertTrue(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertTrue(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -546,7 +559,7 @@ class SocketServerTest {
     // Since throttling is already done, the channel can be unmuted.
     TestUtils.waitUntilTrue(() => openOrClosingChannel(request).exists(c => c.muteState() == ChannelMuteState.NOT_MUTED), "fail")
     // Channel is now unmuted.
-    assertFalse(openOrClosingChannel(request).exists(c => c.isMute()))
+    assertFalse(openOrClosingChannel(request).exists(c => c.isMuted()))
   }
 
   @Test
@@ -697,6 +710,87 @@ class SocketServerTest {
       processRequest(overrideServer.dataPlaneRequestChannel)
       assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
       sslSocket.close()
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testSaslReauthenticationFailureWithKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(true)
+  }
+
+  @Test
+  def testSaslReauthenticationFailureNoKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(false)
+  }
+
+  def checkSaslReauthenticationFailure(leverageKip152SaslAuthenticateRequest : Boolean): Unit = {
+    shutdownServerAndMetrics(server) // we will use our own instance because we require custom configs
+    val username = "admin"
+    val password = "admin-secret"
+    val reauthMs = 1500
+    val brokerProps = new Properties
+    brokerProps.setProperty("listeners", "SASL_PLAINTEXT://localhost:0")
+    brokerProps.setProperty("security.inter.broker.protocol", "SASL_PLAINTEXT")
+    brokerProps.setProperty("listener.name.sasl_plaintext.plain.sasl.jaas.config",
+      "org.apache.kafka.common.security.plain.PlainLoginModule required " +
+        "username=\"%s\" password=\"%s\" user_%s=\"%s\";".format(username, password, username, password))
+    brokerProps.setProperty("sasl.mechanism.inter.broker.protocol", "PLAIN")
+    brokerProps.setProperty("listener.name.sasl_plaintext.sasl.enabled.mechanisms", "PLAIN")
+    brokerProps.setProperty("num.network.threads", "1")
+    brokerProps.setProperty("connections.max.reauth.ms", reauthMs.toString)
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect,
+      saslProperties = Some(brokerProps), enableSaslPlaintext = true)
+    val time = new MockTime()
+    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(overrideProps), time = time)
+    try {
+      overrideServer.startup()
+      val socket = connect(overrideServer, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT))
+
+      val correlationId = -1
+      val clientId = ""
+      // send a SASL handshake request
+      val version : Short = if (leverageKip152SaslAuthenticateRequest) ApiKeys.SASL_HANDSHAKE.latestVersion else 0
+      val saslHandshakeRequest = new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
+        .build(version)
+      val saslHandshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE, saslHandshakeRequest.version, clientId,
+        correlationId)
+      sendApiRequest(socket, saslHandshakeRequest, saslHandshakeHeader)
+      receiveResponse(socket)
+
+      // now send credentials
+      val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
+      if (leverageKip152SaslAuthenticateRequest) {
+        // send credentials within a SaslAuthenticateRequest
+        val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
+          .setAuthBytes(authBytes)).build()
+        val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
+          clientId, correlationId)
+        sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      } else {
+        // send credentials directly, without a SaslAuthenticateRequest
+        sendRequest(socket, authBytes)
+      }
+      receiveResponse(socket)
+      assertEquals(1, overrideServer.testableSelector.channels.size)
+
+      // advance the clock long enough to cause server-side disconnection upon next send...
+      time.sleep(reauthMs * 2)
+      // ...and now send something to trigger the disconnection
+      val ackTimeoutMs = 10000
+      val ack = 0: Short
+      val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
+        new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
+      sendApiRequest(socket, emptyRequest, emptyHeader)
+      // wait a little bit for the server-side disconnection to occur since it happens asynchronously
+      try {
+        TestUtils.waitUntilTrue(() => overrideServer.testableSelector.channels.isEmpty,
+          "Expired connection was not closed", 1000, 100)
+      } finally {
+        socket.close()
+      }
     } finally {
       shutdownServerAndMetrics(overrideServer)
     }
@@ -1241,8 +1335,9 @@ class SocketServerTest {
     }
   }
 
-  class TestableSocketServer(config : KafkaConfig = config, val connectionQueueSize: Int = 20) extends SocketServer(config,
-      new Metrics, Time.SYSTEM, credentialProvider) {
+  class TestableSocketServer(config : KafkaConfig = config, val connectionQueueSize: Int = 20,
+                             override val time: Time = Time.SYSTEM) extends SocketServer(config,
+      new Metrics, time, credentialProvider) {
 
     @volatile var selector: Option[TestableSelector] = None
 

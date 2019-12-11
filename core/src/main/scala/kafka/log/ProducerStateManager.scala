@@ -113,7 +113,7 @@ private[log] class ProducerStateEntry(val producerId: Long,
 
   def lastDataOffset: Long = if (isEmpty) -1L else batchMetadata.last.lastOffset
 
-  def lastTimestamp = if (isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
+  def lastTimestamp: Long = if (isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
 
   def lastOffsetDelta : Int = if (isEmpty) 0 else batchMetadata.last.offsetDelta
 
@@ -147,8 +147,6 @@ private[log] class ProducerStateEntry(val producerId: Long,
     this.coordinatorEpoch = nextEntry.coordinatorEpoch
     this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset
   }
-
-  def removeBatchesOlderThan(offset: Long): Unit = batchMetadata.dropWhile(_.lastOffset < offset)
 
   def findDuplicateBatch(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch != producerEpoch)
@@ -228,10 +226,6 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch at offset $offset in " +
             s"partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number)")
-        } else {
-          throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker at offset $offset" +
-            s"in partition $topicPartition. It is possible that the last message with the producerId=$producerId has " +
-            "been removed due to hitting the retention limit.")
         }
       }
     } else {
@@ -242,16 +236,9 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       else
         RecordBatch.NO_SEQUENCE
 
-      if (currentLastSeq == RecordBatch.NO_SEQUENCE && appendFirstSeq != 0) {
-        // We have a matching epoch, but we do not know the next sequence number. This case can happen if
-        // only a transaction marker is left in the log for this producer. We treat this as an unknown
-        // producer id error, so that the producer can check the log start offset for truncation and reset
-        // the sequence number. Note that this check follows the fencing check, so the marker still fences
-        // old producers even if it cannot determine our next expected sequence number.
-        throw new UnknownProducerIdException(s"Local producer state matches expected epoch $producerEpoch " +
-          s"for producerId=$producerId at offset $offset in partition $topicPartition, but the next expected " +
-          "sequence number is not known.")
-      } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
+      // If there is no current producer epoch (possibly because all producer records have been deleted due to
+      // retention or the DeleteRecords API) accept writes with any sequence number
+      if (!(currentEntry.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId at " +
           s"offset $offset in partition $topicPartition: $appendFirstSeq (incoming seq. number), " +
           s"$currentLastSeq (current end sequence number)")
@@ -542,7 +529,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Returns the last offset of this map
    */
-  def mapEndOffset = lastMapOffset
+  def mapEndOffset: Long = lastMapOffset
 
   /**
    * Get a copy of the active producers
@@ -557,9 +544,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
         case Some(file) =>
           try {
             info(s"Loading producer state from snapshot file '$file'")
-            val loadedProducers = readSnapshot(file).filter { producerEntry =>
-              isProducerRetained(producerEntry, logStartOffset) && !isProducerExpired(currentTime, producerEntry)
-            }
+            val loadedProducers = readSnapshot(file).filter { producerEntry => !isProducerExpired(currentTime, producerEntry) }
             loadedProducers.foreach(loadProducerEntry)
             lastSnapOffset = offsetFromFile(file)
             lastMapOffset = lastSnapOffset
@@ -600,8 +585,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
-   * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
-   * or equal to the high watermark.
+   * snapshot in range (if there is one). We delete snapshot files prior to the logStartOffset but do not remove
+   * producer state from the map. This means that in-memory and on-disk state can diverge, and in the case of
+   * broker failover or unclean shutdown, any in-memory state not persisted in the snapshots will be lost, which
+   * would lead to UNKNOWN_PRODUCER_ID errors. Note that the log end offset is assumed to be less than or equal
+   * to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long): Unit = {
     // remove all out of range snapshots
@@ -692,28 +680,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
 
-  private def isProducerRetained(producerStateEntry: ProducerStateEntry, logStartOffset: Long): Boolean = {
-    producerStateEntry.removeBatchesOlderThan(logStartOffset)
-    producerStateEntry.lastDataOffset >= logStartOffset
-  }
-
   /**
-   * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all producerIds which have a smaller last written offset. Additionally,
-   * we remove snapshots older than the new log start offset.
-   *
-   * Note that snapshots from offsets greater than the log start offset may have producers included which
-   * should no longer be retained: these producers will be removed if and when we need to load state from
-   * the snapshot.
+   * When we remove the head of the log due to retention, we need to remove snapshots older than
+   * the new log start offset.
    */
   def truncateHead(logStartOffset: Long): Unit = {
-    val evictedProducerEntries = producers.filter { case (_, producerState) =>
-      !isProducerRetained(producerState, logStartOffset)
-    }
-    val evictedProducerIds = evictedProducerEntries.keySet
-
-    producers --= evictedProducerIds
-    removeEvictedOngoingTransactions(evictedProducerIds)
     removeUnreplicatedTransactions(logStartOffset)
 
     if (lastMapOffset < logStartOffset)
@@ -721,15 +692,6 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
     deleteSnapshotsBefore(logStartOffset)
     lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
-  }
-
-  private def removeEvictedOngoingTransactions(expiredProducerIds: collection.Set[Long]): Unit = {
-    val iterator = ongoingTxns.entrySet.iterator
-    while (iterator.hasNext) {
-      val txnEntry = iterator.next()
-      if (expiredProducerIds.contains(txnEntry.getValue.producerId))
-        iterator.remove()
-    }
   }
 
   private def removeUnreplicatedTransactions(offset: Long): Unit = {

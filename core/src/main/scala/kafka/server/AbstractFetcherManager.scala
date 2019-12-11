@@ -76,6 +76,16 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     Map("clientId" -> clientId)
   )
 
+  newGauge("DeadThreadCount", {
+    new Gauge[Int] {
+      def value: Int = {
+        deadThreadCount
+      }
+    }
+  }, Map("clientId" -> clientId))
+
+  private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
+
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.foreach { case (id, thread) =>

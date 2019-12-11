@@ -21,6 +21,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
@@ -149,13 +150,13 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
-        Map<String, KafkaFuture<Void>> createTopicResult = new HashMap<>();
+        Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
             for (final NewTopic newTopic : newTopics) {
                 String topicName = newTopic.name();
 
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 createTopicResult.put(topicName, future);
             }
@@ -165,7 +166,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         for (final NewTopic newTopic : newTopics) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
 
             String topicName = newTopic.name();
             if (allTopics.containsKey(topicName)) {
@@ -174,6 +175,11 @@ public class MockAdminClient extends AdminClient {
                 continue;
             }
             int replicationFactor = newTopic.replicationFactor();
+            if (replicationFactor > brokers.size())
+                throw new IllegalArgumentException(
+                    String.format("NewTopic %s cannot have a replication factor of %d that is larger than the number of brokers %s",
+                        newTopic, replicationFactor, brokers));
+
             List<Node> replicas = new ArrayList<>(replicationFactor);
             for (int i = 0; i < replicationFactor; ++i) {
                 replicas.add(brokers.get(i));
@@ -343,6 +349,11 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     @Deprecated
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
@@ -358,7 +369,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options) {
+    public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -435,6 +446,16 @@ public class MockAdminClient extends AdminClient {
     @Override
     public ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions, ListPartitionReassignmentsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
+    public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override

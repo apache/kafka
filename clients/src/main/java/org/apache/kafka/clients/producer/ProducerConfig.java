@@ -83,13 +83,14 @@ public class ProducerConfig extends AbstractConfig {
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
                                            + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
-                                           + " always be set to -1."
+                                           + " always be set to <code>-1</code>."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
                                            + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
+                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
+                                           + "</ul>";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
@@ -132,10 +133,11 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This setting will limit the number of record "
-                                                       + "batches the producer will send in a single request to avoid sending huge requests. "
-                                                       + "This is also effectively a cap on the maximum record batch size. Note that the server "
-                                                       + "has its own cap on record batch size which may be different from this.";
+    private static final String MAX_REQUEST_SIZE_DOC =
+        "The maximum size of a request in bytes. This setting will limit the number of record " +
+        "batches the producer will send in a single request to avoid sending huge requests. " +
+        "This is also effectively a cap on the maximum uncompressed record batch size. Note that the server " +
+        "has its own cap on the record batch size (after compression if compression is enabled) which may be different from this.";
 
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -421,7 +423,7 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 
 }

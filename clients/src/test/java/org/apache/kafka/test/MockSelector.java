@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.requests.ByteBufferChannel;
@@ -41,6 +41,7 @@ public class MockSelector implements Selectable {
     private final Time time;
     private final List<Send> initiatedSends = new ArrayList<>();
     private final List<Send> completedSends = new ArrayList<>();
+    private final List<ByteBufferChannel> completedSendBuffers = new ArrayList<>();
     private final List<NetworkReceive> completedReceives = new ArrayList<>();
     private final Map<String, ChannelState> disconnected = new HashMap<>();
     private final List<String> connected = new ArrayList<>();
@@ -87,18 +88,21 @@ public class MockSelector implements Selectable {
         close(id);
     }
 
+    public void serverAuthenticationFailed(String id) {
+        ChannelState authFailed = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED,
+                new AuthenticationException("Authentication failed"), null);
+        this.disconnected.put(id, authFailed);
+        close(id);
+    }
+
     private void removeSendsForNode(String id, Collection<Send> sends) {
-        Iterator<Send> iter = sends.iterator();
-        while (iter.hasNext()) {
-            Send send = iter.next();
-            if (id.equals(send.destination()))
-                iter.remove();
-        }
+        sends.removeIf(send -> id.equals(send.destination()));
     }
 
     public void clear() {
         this.completedSends.clear();
         this.completedReceives.clear();
+        this.completedSendBuffers.clear();
         this.disconnected.clear();
         this.connected.clear();
     }
@@ -129,6 +133,7 @@ public class MockSelector implements Selectable {
                 send.writeTo(discardChannel);
             }
             completedSends.add(send);
+            completedSendBuffers.add(discardChannel);
         }
     }
 
@@ -150,8 +155,8 @@ public class MockSelector implements Selectable {
         return completedSends;
     }
 
-    public void completeSend(NetworkSend send) {
-        this.completedSends.add(send);
+    public List<ByteBufferChannel> completedSendBuffers() {
+        return completedSendBuffers;
     }
 
     @Override
