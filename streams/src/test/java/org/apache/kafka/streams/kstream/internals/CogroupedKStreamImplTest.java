@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+import java.util.Properties;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -43,11 +47,6 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.Properties;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 
 public class CogroupedKStreamImplTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -130,6 +129,11 @@ public class CogroupedKStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterializedOnAggregateWithNames() {
         cogroupedStream.aggregate(STRING_INITIALIZER, Named.as("name"), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullWindowOnWindowedBy() {
+        cogroupedStream.windowedBy(null);
     }
 
     @Test

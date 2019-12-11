@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * <p>
  * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
  * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
- * The result is written into a local windowed {@link WindowStore} (which is basically an ever-updating
+ * The result is written into a local {@link WindowStore} (which is basically an ever-updating
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  *
  * A {@code WindowedCogroupKStream} must be obtained from a {@link CogroupedKStream} via {@link CogroupedKStream#windowedBy(Windows)} .
@@ -128,12 +128,12 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * }</pre>
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
-     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * Therefore, the store name defined by the {@link Materialized} instance must be a valid Kafka topic name and cannot contain characters other than ASCII
      * alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -234,7 +234,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *

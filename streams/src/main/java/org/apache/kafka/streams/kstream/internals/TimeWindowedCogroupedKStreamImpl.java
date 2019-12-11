@@ -17,6 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -36,15 +40,10 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
         implements TimeWindowedCogroupedKStream<K, V> {
 
-    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
@@ -57,7 +56,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                      final StreamsGraphNode streamsGraphNode,
                                      final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, null, sourceNodes, streamsGraphNode, builder);
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;
         this.groupPatterns = groupPatterns;
