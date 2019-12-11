@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.ChannelMetricsRegistry;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -127,6 +128,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Map<String, AuthenticateCallbackHandler> callbackHandlers;
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
+    private final ChannelMetricsRegistry metricsRegistry;
     private final ReauthInfo reauthInfo;
 
     // Current SASL state
@@ -145,9 +147,6 @@ public class SaslServerAuthenticator implements Authenticator {
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
 
-    // Client information extracted from the ApiVersionsRequest if provided
-    private Optional<ClientInformation> clientInformation = Optional.empty();
-
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    Map<String, AuthenticateCallbackHandler> callbackHandlers,
                                    String connectionId,
@@ -157,7 +156,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    SecurityProtocol securityProtocol,
                                    TransportLayer transportLayer,
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
-                                   Time time) {
+                                   Time time,
+                                   ChannelMetricsRegistry metricsRegistry) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -167,6 +167,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.transportLayer = transportLayer;
         this.connectionsMaxReauthMsByMechanism = connectionsMaxReauthMsByMechanism;
         this.time = time;
+        this.metricsRegistry = metricsRegistry;
         this.reauthInfo = new ReauthInfo();
 
         this.configs = configs;
@@ -324,11 +325,6 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     @Override
-    public Optional<ClientInformation> clientInformation() {
-        return clientInformation;
-    }
-
-    @Override
     public boolean complete() {
         return saslState == SaslState.COMPLETE;
     }
@@ -436,7 +432,7 @@ public class SaslServerAuthenticator implements Authenticator {
             ApiKeys apiKey = header.apiKey();
             short version = header.apiVersion();
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, metricsRegistry);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
                 IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
@@ -522,7 +518,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
 
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, metricsRegistry);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
@@ -595,8 +591,9 @@ public class SaslServerAuthenticator implements Authenticator {
         else if (!apiVersionsRequest.isValid())
             sendKafkaResponse(context, apiVersionsRequest.getErrorResponse(0, Errors.INVALID_REQUEST.exception()));
         else {
-            clientInformation = Optional.of(new ClientInformation(apiVersionsRequest.data.clientSoftwareName(),
-                apiVersionsRequest.data.clientSoftwareVersion()));
+            ClientInformation clientInformation = new ClientInformation(apiVersionsRequest.data.clientSoftwareName(),
+                    apiVersionsRequest.data.clientSoftwareVersion());
+            metricsRegistry.registerClientInformation(clientInformation);
             sendKafkaResponse(context, apiVersionsResponse());
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }

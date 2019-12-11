@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import java.util.Optional;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
@@ -52,15 +51,6 @@ public interface Authenticator extends Closeable {
      * Returns Principal using PrincipalBuilder
      */
     KafkaPrincipal principal();
-
-    /**
-     * Returns the ClientInformation extracted from the ApiVersionsRequest which may
-     * have been received by the Authenticator or an empty Option if the remote end
-     * did not provide it.
-     */
-    default Optional<ClientInformation> clientInformation() {
-        return Optional.empty();
-    }
 
     /**
      * returns true if authentication is complete otherwise returns false;

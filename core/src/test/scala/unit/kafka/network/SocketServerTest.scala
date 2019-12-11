@@ -223,8 +223,10 @@ class SocketServerTest {
     sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
     var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
 
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
-    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION,
+      receivedReq.context.metricsRegistry.clientInformation.softwareName)
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION,
+      receivedReq.context.metricsRegistry.clientInformation.softwareVersion)
 
     server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
 
@@ -232,8 +234,10 @@ class SocketServerTest {
     sendRequest(plainSocket, producerRequestBytes())
     receivedReq = receiveRequest(server.dataPlaneRequestChannel)
 
-    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
-    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
+    assertEquals(expectedClientSoftwareName,
+      receivedReq.context.metricsRegistry.clientInformation.softwareName)
+    assertEquals(expectedClientSoftwareVersion,
+      receivedReq.context.metricsRegistry.clientInformation.softwareVersion)
 
     server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
 

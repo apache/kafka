@@ -38,8 +38,10 @@ public class KafkaChannelTest {
         Authenticator authenticator = Mockito.mock(Authenticator.class);
         TransportLayer transport = Mockito.mock(TransportLayer.class);
         MemoryPool pool = Mockito.mock(MemoryPool.class);
+        ChannelMetricsRegistry metricsRegistry = Mockito.mock(ChannelMetricsRegistry.class);
 
-        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator, 1024, pool);
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
+            1024, pool, metricsRegistry);
         NetworkSend send = new NetworkSend("0", ByteBuffer.wrap(TestUtils.randomBytes(128)));
 
         channel.setSend(send);
@@ -67,13 +69,15 @@ public class KafkaChannelTest {
         Authenticator authenticator = Mockito.mock(Authenticator.class);
         TransportLayer transport = Mockito.mock(TransportLayer.class);
         MemoryPool pool = Mockito.mock(MemoryPool.class);
+        ChannelMetricsRegistry metricsRegistry = Mockito.mock(ChannelMetricsRegistry.class);
 
         ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
         Mockito.when(pool.tryAllocate(sizeCaptor.capture())).thenAnswer(invocation -> {
             return ByteBuffer.allocate(sizeCaptor.getValue());
         });
 
-        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator, 1024, pool);
+        KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
+            1024, pool, metricsRegistry);
 
         ArgumentCaptor<ByteBuffer> bufferCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
         Mockito.when(transport.read(bufferCaptor.capture())).thenAnswer(invocation -> {

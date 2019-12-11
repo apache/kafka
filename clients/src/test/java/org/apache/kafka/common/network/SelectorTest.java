@@ -371,7 +371,7 @@ public class SelectorTest {
         ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
             @Override
             public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                    MemoryPool memoryPool) throws KafkaException {
+                    MemoryPool memoryPool, ChannelMetricsRegistry metricsRegistry) throws KafkaException {
                 throw new RuntimeException("Test exception");
             }
             @Override
@@ -682,7 +682,6 @@ public class SelectorTest {
         when(kafkaChannel.finishConnect()).thenReturn(true);
         when(kafkaChannel.isConnected()).thenReturn(true);
         when(kafkaChannel.ready()).thenReturn(false);
-        when(kafkaChannel.clientInformation()).thenReturn(ClientInformation.EMPTY);
         doThrow(new IOException()).when(kafkaChannel).prepare();
 
         SelectionKey selectionKey = mock(SelectionKey.class);
@@ -767,7 +766,7 @@ public class SelectorTest {
             assertEquals(1, getMetric("connections", unknownNameAndVersion).metricValue());
 
             // Metric with unknown / unknown should not be there, metric with A / B should be there
-            selector.channel(node).updateClientInformation(new ClientInformation("A", "B"));
+            selector.channel(node).channelMetricsRegistry().registerClientInformation(new ClientInformation("A", "B"));
             assertEquals(0, getMetric("connections", unknownNameAndVersion).metricValue());
             assertEquals(1, getMetric("connections", knownNameAndVersion).metricValue());
 

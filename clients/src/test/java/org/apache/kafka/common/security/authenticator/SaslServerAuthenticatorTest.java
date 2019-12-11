@@ -19,9 +19,11 @@ package org.apache.kafka.common.security.authenticator;
 import java.net.InetAddress;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.network.ChannelMetricsRegistry;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.NoOpMetricsRegistry;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -59,7 +61,8 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), new NoOpMetricsRegistry());
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
             invocation.<ByteBuffer>getArgument(0).putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
@@ -74,7 +77,8 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), new NoOpMetricsRegistry());
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
@@ -104,7 +108,9 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
             Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        NoOpMetricsRegistry metricsRegistry = new NoOpMetricsRegistry();
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), metricsRegistry);
 
         final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
         final Struct headerStruct = header.toStruct();
@@ -125,8 +131,8 @@ public class SaslServerAuthenticatorTest {
 
         authenticator.authenticate();
 
-        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, authenticator.clientInformation().get().softwareName());
-        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, authenticator.clientInformation().get().softwareVersion());
+        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, metricsRegistry.clientInformation().softwareName());
+        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, metricsRegistry.clientInformation().softwareVersion());
 
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
@@ -137,7 +143,9 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
             Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        NoOpMetricsRegistry metricsRegistry = new NoOpMetricsRegistry();
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), metricsRegistry);
 
         final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
         final Struct headerStruct = header.toStruct();
@@ -158,13 +166,16 @@ public class SaslServerAuthenticatorTest {
 
         authenticator.authenticate();
 
-        assertEquals("apache-kafka-java", authenticator.clientInformation().get().softwareName());
-        assertEquals(AppInfoParser.getVersion(), authenticator.clientInformation().get().softwareVersion());
+        assertEquals("apache-kafka-java", metricsRegistry.clientInformation().softwareName());
+        assertEquals(AppInfoParser.getVersion(), metricsRegistry.clientInformation().softwareVersion());
 
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
-    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer, String mechanism) throws IOException {
+    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs,
+                                                       TransportLayer transportLayer,
+                                                       String mechanism,
+                                                       ChannelMetricsRegistry metricsRegistry) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
@@ -173,7 +184,8 @@ public class SaslServerAuthenticatorTest {
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, Collections.emptyMap(), Time.SYSTEM);
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, Collections.emptyMap(),
+                Time.SYSTEM, metricsRegistry);
     }
 
 }

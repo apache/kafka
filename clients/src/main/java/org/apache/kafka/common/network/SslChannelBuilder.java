@@ -93,12 +93,15 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     }
 
     @Override
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool,
+                                     ChannelMetricsRegistry metricsRegistry) throws KafkaException {
         try {
-            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
+            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key,
+                peerHost(key), metricsRegistry);
+            Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs,
+                transportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE, metricsRegistry);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -108,9 +111,14 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     @Override
     public void close() {}
 
-    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory,
+                                                    String id,
+                                                    SelectionKey key,
+                                                    String host,
+                                                    ChannelMetricsRegistry metricsRegistry) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        return SslTransportLayer.create(id, key, sslFactory.createSslEngine(host, socketChannel.socket().getPort()));
+        return SslTransportLayer.create(id, key,
+            sslFactory.createSslEngine(host, socketChannel.socket().getPort()), metricsRegistry);
     }
 
     /**
