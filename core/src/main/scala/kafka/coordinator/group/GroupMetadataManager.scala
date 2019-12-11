@@ -254,7 +254,7 @@ class GroupMetadataManager(brokerId: Int,
         def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
           // the append response should only contain the topics partition
           if (responseStatus.size != 1 || !responseStatus.contains(groupMetadataPartition))
-            throw new IllegalStateException("Append status %s should have and only have one partition %s"
+            throw new IllegalStateException("Append status %s should only have one partition %s"
               .format(responseStatus, groupMetadataPartition))
 
           // construct the error status in the propagated assignment response in the cache
@@ -377,7 +377,7 @@ class GroupMetadataManager(brokerId: Int,
           def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
             // the append response should only contain the topics partition
             if (responseStatus.size != 1 || !responseStatus.contains(offsetTopicPartition))
-              throw new IllegalStateException("Append status %s should have and only have one partition %s"
+              throw new IllegalStateException("Append status %s should only have one partition %s"
                 .format(responseStatus, offsetTopicPartition))
 
             // record the number of offsets committed to the log
