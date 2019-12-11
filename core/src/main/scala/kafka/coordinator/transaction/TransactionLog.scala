@@ -16,16 +16,16 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.MessageFormatter
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import kafka.common.MessageFormatter
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.protocol.types.Type._
+import org.apache.kafka.common.protocol.types._
+import org.apache.kafka.common.record.{CompressionType, Record, RecordBatch}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.mutable
 
@@ -130,7 +130,7 @@ object TransactionLog {
     *
     * @return key bytes
     */
-  private[coordinator] def keyToBytes(transactionalId: String): Array[Byte] = {
+  private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
     import KeySchema._
     val key = new Struct(CURRENT)
     key.set(TXN_ID_FIELD, transactionalId)
@@ -146,7 +146,7 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
+  private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
     import ValueSchema._
     val value = new Struct(Current)
     value.set(ProducerIdField, txnMetadata.producerId)
@@ -266,6 +266,29 @@ object TransactionLog {
       }
     }
   }
+
+  /**
+   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
+   */
+  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
+    val txnKey = TransactionLog.readTxnRecordKey(record.key)
+    val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
+
+    val txnMetadata = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value)
+    val valueString = if (txnMetadata == null) {
+      "<DELETE>"
+    } else {
+      s"producerId:${txnMetadata.producerId}," +
+        s"producerEpoch:${txnMetadata.producerEpoch}," +
+        s"state=${txnMetadata.state}," +
+        s"partitions=${txnMetadata.topicPartitions}," +
+        s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
+        s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
+    }
+
+    (Some(keyString), Some(valueString))
+  }
+
 }
 
 case class TxnKey(version: Short, transactionalId: String) {
