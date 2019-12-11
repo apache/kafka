@@ -21,6 +21,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
@@ -115,7 +116,7 @@ public class StreamsMetadataState {
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
         for (final StreamsMetadata metadata : allMetadata) {
-            if (metadata.stateStoreNames().contains(storeName) || metadata.getStandbyStateStoreNames().contains(storeName)) {
+            if (metadata.stateStoreNames().contains(storeName) || metadata.standbyStateStoreNames().contains(storeName)) {
                 results.add(metadata);
             }
         }
@@ -373,19 +374,17 @@ public class StreamsMetadataState {
         final Set<HostInfo> standbyHosts = new HashSet<>();
         for (final StreamsMetadata streamsMetadata : allMetadata) {
             final Set<String> activeStateStoreNames = streamsMetadata.stateStoreNames();
-            final Set<String> standbyStateStoreNames = streamsMetadata.getStandbyStateStoreNames();
+            final Set<String> standbyStateStoreNames = streamsMetadata.standbyStateStoreNames();
             final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
-            if (activeStateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
+            if (activeStateStoreNames.contains(storeName) && !topicPartitions.isEmpty()) {
                 activeHost = streamsMetadata.hostInfo();
-            } else if (standbyStateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
+            } else if (standbyStateStoreNames.contains(storeName) && !topicPartitions.isEmpty()) {
                 standbyHosts.add(streamsMetadata.hostInfo());
             }
         }
 
-        return new KeyQueryMetadata(activeHost, standbyHosts, partition.intValue());
+        return new KeyQueryMetadata(activeHost, standbyHosts, partition);
     }
 
     @Deprecated

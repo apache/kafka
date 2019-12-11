@@ -54,7 +54,6 @@ import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidat
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.internals.KeyQueryMetadata;
 import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.AbstractTask;
@@ -1159,45 +1158,43 @@ public class KafkaStreams implements AutoCloseable {
      * Returns mapping from partition to another map of store name to offset lag info, for all {partitions, stores} local to this Streams instance. It includes both active and standby store partitions.
      */
     public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
-        final Map<TaskId, Map<String, Long>> localOffsetLags = new HashMap<>();
-        final Map<String, Map<Integer, Long>> finalLocalOffsetLags = new HashMap<>();
+
+        final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
         for (int i = 0; i < this.threads.length; i++) {
             final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
             final Map<TaskId, StandbyTask> standbyTaskMap = this.threads[i].standbyTasks();
             final Set<String> activeStateStores = streamsMetadataState.getMyMetadata().stateStoreNames();
-            final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().getStandbyStateStoreNames();
-            for (final TaskId taskId : streamTaskMap.keySet()) {
-                localOffsetLags.put(taskId, getStoreNameToLagMap(activeStateStores, taskId.partition, streamTaskMap.get(taskId)));
-            }
-            for (final TaskId taskId : standbyTaskMap.keySet()) {
-                localOffsetLags.put(taskId, getStoreNameToLagMap(standbyStateStores, taskId.partition, standbyTaskMap.get(taskId)));
-            }
-        }
+            final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().standbyStateStoreNames();
 
-        // Converting the Map<TaskId, Map<String, Long>> to Map<String, Map<Integer, Long>>
-        for (final Map.Entry<TaskId, Map<String, Long>> entry : localOffsetLags.entrySet()) {
-            for (final Map.Entry<String, Long> storeToLagMap : entry.getValue().entrySet()) {
-                Map<Integer, Long> partitionToLagMap = finalLocalOffsetLags.get(storeToLagMap.getKey());
-                if (partitionToLagMap == null) {
-                    partitionToLagMap = new HashMap<>();
-                }
-                partitionToLagMap.put(entry.getKey().partition, storeToLagMap.getValue());
-                finalLocalOffsetLags.put(storeToLagMap.getKey(), partitionToLagMap);
+            for (final Map.Entry<TaskId, StreamTask> taskEntry : streamTaskMap.entrySet()) {
+                addLagInfoToOutputMap(activeStateStores, taskEntry.getKey().partition, taskEntry.getValue(), localOffsetLags);
+            }
+            for (final Map.Entry<TaskId, StandbyTask> taskEntry : standbyTaskMap.entrySet()) {
+                addLagInfoToOutputMap(standbyStateStores, taskEntry.getKey().partition, taskEntry.getValue(), localOffsetLags);
             }
         }
-        return finalLocalOffsetLags;
+        return localOffsetLags;
     }
 
-    private Map<String, Long> getStoreNameToLagMap(final Set<String> stateStores, final int partition, final AbstractTask task) {
-        final Map<String, Long> storeNameToLagMap = new HashMap<>();
+    private void addLagInfoToOutputMap(final Set<String> stateStores,
+                                       final int partition,
+                                       final AbstractTask task,
+                                       final Map<String, Map<Integer, Long>> outputLocalOffsetLags) {
+
         for (final String storeName : stateStores) {
             final TopicPartition topicPartition = new TopicPartition(streamsMetadataState.getChangelogTopicForStore(storeName), partition);
             final long offsetLimit = task.offsetLimit(topicPartition);
             final long checkpointedOffset = task.checkpointedOffsets().get(topicPartition);
             final long offsetLag = offsetLimit - checkpointedOffset;
-            storeNameToLagMap.put(storeName, offsetLag);
+
+            outputLocalOffsetLags.putIfAbsent(storeName, new HashMap<>());
+            final Map<Integer, Long> partitionToOffsetLag = outputLocalOffsetLags.getOrDefault(storeName, new HashMap<>());
+            if (!partitionToOffsetLag.containsKey(partition)) {
+                partitionToOffsetLag.put(partition, offsetLag);
+            } else {
+                throw new IllegalStateException("Encountered the same store partition" + storeName + "," + partition + " more than once");
+            }
         }
-        return storeNameToLagMap;
     }
 
     /**

@@ -59,11 +59,11 @@ public class StreamsMetadata {
         this.standbyStateStoreNames = standbyStateStoreNames;
     }
 
-    public Set<TopicPartition> getStandbyTopicPartitions() {
+    public Set<TopicPartition> standbyTopicPartitions() {
         return standbyTopicPartitions;
     }
 
-    public Set<String> getStandbyStateStoreNames() {
+    public Set<String> standbyStateStoreNames() {
         return standbyStateStoreNames;
     }
 

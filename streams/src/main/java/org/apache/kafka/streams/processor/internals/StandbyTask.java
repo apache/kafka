@@ -213,7 +213,6 @@ public class StandbyTask extends AbstractTask {
                 throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
                     "New limit: " + newlimit.getValue() + ". Previous limit: " + previousLimit);
             }
-
         }
 
         offsetLimits.putAll(newLimits);
