@@ -86,14 +86,11 @@ private[group] class MemberMetadata(var memberId: String,
   }
 
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
-    if (isNew)
-    // New members are expired after the static join timeout
-      latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
-    else if (isAwaitingJoin || isAwaitingSync)
-    // Don't remove members as long as they have a request in purgatory
+    if (isAwaitingJoin)
+      !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+    else if (isNew || isAwaitingSync)
       true
     else
-    // Otherwise check for session expiration
       latestHeartbeat + sessionTimeoutMs > deadlineMs
   }
 
