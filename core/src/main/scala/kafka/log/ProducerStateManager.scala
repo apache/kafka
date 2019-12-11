@@ -226,10 +226,6 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch at offset $offset in " +
             s"partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number)")
-        } else {
-          throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker at offset $offset" +
-            s"in partition $topicPartition. It is possible that the last message with the producerId=$producerId has " +
-            "been removed due to hitting the retention limit.")
         }
       }
     } else {
@@ -240,16 +236,9 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       else
         RecordBatch.NO_SEQUENCE
 
-      if (currentLastSeq == RecordBatch.NO_SEQUENCE && appendFirstSeq != 0) {
-        // We have a matching epoch, but we do not know the next sequence number. This case can happen if
-        // only a transaction marker is left in the log for this producer. We treat this as an unknown
-        // producer id error, so that the producer can check the log start offset for truncation and reset
-        // the sequence number. Note that this check follows the fencing check, so the marker still fences
-        // old producers even if it cannot determine our next expected sequence number.
-        throw new UnknownProducerIdException(s"Local producer state matches expected epoch $producerEpoch " +
-          s"for producerId=$producerId at offset $offset in partition $topicPartition, but the next expected " +
-          "sequence number is not known.")
-      } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
+      // If there is no current producer epoch (possibly because all producer records have been deleted due to
+      // retention or the DeleteRecords API) accept writes with any sequence number
+      if (!(currentEntry.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId at " +
           s"offset $offset in partition $topicPartition: $appendFirstSeq (incoming seq. number), " +
           s"$currentLastSeq (current end sequence number)")

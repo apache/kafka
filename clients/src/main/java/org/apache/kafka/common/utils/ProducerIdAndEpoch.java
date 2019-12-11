@@ -14,23 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.utils;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.common.record.RecordBatch;
 
-class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
+public class ProducerIdAndEpoch {
+    public static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH);
 
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<>();
+    public final long producerId;
+    public final short epoch;
+
+    public ProducerIdAndEpoch(long producerId, short epoch) {
+        this.producerId = producerId;
+        this.epoch = epoch;
     }
 
-    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
-        @Override
-        public void process(final K key, final V value) {
-            context().forward(key, value);
-        }
+    public boolean isValid() {
+        return RecordBatch.NO_PRODUCER_ID < producerId;
+    }
+
+    @Override
+    public String toString() {
+        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
     }
 }

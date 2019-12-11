@@ -3338,7 +3338,7 @@ public class FetcherTest {
         TopicPartition t2p0 = new TopicPartition(topicName2, 0);
         // Expect a metadata refresh.
         metadata.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"),
-                ClientDnsLookup.DEFAULT), time.milliseconds());
+                ClientDnsLookup.DEFAULT));
 
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);

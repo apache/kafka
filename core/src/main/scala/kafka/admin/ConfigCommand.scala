@@ -444,32 +444,21 @@ object ConfigCommand extends Config {
   }
 
   private[admin] def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
-    val entityTypes = opts.options.valuesOf(opts.entityType).asScala
+    val entityTypes = opts.entityTypes
+    val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.User || entityTypes.head == ConfigType.Client)
-      parseQuotaEntity(opts)
+      parseQuotaEntity(opts, entityTypes, entityNames)
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
-      val name = if (opts.options.has(opts.entityName))
-        Some(opts.options.valueOf(opts.entityName))
-      else if (entityTypes.head == ConfigType.Broker && opts.options.has(opts.entityDefault))
-        Some(ConfigEntityName.Default)
-      else
-        None
+      val name = entityNames.headOption match {
+        case Some("") => Some(ConfigEntityName.Default)
+        case v => v
+      }
       ConfigEntity(Entity(entityTypes.head, name), None)
     }
   }
 
-  private def entityNames(opts: ConfigCommandOptions): Seq[String] = {
-    val namesIterator = opts.options.valuesOf(opts.entityName).iterator
-    opts.options.specs.asScala
-      .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))
-      .map(spec => if (spec.options.contains("entity-name")) namesIterator.next else "")
-  }
-
-  private def parseQuotaEntity(opts: ConfigCommandOptions): ConfigEntity = {
-    val types = opts.options.valuesOf(opts.entityType).asScala
-    val names = entityNames(opts)
-
+  private def parseQuotaEntity(opts: ConfigCommandOptions, types: List[String], names: List[String]): ConfigEntity = {
     if (opts.options.has(opts.alterOpt) && names.size != types.size)
       throw new IllegalArgumentException("--entity-name or --entity-default must be specified with each --entity-type for --alter")
 
@@ -494,7 +483,7 @@ object ConfigCommand extends Config {
 
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
             "Multiple URLS can be given to allow fail-over.")
             .withRequiredArg
             .describedAs("urls")
@@ -533,20 +522,67 @@ object ConfigCommand extends Config {
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
     val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val topic = parser.accepts("topic", "The topic's name.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val client = parser.accepts("client", "The client's ID.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val clientDefaults = parser.accepts("client-defaults", "The config defaults for all clients.")
+    val user = parser.accepts("user", "The user's principal name.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val userDefaults = parser.accepts("user-defaults", "The config defaults for all users.")
+    val broker = parser.accepts("broker", "The broker's ID.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val brokerDefaults = parser.accepts("broker-defaults", "The config defaults for all brokers.")
+    val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
+      .withRequiredArg
+      .ofType(classOf[String])
     options = parser.parse(args : _*)
 
-    val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
+    private val entityFlags = List((topic, ConfigType.Topic),
+      (client, ConfigType.Client),
+      (user, ConfigType.User),
+      (broker, ConfigType.Broker),
+      (brokerLogger, BrokerLoggerConfigType))
+
+    private val entityDefaultsFlags = List((clientDefaults, ConfigType.Client),
+      (userDefaults, ConfigType.User),
+      (brokerDefaults, ConfigType.Broker))
+
+    private[admin] def entityTypes(): List[String] = {
+      options.valuesOf(entityType).asScala.toList ++
+        (entityFlags ++ entityDefaultsFlags).filter(entity => options.has(entity._1)).map(_._2)
+    }
+
+    private[admin] def entityNames(): List[String] = {
+      val namesIterator = options.valuesOf(entityName).iterator
+      options.specs.asScala
+        .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))
+        .map(spec => if (spec.options.contains("entity-name")) namesIterator.next else "").toList ++
+      entityFlags
+        .filter(entity => options.has(entity._1))
+        .map(entity => options.valueOf(entity._1)) ++
+      entityDefaultsFlags
+        .filter(entity => options.has(entity._1))
+        .map(_ => "")
+    }
 
     def checkArgs(): Unit = {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
-      if(actions != 1)
+      if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
       // check required args
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
 
-      val entityTypeVals = options.valuesOf(entityType).asScala
+      val entityTypeVals = entityTypes
+      if (entityTypeVals.size != entityTypeVals.distinct.size)
+        throw new IllegalArgumentException(s"Duplicate entity type(s) specified: ${entityTypeVals.diff(entityTypeVals.distinct).mkString(",")}")
+
       val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
         (BrokerSupportedConfigTypes, "--bootstrap-server")
       else
@@ -554,44 +590,52 @@ object ConfigCommand extends Config {
 
       entityTypeVals.foreach(entityTypeVal =>
         if (!allowedEntityTypes.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity-type $entityTypeVal, --entity-type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
+          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
       )
       if (entityTypeVals.isEmpty)
-        throw new IllegalArgumentException("At least one --entity-type must be specified")
+        throw new IllegalArgumentException("At least one entity type must be specified")
       else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
         throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
+
+      if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&
+        (entityFlags ++ entityDefaultsFlags).exists(entity => options.has(entity._1)))
+        throw new IllegalArgumentException("--entity-{type,name,default} should not be used in conjunction with specific entity flags")
+
+      val hasEntityName = options.has(entityName) || entityFlags.exists(entity => options.has(entity._1))
+      val hasEntityDefault = options.has(entityDefault) || entityDefaultsFlags.exists(entity => options.has(entity._1))
 
       if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
         throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
       else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
-      else if (options.has(bootstrapServerOpt) && !options.has(entityName) && !options.has(entityDefault))
-        throw new IllegalArgumentException(s"At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
+      else if (options.has(bootstrapServerOpt) && !hasEntityName && !hasEntityDefault)
+        throw new IllegalArgumentException(s"At least one entity name or default entity must be specified with --bootstrap-server")
 
-      if (options.has(entityName) && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
-        val brokerId = options.valueOf(entityName)
-        try brokerId.toInt catch {
-          case _: NumberFormatException =>
-            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid integer broker id , but it is: $brokerId")
+      if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
+        Seq(entityName, broker, brokerLogger).filter(options.has(_)).map(options.valueOf(_)).foreach { brokerId =>
+          try brokerId.toInt catch {
+            case _: NumberFormatException =>
+              throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid integer broker id, but it is: $brokerId")
+          }
         }
       }
 
       if (entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Topic) || entityTypeVals.contains(ConfigType.User))
-        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
+        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
-      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !options.has(entityName))
-        throw new IllegalArgumentException(s"--entity-name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+        throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
 
       if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Broker)) {
-          if (!options.has(entityName) && !options.has(entityDefault))
-            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
-        } else if (!options.has(entityName))
-          throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals.mkString(",")}")
+          if (!hasEntityName && !hasEntityDefault)
+            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients or brokers")
+        } else if (!hasEntityName)
+          throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if(! isAddConfigPresent && ! isDeleteConfigPresent)
+        if (!isAddConfigPresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
     }

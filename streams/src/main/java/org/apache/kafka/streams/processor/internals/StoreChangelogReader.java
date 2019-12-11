@@ -207,7 +207,7 @@ public class StoreChangelogReader implements ChangelogReader {
                         restoreToOffsets.get(partition));
                 restorer.setStartingOffset(restoreConsumer.position(partition));
 
-                log.debug("Calling restorer for partition {} of task {}", partition, active.restoringTaskFor(partition));
+                log.debug("Calling restorer for partition {}", partition);
                 restorer.restoreStarted();
             } else {
                 log.trace("Did not find checkpoint from changelog {} for store {}, rewinding to beginning.", partition, restorer.storeName());

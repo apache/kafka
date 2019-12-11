@@ -25,7 +25,7 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 
 import scala.collection.mutable
 
@@ -223,8 +223,8 @@ object TransactionLog {
         val entryTimestamp = value.getLong(TxnEntryTimestampField)
         val startTimestamp = value.getLong(TxnStartTimestampField)
 
-        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, epoch, timeout, state,
-          mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
+        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID,
+          epoch, RecordBatch.NO_PRODUCER_EPOCH, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
         if (!state.equals(Empty)) {
           val topicPartitionArray = value.getArray(TxnPartitionsField)

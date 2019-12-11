@@ -14,28 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer.internals;
+package org.apache.kafka.streams.processor.internals;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
 
-class ProducerIdAndEpoch {
-    static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-
-    public final long producerId;
-    public final short epoch;
-
-    ProducerIdAndEpoch(long producerId, short epoch) {
-        this.producerId = producerId;
-        this.epoch = epoch;
-    }
-
-    public boolean isValid() {
-        return NO_PRODUCER_ID < producerId;
-    }
-
-    @Override
-    public String toString() {
-        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
-    }
+/**
+ * This suite runs all the tests related to task management. It's intended to simplify feature testing from IDEs.
+ *
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
+ * these tests are already included in the `:streams:test` task.
+ */
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+    AbstractTaskTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    AssignedStreamsTasksTest.class,
+})
+public class TaskSuite {
 }
+
+

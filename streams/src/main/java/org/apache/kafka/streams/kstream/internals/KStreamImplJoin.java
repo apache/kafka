@@ -133,7 +133,7 @@ class KStreamImplJoin {
             rightOuter
         );
 
-        final KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
+        final PassThrough<K1, R> joinMerge = new PassThrough<>();
 
         final StreamStreamJoinNode.StreamStreamJoinNodeBuilder<K1, V1, V2, R> joinBuilder = StreamStreamJoinNode.streamStreamJoinNodeBuilder();
 

@@ -751,6 +751,41 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def testProduceAndConsumeWithReassignmentInProgress(): Unit = {
+    startBrokers(Seq(100, 101))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 100 * 1000)
+
+    TestUtils.throttleAllBrokersReplication(adminClient, Seq(101), throttleBytes = 1)
+    TestUtils.assignThrottledPartitionReplicas(adminClient, Map(tp0 -> Seq(101)))
+
+    adminClient.alterPartitionReassignments(
+      Map(reassignmentEntry(tp0, Seq(100, 101))).asJava
+    ).all().get()
+
+    awaitReassignmentInProgress(tp0)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 64)
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
+    try {
+      consumer.assign(Seq(tp0).asJava)
+      pollUntilAtLeastNumRecords(consumer, numRecords = 1000)
+    } finally {
+      consumer.close()
+    }
+
+    assertTrue(isAssignmentInProgress(tp0))
+
+    TestUtils.resetBrokersThrottle(adminClient, Seq(101))
+    TestUtils.removePartitionReplicaThrottles(adminClient, Set(tp0))
+
+    waitForAllReassignmentsToComplete()
+    assertEquals(Seq(100, 101), zkClient.getReplicasForPartition(tp0))
+  }
+
+  @Test
   def shouldListMovingPartitionsThroughApi(): Unit = {
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
@@ -1226,6 +1261,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def waitForZkReassignmentToComplete(pause: Long = 100L): Unit = {
     waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
       s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", pause = pause)
+  }
+
+  def awaitReassignmentInProgress(topicPartition: TopicPartition): Unit = {
+    waitUntilTrue(() => isAssignmentInProgress(topicPartition),
+      "Timed out waiting for expected reassignment to begin")
+  }
+
+  def isAssignmentInProgress(topicPartition: TopicPartition): Boolean = {
+    val reassignments = adminClient.listPartitionReassignments().reassignments().get()
+    reassignments.asScala.get(topicPartition).isDefined
   }
 
   def waitForAllReassignmentsToComplete(pause: Long = 100L): Unit = {

@@ -23,6 +23,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Random
 import java.util.{Collections, Optional}
+import java.util.concurrent.TimeUnit
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.cluster.Partition
@@ -877,6 +878,42 @@ class KafkaApisTest {
       assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
     assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
 
+  }
+
+  @Test
+  def rejectInitProducerIdWhenIdButNotEpochProvided(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (initProducerIdRequest, requestChannelRequest) = buildRequest(new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId("known")
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setProducerId(10)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+        ))
+    createKafkaApis(KAFKA_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.INIT_PRODUCER_ID, initProducerIdRequest, capturedResponse).asInstanceOf[InitProducerIdResponse]
+    assertEquals(Errors.INVALID_REQUEST, response.error)
+  }
+
+  @Test
+  def rejectInitProducerIdWhenEpochButNotIdProvided(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (initProducerIdRequest, requestChannelRequest) = buildRequest(new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId("known")
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(2)
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.INIT_PRODUCER_ID, initProducerIdRequest, capturedResponse).asInstanceOf[InitProducerIdResponse]
+    assertEquals(Errors.INVALID_REQUEST, response.error)
   }
 
   /**

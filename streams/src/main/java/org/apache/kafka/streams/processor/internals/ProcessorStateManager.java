@@ -348,9 +348,7 @@ public class ProcessorStateManager implements StateManager {
 
         updateCheckpointFileCache(checkpointableOffsetsFromProcessing);
 
-        log.trace("Checkpointable offsets updated with active acked offsets: {}", checkpointFileCache);
-
-        log.trace("Writing checkpoint: {}", checkpointFileCache);
+        log.debug("Writing checkpoint: {}", checkpointFileCache);
         try {
             checkpointFile.write(checkpointFileCache);
         } catch (final IOException e) {
