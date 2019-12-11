@@ -26,6 +26,7 @@ import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
@@ -54,7 +55,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"),
     numPartitions = numPartitions,
     defaultReplicationFactor = defaultReplicationFactor
-    ).map(KafkaConfig.fromProps)
+  ).map(KafkaConfig.fromProps)
 
   private val numPartitions = 1
   private val defaultReplicationFactor = 1.toShort
@@ -93,7 +94,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
     val finishTime = System.currentTimeMillis() + timeout
     var result = false
-    while (System.currentTimeMillis() < finishTime || !result) {
+    while (System.currentTimeMillis() < finishTime && !result) {
       val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
       result = topics.contains(topicName)
       Thread.sleep(100)
@@ -655,31 +656,30 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val configMap = new java.util.HashMap[String, String]()
     val replicationFactor: Short = 1
     val partitions = 1
+    val tp = new TopicPartition(testTopicName, 0)
 
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
-
-    for (msg <- 0 to 10) {
-      TestUtils.produceMessage(servers, testTopicName, s"$msg")
-    }
+    produceMessages(testTopicName, numMessages = 10, acks = -1, valueLength = 128)
 
     val brokerIds = servers.map(_.config.brokerId)
     TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttleBytes = 1)
+    TestUtils.assignThrottledPartitionReplicas(adminClient, Map(tp -> brokerIds))
 
     val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
-    val firstTopicPartition = new TopicPartition(testTopicName, firstPartition.partition())
+
     val replicasOfFirstPartition = firstPartition.replicas().asScala.map(_.id())
     val targetReplica = brokerIds.diff(replicasOfFirstPartition).head
 
-    adminClient.alterPartitionReassignments(Collections.singletonMap(firstTopicPartition,
+    adminClient.alterPartitionReassignments(Collections.singletonMap(tp,
       Optional.of(new NewPartitionReassignment(Collections.singletonList(targetReplica)))))
 
     // let's wait until the LAIR is propagated
     TestUtils.waitUntilTrue(() => {
-      val reassignments = adminClient.listPartitionReassignments(Collections.singleton(firstTopicPartition)).reassignments().get()
-      !reassignments.get(firstTopicPartition).addingReplicas().isEmpty
+      val reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get()
+      !reassignments.get(tp).addingReplicas().isEmpty
     }, "Reassignment didn't add the second node")
 
     // describe the topic and test if it's under-replicated
@@ -694,6 +694,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     assertEquals("--under-replicated-partitions shouldn't return anything", "", underReplicatedOutput)
 
     TestUtils.resetBrokersThrottle(adminClient, brokerIds)
+    TestUtils.removePartitionReplicaThrottles(adminClient, Set(tp))
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
@@ -792,5 +793,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     output = TestUtils.grabConsoleOutput(topicService.listTopics(new TopicCommandOptions(Array("--list", "--exclude-internal"))))
     assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+  }
+
+  private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {
+    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
+      new Array[Byte](valueLength)))
+    TestUtils.produceMessages(servers, records, acks)
   }
 }
