@@ -80,7 +80,6 @@ public final class MessageDataGenerator {
         generateFieldDeclarations(struct, isSetElement);
         buffer.printf("%n");
         schemaGenerator.writeSchema(className, buffer);
-        generateClassConstructors(className, struct, isSetElement);
         buffer.printf("%n");
         if (isTopLevel) {
             generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().orElse((short) -1));
