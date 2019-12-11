@@ -87,7 +87,6 @@ public abstract class AbstractStream<K, V> {
 
     Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
         final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
-        allSourceNodes.addAll(sourceNodes);
         for (final AbstractStream<K, ?> other: otherStreams) {
             allSourceNodes.addAll(other.sourceNodes);
         }
