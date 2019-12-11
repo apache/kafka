@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -52,11 +51,11 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                                      final InternalStreamsBuilder builder,
                                      final Set<String> sourceNodes,
                                      final String name,
-                                     final Serde<K> keySerde,
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                      final StreamsGraphNode streamsGraphNode,
                                      final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, keySerde, null, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;
         this.groupPatterns = groupPatterns;

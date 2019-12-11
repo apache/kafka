@@ -120,32 +120,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
     }
 
     @Test
-    public void timeWindowAggregateTest() {
-        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(TimeWindows.of(ofMillis(500L))).aggregate(
-                        MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
-        customers.toStream().to(OUTPUT);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
-                    TOPIC, new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
-            testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k2", "A", 0);
-            testInputTopic.pipeInput("k2", "A", 1);
-            testInputTopic.pipeInput("k1", "A", 2);
-
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 2);
-        }
-
-    }
-
-    @Test
-    public void timeWindowAggregateTest2StreamsTest() {
+    public void timeWindowAggregateTestStreamsTest() {
 
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
@@ -229,17 +204,50 @@ public class TimeWindowedCogroupedKStreamImplTest {
                     OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k2", "A", 0);
-            testInputTopic.pipeInput("k2", "A", 501L);
-            testInputTopic.pipeInput("k1", "A", 501L);
+            testInputTopic.pipeInput("k2", "A", 499);
+            testInputTopic.pipeInput("k2", "A", 500L);
+            testInputTopic.pipeInput("k1", "A", 500L);
 
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 501);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 501);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 499);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 500);
         }
     }
 
+    @Test
+    public void timeWindowAggregateOverlappingWindowsTest() {
+
+        final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
+                .windowedBy(TimeWindows.of(ofMillis(500L)).advanceBy(ofMillis(200L))).aggregate(
+                        MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+        customers.toStream().to(OUTPUT);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
+                    TOPIC, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
+                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer()), new StringDeserializer());
+
+            testInputTopic.pipeInput("k1", "A", 0);
+            testInputTopic.pipeInput("k2", "A", 0);
+            testInputTopic.pipeInput("k1", "B", 250);
+            testInputTopic.pipeInput("k2", "B", 250);
+            testInputTopic.pipeInput("k2", "A", 500L);
+            testInputTopic.pipeInput("k1", "A", 500L);
+
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+B", 250);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 250);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+B", 250);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 250);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B+A", 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B+A", 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 500);
+        }
+    }
 
     @Test
     public void timeWindowMixAggregatorsManyWindowsTest() {
