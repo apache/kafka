@@ -62,19 +62,18 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         final Map<KGroupedStreamImpl<K, ?>, StreamsGraphNode> parentNodes = new LinkedHashMap<>();
 
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
+            parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
             if (repartitionReqs.repartitionRequired) {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                createRepartitionSource(repartitionReqs.name, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
+                createRepartitionSource(storeBuilder.name(), repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
 
                 final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
 
                 builder.addGraphNode(parentNodes.get(repartitionReqs), repartitionNode);
 
                 parentNodes.put(repartitionReqs, repartitionNode);
-            }else {
-                parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
             }
         }
 
