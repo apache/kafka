@@ -59,12 +59,6 @@ import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.ietf.jgss.GSSContext;
-import org.ietf.jgss.GSSCredential;
-import org.ietf.jgss.GSSException;
-import org.ietf.jgss.GSSManager;
-import org.ietf.jgss.GSSName;
-import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -213,27 +207,6 @@ public class SaslServerAuthenticator implements Authenticator {
         final String serviceHostname = kerberosName.hostName();
 
         LOG.debug("Creating SaslServer for {} with mechanism {}", kerberosName, saslMechanism);
-
-        // As described in http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/jgss-features.html:
-        // "To enable Java GSS to delegate to the native GSS library and its list of native mechanisms,
-        // set the system property "sun.security.jgss.native" to true"
-        // "In addition, when performing operations as a particular Subject, for example, Subject.doAs(...)
-        // or Subject.doAsPrivileged(...), the to-be-used GSSCredential should be added to Subject's
-        // private credential set. Otherwise, the GSS operations will fail since no credential is found."
-        boolean usingNativeJgss = Boolean.getBoolean("sun.security.jgss.native");
-        if (usingNativeJgss) {
-            try {
-                GSSManager manager = GSSManager.getInstance();
-                // This Oid is used to represent the Kerberos version 5 GSS-API mechanism. It is defined in
-                // RFC 1964.
-                Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
-                GSSName gssName = manager.createName(servicePrincipalName + "@" + serviceHostname, GSSName.NT_HOSTBASED_SERVICE);
-                GSSCredential cred = manager.createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
-                subject.getPrivateCredentials().add(cred);
-            } catch (GSSException ex) {
-                LOG.warn("Cannot add private credential to subject; clients authentication may fail", ex);
-            }
-        }
 
         try {
             return Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
