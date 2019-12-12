@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.util.Optional;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -30,6 +29,7 @@ import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -128,6 +128,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
     private final ReauthInfo reauthInfo;
+    private final ChannelMetadataRegistry metadataRegistry;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -145,9 +146,6 @@ public class SaslServerAuthenticator implements Authenticator {
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
 
-    // Client information extracted from the ApiVersionsRequest if provided
-    private Optional<ClientInformation> clientInformation = Optional.empty();
-
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    Map<String, AuthenticateCallbackHandler> callbackHandlers,
                                    String connectionId,
@@ -157,6 +155,7 @@ public class SaslServerAuthenticator implements Authenticator {
                                    SecurityProtocol securityProtocol,
                                    TransportLayer transportLayer,
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
+                                   ChannelMetadataRegistry metadataRegistry,
                                    Time time) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
@@ -168,6 +167,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.connectionsMaxReauthMsByMechanism = connectionsMaxReauthMsByMechanism;
         this.time = time;
         this.reauthInfo = new ReauthInfo();
+        this.metadataRegistry = metadataRegistry;
 
         this.configs = configs;
         @SuppressWarnings("unchecked")
@@ -321,11 +321,6 @@ public class SaslServerAuthenticator implements Authenticator {
             principal.tokenAuthenticated(true);
         }
         return principal;
-    }
-
-    @Override
-    public Optional<ClientInformation> clientInformation() {
-        return clientInformation;
     }
 
     @Override
@@ -595,7 +590,7 @@ public class SaslServerAuthenticator implements Authenticator {
         else if (!apiVersionsRequest.isValid())
             sendKafkaResponse(context, apiVersionsRequest.getErrorResponse(0, Errors.INVALID_REQUEST.exception()));
         else {
-            clientInformation = Optional.of(new ClientInformation(apiVersionsRequest.data.clientSoftwareName(),
+            metadataRegistry.registerClientInformation(new ClientInformation(apiVersionsRequest.data.clientSoftwareName(),
                 apiVersionsRequest.data.clientSoftwareVersion()));
             sendKafkaResponse(context, apiVersionsResponse());
             setSaslState(SaslState.HANDSHAKE_REQUEST);

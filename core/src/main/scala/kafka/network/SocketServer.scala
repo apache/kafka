@@ -917,13 +917,13 @@ private[kafka] class Processor(val id: Int,
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
                   channel.principal, listenerName, securityProtocol,
-                  channel.clientInformation)
+                  channel.channelMetadataRegistry.clientInformation)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 if (header.apiKey == ApiKeys.API_VERSIONS) {
                   val apiVersionsRequest = req.body[ApiVersionsRequest]
                   if (apiVersionsRequest.isValid) {
-                    channel.updateClientInformation(new ClientInformation(
+                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
                       apiVersionsRequest.data.clientSoftwareVersion))
                   }

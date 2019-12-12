@@ -27,7 +27,6 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
-import java.util.Optional;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
@@ -214,10 +213,5 @@ public class PlaintextTransportLayer implements TransportLayer {
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, socketChannel);
-    }
-
-    @Override
-    public Optional<CipherInformation> cipherInformation() {
-        return Optional.empty();
     }
 }

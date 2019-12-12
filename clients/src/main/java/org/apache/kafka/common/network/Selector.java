@@ -52,7 +52,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -314,7 +313,6 @@ public class Selector implements Selectable, AutoCloseable {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
-        this.sensors.connectionsByClient.increment(channel(id).clientInformation());
     }
 
     private void ensureNotRegistered(String id) {
@@ -327,7 +325,6 @@ public class Selector implements Selectable, AutoCloseable {
     protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
-        channel.register(this);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
             idleExpiryManager.update(channel.id(), time.nanoseconds());
@@ -336,7 +333,8 @@ public class Selector implements Selectable, AutoCloseable {
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
+                new SelectorChannelMetadataRegistry());
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -565,10 +563,6 @@ public class Selector implements Selectable, AutoCloseable {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
                             if (!channel.connectedClientSupportsReauthentication())
                                 sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
-                            Optional<CipherInformation> cipherInformation = channel.cipherInformation();
-                            if (cipherInformation.isPresent()) {
-                                sensors.connectionsByCipher.increment(cipherInformation.get());
-                            }
                         }
                         log.debug("Successfully {}authenticated with {}", isReauthentication ?
                             "re-" : "", channel.socketDescription());
@@ -928,11 +922,6 @@ public class Selector implements Selectable, AutoCloseable {
             key.attach(null);
         }
 
-        Optional<CipherInformation> cipherInformation = channel.cipherInformation();
-        if (cipherInformation.isPresent()) {
-            sensors.connectionsByCipher.decrement(cipherInformation.get());
-        }
-        this.sensors.connectionsByClient.decrement(channel.clientInformation());
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
@@ -1075,10 +1064,55 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
-    // package private, called by KafkaChannel
-    void clientInformationUpdated(ClientInformation oldClientInformation, ClientInformation newClientInformation) {
-        this.sensors.connectionsByClient.decrement(oldClientInformation);
-        this.sensors.connectionsByClient.increment(newClientInformation);
+    class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
+        private CipherInformation cipherInformation;
+        private ClientInformation clientInformation;
+
+        SelectorChannelMetadataRegistry() {
+            // Default to empty client information as the ApiVersionsRequest is not
+            // mandatory or could not have the information yet if an older version
+            // is used. In this case, we still want to account for the connection.
+            registerClientInformation(ClientInformation.EMPTY);
+        }
+
+        @Override
+        public void registerCipherInformation(final CipherInformation cipherInformation) {
+            if (this.cipherInformation == null) {
+                this.cipherInformation = cipherInformation;
+                sensors.connectionsByCipher.increment(cipherInformation);
+            }
+        }
+
+        @Override
+        public CipherInformation cipherInformation() {
+            return cipherInformation;
+        }
+
+        @Override
+        public void registerClientInformation(final ClientInformation clientInformation) {
+            if (this.clientInformation != null) {
+                sensors.connectionsByClient.decrement(this.clientInformation);
+            }
+
+            this.clientInformation = clientInformation;
+            sensors.connectionsByClient.increment(clientInformation);
+        }
+
+        @Override
+        public ClientInformation clientInformation() {
+            return clientInformation;
+        }
+
+        @Override
+        public void close() {
+            if (this.cipherInformation != null) {
+                sensors.connectionsByCipher.decrement(this.cipherInformation);
+                this.cipherInformation = null;
+            }
+
+            sensors.connectionsByClient.decrement(this.clientInformation);
+            this.clientInformation = null;
+        }
     }
 
     class SelectorMetrics implements AutoCloseable {

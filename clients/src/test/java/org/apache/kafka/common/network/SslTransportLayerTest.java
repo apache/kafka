@@ -1114,7 +1114,8 @@ public class SslTransportLayerTest {
         }
 
         @Override
-        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
+                                                        String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
             TestSslTransportLayer transportLayer = newTransportLayer(id, key, sslEngine);
@@ -1145,7 +1146,7 @@ public class SslTransportLayerTest {
             private final AtomicInteger numDelayedFlushesRemaining;
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-                super(channelId, key, sslEngine);
+                super(channelId, key, sslEngine, new DefaultChannelMetadataRegistry());
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);

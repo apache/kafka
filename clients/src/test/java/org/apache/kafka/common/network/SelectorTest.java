@@ -371,7 +371,7 @@ public class SelectorTest {
         ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
             @Override
             public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                    MemoryPool memoryPool) throws KafkaException {
+                    MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
                 throw new RuntimeException("Test exception");
             }
             @Override
@@ -682,7 +682,6 @@ public class SelectorTest {
         when(kafkaChannel.finishConnect()).thenReturn(true);
         when(kafkaChannel.isConnected()).thenReturn(true);
         when(kafkaChannel.ready()).thenReturn(false);
-        when(kafkaChannel.clientInformation()).thenReturn(ClientInformation.EMPTY);
         doThrow(new IOException()).when(kafkaChannel).prepare();
 
         SelectionKey selectionKey = mock(SelectionKey.class);
@@ -764,10 +763,17 @@ public class SelectorTest {
 
             // Metric with unknown / unknown should be there
             selector.register(node, channel);
-            assertEquals(1, getMetric("connections", unknownNameAndVersion).metricValue());
+            assertEquals(1,
+                getMetric("connections", unknownNameAndVersion).metricValue());
+            assertEquals(ClientInformation.EMPTY,
+                selector.channel(node).channelMetadataRegistry().clientInformation());
 
             // Metric with unknown / unknown should not be there, metric with A / B should be there
-            selector.channel(node).updateClientInformation(new ClientInformation("A", "B"));
+            ClientInformation clientInformation = new ClientInformation("A", "B");
+            selector.channel(node).channelMetadataRegistry()
+                .registerClientInformation(clientInformation);
+            assertEquals(clientInformation,
+                selector.channel(node).channelMetadataRegistry().clientInformation());
             assertEquals(0, getMetric("connections", unknownNameAndVersion).metricValue());
             assertEquals(1, getMetric("connections", knownNameAndVersion).metricValue());
 
