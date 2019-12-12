@@ -181,7 +181,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldRemoveDeletedValuesOnFlush() {
-        cache.setListener((dirty) -> {}); //no-op
+        cache.setListener(dirty -> { }); //no-op
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, null, true, 0, 0, 0, ""));
         cache.flush();
@@ -197,7 +197,7 @@ public class NamedCacheTest {
         cache.put(Bytes.wrap(new byte[]{1}), clean);
         cache.put(Bytes.wrap(new byte[]{2}), clean);
         assertEquals(3 * cache.head().size(), cache.sizeInBytes());
-        cache.setListener((d) -> {
+        cache.setListener(d -> {
                 cache.put(Bytes.wrap(new byte[]{3}), clean);
                 // evict key 1
                 cache.evict();
@@ -238,7 +238,7 @@ public class NamedCacheTest {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, null, true, 0, 0, 0, "");
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
         final Bytes key = Bytes.wrap(new byte[] {3});
-        cache.setListener((d) -> cache.put(key, clean));
+        cache.setListener(d -> cache.put(key, clean));
         cache.put(key, dirty);
         cache.evict();
     }
