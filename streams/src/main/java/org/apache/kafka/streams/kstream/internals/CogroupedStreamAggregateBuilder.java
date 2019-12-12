@@ -67,7 +67,10 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                createRepartitionSource(storeBuilder.name(), repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
+                final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
+                        repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
+
+                createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
 
                 final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
 

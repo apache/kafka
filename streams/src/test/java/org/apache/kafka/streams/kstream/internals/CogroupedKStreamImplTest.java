@@ -181,6 +181,60 @@ public class CogroupedKStreamImplTest {
     }
 
     @Test
+    public void shouldNameRepartitionTopic() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey(Grouped.as("repartition-test"));
+        final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
+
+        final KTable<String, String> customers = groupedOne
+                .cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER);
+
+        customers.toStream().to(OUTPUT);
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+                topologyDescription,
+                equalTo("Topologies:\n" +
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                        "      --> KSTREAM-MAP-0000000002\n" +
+                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                        "      --> repartition-test-repartition-filter\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Processor: repartition-test-repartition-filter (stores: [])\n" +
+                        "      --> repartition-test-repartition-sink\n" +
+                        "      <-- KSTREAM-MAP-0000000002\n" +
+                        "    Sink: repartition-test-repartition-sink (topic: repartition-test-repartition)\n" +
+                        "      <-- repartition-test-repartition-filter\n\n" +
+                        "  Sub-topology: 1\n" +
+                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                        "    Source: repartition-test-repartition-source (topics: [repartition-test-repartition])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                        "      <-- repartition-test-repartition-source\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                        "      <-- KSTREAM-SOURCE-0000000001\n" +
+                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                        "      --> KTABLE-TOSTREAM-0000000010\n" +
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                        "    Processor: KTABLE-TOSTREAM-0000000010 (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000011\n" +
+                        "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
+                        "    Sink: KSTREAM-SINK-0000000011 (topic: output)\n" +
+                        "      <-- KTABLE-TOSTREAM-0000000010\n\n"));
+    }
+
+    @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModification() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
