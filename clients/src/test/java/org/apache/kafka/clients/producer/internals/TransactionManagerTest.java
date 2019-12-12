@@ -1457,8 +1457,10 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
         sender.runOnce();
         assertFutureFailed(unauthorizedTopicProduceFuture);
-        assertTrue(authorizedTopicProduceFuture.isDone());
+
+        sender.runOnce();
         assertNotNull(authorizedTopicProduceFuture.get());
+        assertTrue(authorizedTopicProduceFuture.isDone());
         assertTrue(authorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
