@@ -44,7 +44,7 @@ public class ThreadCacheTest {
     private final LogContext logContext = new LogContext("testCache ");
 
     @Test
-    public void basicPutGet() throws IOException {
+    public void basicPutGet() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
@@ -65,7 +65,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final LRUCacheEntry entry = cache.get(namespace, key);
-            assertEquals(entry.isDirty(), true);
+            assertTrue(entry.isDirty());
             assertEquals(new String(entry.value()), kvToInsert.value);
         }
         assertEquals(cache.gets(), 5);

@@ -106,7 +106,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldAvoidFlushingDeletionsWithoutDirtyKeys() {
         final int added = addItemsToCache();
-        // all dirty entries should have been flushed
+        store.flush();
+
         assertEquals(added, underlyingStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
 
@@ -158,16 +159,16 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() {
         final int added = addItemsToCache();
-        // all dirty entries should have been flushed
-        assertEquals(added, underlyingStore.approximateNumEntries());
-        assertEquals(added, store.approximateNumEntries());
+        // only the evicted entry should have been flushed
+        assertEquals(1, underlyingStore.approximateNumEntries());
+        assertEquals(1, store.approximateNumEntries()); // this delegates to the underlying store, and not the cache
         assertNotNull(underlyingStore.get(Bytes.wrap("0".getBytes())));
     }
 
     @Test
     public void shouldForwardDirtyItemToListenerWhenEvicted() {
-        final int numRecords = addItemsToCache();
-        assertEquals(numRecords, cacheFlushListener.forwarded.size());
+        addItemsToCache();
+        assertEquals(1, cacheFlushListener.forwarded.size());
     }
 
     @Test

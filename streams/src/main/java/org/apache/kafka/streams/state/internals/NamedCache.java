@@ -238,7 +238,7 @@ class NamedCache {
         if (eldest.entry.isDirty()) {
             dirtyKeys.remove(eldest.key);
             flush(Collections.singletonList(
-                new ThreadCache.DirtyEntry(eldest.key,eldest.entry.value(), eldest.entry)));
+                new ThreadCache.DirtyEntry(eldest.key, eldest.entry.value(), eldest.entry)));
         }
     }
 

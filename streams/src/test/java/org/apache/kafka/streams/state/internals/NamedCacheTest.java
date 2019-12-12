@@ -151,28 +151,21 @@ public class NamedCacheTest {
     }
 
     @Test
-    public void shouldFlushDirtEntriesOnEviction() {
+    public void shouldFlushOnlyEvictedEntry() {
         final List<ThreadCache.DirtyEntry> flushed = new ArrayList<>();
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}));
         cache.put(Bytes.wrap(new byte[]{2}), new LRUCacheEntry(new byte[]{30}, headers, true, 0, 0, 0, ""));
 
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                flushed.addAll(dirty);
-            }
-        });
+        cache.setListener(flushed::addAll);
 
         cache.evict();
 
-        assertEquals(2, flushed.size());
+        assertEquals(1, flushed.size());
         assertEquals(Bytes.wrap(new byte[] {0}), flushed.get(0).key());
         assertEquals(headers, flushed.get(0).entry().context().headers());
         assertArrayEquals(new byte[] {10}, flushed.get(0).newValue());
-        assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
-        assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());
-        assertEquals(cache.flushes(), 1);
+        assertEquals(cache.flushes(), 0);
     }
 
     @Test
@@ -188,12 +181,7 @@ public class NamedCacheTest {
 
     @Test
     public void shouldRemoveDeletedValuesOnFlush() {
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                // no-op
-            }
-        });
+        cache.setListener((dirty) -> {}); //no-op
         cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(null, headers, true, 0, 0, 0, ""));
         cache.put(Bytes.wrap(new byte[]{1}), new LRUCacheEntry(new byte[]{20}, null, true, 0, 0, 0, ""));
         cache.flush();
@@ -209,16 +197,14 @@ public class NamedCacheTest {
         cache.put(Bytes.wrap(new byte[]{1}), clean);
         cache.put(Bytes.wrap(new byte[]{2}), clean);
         assertEquals(3 * cache.head().size(), cache.sizeInBytes());
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+        cache.setListener((d) -> {
                 cache.put(Bytes.wrap(new byte[]{3}), clean);
                 // evict key 1
                 cache.evict();
                 // evict key 2
                 cache.evict();
             }
-        });
+        );
 
         assertEquals(3 * cache.head().size(), cache.sizeInBytes());
         // Evict key 0
@@ -252,12 +238,7 @@ public class NamedCacheTest {
         final LRUCacheEntry dirty = new LRUCacheEntry(new byte[]{3}, null, true, 0, 0, 0, "");
         final LRUCacheEntry clean = new LRUCacheEntry(new byte[]{3});
         final Bytes key = Bytes.wrap(new byte[] {3});
-        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
-                cache.put(key, clean);
-            }
-        });
+        cache.setListener((d) -> cache.put(key, clean));
         cache.put(key, dirty);
         cache.evict();
     }
