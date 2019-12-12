@@ -139,10 +139,10 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldNameProcessorsAndStoreBasedOnNamedParameter() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> test2 = builder2.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> test2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.groupByKey();
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
@@ -154,7 +154,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        final String topologyDescription = builder2.build().describe().toString();
+        final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
             topologyDescription,
@@ -235,10 +235,10 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInSameCogroups() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -256,38 +256,41 @@ public class CogroupedKStreamImplTest {
         cogroupedOne.toStream().to(OUTPUT);
         cogroupedTwo.toStream().to("OUTPUT2");
 
-        final String topologyDescription = builder2.build().describe().toString();
+        final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
                 topologyDescription,
-                equalTo("Topologies:\n  " +
-                        " Sub-topology: 0\n " +
-                        "   Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n  " +
-                        "    --> KSTREAM-MAP-0000000002\n  " +
-                        "  Processor: KSTREAM-MAP-0000000002 (stores: [])\n   " +
-                        "   --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n   " +
-                        "   <-- KSTREAM-SOURCE-0000000000\n    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n " +
-                        "     --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n   " +
-                        "   <-- KSTREAM-MAP-0000000002\n  " +
-                        "  Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter (stores: [])\n    " +
-                        "  --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink\n  " +
-                        "    <-- KSTREAM-MAP-0000000002\n  " +
-                        "  Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n   " +
-                        "   <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n  " +
-                        "  Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n  " +
-                        "    <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter\n\n " +
-                        " Sub-topology: 1\n    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n   " +
-                        "   --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n  " +
-                        "  Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n   " +
-                        "   --> COGROUPKSTREAM-AGGREGATE-0000000007\n " +
-                        "   Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n    " +
-                        "  --> COGROUPKSTREAM-AGGREGATE-0000000014\n " +
-                        "   Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n  " +
-                        "    --> COGROUPKSTREAM-MERGE-0000000009\n      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n " +
-                        "   Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n     " +
-                        " --> COGROUPKSTREAM-MERGE-0000000009\n " +
-                        "     <-- KSTREAM-SOURCE-0000000001\n    " +
-                        "Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                equalTo("Topologies:\n" +
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                        "      --> KSTREAM-MAP-0000000002\n" +
+                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
+                        "      <-- KSTREAM-MAP-0000000002\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter (stores: [])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink\n" +
+                        "      <-- KSTREAM-MAP-0000000002\n" +
+                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n" +
+                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter\n\n" +
+                        "  Sub-topology: 1\n" +
+                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000014\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                        "      <-- KSTREAM-SOURCE-0000000001\n" +
+                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
                         "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
                         "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source\n" +
                         "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
@@ -315,10 +318,10 @@ public class CogroupedKStreamImplTest {
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInSameCogroupsWithOptimization() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -336,7 +339,7 @@ public class CogroupedKStreamImplTest {
         cogroupedOne.toStream().to(OUTPUT);
         cogroupedTwo.toStream().to("OUTPUT2");
 
-        final String topologyDescription = builder2.build(properties).describe().toString();
+        final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
                 topologyDescription,
@@ -389,11 +392,11 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInDiffrentCogroups() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
-        final KStream<String, String> stream3 = builder2.stream("three", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> stream3 = builder.stream("three", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -407,7 +410,7 @@ public class CogroupedKStreamImplTest {
                 .cogroup(groupedTwo, STRING_AGGREGATOR)
                 .aggregate(STRING_INITIALIZER);
 
-        final String topologyDescription = builder2.build().describe().toString();
+        final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
                 topologyDescription,
@@ -460,14 +463,14 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInDiffrentCogroupsWithOptimization() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
-        final KStream<String, String> stream3 = builder2.stream("three", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> stream3 = builder.stream("three", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -481,7 +484,7 @@ public class CogroupedKStreamImplTest {
                 .cogroup(groupedTwo, STRING_AGGREGATOR)
                 .aggregate(STRING_INITIALIZER);
 
-        final String topologyDescription = builder2.build(properties).describe().toString();
+        final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
                 topologyDescription,
@@ -526,10 +529,10 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReused() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -540,7 +543,7 @@ public class CogroupedKStreamImplTest {
 
         groupedOne.aggregate(STRING_INITIALIZER, STRING_AGGREGATOR);
 
-        final String topologyDescription = builder2.build().describe().toString();
+        final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
                 topologyDescription,
@@ -585,13 +588,13 @@ public class CogroupedKStreamImplTest {
 
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedWithOptimization() {
-        final StreamsBuilder builder2 = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
-        final KStream<String, String> stream1 = builder2.stream("one", stringConsumed);
-        final KStream<String, String> stream2 = builder2.stream("two", stringConsumed);
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
 
         final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
@@ -602,7 +605,7 @@ public class CogroupedKStreamImplTest {
 
         groupedOne.aggregate(STRING_INITIALIZER, STRING_AGGREGATOR);
 
-        final String topologyDescription = builder2.build(properties).describe().toString();
+        final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
                 topologyDescription,
@@ -635,6 +638,39 @@ public class CogroupedKStreamImplTest {
                         "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
                         "      --> none\n" +
                         "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n\n"));
+    }
+
+    @Test
+    public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedRemadeWithOptimization() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+
+        final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
+        final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
+        final KStream<String, String> stream3 = builder.stream("three", stringConsumed);
+
+        final KGroupedStream<String, String> groupedOne = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
+        final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
+        final KGroupedStream<String, String> groupedThree = stream3.groupByKey();
+        final KGroupedStream<String, String> groupedFour = stream1.map((k, v) -> new KeyValue<>(v, k)).groupByKey();
+
+
+        groupedOne.cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedTwo, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER);
+
+        groupedThree.cogroup(STRING_AGGREGATOR)
+                .cogroup(groupedFour, STRING_AGGREGATOR)
+                .aggregate(STRING_INITIALIZER);
+
+
+        final String topologyDescription = builder.build(properties).describe().toString();
+
+        assertThat(
+                topologyDescription,
+                equalTo("Topologies:\n   Sub-topology: 0\n    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n      --> KSTREAM-MAP-0000000003, KSTREAM-MAP-0000000004\n    Processor: KSTREAM-MAP-0000000003 (stores: [])\n      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n      <-- KSTREAM-SOURCE-0000000000\n    Processor: KSTREAM-MAP-0000000004 (stores: [])\n      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n      <-- KSTREAM-SOURCE-0000000000\n    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter (stores: [])\n      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink\n      <-- KSTREAM-MAP-0000000003\n    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter (stores: [])\n      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink\n      <-- KSTREAM-MAP-0000000004\n    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition)\n      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n\n  Sub-topology: 1\n    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n      --> COGROUPKSTREAM-AGGREGATE-0000000009\n    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n      --> COGROUPKSTREAM-AGGREGATE-0000000010\n    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n      --> COGROUPKSTREAM-MERGE-0000000011\n      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source\n    Processor: COGROUPKSTREAM-AGGREGATE-0000000010 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n      --> COGROUPKSTREAM-MERGE-0000000011\n      <-- KSTREAM-SOURCE-0000000001\n    Processor: COGROUPKSTREAM-MERGE-0000000011 (stores: [])\n      --> none\n      <-- COGROUPKSTREAM-AGGREGATE-0000000009, COGROUPKSTREAM-AGGREGATE-0000000010\n\n  Sub-topology: 2\n    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition])\n      --> COGROUPKSTREAM-AGGREGATE-0000000017\n    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n      --> COGROUPKSTREAM-AGGREGATE-0000000016\n    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n      --> COGROUPKSTREAM-MERGE-0000000018\n      <-- KSTREAM-SOURCE-0000000002\n    Processor: COGROUPKSTREAM-AGGREGATE-0000000017 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n      --> COGROUPKSTREAM-MERGE-0000000018\n      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source\n    Processor: COGROUPKSTREAM-MERGE-0000000018 (stores: [])\n      --> none\n      <-- COGROUPKSTREAM-AGGREGATE-0000000016, COGROUPKSTREAM-AGGREGATE-0000000017\n\n"));
     }
 
     @Test
