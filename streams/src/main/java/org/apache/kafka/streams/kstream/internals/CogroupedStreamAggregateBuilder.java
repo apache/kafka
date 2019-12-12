@@ -43,9 +43,11 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
     private final InternalStreamsBuilder builder;
+    private int repatitions;
 
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
+        repatitions = 0;
     }
 
     <KR, VIn, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
@@ -67,8 +69,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
+                String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
                         repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
+                repartionNamePrefix = repartionNamePrefix + "-" + repatitions++;
 
                 createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
 
