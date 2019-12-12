@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
+import org.apache.kafka.common.record.RecordsSend;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -520,7 +521,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         sends.add(new ByteBufferSend(dest, buffer));
 
         // finally the send for the record set itself
-        sends.add(records.toSend(dest));
+        RecordsSend recordsSend = records.toSend(dest);
+        if (recordsSend.size() > 0)
+            sends.add(recordsSend);
     }
 
     private static <T extends BaseRecords> Struct toStruct(short version, int throttleTimeMs, Errors error,

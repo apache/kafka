@@ -879,7 +879,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -970,7 +973,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1063,8 +1069,9 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
-     * record transformation).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1155,8 +1162,9 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
-     * record transformation).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1248,7 +1256,9 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1323,7 +1333,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1401,7 +1414,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1480,7 +1496,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
@@ -1561,7 +1580,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1647,7 +1669,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
@@ -1735,7 +1760,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1822,7 +1850,10 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes zero or more new values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
@@ -1908,7 +1939,10 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
@@ -1967,7 +2001,10 @@ public interface KStream<K, V> {
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
-     * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
@@ -2028,6 +2065,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and default serializers and deserializers.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2057,6 +2095,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and using the serializers as defined by {@link Serialized}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2087,6 +2126,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and using the serializers as defined by {@link Grouped}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2117,6 +2157,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and default serializers and deserializers.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
@@ -2146,6 +2187,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and {@link Serde}s as specified by {@link Serialized}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
@@ -2178,6 +2220,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and {@link Serde}s as specified by {@link Grouped}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
@@ -2367,8 +2410,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
@@ -2437,8 +2480,8 @@ public interface KStream<K, V> {
      * @param streamJoined   a {@link StreamJoined} used to configure join stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -2613,8 +2656,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join}, all records from this stream will
      * produce at least one output record (cf. below).
      * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
@@ -2678,17 +2721,17 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param streamJoined
+     * @param <VO>         the value type of the other stream
+     * @param <VR>         the value type of the result stream
+     * @param otherStream  the {@code KStream} to be joined with this stream
+     * @param joiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows      the specification of the {@link JoinWindows}
+     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * this {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #join(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -2865,8 +2908,8 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
-     * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
-     * and {@link Serde the other stream's value serde}.
+     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
+     * serde}, {@link Serde the other stream's value serde}, and used state stores.
      * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
      * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
      * least one output record (cf. below).
@@ -2931,17 +2974,17 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param streamJoined
+     * @param <VO>         the value type of the other stream
+     * @param <VR>         the value type of the result stream
+     * @param otherStream  the {@code KStream} to be joined with this stream
+     * @param joiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows      the specification of the {@link JoinWindows}
+     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @see #join(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
      */
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
@@ -3327,6 +3370,7 @@ public interface KStream<K, V> {
                                      final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
                                      final ValueJoiner<? super V, ? super GV, ? extends RV> joiner,
                                      final Named named);
+
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
      * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner-join}, all records from this stream

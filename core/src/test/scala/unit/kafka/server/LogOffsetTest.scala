@@ -22,12 +22,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 
 import kafka.log.{Log, LogSegment}
-import kafka.network.SocketServer
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
@@ -249,14 +248,12 @@ class LogOffsetTest extends BaseRequestTest {
 
   private def server: KafkaServer = servers.head
 
-  private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = destination.getOrElse(anySocketServer))
-    ListOffsetResponse.parse(response, request.version)
+  private def sendListOffsetsRequest(request: ListOffsetRequest): ListOffsetResponse = {
+    connectAndReceive[ListOffsetResponse](request)
   }
 
-  private def sendFetchRequest(request: FetchRequest, destination: Option[SocketServer] = None): FetchResponse[MemoryRecords] = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = destination.getOrElse(anySocketServer))
-    FetchResponse.parse(response, request.version)
+  private def sendFetchRequest(request: FetchRequest): FetchResponse[MemoryRecords] = {
+    connectAndReceive[FetchResponse[MemoryRecords]](request)
   }
 
 }

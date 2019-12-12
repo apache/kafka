@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,7 +46,6 @@ public class StandbyTask extends AbstractTask {
     private boolean updateOffsetLimits;
     private final Sensor closeTaskSensor;
     private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
-    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -68,8 +68,7 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
-        closeTaskSensor = metrics
-            .threadLevelSensor(Thread.currentThread().getName(), "task-closed", Sensor.RecordingLevel.INFO);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
 
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
@@ -86,7 +85,6 @@ public class StandbyTask extends AbstractTask {
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
         registerStateStores();
-        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialize();
         taskInitialized = true;
         return true;
@@ -122,6 +120,9 @@ public class StandbyTask extends AbstractTask {
     }
 
     private void flushAndCheckpointState() {
+        // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
+        // but in practice this shouldn't happen for standby tasks, since they don't produce to changelog topics
+        // or downstream topics.
         stateMgr.flush();
         stateMgr.checkpoint(Collections.emptyMap());
     }
@@ -195,7 +196,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {
-        return checkpointedOffsets;
+        return Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     private long updateOffsetLimits(final TopicPartition partition) {
@@ -222,15 +223,9 @@ public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
         try {
-            final Map<TopicPartition, Long> results = consumer.committed(partitions)
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-
             // those do not have a committed offset would default to 0
-            for (final TopicPartition tp : partitions) {
-                results.putIfAbsent(tp, 0L);
-            }
-
-            return results;
+            return consumer.committed(partitions).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
         } catch (final AuthorizationException e) {
             throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
         } catch (final WakeupException e) {

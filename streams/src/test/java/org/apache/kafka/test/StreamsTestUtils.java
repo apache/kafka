@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -195,5 +196,13 @@ public final class StreamsTestUtils {
         } else {
             return metric;
         }
+    }
+
+    public static boolean containsMetric(final Metrics metrics,
+                                         final String name,
+                                         final String group,
+                                         final Map<String, String> tags) {
+        final MetricName metricName = metrics.metricName(name, group, tags);
+        return metrics.metric(metricName) != null;
     }
 }

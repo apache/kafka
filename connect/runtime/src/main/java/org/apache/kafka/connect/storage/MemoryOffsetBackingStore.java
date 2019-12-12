@@ -75,9 +75,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     }
 
     @Override
-    public Future<Map<ByteBuffer, ByteBuffer>> get(
-            final Collection<ByteBuffer> keys,
-            final Callback<Map<ByteBuffer, ByteBuffer>> callback) {
+    public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
         return executor.submit(new Callable<Map<ByteBuffer, ByteBuffer>>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> call() throws Exception {
@@ -85,8 +83,6 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
                 for (ByteBuffer key : keys) {
                     result.put(key, data.get(key));
                 }
-                if (callback != null)
-                    callback.onCompletion(null, result);
                 return result;
             }
         });

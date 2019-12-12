@@ -14,28 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals;
 
-package org.apache.kafka.common.utils;
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
 
-import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-
-import java.io.File;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-
-public class MappedByteBuffersTest {
-
-    /**
-     * Checks that unmap doesn't throw exceptions.
-     */
-    @Test
-    public void testUnmap() throws Exception {
-        File file = TestUtils.tempFile();
-        try (FileChannel channel = FileChannel.open(file.toPath())) {
-            MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_ONLY, 0, 0);
-            MappedByteBuffers.unmap(file.getAbsolutePath(), map);
-        }
-    }
-
+/**
+ * This suite runs all the tests related to task management. It's intended to simplify feature testing from IDEs.
+ *
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
+ * these tests are already included in the `:streams:test` task.
+ */
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+    AbstractTaskTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    AssignedStreamsTasksTest.class,
+})
+public class TaskSuite {
 }
+
+

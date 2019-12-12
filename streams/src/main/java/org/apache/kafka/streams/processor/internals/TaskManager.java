@@ -130,12 +130,15 @@ public class TaskManager {
         }
 
         // Pause all the new partitions until the underlying state store is ready for all the active tasks.
+        log.debug("Pausing all active task partitions until the underlying state stores are ready");
         pausePartitions();
     }
 
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
         final Set<TaskId> suspendedTasks = partitionsToTaskSet(assignment);
         suspendedTasks.removeAll(addedActiveTasks.keySet());
+
+        log.debug("Suspended tasks to be resumed: {}", suspendedTasks);
 
         for (final TaskId taskId : suspendedTasks) {
             final Set<TopicPartition> partitions = assignedActiveTasks.get(taskId);
@@ -160,7 +163,7 @@ public class TaskManager {
     }
 
     private void addNewStandbyTasks(final Map<TaskId, Set<TopicPartition>> newStandbyTasks) {
-        log.trace("New standby tasks to be created: {}", newStandbyTasks);
+        log.debug("New standby tasks to be created: {}", newStandbyTasks);
 
         for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
@@ -168,7 +171,8 @@ public class TaskManager {
     }
 
     /**
-     * Returns ids of tasks whose states are kept on the local storage.
+     * Returns ids of tasks whose states are kept on the local storage. This includes active, standby, and previously
+     * assigned but not yet cleaned up tasks
      */
     public Set<TaskId> cachedTasksIds() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
@@ -253,41 +257,43 @@ public class TaskManager {
 
     /**
      * Closes active tasks as zombies, as these partitions have been lost and are no longer owned.
+     * NOTE this method assumes that when it is called, EVERY task/partition has been lost and must
+     * be closed as a zombie.
      * @return list of lost tasks
      */
-    Set<TaskId> closeLostTasks(final Collection<TopicPartition> lostPartitions) {
-        final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
-        log.debug("Closing lost tasks as zombies: {}", zombieTasks);
+    Set<TaskId> closeLostTasks() {
+        final Set<TaskId> lostTasks = new HashSet<>(assignedActiveTasks.keySet());
+        log.debug("Closing lost active tasks as zombies: {}", lostTasks);
 
-        final List<TopicPartition> lostTaskChangelogs = new ArrayList<>();
+        final RuntimeException exception = active.closeAllTasksAsZombies();
 
-        final RuntimeException exception = active.closeZombieTasks(zombieTasks, lostTaskChangelogs);
+        log.debug("Clearing assigned active tasks: {}", assignedActiveTasks);
+        assignedActiveTasks.clear();
 
-        assignedActiveTasks.keySet().removeAll(zombieTasks);
-        changelogReader.remove(lostTaskChangelogs);
-        removeChangelogsFromRestoreConsumer(lostTaskChangelogs, false);
+        log.debug("Clearing the store changelog reader: {}", changelogReader);
+        changelogReader.clear();
+
+        if (!restoreConsumerAssignedStandbys) {
+            log.debug("Clearing the restore consumer's assignment: {}", restoreConsumer.assignment());
+            restoreConsumer.unsubscribe();
+        }
 
         if (exception != null) {
             throw exception;
-        } else if (!assignedActiveTasks.isEmpty()) {
-            throw new IllegalStateException("TaskManager had leftover tasks after removing all zombies");
         }
 
-        return zombieTasks;
+        return lostTasks;
     }
 
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        log.debug("Shutting down all active tasks {}, standby tasks {}, and suspended tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
-                  active.suspendedTaskIds());
-
         try {
-            active.close(clean);
+            active.shutdown(clean);
         } catch (final RuntimeException fatalException) {
             firstException.compareAndSet(null, fatalException);
         }
-        standby.close(clean);
+        standby.shutdown(clean);
 
         // remove the changelog partitions from restore consumer
         try {
@@ -383,6 +389,8 @@ public class TaskManager {
             final Collection<TopicPartition> restored = changelogReader.restore(active);
             active.updateRestored(restored);
             removeChangelogsFromRestoreConsumer(restored, false);
+        } else {
+            active.clearRestoringPartitions();
         }
 
         if (active.allTasksRunning()) {
@@ -410,6 +418,7 @@ public class TaskManager {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
         }
 
+        log.debug("Assigning and seeking restoreConsumer to {}", checkpointedOffsets);
         restoreConsumerAssignedStandbys = true;
         restoreConsumer.assign(checkpointedOffsets.keySet());
         for (final Map.Entry<TopicPartition, Long> entry : checkpointedOffsets.entrySet()) {
@@ -469,8 +478,23 @@ public class TaskManager {
             }
         }
 
-        this.assignedActiveTasks = activeTasks;
-        this.assignedStandbyTasks = standbyTasks;
+        log.debug("Assigning metadata with: " +
+                      "\tpreviousAssignedActiveTasks: {},\n" +
+                      "\tpreviousAssignedStandbyTasks: {}\n" +
+                      "The updated task states are: \n" +
+                      "\tassignedActiveTasks {},\n" +
+                      "\tassignedStandbyTasks {},\n" +
+                      "\taddedActiveTasks {},\n" +
+                      "\taddedStandbyTasks {},\n" +
+                      "\trevokedActiveTasks {},\n" +
+                      "\trevokedStandbyTasks {}",
+                  assignedActiveTasks, assignedStandbyTasks,
+                  activeTasks, standbyTasks,
+                  addedActiveTasks, addedStandbyTasks,
+                  revokedActiveTasks, revokedStandbyTasks);
+
+        assignedActiveTasks = activeTasks;
+        assignedStandbyTasks = standbyTasks;
     }
 
     public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {

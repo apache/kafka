@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -72,7 +73,8 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        this.logPrefix = threadIdPrefix + String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -171,7 +173,13 @@ public abstract class AbstractTask implements Task {
      * Flush all state stores owned by this task
      */
     void flushState() {
-        stateMgr.flush();
+        try {
+            stateMgr.flush();
+        } catch (final ProcessorStateException e) {
+            if (e.getCause() instanceof RecoverableClientException) {
+                throw new TaskMigratedException(this, e);
+            }
+        }
     }
 
     /**
@@ -197,7 +205,7 @@ public abstract class AbstractTask implements Task {
         log.trace("Initializing state stores");
 
         for (final StateStore store : topology.stateStores()) {
-            log.trace("Initializing store {}", store.name());
+            log.debug("Initializing store {}", store.name());
             processorContext.uninitialize();
             store.init(processorContext, store);
         }

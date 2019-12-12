@@ -18,10 +18,12 @@ package org.apache.kafka.streams.kstream.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,7 +50,7 @@ import static org.powermock.api.easymock.PowerMock.verify;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockRunnerDelegate(Parameterized.class)
-@PrepareForTest({StreamsMetricsImpl.class, Sensor.class, ThreadMetrics.class})
+@PrepareForTest({StreamsMetricsImpl.class, Sensor.class, ThreadMetrics.class, StateStoreMetrics.class, ProcessorNodeMetrics.class})
 public class TaskMetricsTest {
 
     private final static String THREAD_ID = "test-thread";
@@ -62,7 +64,7 @@ public class TaskMetricsTest {
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][] {
             {Version.LATEST},
-            {Version.FROM_100_TO_24}
+            {Version.FROM_0100_TO_24}
         });
     }
 
@@ -81,8 +83,8 @@ public class TaskMetricsTest {
         expect(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .andReturn(expectedSensor);
         if (builtInMetricsVersion == Version.LATEST) {
-            final String avgLatencyDescription = "The average latency of processing";
-            final String maxLatencyDescription = "The maximum latency of processing";
+            final String avgLatencyDescription = "The average latency of calls to process";
+            final String maxLatencyDescription = "The maximum latency of calls to process";
             expect(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).andReturn(tagMap);
             StreamsMetricsImpl.addAvgAndMaxToSensor(
                 expectedSensor,
@@ -246,15 +248,72 @@ public class TaskMetricsTest {
     }
 
     @Test
-    public void shouldGetDroppedOrSkippedRecordsSensor() {
+    public void shouldGetDroppedRecordsSensorOrSkippedRecordsSensor() {
         mockStatic(ThreadMetrics.class);
-        if (builtInMetricsVersion == Version.FROM_100_TO_24) {
+        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
             expect(ThreadMetrics.skipRecordSensor(THREAD_ID, streamsMetrics)).andReturn(expectedSensor);
             replay(ThreadMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
 
             final Sensor sensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(THREAD_ID, TASK_ID, streamsMetrics);
 
             verify(ThreadMetrics.class);
+            assertThat(sensor, is(expectedSensor));
+        } else {
+            shouldGetDroppedRecordsSensor();
+        }
+    }
+
+    @Test
+    public void shouldGetDroppedRecordsSensorOrExpiredWindowRecordDropSensor() {
+        final String storeType = "test-store-type";
+        final String storeName = "test-store-name";
+        mockStatic(StateStoreMetrics.class);
+        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
+            expect(StateStoreMetrics.expiredWindowRecordDropSensor(
+                THREAD_ID,
+                TASK_ID,
+                storeType,
+                storeName,
+                streamsMetrics
+            )).andReturn(expectedSensor);
+            replay(StateStoreMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
+
+            final Sensor sensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
+                THREAD_ID,
+                TASK_ID,
+                storeType,
+                storeName,
+                streamsMetrics
+            );
+
+            verify(StateStoreMetrics.class);
+            assertThat(sensor, is(expectedSensor));
+        } else {
+            shouldGetDroppedRecordsSensor();
+        }
+    }
+
+    @Test
+    public void shouldGetDroppedRecordsSensorOrLateRecordDropSensor() {
+        final String processorNodeId = "test-processor-node";
+        mockStatic(ProcessorNodeMetrics.class);
+        if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
+            expect(ProcessorNodeMetrics.lateRecordDropSensor(
+                THREAD_ID,
+                TASK_ID,
+                processorNodeId,
+                streamsMetrics
+            )).andReturn(expectedSensor);
+            replay(ProcessorNodeMetrics.class, StreamsMetricsImpl.class, streamsMetrics);
+
+            final Sensor sensor = TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor(
+                THREAD_ID,
+                TASK_ID,
+                processorNodeId,
+                streamsMetrics
+            );
+
+            verify(ProcessorNodeMetrics.class);
             assertThat(sensor, is(expectedSensor));
         } else {
             shouldGetDroppedRecordsSensor();

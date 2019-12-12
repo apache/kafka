@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 
@@ -74,7 +75,7 @@ public class TaskMetrics {
 
     private static final String PROCESS = "process";
     private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
-    private static final String PROCESS_DESCRIPTION = "processing";
+    private static final String PROCESS_DESCRIPTION = "calls to process";
     private static final String PROCESS_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + PROCESS_DESCRIPTION;
 
@@ -179,8 +180,29 @@ public class TaskMetrics {
     public static Sensor droppedRecordsSensorOrSkippedRecordsSensor(final String threadId,
                                                                     final String taskId,
                                                                     final StreamsMetricsImpl streamsMetrics) {
-        if (streamsMetrics.version() == Version.FROM_100_TO_24) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
             return ThreadMetrics.skipRecordSensor(threadId, streamsMetrics);
+        }
+        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
+    }
+
+    public static Sensor droppedRecordsSensorOrExpiredWindowRecordDropSensor(final String threadId,
+                                                                             final String taskId,
+                                                                             final String storeType,
+                                                                             final String storeName,
+                                                                             final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return StateStoreMetrics.expiredWindowRecordDropSensor(threadId, taskId, storeType, storeName, streamsMetrics);
+        }
+        return droppedRecordsSensor(threadId, taskId, streamsMetrics);
+    }
+
+    public static Sensor droppedRecordsSensorOrLateRecordDropSensor(final String threadId,
+                                                                    final String taskId,
+                                                                    final String processorNodeId,
+                                                                    final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            return ProcessorNodeMetrics.lateRecordDropSensor(threadId, taskId, processorNodeId, streamsMetrics);
         }
         return droppedRecordsSensor(threadId, taskId, streamsMetrics);
     }

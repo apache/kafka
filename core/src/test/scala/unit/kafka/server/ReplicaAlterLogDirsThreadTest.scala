@@ -20,7 +20,6 @@ import java.util.Optional
 
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogManager}
-import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition

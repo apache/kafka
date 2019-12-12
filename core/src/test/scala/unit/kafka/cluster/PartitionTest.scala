@@ -451,7 +451,8 @@ class PartitionTest extends AbstractPartitionTest {
         followerFetchOffsetMetadata = fetchOffsetMetadata,
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset)
+        leaderEndOffset = partition.localLogOrException.logEndOffset,
+        lastSentHighwatermark = partition.localLogOrException.highWatermark)
     }
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
@@ -826,7 +827,8 @@ class PartitionTest extends AbstractPartitionTest {
         followerFetchOffsetMetadata = fetchOffsetMetadata,
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset)
+        leaderEndOffset = partition.localLogOrException.logEndOffset,
+        lastSentHighwatermark = partition.localLogOrException.highWatermark)
     }
 
     updateFollowerFetchState(follower2, LogOffsetMetadata(0))
@@ -946,7 +948,7 @@ class PartitionTest extends AbstractPartitionTest {
       // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
       executor.submit(CoreUtils.runnable {
         while (!done.get) {
-          partitions.foreach(_.maybeShrinkIsr(10000))
+          partitions.foreach(_.maybeShrinkIsr())
         }
       })
       // Append records to partitions, one partition-per-thread
@@ -1061,7 +1063,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
+      leaderEndOffset = 6L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
 
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(3L, remoteReplica.logEndOffset)
@@ -1073,7 +1076,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(6L),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
+      leaderEndOffset = 6L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
 
     assertEquals(time.milliseconds(), remoteReplica.lastCaughtUpTimeMs)
     assertEquals(6L, remoteReplica.logEndOffset)
@@ -1121,7 +1125,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
+      leaderEndOffset = 6L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
 
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(3L, remoteReplica.logEndOffset)
@@ -1139,7 +1144,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 6L)
+      leaderEndOffset = 6L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
 
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1192,7 +1198,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+      leaderEndOffset = 10L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
 
     // Follower state is updated, but the ISR has not expanded
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1240,11 +1247,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // On initialization, the replica is considered caught up and should not be removed
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
 
     // If enough time passes without a fetch update, the ISR should shrink
-    time.sleep(10001)
+    time.sleep(partition.replicaLagTimeMaxMs + 1)
     val updatedLeaderAndIsr = LeaderAndIsr(
       leader = brokerId,
       leaderEpoch = leaderEpoch,
@@ -1252,7 +1259,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(Some(2))
 
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(10L, partition.localLogOrException.highWatermark)
   }
@@ -1303,7 +1310,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(5),
       followerStartOffset = 0L,
       followerFetchTimeMs = firstFetchTimeMs,
-      leaderEndOffset = 10L)
+      leaderEndOffset = 10L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(5L, partition.localLogOrException.highWatermark)
     assertEquals(5L, remoteReplica.logEndOffset)
@@ -1317,7 +1325,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 15L)
+      leaderEndOffset = 15L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
     assertEquals(firstFetchTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1325,7 +1334,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
@@ -1373,7 +1382,8 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchOffsetMetadata = LogOffsetMetadata(10),
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
-      leaderEndOffset = 10L)
+      leaderEndOffset = 10L,
+      lastSentHighwatermark = partition.localLogOrException.highWatermark)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1383,7 +1393,7 @@ class PartitionTest extends AbstractPartitionTest {
     time.sleep(10001)
 
     // The ISR should not be shrunk because the follower is caught up to the leader's log end
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
@@ -1434,7 +1444,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(None)
 
-    partition.maybeShrinkIsr(10000)
+    partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }

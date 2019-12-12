@@ -82,6 +82,11 @@ public class KGroupedStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullAggregatorOnCogroup() {
+        groupedStream.cogroup(null);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerOnReduce() {
         groupedStream.reduce(null);
     }
@@ -471,8 +476,6 @@ public class KGroupedStreamImplTest {
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldReduceAndMaterializeResults() {
         groupedStream.reduce(
@@ -544,8 +547,6 @@ public class KGroupedStreamImplTest {
         }
     }
 
-
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         groupedStream.aggregate(
@@ -575,7 +576,6 @@ public class KGroupedStreamImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateWithDefaultSerdes() {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();

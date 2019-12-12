@@ -368,7 +368,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
 
         for (int i = 0; i < predicates.length; i++) {
-            final ProcessorParameters innerProcessorParameters = new ProcessorParameters<>(new KStreamPassThrough<K, V>(), childNames[i]);
+            final ProcessorParameters innerProcessorParameters = new ProcessorParameters<>(new PassThrough<K, V>(), childNames[i]);
             final ProcessorGraphNode<K, V> branchChildNode = new ProcessorGraphNode<>(childNames[i], innerProcessorParameters);
 
             builder.addGraphNode(branchNode, branchChildNode);
@@ -401,7 +401,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(streamImpl.sourceNodes);
 
-        final ProcessorParameters<? super K, ? super V> processorParameters = new ProcessorParameters<>(new KStreamPassThrough<>(), name);
+        final ProcessorParameters<? super K, ? super V> processorParameters = new ProcessorParameters<>(new PassThrough<>(), name);
 
         final ProcessorGraphNode<? super K, ? super V> mergeNode = new ProcessorGraphNode<>(name, processorParameters);
         mergeNode.setMergeNode(true);
@@ -796,7 +796,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         }
 
-        joinThis.ensureJoinableWith(joinOther);
+        joinThis.ensureCopartitionWith(Collections.singleton(joinOther));
 
         return join.join(
             joinThis,
@@ -836,10 +836,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
 
-        final String repartitionTopic = repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
-        final String sinkName = builder.newProcessorName(SINK_NAME);
-        final String nullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
-        final String sourceName = builder.newProcessorName(SOURCE_NAME);
+        final String repartitionTopicName = repartitionTopicNamePrefix.endsWith(REPARTITION_TOPIC_SUFFIX) ?
+            repartitionTopicNamePrefix : repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
+
+        // Always need to generate the names to burn index counter for compatibility
+        final String genSinkName = builder.newProcessorName(SINK_NAME);
+        final String genNullKeyFilterProcessorName = builder.newProcessorName(FILTER_NAME);
+        final String genSourceName = builder.newProcessorName(SOURCE_NAME);
+
+        final String sinkName;
+        final String sourceName;
+        final String nullKeyFilterProcessorName;
+
+        if (repartitionTopicNamePrefix.matches("KSTREAM.*-[0-9]{10}")) {
+            sinkName = genSinkName;
+            sourceName = genSourceName;
+            nullKeyFilterProcessorName = genNullKeyFilterProcessorName;
+        } else {
+            sinkName = repartitionTopicName + "-sink";
+            sourceName = repartitionTopicName + "-source";
+            nullKeyFilterProcessorName = repartitionTopicName + "-filter";
+        }
 
         final Predicate<K1, V1> notNullKeyPredicate = (k, v) -> k != null;
 
@@ -851,7 +868,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         optimizableRepartitionNodeBuilder.withKeySerde(keySerde)
                                          .withValueSerde(valSerde)
                                          .withSourceName(sourceName)
-                                         .withRepartitionTopic(repartitionTopic)
+                                         .withRepartitionTopic(repartitionTopicName)
                                          .withSinkName(sinkName)
                                          .withProcessorParameters(processorParameters)
                                          // reusing the source name for the graph node name
@@ -1020,7 +1037,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(other, "other KTable can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
-        final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K, VO>) other);
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
 
         final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
