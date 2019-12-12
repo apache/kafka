@@ -43,11 +43,10 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
     private final InternalStreamsBuilder builder;
-    private int repatitions;
+    private final Map<KGroupedStreamImpl<K, ?>, StreamsGraphNode> parentNodes = new LinkedHashMap<>();
 
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
-        repatitions = 0;
     }
 
     <KR, VIn, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
@@ -61,25 +60,24 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final SessionWindows sessionWindows,
                                                        final Merger<? super K, VOut> sessionMerger) {
 
-        final Map<KGroupedStreamImpl<K, ?>, StreamsGraphNode> parentNodes = new LinkedHashMap<>();
-
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
-            parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
+
             if (repartitionReqs.repartitionRequired) {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
-                String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
+                final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
                         repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
-                repartionNamePrefix = repartionNamePrefix + "-" + repatitions++;
 
                 createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
 
-                final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
-
-                builder.addGraphNode(parentNodes.get(repartitionReqs), repartitionNode);
-
-                parentNodes.put(repartitionReqs, repartitionNode);
+                if (!parentNodes.containsKey(repartitionReqs)) {
+                    final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
+                    builder.addGraphNode(repartitionReqs.streamsGraphNode, repartitionNode);
+                    parentNodes.put(repartitionReqs, repartitionNode);
+                }
+            } else {
+                parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
             }
         }
 

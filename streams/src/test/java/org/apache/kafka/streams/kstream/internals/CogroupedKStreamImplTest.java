@@ -797,33 +797,25 @@ public class CogroupedKStreamImplTest {
                         "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
                         "      --> KSTREAM-MAP-0000000001\n" +
                         "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
-                        "      --> foo-0-repartition-filter, foo-1-repartition-filter\n" +
+                        "      --> foo-repartition-filter\n" +
                         "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: foo-0-repartition-filter (stores: [])\n" +
-                        "      --> foo-0-repartition-sink\n" +
+                        "    Processor: foo-repartition-filter (stores: [])\n" +
+                        "      --> foo-repartition-sink\n" +
                         "      <-- KSTREAM-MAP-0000000001\n" +
-                        "    Processor: foo-1-repartition-filter (stores: [])\n" +
-                        "      --> foo-1-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000001\n" +
-                        "    Sink: foo-0-repartition-sink (topic: foo-0-repartition)\n" +
-                        "      <-- foo-0-repartition-filter\n" +
-                        "    Sink: foo-1-repartition-sink (topic: foo-1-repartition)\n" +
-                        "      <-- foo-1-repartition-filter\n\n" +
+                        "    Sink: foo-repartition-sink (topic: foo-repartition)\n" +
+                        "      <-- foo-repartition-filter\n\n" +
                         "  Sub-topology: 1\n" +
-                        "    Source: foo-0-repartition-source (topics: [foo-0-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000006\n" +
+                        "    Source: foo-repartition-source (topics: [foo-repartition])\n" +
+                        "      --> COGROUPKSTREAM-AGGREGATE-0000000006, COGROUPKSTREAM-AGGREGATE-0000000012\n" +
                         "    Processor: COGROUPKSTREAM-AGGREGATE-0000000006 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
                         "      --> COGROUPKSTREAM-MERGE-0000000007\n" +
-                        "      <-- foo-0-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000007 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000006\n\n" +
-                        "  Sub-topology: 2\n" +
-                        "    Source: foo-1-repartition-source (topics: [foo-1-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000012\n" +
+                        "      <-- foo-repartition-source\n" +
                         "    Processor: COGROUPKSTREAM-AGGREGATE-0000000012 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000008])\n" +
                         "      --> COGROUPKSTREAM-MERGE-0000000013\n" +
-                        "      <-- foo-1-repartition-source\n" +
+                        "      <-- foo-repartition-source\n" +
+                        "    Processor: COGROUPKSTREAM-MERGE-0000000007 (stores: [])\n" +
+                        "      --> none\n" +
+                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000006\n" +
                         "    Processor: COGROUPKSTREAM-MERGE-0000000013 (stores: [])\n" +
                         "      --> none\n" +
                         "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n"));
