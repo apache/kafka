@@ -23,9 +23,10 @@ public class RetriableCommitFailedException extends ApiException {
     private static final long serialVersionUID = 1L;
 
     public RetriableCommitFailedException(Throwable t) {
-        super("Offset commit failed with a retriable exception. This is usually because the consumer is no longer " +
-            "part of a group or is participating a rebalance right now. You should first call poll to complete " +
-            "the rebalance and then commit the latest consumed offsets.", t);
+        super("Offset commit failed with a retriable exception. This is usually because the consumer is not yet " +
+            "part of a group with auto partition assignment or is participating in a rebalance to reassign partitions " +
+            "right now. You should first call poll to complete the rebalance and then " +
+            "retry committing the consumed offsets for those assigned partitions.", t);
     }
 
     public RetriableCommitFailedException(String message) {

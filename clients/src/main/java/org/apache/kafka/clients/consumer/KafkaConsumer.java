@@ -1332,10 +1332,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same groupId which is using group management. In such cases,
+     *             when you are trying to commit to partitions that is no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
      * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retriable.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance. In such cases
-     *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
+     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet deteremined
+     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
+     *            by calling {@link #poll(Duration)} and retry the commit: in this case only offsets of the still assigned
+     *            partitions would be committed.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1370,10 +1374,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same groupId which is using group management. In such cases,
+     *             when you are trying to commit to partitions that is no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
      * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retriable.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance. In such cases
-     *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
+     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet deteremined
+     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
+     *            by calling {@link #poll(Duration)} and retry the commit: in this case only offsets of the still assigned
+     *            partitions would be committed.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1420,10 +1428,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param offsets A map of offsets by partition with associated metadata
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same groupId which is using group management. In such cases,
+     *             when you are trying to commit to partitions that is no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
      * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retriable.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance. In such cases
-     *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
+     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet deteremined
+     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
+     *            by calling {@link #poll(Duration)} and retry the commit with those offsets whose partitions are still
+     *            assigned to this consumer.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1462,10 +1474,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum amount of time to await completion of the offset commit
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same groupId which is using group management. In such cases,
+     *             when you are trying to commit to partitions that is no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
      * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retriable.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance. In such cases
-     *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
+     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet deteremined
+     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
+     *            by calling {@link #poll(Duration)} and retry the commit with those offsets whose partitions are still
+     *            assigned to this consumer.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while

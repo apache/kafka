@@ -1061,7 +1061,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (generation == null) {
                 log.info("Failing OffsetCommit request since the consumer is not part of an active group");
                 return RequestFuture.failure(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
-                    "consumer group is not part of an active group yet. You can try completing the rebalance " +
+                    "consumer is not part of an active group for auto partition assignment yet. You can try completing the rebalance " +
                     "by calling poll() and then retry the operation"));
             }
         } else
