@@ -313,6 +313,9 @@ public class Selector implements Selectable, AutoCloseable {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
+        // Default to empty client information as the ApiVersionsRequest is not
+        // mandatory. In this case, we still want to account for the connection.
+        this.channel(id).channelMetadataRegistry().registerClientInformation(ClientInformation.EMPTY);
     }
 
     private void ensureNotRegistered(String id) {
@@ -1068,13 +1071,6 @@ public class Selector implements Selectable, AutoCloseable {
         private CipherInformation cipherInformation;
         private ClientInformation clientInformation;
 
-        SelectorChannelMetadataRegistry() {
-            // Default to empty client information as the ApiVersionsRequest is not
-            // mandatory or could not have the information yet if an older version
-            // is used. In this case, we still want to account for the connection.
-            registerClientInformation(ClientInformation.EMPTY);
-        }
-
         @Override
         public void registerCipherInformation(final CipherInformation cipherInformation) {
             if (this.cipherInformation == null) {
@@ -1110,8 +1106,10 @@ public class Selector implements Selectable, AutoCloseable {
                 this.cipherInformation = null;
             }
 
-            sensors.connectionsByClient.decrement(this.clientInformation);
-            this.clientInformation = null;
+            if (this.clientInformation != null) {
+                sensors.connectionsByClient.decrement(this.clientInformation);
+                this.clientInformation = null;
+            }
         }
     }
 
