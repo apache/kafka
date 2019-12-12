@@ -123,8 +123,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
         """
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
                                   version=KafkaVersion(from_kafka_version),
-                                  topics={self.topic: {"partitions": self.partitions, "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}})
+                                  topics={self.topic: {"partitions": self.partitions,
+				      "replication-factor": self.replication_factor,
+				      'configs': {"min.insync.replicas": 2}}})
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.start()
