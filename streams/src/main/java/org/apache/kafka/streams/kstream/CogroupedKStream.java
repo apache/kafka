@@ -265,4 +265,14 @@ public interface CogroupedKStream<K, VOut> {
                               final Named named,
                               final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
+
+    /**
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
+     * aggregations.
+     *
+     * @param windows the specification of the aggregation {@link Windows}
+     * @param <W>     the window type
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
 }
