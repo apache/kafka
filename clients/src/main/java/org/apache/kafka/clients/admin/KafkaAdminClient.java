@@ -528,7 +528,7 @@ public class KafkaAdminClient extends AdminClient {
      * If no default.api.timeout.ms has been configured, then set its value as the max of the default and request.timeout.ms. Also we should probably log a warning.
      * Otherwise, use the provided values for both configurations.
      *
-     * @param config
+     * @param config The configuration
      */
     private void configureDefaultApiTimeoutMsAndRequestTimeoutMs(AdminClientConfig config) {
         this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -1036,7 +1036,8 @@ public class KafkaAdminClient extends AdminClient {
                         "Internal error sending %s to %s.", call.callName, node)));
                     continue;
                 }
-                ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true);
+                ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
+                        true, timeoutMs, null);
                 log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);

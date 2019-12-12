@@ -2729,6 +2729,49 @@ public class KafkaAdminClientTest {
             errorsMap, memberIdentities.get(1), "For unit test").getClass());
     }
 
+    @Test
+    public void testSingleRequestTimeoutAndRetryWithoutApiTimeout() throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        final int requestTimeoutMs = 1000;
+        final int retryBackoff = 100;
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoff),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            assertEquals(time, env.time());
+            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
+
+            final int apiTimeoutMs = 3000;
+            final long startTimeMs = time.milliseconds();
+            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(apiTimeoutMs));
+
+            // Wait until the first attempt has failed, then advance the time
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(), "Timed out waiting for inFlightRequests");
+            time.sleep(requestTimeoutMs + retryBackoff);
+            final long betweenTimeoutMs = time.milliseconds();
+
+            // Since api timeout bound is not hit, AdminClient should add the retry call to the queue
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
+                    "Failed to add retry listTopics call");
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            time.sleep(requestTimeoutMs);
+
+            assertEquals(apiTimeoutMs - requestTimeoutMs - retryBackoff,
+                    KafkaAdminClient.calcTimeoutMsRemainingAsInt(betweenTimeoutMs, apiTimeoutMs + startTimeMs));
+            assertEquals(result.listings().get().size(), 1);
+            assertEquals("foo", result.listings().get().iterator().next().name());
+
+        }
+    }
+
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
                                                                  MemberAssignment assignment) {
         return new MemberDescription(member.memberId(),
