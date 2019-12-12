@@ -74,9 +74,14 @@
 <ol>
     <li>ZooKeeper has been upgraded to 3.5.6. ZooKeeper upgrade from 3.4.X to 3.5.6 can fail if there are no snapshot files in 3.4 data directory.
         This usually happens in test upgrades where ZooKeeper 3.5.6 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
-        The workaround for the issue is given in <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
-        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>
-        and <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3644">ZOOKEEPER-3644</a>.
+        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
+        For multi-node ZooKeeper cluster upgrades, set <code>snapshot.trust.empty=true</code> in <code>zookeeper.properties</code> before the upgrade
+        to avoid <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>. After the new version starts successfully, it is safe to remove this config.
+        See <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_advancedConfiguration">ZooKeeper advanced configuration</a> for more details.
+        For standalone cluster upgrades, we have observed a data loss issue when using <code>snapshot.trust.empty=true</code> config.
+        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3644">ZOOKEEPER-3644</a>.
+        The workaround is need to manually copy the <a href="https://issues.apache.org/jira/secure/attachment/12928686/snapshot.0">snapshot</a> file to the 3.4 data directory.
+        For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
     </li>
     <li>
         An embedded Jetty based <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
@@ -91,7 +96,7 @@
 <ul>
     <li>A new Admin API has been added for partition reassignments. Due to changing the way Kafka propagates reassignment information,
         it is possible to lose reassignment state in failure edge cases while upgrading to the new version. It is not recommended to start reassignments while upgrading.</li>
-    <li>ZooKeeper has been upgraded from 3.4.14 to 3.5.5. TLS and dynamic reconfiguration are supported by the new version.</li>
+    <li>ZooKeeper has been upgraded from 3.4.14 to 3.5.6. TLS and dynamic reconfiguration are supported by the new version.</li>
     <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
     <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
     <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
