@@ -134,14 +134,14 @@ class NamedCache {
         }
 
         dirtyKeys.clear();
-        flush(entries);
+        applyFlushListener(entries);
         for (final Bytes key : deleted) {
             delete(key);
         }
     }
 
     // Entries should be removed from dirtyKeys before the listener is applied as it may be re-entrant
-    private void flush(final List<ThreadCache.DirtyEntry> entries) {
+    private void applyFlushListener(final List<ThreadCache.DirtyEntry> entries) {
         if (listener == null) {
             throw new IllegalArgumentException("No listener for namespace " + name + " registered with cache");
         }
@@ -237,7 +237,7 @@ class NamedCache {
         cache.remove(eldest.key);
         if (eldest.entry.isDirty()) {
             dirtyKeys.remove(eldest.key);
-            flush(Collections.singletonList(
+            applyFlushListener(Collections.singletonList(
                 new ThreadCache.DirtyEntry(eldest.key, eldest.entry.value(), eldest.entry)));
         }
     }
