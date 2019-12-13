@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -38,18 +39,20 @@ public class OffsetAndMetadata implements Serializable {
     // initialize its value to null.
     private final Integer leaderEpoch;
 
-    private final RecordKeyRange recordKeyRange;
+    private final Map<Long, RecordKeyRange> offsetRanges;
+
+    //private final RecordKeyRange recordKeyRange;
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
      * @param offset The offset to be committed
      * @param leaderEpoch Optional leader epoch of the last consumed record
-     * @param recordKeyRange The key range committed
+     * @param offsetRanges The key range committed
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset,
                              Optional<Integer> leaderEpoch,
-                             RecordKeyRange recordKeyRange,
+                             Map<Long, RecordKeyRange> offsetRanges,
                              String metadata) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
@@ -63,7 +66,7 @@ public class OffsetAndMetadata implements Serializable {
             this.metadata = OffsetFetchResponse.NO_METADATA;
         else
             this.metadata = metadata;
-        this.recordKeyRange = recordKeyRange;
+        this.offsetRanges = offsetRanges;
     }
 
     /**

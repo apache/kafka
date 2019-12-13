@@ -54,12 +54,16 @@
         "about": "Each partition to commit offsets for.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "CommittedOffset", "type": "int64", "versions": "0+",
+        { "name": "CommittedOffset", "type": "int64", "versions": "0-8",
           "about": "The message offset to be committed." },
-        {"name": "LowerKeyRange", "type": "int64", "versions": "9+",
-          "about": "The lower bound key range to be committed." },
-        {"name": "UpperKeyRange", "type": "int64", "versions": "9+",
-          "about": "The upper bound key range to be committed." },
+        { "name":  "OffsetRanges", "type":  "[]OffsetAndRange", "versions": "9+", "about": "The committed offsets and their key ranges", "fields": [
+          {"name": "CommittedOffset", "type": "int64", "versions": "9+",
+            "about": "The offset to be committed." },
+          {"name": "LowerKeyRange", "type": "int64", "versions": "9+",
+            "about": "The lower bound key range to be committed." },
+          {"name": "UpperKeyRange", "type": "int64", "versions": "9+",
+            "about": "The upper bound key range to be committed." }
+        ]},
         { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "6+", "default": "-1", "ignorable": true,
           "about": "The leader epoch of this partition." },
         // CommitTimestamp has been removed from v2 and later.
