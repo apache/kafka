@@ -131,6 +131,28 @@ public class SessionWindowedCogroupedKStreamImplTest {
         windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, (Named) null);
     }
 
+    @Test
+    public void namedParamShouldSetName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream = builder.stream(TOPIC, Consumed
+                .with(Serdes.String(), Serdes.String()));
+        groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
+                .windowedBy(SessionWindows.with(ofMillis(1)))
+                .aggregate(MockInitializer.STRING_INIT, sessionMerger, Named.as("foo"));
+
+        assertThat(builder.build().describe().toString(), equalTo(
+                "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+                "      --> foo-cogroup-agg-0\n" +
+                "    Processor: foo-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> foo-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: foo-cogroup-merge (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- foo-cogroup-agg-0\n\n"));
+    }
 
     @Test
     public void sessionWindowAggregateTest() {
