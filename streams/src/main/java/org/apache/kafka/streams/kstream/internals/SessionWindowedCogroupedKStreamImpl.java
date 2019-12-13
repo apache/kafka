@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -42,7 +41,6 @@ import org.apache.kafka.streams.state.Stores;
 public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     AbstractStream<K, V> implements SessionWindowedCogroupedKStream<K, V> {
 
-    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     private final SessionWindows sessionWindows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
@@ -51,8 +49,6 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                                         final InternalStreamsBuilder builder,
                                         final Set<String> sourceNodes,
                                         final String name,
-                                        final Serde<K> keySerde,
-                                        final Serde<V> valSerde,
                                         final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                         final StreamsGraphNode streamsGraphNode,
                                         final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
@@ -66,27 +62,25 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
                                             final Merger<? super K, V> sessionMerger) {
-        return aggregate(initializer, sessionMerger, Materialized.with(keySerde, null));
+        return aggregate(initializer, sessionMerger, Materialized.with(null, null));
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
                                             final Merger<? super K, V> sessionMerger,
                                             final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
-        return aggregate(initializer, NamedInternal.empty(), sessionMerger, materialized);
+        return aggregate(initializer, sessionMerger, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Named named,
-                                            final Merger<? super K, V> sessionMerger) {
-        return aggregate(initializer, named, sessionMerger, Materialized.with(keySerde, null));
+                                            final Merger<? super K, V> sessionMerger, final Named named) {
+        return aggregate(initializer, sessionMerger, named, Materialized.with(null, null));
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Named named,
-                                            final Merger<? super K, V> sessionMerger,
+                                            final Merger<? super K, V> sessionMerger, final Named named,
                                             final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
@@ -95,7 +89,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
         final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(
                 materialized,
                 builder,
-                AGGREGATE_NAME);
+                CogroupedKStreamImpl.AGGREGATE_NAME);
         return aggregateBuilder.build(groupPatterns,
                 initializer,
                 new NamedInternal(named),

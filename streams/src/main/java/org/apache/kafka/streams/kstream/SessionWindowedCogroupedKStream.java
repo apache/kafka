@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.SessionStore;
  * {@link KGroupedStream} records.
  * <p>
  * The specified {@link SessionWindows} defines how the windows are created.
- * The result is written into a local windowed {@link org.apache.kafka.streams.state.KeyValueStore} (which is basically an ever-updating
+ * The result is written into a local {@link SessionStore} (which is basically an ever-updating
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
@@ -124,8 +124,8 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Named named,
-                                     final Merger<? super K, V> sessionMerger);
+                                     final Merger<? super K, V> sessionMerger,
+                                     final Named named);
     /**
      * Aggregate the values of records in these streams by the grouped key and defined {@link SessionWindows}.
      * Records with {@code null} key or value are ignored.
@@ -145,15 +145,15 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
      * @param initializer    the instance of {@link Initializer}. Cannot be {@code null}.
-     * @param named  an instance of {@link Named} used to Named the processors. Cannot be {@code null}.
      * @param sessionMerger  the instance of {@link Merger}. Cannot be {@code null}.
+     * @param named  an instance of {@link Named} used to Named the processors. Cannot be {@code null}.
      * @param materialized   an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Named named,
                                      final Merger<? super K, V> sessionMerger,
+                                     final Named named,
                                      final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
 
 }

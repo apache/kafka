@@ -113,8 +113,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             builder,
             sourceNodes,
             name,
-            keySerde,
-            null,
             aggregateBuilder,
             streamsGraphNode,
             groupPatterns);

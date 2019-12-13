@@ -93,7 +93,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterializedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, null);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, (Named) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -108,27 +108,27 @@ public class SessionWindowedCogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullMaterialized2OnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("name"), sessionMerger, null);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, Named.as("name"), null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullSessionMerger3OnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("name"), null, Materialized.as("test"));
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Named.as("name"), Materialized.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullNamedOnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger, Materialized.as("test"));
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, null, Materialized.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializer3OnAggregate() {
-        windowedCogroupedStream.aggregate(null, Named.as("name"), sessionMerger, Materialized.as("test"));
+        windowedCogroupedStream.aggregate(null, sessionMerger, Named.as("name"), Materialized.as("test"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullNamed2OnAggregate() {
-        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, sessionMerger);
+        windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, sessionMerger, (Named) null);
     }
 
 
