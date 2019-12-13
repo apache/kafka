@@ -161,7 +161,6 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       val topicResponse = response.data.topics.find(topic)
       assertNotNull(topicResponse)
       assertEquals(topic, topicResponse.name())
-      println(topicResponse.errorMessage())
       assertEquals(Errors.NONE.code(), topicResponse.errorCode())
       if (version >= 5) {
         assertEquals(1, topicResponse.numPartitions())
