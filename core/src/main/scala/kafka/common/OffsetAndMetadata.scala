@@ -20,6 +20,9 @@ package kafka.common
 import java.util.Optional
 
 case class OffsetAndMetadata(offset: Long,
+                             lowerKey: Optional[Long],
+                             upperKey: Optional[Long],
+                             unsafeOffset: Optional[Long],
                              leaderEpoch: Optional[Integer],
                              metadata: String,
                              commitTimestamp: Long,
@@ -39,14 +42,14 @@ object OffsetAndMetadata {
   val NoMetadata: String = ""
 
   def apply(offset: Long, metadata: String, commitTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, Optional.empty(), metadata, commitTimestamp, None)
+    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), metadata, commitTimestamp, None)
   }
 
   def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, Optional.empty(), metadata, commitTimestamp, Some(expireTimestamp))
+    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), metadata, commitTimestamp, Some(expireTimestamp))
   }
 
   def apply(offset: Long, leaderEpoch: Optional[Integer], metadata: String, commitTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, leaderEpoch, metadata, commitTimestamp, None)
+    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch, metadata, commitTimestamp, None)
   }
 }

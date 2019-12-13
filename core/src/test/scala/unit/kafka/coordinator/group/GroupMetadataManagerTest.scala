@@ -1451,7 +1451,7 @@ class GroupMetadataManagerTest {
     // expire the offset after 1 millisecond
     val startMs = time.milliseconds
     val offsets = immutable.Map(
-      topicPartition1 -> OffsetAndMetadata(offset, Optional.empty(), "", startMs, Some(startMs + 1)),
+      topicPartition1 -> OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), "", startMs, Some(startMs + 1)),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
 
     mockGetPartition()
@@ -1962,12 +1962,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testSerdeOffsetCommitValue(): Unit = {
-    val offsetAndMetadata = OffsetAndMetadata(
-      offset = 537L,
-      leaderEpoch = Optional.of(15),
-      metadata = "metadata",
-      commitTimestamp = time.milliseconds(),
-      expireTimestamp = None)
+    val offsetAndMetadata = OffsetAndMetadata(offset = 537L, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = Optional.of(15), metadata = "metadata", commitTimestamp = time.milliseconds(), expireTimestamp = None)
 
     def verifySerde(apiVersion: ApiVersion, expectedOffsetCommitValueVersion: Int): Unit = {
       val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)
@@ -2004,12 +1999,7 @@ class GroupMetadataManagerTest {
     // If expire timestamp is set, we should always use version 1 of the offset commit
     // value schema since later versions do not support it
 
-    val offsetAndMetadata = OffsetAndMetadata(
-      offset = 537L,
-      leaderEpoch = Optional.empty(),
-      metadata = "metadata",
-      commitTimestamp = time.milliseconds(),
-      expireTimestamp = Some(time.milliseconds() + 1000))
+    val offsetAndMetadata = OffsetAndMetadata(offset = 537L, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = Optional.empty(), metadata = "metadata", commitTimestamp = time.milliseconds(), expireTimestamp = Some(time.milliseconds() + 1000))
 
     def verifySerde(apiVersion: ApiVersion): Unit = {
       val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)
@@ -2026,12 +2016,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testSerdeOffsetCommitValueWithNoneExpireTimestamp(): Unit = {
-    val offsetAndMetadata = OffsetAndMetadata(
-      offset = 537L,
-      leaderEpoch = Optional.empty(),
-      metadata = "metadata",
-      commitTimestamp = time.milliseconds(),
-      expireTimestamp = None)
+    val offsetAndMetadata = OffsetAndMetadata(offset = 537L, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = Optional.empty(), metadata = "metadata", commitTimestamp = time.milliseconds(), expireTimestamp = None)
 
     def verifySerde(apiVersion: ApiVersion): Unit = {
       val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)

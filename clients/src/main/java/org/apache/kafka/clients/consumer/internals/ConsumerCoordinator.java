@@ -1045,8 +1045,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
                     .setPartitionIndex(topicPartition.partition())
                     .setCommittedOffset(offsetAndMetadata.offset())
-                    .setKeyRangeLow(offsetAndMetadata.recordKeyRange().lowerBound())
-                                       .setKeyRangeHi(offsetAndMetadata.recordKeyRange().upperBound())
+                    .setLowerKeyRange(offsetAndMetadata.recordKeyRange().lowerBound())
+                    .setUpperKeyRange(offsetAndMetadata.recordKeyRange().upperBound())
                     .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setCommittedMetadata(offsetAndMetadata.metadata())
             );

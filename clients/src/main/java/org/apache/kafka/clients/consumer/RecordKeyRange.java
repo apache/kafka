@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.io.Serializable;
+
 /**
  * Key range for records. Used in concurrent offset commit.
  */
-public class RecordKeyRange {
+public class RecordKeyRange implements Serializable {
     private long low;
     private long hi;
 

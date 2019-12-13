@@ -427,19 +427,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             Optional.of[Integer](partitionData.committedLeaderEpoch)
 
-          k -> new OffsetAndMetadata(
-            offset = partitionData.committedOffset(),
-            leaderEpoch = leaderEpochOpt,
-            metadata = metadata,
-            commitTimestamp = partitionData.commitTimestamp() match {
-              case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
-              case customTimestamp => customTimestamp
-            },
-            expireTimestamp = offsetCommitRequest.data().retentionTimeMs() match {
-              case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
-              case retentionTime => Some(currentTimestamp + retentionTime)
-            }
-          )
+          k -> new OffsetAndMetadata(offset = partitionData.committedOffset(), Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = leaderEpochOpt, metadata = metadata, commitTimestamp = partitionData.commitTimestamp() match {
+                                  case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
+                                  case customTimestamp => customTimestamp
+                                }, expireTimestamp = offsetCommitRequest.data().retentionTimeMs() match {
+                                  case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
+                                  case retentionTime => Some(currentTimestamp + retentionTime)
+                                })
         }
 
         // call coordinator to handle commit offset
@@ -2174,12 +2168,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val currentTimestamp = time.milliseconds
     offsetsMap.map { case (topicPartition, partitionData) =>
       val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
-      topicPartition -> new OffsetAndMetadata(
-        offset = partitionData.offset,
-        leaderEpoch = partitionData.leaderEpoch,
-        metadata = metadata,
-        commitTimestamp = currentTimestamp,
-        expireTimestamp = None)
+      topicPartition -> new OffsetAndMetadata(offset = partitionData.offset, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = partitionData.leaderEpoch, metadata = metadata, commitTimestamp = currentTimestamp, expireTimestamp = None)
     }
   }
 

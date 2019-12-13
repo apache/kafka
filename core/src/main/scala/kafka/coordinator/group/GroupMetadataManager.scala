@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0, KAFKA_2_5_IV0}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
@@ -85,6 +85,10 @@ class GroupMetadataManager(brokerId: Int,
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
    * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
+
+  /* The mapping to maintain the latest committed offset to consolidate future commit. Used for key range commit tracking*/
+  // TODO: add an implementation for merging range commits.
+  private val lastCommittedOffset = mutable.Map[TopicPartition, OffsetAndMetadata]()
 
   /* setup metrics*/
   val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
@@ -1011,10 +1015,28 @@ object GroupMetadataManager {
     new Field("leader_epoch", INT32),
     new Field("metadata", STRING, "Associated metadata.", ""),
     new Field("commit_timestamp", INT64))
+
   private val OFFSET_VALUE_OFFSET_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("offset")
   private val OFFSET_VALUE_LEADER_EPOCH_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("leader_epoch")
   private val OFFSET_VALUE_METADATA_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("metadata")
   private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("commit_timestamp")
+
+  private val OFFSET_COMMIT_VALUE_SCHEMA_V4 = new Schema(
+    new Field("offset", INT64),
+    new Field("lower_key", INT64),
+    new Field("upper_key", INT64),
+    new Field("unsafe_offset", INT64),
+    new Field("leader_epoch", INT32),
+    new Field("metadata", STRING, "Associated metadata.", ""),
+    new Field("commit_timestamp", INT64))
+
+  private val OFFSET_VALUE_OFFSET_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("offset")
+  private val OFFSET_VALUE_LOWER_KEY_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("lower_key")
+  private val OFFSET_VALUE_UPPER_KEY_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("upper_key")
+  private val OFFSET_VALUE_UNSAFE_OFFSET_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("unsafe_offset")
+  private val OFFSET_VALUE_LEADER_EPOCH_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("leader_epoch")
+  private val OFFSET_VALUE_METADATA_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("metadata")
+  private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("commit_timestamp")
 
   private val GROUP_METADATA_KEY_SCHEMA = new Schema(new Field("group", STRING))
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
@@ -1105,7 +1127,8 @@ object GroupMetadataManager {
     0 -> OFFSET_COMMIT_VALUE_SCHEMA_V0,
     1 -> OFFSET_COMMIT_VALUE_SCHEMA_V1,
     2 -> OFFSET_COMMIT_VALUE_SCHEMA_V2,
-    3 -> OFFSET_COMMIT_VALUE_SCHEMA_V3)
+    3 -> OFFSET_COMMIT_VALUE_SCHEMA_V3,
+    4 -> OFFSET_COMMIT_VALUE_SCHEMA_V4)
 
   // map of version of group metadata value schemas
   private val GROUP_VALUE_SCHEMAS = Map(
@@ -1200,7 +1223,7 @@ object GroupMetadataManager {
         value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
         value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
         (2, value)
-      } else {
+      } else if (apiVersion < KAFKA_2_5_IV0) {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V3)
         value.set(OFFSET_VALUE_OFFSET_FIELD_V3, offsetAndMetadata.offset)
         value.set(OFFSET_VALUE_LEADER_EPOCH_FIELD_V3,
@@ -1208,6 +1231,18 @@ object GroupMetadataManager {
         value.set(OFFSET_VALUE_METADATA_FIELD_V3, offsetAndMetadata.metadata)
         value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V3, offsetAndMetadata.commitTimestamp)
         (3, value)
+      }
+      else {
+        val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V4)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V4, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_LOWER_KEY_FIELD_V4, offsetAndMetadata.lowerKey.orElse(0))
+        value.set(OFFSET_VALUE_UPPER_KEY_FIELD_V4, offsetAndMetadata.upperKey.orElse(0))
+        value.set(OFFSET_VALUE_UNSAFE_OFFSET_FIELD_V4, offsetAndMetadata.unsafeOffset.orElse(0))
+        value.set(OFFSET_VALUE_LEADER_EPOCH_FIELD_V4,
+          offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+        value.set(OFFSET_VALUE_METADATA_FIELD_V4, offsetAndMetadata.metadata)
+        value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V4, offsetAndMetadata.commitTimestamp)
+        (4, value)
       }
     }
 
