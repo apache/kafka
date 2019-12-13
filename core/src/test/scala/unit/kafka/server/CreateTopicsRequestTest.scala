@@ -18,9 +18,16 @@
 package kafka.server
 
 import kafka.utils._
+import org.apache.kafka.common.message.CreateTopicsRequestData
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.Assert._
 import org.junit.Test
+
+import scala.collection.JavaConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
@@ -132,5 +139,37 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
+  }
+
+  @Test
+  def testOldestCreateTopicsRequest(): Unit = {
+    for (version <- ApiKeys.CREATE_TOPICS.oldestVersion() to ApiKeys.CREATE_TOPICS.latestVersion()) {
+      val topic = s"topic_$version"
+      val data = new CreateTopicsRequestData()
+      data.setTimeoutMs(30)
+      data.setValidateOnly(false)
+      data.setTopics(new CreatableTopicCollection(List(
+        new CreatableTopic()
+          .setName(topic)
+          .setNumPartitions(1)
+          .setReplicationFactor(1)
+      ).asJava.iterator()))
+
+      val request = new CreateTopicsRequest.Builder(data).build(version.asInstanceOf[Short])
+      val response = sendCreateTopicRequest(request)
+
+      val topicResponse = response.data.topics.find(topic)
+      assertNotNull(topicResponse)
+      assertEquals(topic, topicResponse.name())
+      println(topicResponse.errorMessage())
+      assertEquals(Errors.NONE.code(), topicResponse.errorCode())
+      if (version >= 5) {
+        assertEquals(1, topicResponse.numPartitions())
+        assertEquals(1, topicResponse.replicationFactor())
+      } else {
+        assertEquals(-1, topicResponse.numPartitions())
+        assertEquals(-1, topicResponse.replicationFactor())
+      }
+    }
   }
 }
