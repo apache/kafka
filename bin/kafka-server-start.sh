@@ -31,6 +31,12 @@ fi
 
 EXTRA_ARGS=${EXTRA_ARGS-'-name kafkaServer -loggc'}
 
+echo "===> Adding jmx exporter to the Kafka broker ... "
+export JMX_EXPORTER_AGENT_PORT=${JMX_EXPORTER_AGENT_PORT:-7778}
+export JMX_EXPORTER_AGENT_HOST=${JMX_EXPORTER_AGENT_HOST:-"0.0.0.0"}
+export KAFKA_OPTS="${KAFKA_OPTS} -javaagent:/Users/yifei/hackday/lekafgo-hackday/jmx_prometheus_javaagent-0.12.0.jar=${JMX_EXPORTER_AGENT_PORT}:/Users/yifei/hackday/lekafgo-hackday/jmx-exporter.yaml"
+
+
 COMMAND=$1
 case $COMMAND in
   -daemon)
