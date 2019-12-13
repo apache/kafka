@@ -33,12 +33,12 @@ public class OffsetAndMetadataTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidNegativeOffset() {
-        new OffsetAndMetadata(-239L, Optional.of(15), "");
+        new OffsetAndMetadata(-239L, Optional.of(15), null, "");
     }
 
     @Test
     public void testSerializationRoundtrip() throws IOException, ClassNotFoundException {
-        checkSerde(new OffsetAndMetadata(239L, Optional.of(15), "blah"));
+        checkSerde(new OffsetAndMetadata(239L, Optional.of(15), null, "blah"));
         checkSerde(new OffsetAndMetadata(239L, "blah"));
         checkSerde(new OffsetAndMetadata(239L));
     }
@@ -60,7 +60,7 @@ public class OffsetAndMetadataTest {
     public void testDeserializationCompatibilityWithLeaderEpoch() throws IOException, ClassNotFoundException {
         String fileName = "serializedData/offsetAndMetadataWithLeaderEpoch";
         Object deserializedObject = Serializer.deserialize(fileName);
-        assertEquals(new OffsetAndMetadata(10, Optional.of(235), "test commit metadata"), deserializedObject);
+        assertEquals(new OffsetAndMetadata(10, Optional.of(235), null, "test commit metadata"), deserializedObject);
     }
 
 }

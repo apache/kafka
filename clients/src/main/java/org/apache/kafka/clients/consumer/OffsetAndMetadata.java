@@ -38,14 +38,19 @@ public class OffsetAndMetadata implements Serializable {
     // initialize its value to null.
     private final Integer leaderEpoch;
 
+    private final RecordKeyRange recordKeyRange;
+
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
-     *
      * @param offset The offset to be committed
      * @param leaderEpoch Optional leader epoch of the last consumed record
+     * @param recordKeyRange The key range committed
      * @param metadata Non-null metadata
      */
-    public OffsetAndMetadata(long offset, Optional<Integer> leaderEpoch, String metadata) {
+    public OffsetAndMetadata(long offset,
+                             Optional<Integer> leaderEpoch,
+                             RecordKeyRange recordKeyRange,
+                             String metadata) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
 
@@ -58,6 +63,7 @@ public class OffsetAndMetadata implements Serializable {
             this.metadata = OffsetFetchResponse.NO_METADATA;
         else
             this.metadata = metadata;
+        this.recordKeyRange = recordKeyRange;
     }
 
     /**
@@ -66,7 +72,11 @@ public class OffsetAndMetadata implements Serializable {
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset, String metadata) {
-        this(offset, Optional.empty(), metadata);
+        this(offset, Optional.empty(), null, metadata);
+    }
+
+    public OffsetAndMetadata(long offset, RecordKeyRange recordKeyRange, String metadata) {
+        this(offset, Optional.empty(), recordKeyRange, metadata);
     }
 
     /**
@@ -80,6 +90,10 @@ public class OffsetAndMetadata implements Serializable {
 
     public long offset() {
         return offset;
+    }
+
+    public RecordKeyRange recordKeyRange() {
+        return recordKeyRange;
     }
 
     public String metadata() {

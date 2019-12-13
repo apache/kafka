@@ -3026,7 +3026,7 @@ public class KafkaAdminClient extends AdminClient {
                         final Long offset = partitionData.offset;
                         final String metadata = partitionData.metadata;
                         final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                        groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                        groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, null, metadata));
                     } else {
                         log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                     }

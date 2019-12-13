@@ -1975,7 +1975,7 @@ public class ConsumerCoordinatorTest {
                 time.timer(Long.MAX_VALUE));
 
         assertNotNull(fetchedOffsets);
-        assertEquals(new OffsetAndMetadata(offset, leaderEpoch, metadata), fetchedOffsets.get(t1p));
+        assertEquals(new OffsetAndMetadata(offset, leaderEpoch, null, metadata), fetchedOffsets.get(t1p));
     }
 
     @Test

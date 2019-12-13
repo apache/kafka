@@ -30,7 +30,9 @@
   // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  //
+  // version 9 adds the key range bounds to the offset commit for concurrent committing.
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
@@ -54,6 +56,10 @@
           "about": "The partition index." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0+",
           "about": "The message offset to be committed." },
+        {"name": "LowerKeyRange", "type": "int64", "versions": "9+",
+          "about": "The lower bound key range to be committed." },
+        {"name": "UpperKeyRange", "type": "int64", "versions": "9+",
+          "about": "The upper bound key range to be committed." },
         { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "6+", "default": "-1", "ignorable": true,
           "about": "The leader epoch of this partition." },
         // CommitTimestamp has been removed from v2 and later.

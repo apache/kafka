@@ -459,7 +459,7 @@ public class SubscriptionState {
                                     "broker is {}), but no reset policy is set",
                             tp, currentPosition, epochEndOffset);
                     return Optional.of(new OffsetAndMetadata(epochEndOffset.endOffset(),
-                            Optional.of(epochEndOffset.leaderEpoch()), null));
+                                                             Optional.of(epochEndOffset.leaderEpoch()), null, null));
                 }
             } else {
                 state.completeValidation();
@@ -554,7 +554,7 @@ public class SubscriptionState {
             TopicPartitionState partitionState = state.value();
             if (partitionState.hasValidPosition())
                 allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.offsetEpoch, ""));
+                                                                              partitionState.position.offsetEpoch, null, ""));
         });
         return allConsumed;
     }

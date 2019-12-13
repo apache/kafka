@@ -478,7 +478,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
 
     // sync commit
-    val syncMetadata = new OffsetAndMetadata(5, Optional.of(15), "foo")
+    val syncMetadata = new OffsetAndMetadata(5, Optional.of(15), null, "foo")
     consumer.commitSync(Map((tp, syncMetadata)).asJava)
     assertEquals(syncMetadata, consumer.committed(Set(tp).asJava).get(tp))
 

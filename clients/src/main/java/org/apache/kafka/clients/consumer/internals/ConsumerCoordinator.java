@@ -1045,6 +1045,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
                     .setPartitionIndex(topicPartition.partition())
                     .setCommittedOffset(offsetAndMetadata.offset())
+                    .setKeyRangeLow(offsetAndMetadata.recordKeyRange().lowerBound())
+                                       .setKeyRangeHi(offsetAndMetadata.recordKeyRange().upperBound())
                     .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setCommittedMetadata(offsetAndMetadata.metadata())
             );
@@ -1236,7 +1238,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch);
                     // if there's no committed offset, record as null
-                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
+                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, null, data.metadata));
                 } else {
                     log.info("Found no committed offset for partition {}", tp);
                     offsets.put(tp, null);
