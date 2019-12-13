@@ -27,7 +27,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0, KAFKA_2_5_IV0}
-import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.common.{MessageFormatter, OffsetAndMetadata, OffsetAndRange}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
@@ -1033,7 +1033,6 @@ object GroupMetadataManager {
   private val OFFSET_VALUE_OFFSET_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("offset")
   private val OFFSET_VALUE_LOWER_KEY_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("lower_key")
   private val OFFSET_VALUE_UPPER_KEY_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("upper_key")
-  private val OFFSET_VALUE_UNSAFE_OFFSET_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("unsafe_offset")
   private val OFFSET_VALUE_LEADER_EPOCH_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("leader_epoch")
   private val OFFSET_VALUE_METADATA_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("metadata")
   private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V4 = OFFSET_COMMIT_VALUE_SCHEMA_V4.get("commit_timestamp")
@@ -1206,11 +1205,14 @@ object GroupMetadataManager {
    */
   private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
                                        apiVersion: ApiVersion): Array[Byte] = {
+    // assume singular offset and range
+    val offsetAndRange = offsetAndMetadata.offsetRanges.get(0)
+
     // generate commit value according to schema version
     val (version, value) = {
       if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1)
-        value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndRange.offset)
         value.set(OFFSET_VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
         value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
         // version 1 has a non empty expireTimestamp field
@@ -1219,13 +1221,13 @@ object GroupMetadataManager {
         (1, value)
       } else if (apiVersion < KAFKA_2_1_IV1) {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2)
-        value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndRange.offset)
         value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
         value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
         (2, value)
       } else if (apiVersion < KAFKA_2_5_IV0) {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V3)
-        value.set(OFFSET_VALUE_OFFSET_FIELD_V3, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V3, offsetAndRange.offset)
         value.set(OFFSET_VALUE_LEADER_EPOCH_FIELD_V3,
           offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
         value.set(OFFSET_VALUE_METADATA_FIELD_V3, offsetAndMetadata.metadata)
@@ -1234,10 +1236,9 @@ object GroupMetadataManager {
       }
       else {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V4)
-        value.set(OFFSET_VALUE_OFFSET_FIELD_V4, offsetAndMetadata.offset)
-        value.set(OFFSET_VALUE_LOWER_KEY_FIELD_V4, offsetAndMetadata.lowerKey.orElse(0))
-        value.set(OFFSET_VALUE_UPPER_KEY_FIELD_V4, offsetAndMetadata.upperKey.orElse(0))
-        value.set(OFFSET_VALUE_UNSAFE_OFFSET_FIELD_V4, offsetAndMetadata.unsafeOffset.orElse(0))
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V4, offsetAndRange.offset)
+        value.set(OFFSET_VALUE_LOWER_KEY_FIELD_V4, offsetAndRange.lowerKey.orElse(0))
+        value.set(OFFSET_VALUE_UPPER_KEY_FIELD_V4, offsetAndRange.upperKey.orElse(0))
         value.set(OFFSET_VALUE_LEADER_EPOCH_FIELD_V4,
           offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
         value.set(OFFSET_VALUE_METADATA_FIELD_V4, offsetAndMetadata.metadata)

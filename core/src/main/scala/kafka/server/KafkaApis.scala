@@ -29,7 +29,7 @@ import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
-import kafka.common.OffsetAndMetadata
+import kafka.common.{OffsetAndMetadata, OffsetAndRange}
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -427,7 +427,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             Optional.of[Integer](partitionData.committedLeaderEpoch)
 
-          k -> new OffsetAndMetadata(offset = partitionData.committedOffset(), Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = leaderEpochOpt, metadata = metadata, commitTimestamp = partitionData.commitTimestamp() match {
+          // assuming only singular offset range for commits
+          val offsetAndRange = OffsetAndRange(offset = partitionData.committedOffset(),
+            lowerKey = Optional.of(partitionData.lowerKeyRange()),
+            upperKey = Optional.of(partitionData.lowerKeyRange()))
+
+          k -> new OffsetAndMetadata(offsetRanges = java.util.Collections.singletonList(offsetAndRange),
+            leaderEpoch = leaderEpochOpt, metadata = metadata, commitTimestamp = partitionData.commitTimestamp() match {
                                   case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
                                   case customTimestamp => customTimestamp
                                 }, expireTimestamp = offsetCommitRequest.data().retentionTimeMs() match {

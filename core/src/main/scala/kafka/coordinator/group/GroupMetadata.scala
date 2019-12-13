@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.common.OffsetAndMetadata
+import kafka.common.{OffsetAndMetadata, OffsetAndRange}
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
@@ -575,8 +575,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
         throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record " +
           "in the log.")
-      if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(offsetWithCommitRecordMetadata))
+      if (!offsets.contains(topicPartition)) {
         offsets.put(topicPartition, offsetWithCommitRecordMetadata)
+      } else if (offsets(topicPartition).olderThan(offsetWithCommitRecordMetadata)) {
+        val oldCommitRecordMetadataAndOffset = offsets(topicPartition)
+        val newOffsetAndRange = offsetWithCommitRecordMetadata.offsetAndMetadata.offsetRanges.get(0)
+        merge(oldCommitRecordMetadataAndOffset, newOffsetAndRange)
+      }
     }
 
     pendingOffsetCommits.get(topicPartition) match {
@@ -659,7 +664,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
           if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
             trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
               "committed and loaded into the cache.")
-            offsets.put(topicPartition, commitRecordMetadataAndOffset)
+
+            // merge
+            if (currentOffsetOpt.isEmpty) {
+              offsets.put(topicPartition, commitRecordMetadataAndOffset)
+            } else {
+              val oldCommitRecordMetadataAndOffset = currentOffsetOpt.get
+              // assuming singular value
+              val newOffsetAndRange = commitRecordMetadataAndOffset.offsetAndMetadata.offsetRanges.get(0)
+              merge(oldCommitRecordMetadataAndOffset, newOffsetAndRange)
+            }
           } else {
             trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
               s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt.")
@@ -669,6 +683,29 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     } else {
       trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $pendingOffsetsOpt aborted")
     }
+  }
+
+  def merge(oldCommitRecordMetadataAndOffset: CommitRecordMetadataAndOffset, newOffsetAndRange: OffsetAndRange): Unit = {
+    var merged = false
+    for (offsetAndRange : OffsetAndRange <- oldCommitRecordMetadataAndOffset.offsetAndMetadata.offsetRanges) {
+      if (offsetAndRange.offset == newOffsetAndRange.offset) {
+        if (offsetAndRange.lowerKey.get == newOffsetAndRange.upperKey.get + 1L) {
+          offsetAndRange.lowerKey = newOffsetAndRange.lowerKey
+          merged = true
+        } else if (offsetAndRange.upperKey.get == newOffsetAndRange.lowerKey.get - 1L) {
+          offsetAndRange.upperKey = newOffsetAndRange.upperKey
+          merged = true
+        }
+      } else if (offsetAndRange.lowerKey == newOffsetAndRange.lowerKey &&
+        offsetAndRange.upperKey == newOffsetAndRange.upperKey) {
+        offsetAndRange.offset = newOffsetAndRange.offset
+        merged = true
+      }
+    }
+
+
+    if (!merged)
+      oldCommitRecordMetadataAndOffset.offsetAndMetadata.offsetRanges.add(newOffsetAndRange)
   }
 
   def activeProducers = pendingTransactionalOffsetCommits.keySet

@@ -41,7 +41,7 @@ public class OffsetAndMetadata implements Serializable {
 
     private final Map<Long, RecordKeyRange> offsetRanges;
 
-    //private final RecordKeyRange recordKeyRange;
+    //private final RecordKeyRange offsetRanges;
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
@@ -78,8 +78,8 @@ public class OffsetAndMetadata implements Serializable {
         this(offset, Optional.empty(), null, metadata);
     }
 
-    public OffsetAndMetadata(long offset, RecordKeyRange recordKeyRange, String metadata) {
-        this(offset, Optional.empty(), recordKeyRange, metadata);
+    public OffsetAndMetadata(long offset, Map<Long, RecordKeyRange> offsetRanges, String metadata) {
+        this(offset, Optional.empty(), offsetRanges, metadata);
     }
 
     /**
@@ -95,8 +95,8 @@ public class OffsetAndMetadata implements Serializable {
         return offset;
     }
 
-    public RecordKeyRange recordKeyRange() {
-        return recordKeyRange;
+    public Map<Long, RecordKeyRange> offsetRanges() {
+        return offsetRanges;
     }
 
     public String metadata() {

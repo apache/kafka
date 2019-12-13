@@ -19,10 +19,7 @@ package kafka.common
 
 import java.util.Optional
 
-case class OffsetAndMetadata(offset: Long,
-                             lowerKey: Optional[Long],
-                             upperKey: Optional[Long],
-                             unsafeOffset: Optional[Long],
+case class OffsetAndMetadata(offsetRanges: java.util.List[OffsetAndRange],
                              leaderEpoch: Optional[Integer],
                              metadata: String,
                              commitTimestamp: Long,
@@ -30,7 +27,7 @@ case class OffsetAndMetadata(offset: Long,
 
 
   override def toString: String  = {
-    s"OffsetAndMetadata(offset=$offset" +
+    s"OffsetAndMetadata(offset=$offsetRanges" +
       s", leaderEpoch=$leaderEpoch" +
       s", metadata=$metadata" +
       s", commitTimestamp=$commitTimestamp" +
@@ -38,18 +35,27 @@ case class OffsetAndMetadata(offset: Long,
   }
 }
 
+case class OffsetAndRange(var offset: Long, var lowerKey: Optional[Long], var upperKey: Optional[Long]) {
+
+  override def toString: String = {
+    s"OffsetAndMetadata(offset=$offset" +
+      s", lowerKey=$lowerKey" +
+      s", upperKey=$upperKey)"
+  }
+}
+
 object OffsetAndMetadata {
   val NoMetadata: String = ""
 
   def apply(offset: Long, metadata: String, commitTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), metadata, commitTimestamp, None)
+    OffsetAndMetadata(java.util.Collections.singletonList(OffsetAndRange(offset, Optional.empty(), Optional.empty())), Optional.empty(), metadata, commitTimestamp, None)
   }
 
   def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), metadata, commitTimestamp, Some(expireTimestamp))
+    OffsetAndMetadata(java.util.Collections.singletonList(OffsetAndRange(offset, Optional.empty(), Optional.empty())), Optional.empty(), metadata, commitTimestamp, Some(expireTimestamp))
   }
 
   def apply(offset: Long, leaderEpoch: Optional[Integer], metadata: String, commitTimestamp: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch, metadata, commitTimestamp, None)
+    OffsetAndMetadata(java.util.Collections.singletonList(OffsetAndRange(offset, Optional.empty(), Optional.empty())), leaderEpoch, metadata, commitTimestamp, None)
   }
 }

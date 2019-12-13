@@ -1042,11 +1042,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                     .setName(topicPartition.topic())
                     );
 
+            // for committing offset, we assume only singular offset / range mapping
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
                     .setPartitionIndex(topicPartition.partition())
                     .setCommittedOffset(offsetAndMetadata.offset())
-                    .setLowerKeyRange(offsetAndMetadata.recordKeyRange().lowerBound())
-                    .setUpperKeyRange(offsetAndMetadata.recordKeyRange().upperBound())
+                    .setLowerKeyRange(offsetAndMetadata.offsetRanges().get(offsetAndMetadata.offset()).lowerBound())
+                    .setUpperKeyRange(offsetAndMetadata.offsetRanges().get(offsetAndMetadata.offset()).upperBound())
                     .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setCommittedMetadata(offsetAndMetadata.metadata())
             );
