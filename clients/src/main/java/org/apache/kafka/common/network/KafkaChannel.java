@@ -29,7 +29,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -122,6 +121,7 @@ public class KafkaChannel implements AutoCloseable {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
+    private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -134,7 +134,8 @@ public class KafkaChannel implements AutoCloseable {
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
+                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -142,6 +143,7 @@ public class KafkaChannel implements AutoCloseable {
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
         this.memoryPool = memoryPool;
+        this.metadataRegistry = metadataRegistry;
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
@@ -149,7 +151,7 @@ public class KafkaChannel implements AutoCloseable {
 
     public void close() throws IOException {
         this.disconnected = true;
-        Utils.closeAll(transportLayer, authenticator, receive);
+        Utils.closeAll(transportLayer, authenticator, receive, metadataRegistry);
     }
 
     /**
@@ -653,7 +655,7 @@ public class KafkaChannel implements AutoCloseable {
         authenticator.reauthenticate(reauthenticationContext);
     }
 
-    public Optional<CipherInformation> cipherInformation() {
-        return transportLayer.cipherInformation();
+    public ChannelMetadataRegistry channelMetadataRegistry() {
+        return metadataRegistry;
     }
 }

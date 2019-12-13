@@ -14,36 +14,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.network;
 
 import java.util.Objects;
 
-public class CipherInformation {
-    private final String cipher;
-    private final String protocol;
+public class ClientInformation {
+    public static final String UNKNOWN_NAME_OR_VERSION = "unknown";
+    public static final ClientInformation EMPTY = new ClientInformation(UNKNOWN_NAME_OR_VERSION, UNKNOWN_NAME_OR_VERSION);
 
-    public CipherInformation(String cipher, String protocol) {
-        this.cipher = cipher == null || cipher.isEmpty()  ? "unknown" : cipher;
-        this.protocol = protocol == null || protocol.isEmpty()  ? "unknown" : protocol;
+    private final String softwareName;
+    private final String softwareVersion;
+
+    public ClientInformation(String softwareName, String softwareVersion) {
+        this.softwareName = softwareName.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareName;
+        this.softwareVersion = softwareVersion.isEmpty() ? UNKNOWN_NAME_OR_VERSION : softwareVersion;
     }
 
-    public String cipher() {
-        return cipher;
+    public String softwareName() {
+        return this.softwareName;
     }
 
-    public String protocol() {
-        return protocol;
+    public String softwareVersion() {
+        return this.softwareVersion;
     }
 
     @Override
     public String toString() {
-        return "CipherInformation(cipher=" + cipher +
-            ", protocol=" + protocol + ")";
+        return "ClientInformation(softwareName=" + softwareName +
+            ", softwareVersion=" + softwareVersion + ")";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(cipher, protocol);
+        return Objects.hash(softwareName, softwareVersion);
     }
 
     @Override
@@ -51,11 +55,11 @@ public class CipherInformation {
         if (o == null) {
             return false;
         }
-        if (!(o instanceof CipherInformation)) {
+        if (!(o instanceof ClientInformation)) {
             return false;
         }
-        CipherInformation other = (CipherInformation) o;
-        return other.cipher.equals(cipher) &&
-            other.protocol.equals(protocol);
+        ClientInformation other = (ClientInformation) o;
+        return other.softwareName.equals(softwareName) &&
+            other.softwareVersion.equals(softwareVersion);
     }
 }
