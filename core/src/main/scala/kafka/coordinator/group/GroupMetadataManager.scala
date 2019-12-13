@@ -1191,7 +1191,7 @@ object GroupMetadataManager {
         value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
         // version 1 has a non empty expireTimestamp field
         value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1,
-          offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest. )DEFAULT_TIMESTAMP))
+          offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
         (1, value)
       } else if (apiVersion < KAFKA_2_1_IV1) {
         val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2)
