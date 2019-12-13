@@ -17,31 +17,6 @@
 
 package kafka.coordinator.group
 
-import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
-import kafka.common.{MessageFormatter, OffsetAndMetadata}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{FetchLogEnd, ReplicaManager}
-import kafka.utils.CoreUtils.inLock
-import kafka.utils._
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types._
-import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-
-import scala.collection.JavaConverters._
-import scala.collection._
-import scala.collection.mutable.ArrayBuffer
-
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -49,6 +24,30 @@ import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+import com.yammer.metrics.core.Gauge
+import kafka.api.{KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0, KAFKA_0_10_1_IV0, ApiVersion}
+import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.metrics.KafkaMetricsGroup
+import kafka.server.{ReplicaManager, FetchLogEnd}
+import kafka.utils.CoreUtils.inLock
+import kafka.utils._
+import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.{TopicPartition, KafkaException}
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.{Meter, Max, Avg}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.types.Type._
+import org.apache.kafka.common.protocol.types._
+import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.{OffsetFetchResponse, OffsetCommitRequest}
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.{Utils, Time}
+
+import scala.collection.JavaConverters._
+import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
