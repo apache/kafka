@@ -732,24 +732,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testSerialisingCreateTopicResponseV5FailsWithOlderVersion() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
-                CreateTopicsResponseData data = new CreateTopicsResponseData();
-                data.topics().add(new CreatableTopicResult()
-                    .setName("t1")
-                    .setNumPartitions(2) // V5
-                    .setReplicationFactor((short) 3) // V5
-                    .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
-                    .setErrorMessage(null));
-                new CreateTopicsResponse(data)
-                    .serialize(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.oldestVersion(), 0);
-            });
-        assertTrue(
-            exception.getMessage().contains("Attempted to write a non-default numPartitions at version 0"));
-    }
-
-    @Test
     public void testFetchRequestMaxBytesOldVersions() throws Exception {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);

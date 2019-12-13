@@ -1690,14 +1690,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setTopicConfigErrorCode(0.toShort)
           }
         }
-        if (request.context.apiVersion() < 5) {
-          results.asScala.foreach { result =>
-            result.setConfigs(List.empty.asJava)
-              .setNumPartitions(-1)
-              .setReplicationFactor(-1)
-              .setTopicConfigErrorCode(0.toShort)
-          }
-        }
         sendResponseCallback(results)
       }
       adminManager.createTopics(createTopicsRequest.data.timeoutMs,

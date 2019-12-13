@@ -146,7 +146,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion() to ApiKeys.CREATE_TOPICS.latestVersion()) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
-      data.setTimeoutMs(30)
+      data.setTimeoutMs(10000)
       data.setValidateOnly(false)
       data.setTopics(new CreatableTopicCollection(List(
         new CreatableTopic()
