@@ -40,10 +40,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 public class SessionWindowedCogroupedKStreamImpl<K, V> extends
-    AbstractStream<K, V> implements
-        SessionWindowedCogroupedKStream<K, V> {
+    AbstractStream<K, V> implements SessionWindowedCogroupedKStream<K, V> {
 
-    private static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
+    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     private final SessionWindows sessionWindows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
