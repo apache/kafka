@@ -149,9 +149,9 @@ public class SessionWindowedCogroupedKStreamImplTest {
             testInputTopic.pipeInput("k1", "B", 599);
             testInputTopic.pipeInput("k2", "B", 607);
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 599 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 599);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 607);
         }
     }
@@ -174,9 +174,9 @@ public class SessionWindowedCogroupedKStreamImplTest {
             testInputTopic.pipeInput("k2", "B", 599);
             testInputTopic.pipeInput("k1", "B", 607);
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 0 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 599 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 599);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 607);
         }
 
@@ -208,14 +208,14 @@ public class SessionWindowedCogroupedKStreamImplTest {
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 0);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 84);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 84);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+A+A+A", 113 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+A+A+A", 113);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 113);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+0+A+A+A+A", 199 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 300 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+0+A+A+A+A", 199);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 300);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 301);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", null, 301);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+B+B", 400 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 300 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+B+B", 400);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 300);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+B+B", 400);
 
         }
@@ -246,12 +246,12 @@ public class SessionWindowedCogroupedKStreamImplTest {
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", null, 0);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+A+A", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 0 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 2 );
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 2 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 2);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+A+A-B", 3);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", null, 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+0+A+A-B", 3 );
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+0+A+A-B", 3);
             assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-B", 444);
             assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-B", 444);
         }
@@ -280,18 +280,18 @@ public class SessionWindowedCogroupedKStreamImplTest {
             testInputTopic2.pipeInput("k2", "B", 501);
             testInputTopic2.pipeInput("k1", "B", 501);
 
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", "0+A",0);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", "0+A",0);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", null, 0);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", "0+0+A+A",1);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", null, 0);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", "0+0+A+A", 2);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", null, 2);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", "0+0+0+A+A-B", 3);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", "0-B", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", null, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k2", "0+0-B-B", 501);
-            assertOutputKeyValueTimestamp(testOutputTopic,"k1", "0-B", 501);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", null, 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0+A+A", 1);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 0);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+A+A", 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", null, 2);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+0+0+A+A-B", 3);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-B", 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", null, 500);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+0-B-B", 501);
+            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-B", 501);
         }
 
     }
