@@ -23,16 +23,14 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.SessionStore;
 /**
  * {@code SessionWindowedCogroupKStream} is an abstraction of a <i>windowed</i> record stream of {@link org.apache.kafka.streams.KeyValue} pairs.
- * It is an intermediate representation of a {@link KGroupedStream} in order to apply a windowed aggregation operation on the original
+ * It is an intermediate representation of a {@link CogroupedKStream} in order to apply a windowed aggregation operation on the original
  * {@link KGroupedStream} records.
  * <p>
- * The specified {@link SessionWindows} define the gap between windows.
+ * The specified {@link SessionWindows} defines how the windows are created.
  * The result is written into a local windowed {@link org.apache.kafka.streams.state.KeyValueStore} (which is basically an ever-updating
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
- *
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
-
  * A {@code SessionWindowedCogroupedKStream} must be obtained from a {@link CogroupedKStream} via {@link CogroupedKStream#windowedBy(SessionWindows)} .
  *
  * @param <K> Type of keys
@@ -50,9 +48,6 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
-     * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
-     * aggregate (or for the very first record using the intermediate aggregation result provided via the
-     * {@link Initializer}) and the record's value.
      * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
      * they are merged into a single session and the old sessions are discarded.
      * Thus, {@code aggregate(Initializer, Merger)} can be used to compute aggregate functions like count or sum ect...
@@ -80,9 +75,6 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
-     * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
-     * aggregate (or for the very first record using the intermediate aggregation result provided via the
-     * {@link Initializer}) and the record's value.
      * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
      * they are merged into a single session and the old sessions are discarded.
      * Thus, {@code aggregate(Initializer, Merger, Materialized)} can be used to compute
@@ -110,9 +102,6 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
-     * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
-     * aggregate (or for the very first record using the intermediate aggregation result provided via the
-     * {@link Initializer}) and the record's value.
      * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
      * they are merged into a single session and the old sessions are discarded.
      * Thus, {@code aggregate(Initializer, Named, Merger)} can be used to compute
@@ -143,9 +132,6 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * <p>
      * The specified {@link Initializer} is applied once per session directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
-     * The specified {@link Aggregator} is applied for each input record and computes a new aggregate using the current
-     * aggregate (or for the very first record using the intermediate aggregation result provided via the
-     * {@link Initializer}) and the record's value.
      * The specified {@link Merger} is used to merge 2 existing sessions into one, i.e., when the windows overlap,
      * they are merged into a single session and the old sessions are discarded.
      * Thus, {@code aggregate(Initializer, Named, Merger, Materialized)} can be used to compute

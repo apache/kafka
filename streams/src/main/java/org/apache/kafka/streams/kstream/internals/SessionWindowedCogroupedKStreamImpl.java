@@ -57,7 +57,8 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                                         final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                         final StreamsGraphNode streamsGraphNode,
                                         final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.sessionWindows = sessionWindows;
         this.aggregateBuilder = aggregateBuilder;
         this.groupPatterns = groupPatterns;
@@ -98,7 +99,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                 AGGREGATE_NAME);
         return aggregateBuilder.build(groupPatterns,
                 initializer,
-                NamedInternal.empty(),
+                new NamedInternal(named),
                 materialize(materializedInternal),
                 materializedInternal.keySerde() != null ?
                         new WindowedSerdes.SessionWindowedSerde<>(

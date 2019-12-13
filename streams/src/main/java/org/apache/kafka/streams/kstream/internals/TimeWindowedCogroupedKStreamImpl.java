@@ -93,7 +93,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         return aggregateBuilder.build(
             groupPatterns,
             initializer,
-            NamedInternal.empty(),
+            new NamedInternal(named),
             materialize(materializedInternal),
             materializedInternal.keySerde() != null ?
                     new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())

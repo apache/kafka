@@ -46,18 +46,17 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 public class TimeWindowedCogroupedKStreamImplTest {
 
-    private final MockProcessorSupplier<Windowed<String>, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
     private static final String TOPIC2 = "topic2";
     private static final String OUTPUT = "output";
     private final StreamsBuilder builder = new StreamsBuilder();
+
     private KGroupedStream<String, String> groupedStream;
 
     private KGroupedStream<String, String> groupedStream2;
