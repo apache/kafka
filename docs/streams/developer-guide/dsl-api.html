@@ -653,7 +653,7 @@
                         <td><p class="first">Cogrouping allows to aggregate multiple input streams in a single operation.
                             The different (already grouped) input streams must have the same key type and may have different values types.
                             <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html#cogroup">KGroupedStream#cogroup()</a> creates a new cogrouped stream with a single input stream, while <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#cogroup">CogroupedKStream#cogroup()</a> adds a grouped stream to an existing cogrouped stream.
-                            A <code>CogroupedKStream</code> may be <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy">windowed</a> before it is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate"> aggregated</a> (<a class=" reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate--">aggregate details</a>) and (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy--">windowBy details</a>)<p>
+                            A <code>CogroupedKStream</code> may be <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy">windowed</a> before it is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate">aggregated</a>.
 
                             <p class="first">Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
@@ -929,12 +929,12 @@
                             <col width="78%" />
                         </colgroup>
                         <thead valign="bottom">
-                        <tr class="row-even"><th class="head">Transformation</th>
+                        <tr class="row-odd"><th class="head">Transformation</th>
                             <th class="head">Description</th>
                         </tr>
                         </thead>
                         <tbody valign="top">
-                        <tr class="row-odd"><td><p class="first"><strong>Aggregate</strong></p>
+                        <tr class="row-even"><td><p class="first"><strong>Aggregate</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                                 <li>KGroupedTable &rarr; KTable</li>
@@ -944,7 +944,7 @@
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
                                 (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>
                                 <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html">KGroupedTable details</a>)</p>
                                 <p>When aggregating a <em>grouped stream</em>, you must provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>) and an &#8220;adder&#8221;
                                     aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must provide a
