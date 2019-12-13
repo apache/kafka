@@ -749,7 +749,8 @@ public class SelectorTest {
     @Test
     public void testConnectionsByClientMetric() throws Exception {
         String node = "0";
-        Map<String, String> unknownNameAndVersion = softwareNameAndVersionTags("unknown", "unknown");
+        Map<String, String> unknownNameAndVersion = softwareNameAndVersionTags(
+            ClientInformation.UNKNOWN_NAME_OR_VERSION, ClientInformation.UNKNOWN_NAME_OR_VERSION);
         Map<String, String> knownNameAndVersion = softwareNameAndVersionTags("A", "B");
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {

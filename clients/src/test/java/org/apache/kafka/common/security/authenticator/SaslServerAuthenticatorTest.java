@@ -104,44 +104,18 @@ public class SaslServerAuthenticatorTest {
 
     @Test
     public void testOldestApiVersionsRequest() throws IOException {
-        final short version = ApiKeys.API_VERSIONS.oldestVersion();
-        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
-        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
-            Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
-            SCRAM_SHA_256.mechanismName(), metadataRegistry);
-
-        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
-        final Struct headerStruct = header.toStruct();
-
-        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        final Struct requestStruct = request.data.toStruct(version);
-
-        when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
-
-        when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf() + requestStruct.sizeOf());
-            return 4;
-        }).then(invocation -> {
-            headerStruct.writeTo(invocation.getArgument(0));
-            requestStruct.writeTo(invocation.getArgument(0));
-            return headerStruct.sizeOf() + requestStruct.sizeOf();
-        });
-
-        authenticator.authenticate();
-
-        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION,
-            metadataRegistry.clientInformation().softwareName());
-        assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION,
-            metadataRegistry.clientInformation().softwareVersion());
-
-        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+        testApiVersionsRequest(ApiKeys.API_VERSIONS.oldestVersion(),
+            ClientInformation.UNKNOWN_NAME_OR_VERSION, ClientInformation.UNKNOWN_NAME_OR_VERSION);
     }
 
     @Test
     public void testLatestApiVersionsRequest() throws IOException {
-        final short version = ApiKeys.API_VERSIONS.latestVersion();
+        testApiVersionsRequest(ApiKeys.API_VERSIONS.latestVersion(),
+            "apache-kafka-java", AppInfoParser.getVersion());
+    }
+
+    public void testApiVersionsRequest(short version, String expectedSoftwareName,
+                                       String expectedSoftwareVersion) throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
             Collections.singletonList(SCRAM_SHA_256.mechanismName()));
@@ -168,10 +142,8 @@ public class SaslServerAuthenticatorTest {
 
         authenticator.authenticate();
 
-        assertEquals("apache-kafka-java",
-            metadataRegistry.clientInformation().softwareName());
-        assertEquals(AppInfoParser.getVersion(),
-            metadataRegistry.clientInformation().softwareVersion());
+        assertEquals(expectedSoftwareName, metadataRegistry.clientInformation().softwareName());
+        assertEquals(expectedSoftwareVersion, metadataRegistry.clientInformation().softwareVersion());
 
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
