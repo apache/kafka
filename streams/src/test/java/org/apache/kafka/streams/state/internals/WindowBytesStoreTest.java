@@ -41,30 +41,27 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -80,12 +77,10 @@ public abstract class WindowBytesStoreTest {
 
     WindowStore<Integer, String> windowStore;
     InternalMockProcessorContext context;
+
     final File baseDir = TestUtils.tempDirectory("test");
-
+    final MockRecordCollector recordCollector = new MockRecordCollector();
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
-
-    final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-
     private final Producer<byte[], byte[]> producer = new MockProducer<>(true,
         Serdes.ByteArray().serializer(),
         Serdes.ByteArray().serializer());
@@ -100,34 +95,10 @@ public abstract class WindowBytesStoreTest {
 
     abstract void setClassLoggerToDebug();
 
-    private RecordCollectorImpl createRecordCollector(final String name) {
-        return new RecordCollectorImpl(name,
-            new LogContext(name),
-            new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("dropped-records")
-        ) {
-            @Override
-            public <K1, V1> void send(final String topic,
-                final K1 key,
-                final V1 value,
-                final Headers headers,
-                final Integer partition,
-                final Long timestamp,
-                final Serializer<K1> keySerializer,
-                final Serializer<V1> valueSerializer) {
-                changeLog.add(new KeyValue<>(
-                    keySerializer.serialize(topic, headers, key),
-                    valueSerializer.serialize(topic, headers, value))
-                );
-            }
-        };
-    }
-
     @Before
     public void setup() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
-        final RecordCollector recordCollector = createRecordCollector(windowStore.name());
         recordCollector.init(producer);
 
         context = new InternalMockProcessorContext(
@@ -139,6 +110,7 @@ public abstract class WindowBytesStoreTest {
                 new LogContext("testCache"),
                 0,
                 new MockStreamsMetrics(new Metrics())));
+        context.setTime(1L);
 
         windowStore.init(context, windowStore);
     }
@@ -269,6 +241,11 @@ public abstract class WindowBytesStoreTest {
 
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
@@ -544,6 +521,11 @@ public abstract class WindowBytesStoreTest {
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
 
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
+
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
         assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
         assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
@@ -653,6 +635,11 @@ public abstract class WindowBytesStoreTest {
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
 
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
+
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
         assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
@@ -719,6 +706,11 @@ public abstract class WindowBytesStoreTest {
 
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
 
@@ -900,13 +892,13 @@ public abstract class WindowBytesStoreTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
-        final RecordCollector recordCollector = createRecordCollector(windowStore.name());
         recordCollector.init(producer);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
             recordCollector
         );
+        context.setTime(1L);
         windowStore.init(context, windowStore);
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired

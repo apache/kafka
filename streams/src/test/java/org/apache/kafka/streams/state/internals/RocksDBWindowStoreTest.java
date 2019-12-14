@@ -17,13 +17,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -599,6 +602,11 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
                 8,
                 ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
                 ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
+
+        final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+            changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
+        }
 
         context.restore(STORE_NAME, changeLog);
 
