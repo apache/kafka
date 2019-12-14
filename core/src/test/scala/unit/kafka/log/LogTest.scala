@@ -611,6 +611,30 @@ class LogTest {
     assertFalse(logDir.exists)
   }
 
+  /**
+   * Test that "PeriodicProducerExpirationCheck" scheduled task gets canceled after log
+   * is deleted.
+   */
+  @Test
+  def testProducerExpireCheckAfterDelete(): Unit = {
+    val scheduler = new KafkaScheduler(1)
+    try {
+      scheduler.startup()
+      val logConfig = LogTest.createLogConfig()
+      val log = createLog(logDir, logConfig, scheduler = scheduler)
+
+      val producerExpireCheck = log.producerExpireCheck
+      assertTrue("producerExpireCheck isn't as part of scheduled tasks",
+        scheduler.taskRunning(producerExpireCheck))
+
+      log.delete()
+      assertFalse("producerExpireCheck is part of scheduled tasks even after log deletion",
+        scheduler.taskRunning(producerExpireCheck))
+    } finally {
+      scheduler.shutdown();
+    }
+  }
+
   private def testProducerSnapshotsRecoveryAfterUncleanShutdown(messageFormatVersion: String): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 64 * 10, messageFormatVersion = messageFormatVersion)
     var log = createLog(logDir, logConfig)
@@ -4143,6 +4167,27 @@ class LogTest {
     val logConfig = LogTest.createLogConfig()
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments)
+  }
+
+  @Test
+  def testMetricsRemovedOnLogDeletion(): Unit = {
+    TestUtils.clearYammerMetrics()
+
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val metricTag = s"topic=${topicPartition.topic},partition=${topicPartition.partition}"
+
+    val logMetrics = metricsKeySet.filter(_.getType == "Log")
+    assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+    logMetrics.foreach { metric =>
+      assertTrue(metric.getMBeanName.contains(metricTag))
+    }
+
+    // Delete the log and validate that corresponding metrics were removed.
+    log.delete()
+    val logMetricsAfterDeletion = metricsKeySet.filter(_.getType == "Log")
+    assertTrue(logMetricsAfterDeletion.isEmpty)
   }
 
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)

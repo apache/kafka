@@ -121,6 +121,7 @@ public class KafkaChannel implements AutoCloseable {
     private long networkThreadTimeNanos;
     private final int maxReceiveSize;
     private final MemoryPool memoryPool;
+    private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
     private Send send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
@@ -133,7 +134,8 @@ public class KafkaChannel implements AutoCloseable {
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
+                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -141,6 +143,7 @@ public class KafkaChannel implements AutoCloseable {
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
         this.memoryPool = memoryPool;
+        this.metadataRegistry = metadataRegistry;
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
@@ -148,7 +151,7 @@ public class KafkaChannel implements AutoCloseable {
 
     public void close() throws IOException {
         this.disconnected = true;
-        Utils.closeAll(transportLayer, authenticator, receive);
+        Utils.closeAll(transportLayer, authenticator, receive, metadataRegistry);
     }
 
     /**
@@ -580,8 +583,8 @@ public class KafkaChannel implements AutoCloseable {
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.
          */
-        long nowNanos = nowNanosSupplier.get().longValue();
-        if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos().longValue())
+        long nowNanos = nowNanosSupplier.get();
+        if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos())
             return false;
         swapAuthenticatorsAndBeginReauthentication(new ReauthenticationContext(authenticator, receive, nowNanos));
         receive = null;
@@ -614,7 +617,7 @@ public class KafkaChannel implements AutoCloseable {
      */
     public boolean serverAuthenticationSessionExpired(long nowNanos) {
         Long serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
-        return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos.longValue() > 0;
+        return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos > 0;
     }
     
     /**
@@ -650,5 +653,9 @@ public class KafkaChannel implements AutoCloseable {
         // replace with a new one and begin the process of re-authenticating
         authenticator = authenticatorCreator.get();
         authenticator.reauthenticate(reauthenticationContext);
+    }
+
+    public ChannelMetadataRegistry channelMetadataRegistry() {
+        return metadataRegistry;
     }
 }

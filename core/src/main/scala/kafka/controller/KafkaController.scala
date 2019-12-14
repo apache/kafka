@@ -1081,14 +1081,16 @@ class KafkaController(val config: KafkaConfig,
           val UpdateLeaderAndIsrResult(finishedUpdates, _) =
             zkClient.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch, controllerContext.epochZkVersion)
 
-          finishedUpdates.headOption.map {
-            case (partition, Right(leaderAndIsr)) =>
-              finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
+          finishedUpdates.get(partition) match {
+            case Some(Right(leaderAndIsr)) =>
+              val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
+              controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+              finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
               info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
               true
-            case (_, Left(e)) =>
-              throw e
-          }.getOrElse(false)
+            case Some(Left(e)) => throw e
+            case None => false
+          }
         case None =>
           throw new IllegalStateException(s"Cannot update leader epoch for partition $partition as " +
             "leaderAndIsr path is empty. This could mean we somehow tried to reassign a partition that doesn't exist")

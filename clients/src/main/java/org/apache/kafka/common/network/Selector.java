@@ -22,12 +22,13 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.IntGaugeSuite;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -175,13 +176,13 @@ public class Selector implements Selectable, AutoCloseable {
         this.connected = new ArrayList<>();
         this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
+        this.log = logContext.logger(Selector.class);
         this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
         this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
         this.memoryPool = memoryPool;
         this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
-        this.log = logContext.logger(Selector.class);
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
         this.delayedClosingChannels = (failedAuthenticationDelayMs > NO_FAILED_AUTHENTICATION_DELAY) ? new LinkedHashMap<String, DelayedAuthenticationFailureClose>() : null;
     }
@@ -312,6 +313,11 @@ public class Selector implements Selectable, AutoCloseable {
         ensureNotRegistered(id);
         registerChannel(id, socketChannel, SelectionKey.OP_READ);
         this.sensors.connectionCreated.record();
+        // Default to empty client information as the ApiVersionsRequest is not
+        // mandatory. In this case, we still want to account for the connection.
+        ChannelMetadataRegistry metadataRegistry = this.channel(id).channelMetadataRegistry();
+        if (metadataRegistry.clientInformation() == null)
+            metadataRegistry.registerClientInformation(ClientInformation.EMPTY);
     }
 
     private void ensureNotRegistered(String id) {
@@ -332,7 +338,8 @@ public class Selector implements Selectable, AutoCloseable {
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
+                new SelectorChannelMetadataRegistry());
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -531,6 +538,7 @@ public class Selector implements Selectable, AutoCloseable {
                     if (channel.finishConnect()) {
                         this.connected.add(nodeId);
                         this.sensors.connectionCreated.record();
+
                         SocketChannel socketChannel = (SocketChannel) key.channel();
                         log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
                                 socketChannel.socket().getReceiveBufferSize(),
@@ -918,6 +926,7 @@ public class Selector implements Selectable, AutoCloseable {
             key.cancel();
             key.attach(null);
         }
+
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
@@ -1060,6 +1069,58 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
+    class SelectorChannelMetadataRegistry implements ChannelMetadataRegistry {
+        private CipherInformation cipherInformation;
+        private ClientInformation clientInformation;
+
+        @Override
+        public void registerCipherInformation(final CipherInformation cipherInformation) {
+            if (this.cipherInformation != null) {
+                if (this.cipherInformation.equals(cipherInformation))
+                    return;
+                sensors.connectionsByCipher.decrement(this.cipherInformation);
+            }
+
+            this.cipherInformation = cipherInformation;
+            sensors.connectionsByCipher.increment(cipherInformation);
+        }
+
+        @Override
+        public CipherInformation cipherInformation() {
+            return cipherInformation;
+        }
+
+        @Override
+        public void registerClientInformation(final ClientInformation clientInformation) {
+            if (this.clientInformation != null) {
+                if (this.clientInformation.equals(clientInformation))
+                    return;
+                sensors.connectionsByClient.decrement(this.clientInformation);
+            }
+
+            this.clientInformation = clientInformation;
+            sensors.connectionsByClient.increment(clientInformation);
+        }
+
+        @Override
+        public ClientInformation clientInformation() {
+            return clientInformation;
+        }
+
+        @Override
+        public void close() {
+            if (this.cipherInformation != null) {
+                sensors.connectionsByCipher.decrement(this.cipherInformation);
+                this.cipherInformation = null;
+            }
+
+            if (this.clientInformation != null) {
+                sensors.connectionsByClient.decrement(this.clientInformation);
+                this.clientInformation = null;
+            }
+        }
+    }
+
     class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final String metricGrpPrefix;
@@ -1081,6 +1142,8 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor responsesReceived;
         public final Sensor selectTime;
         public final Sensor ioTime;
+        public final IntGaugeSuite<CipherInformation> connectionsByCipher;
+        public final IntGaugeSuite<ClientInformation> connectionsByClient;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
@@ -1176,6 +1239,24 @@ public class Selector implements Selectable, AutoCloseable {
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
+
+            this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
+                cipherInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("cipher", cipherInformation.cipher());
+                    tags.put("protocol", cipherInformation.protocol());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this SSL cipher and protocol.", tags);
+                }, 100);
+
+            this.connectionsByClient = new IntGaugeSuite<>(log, "clients", metrics,
+                clientInformation -> {
+                    Map<String, String> tags = new LinkedHashMap<>();
+                    tags.put("clientSoftwareName", clientInformation.softwareName());
+                    tags.put("clientSoftwareVersion", clientInformation.softwareVersion());
+                    tags.putAll(metricTags);
+                    return metrics.metricName("connections", metricGrpName, "The number of connections with this client and version.", tags);
+                }, 100);
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -1299,6 +1380,8 @@ public class Selector implements Selectable, AutoCloseable {
                 metrics.removeMetric(metricName);
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
+            connectionsByCipher.close();
+            connectionsByClient.close();
         }
     }
 

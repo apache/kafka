@@ -1069,8 +1069,8 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
      * but allows access to the {@code ProcessorContext} and record metadata.
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
@@ -2065,6 +2065,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and default serializers and deserializers.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2094,6 +2095,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and using the serializers as defined by {@link Serialized}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2124,6 +2126,7 @@ public interface KStream<K, V> {
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
      * and using the serializers as defined by {@link Grouped}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
@@ -2154,6 +2157,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and default serializers and deserializers.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
@@ -2183,6 +2187,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and {@link Serde}s as specified by {@link Serialized}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
@@ -2215,6 +2220,7 @@ public interface KStream<K, V> {
     /**
      * Group the records of this {@code KStream} on a new key that is selected using the provided {@link KeyValueMapper}
      * and {@link Serde}s as specified by {@link Grouped}.
+     * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
      * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the

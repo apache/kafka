@@ -126,8 +126,16 @@ public class SslSelectorTest extends SelectorTest {
 
         waitForBytesBuffered(selector, node);
 
+        TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            "Waiting for cipher metrics to be created.");
+        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
+        assertNotNull(selector.channel(node).channelMetadataRegistry().cipherInformation());
+
         selector.close(node);
         super.verifySelectorEmpty(selector);
+
+        assertEquals(1, cipherMetrics(metrics).size());
+        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
@@ -361,10 +369,11 @@ public class SslSelectorTest extends SelectorTest {
         }
 
         @Override
-        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
+                                                        String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
-            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
+            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
             return transportLayer;
         }
 
@@ -376,8 +385,9 @@ public class SslSelectorTest extends SelectorTest {
             static Map<String, TestSslTransportLayer> transportLayers = new HashMap<>();
             boolean muteSocket = false;
 
-            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-                super(channelId, key, sslEngine);
+            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+                                         ChannelMetadataRegistry metadataRegistry) throws IOException {
+                super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }
 
@@ -401,5 +411,4 @@ public class SslSelectorTest extends SelectorTest {
             }
         }
     }
-
 }

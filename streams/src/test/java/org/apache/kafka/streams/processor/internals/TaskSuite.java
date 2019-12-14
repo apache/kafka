@@ -14,23 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
 
-class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
-
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<>();
-    }
-
-    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
-        @Override
-        public void process(final K key, final V value) {
-            context().forward(key, value);
-        }
-    }
+/**
+ * This suite runs all the tests related to task management. It's intended to simplify feature testing from IDEs.
+ *
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
+ * these tests are already included in the `:streams:test` task.
+ */
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+    AbstractTaskTest.class,
+    StreamTaskTest.class,
+    StandbyTaskTest.class,
+    AssignedStreamsTasksTest.class,
+})
+public class TaskSuite {
 }
+
+
