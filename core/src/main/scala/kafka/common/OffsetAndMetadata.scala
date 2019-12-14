@@ -19,22 +19,6 @@ package kafka.common
 
 import java.util.Optional
 
-case class OffsetAndMetadata(offsetRanges: java.util.List[OffsetAndRange],
-                             leaderEpoch: Optional[Integer],
-                             metadata: String,
-                             commitTimestamp: Long,
-                             expireTimestamp: Option[Long]) {
-
-
-  override def toString: String  = {
-    s"OffsetAndMetadata(offset=$offsetRanges" +
-      s", leaderEpoch=$leaderEpoch" +
-      s", metadata=$metadata" +
-      s", commitTimestamp=$commitTimestamp" +
-      s", expireTimestamp=$expireTimestamp)"
-  }
-}
-
 case class OffsetAndRange(var offset: Long, var lowerKey: Optional[Long], var upperKey: Optional[Long]) {
 
   override def toString: String = {
@@ -42,6 +26,38 @@ case class OffsetAndRange(var offset: Long, var lowerKey: Optional[Long], var up
       s", lowerKey=$lowerKey" +
       s", upperKey=$upperKey)"
   }
+}
+
+case class OffsetAndMetadata(offsetRanges: java.util.List[OffsetAndRange],
+                             leaderEpoch: Optional[Integer],
+                             metadata: String,
+                             commitTimestamp: Long,
+                             expireTimestamp: Option[Long]) {
+
+  // cached min offsetAndRange
+  var minOffsetAndRange = OffsetAndRange(Long.MaxValue, Optional.empty(), Optional.empty())
+
+  override def toString: String = {
+    s"OffsetAndMetadata(offset=$offsetRanges" +
+      s", leaderEpoch=$leaderEpoch" +
+      s", metadata=$metadata" +
+      s", commitTimestamp=$commitTimestamp" +
+      s", expireTimestamp=$expireTimestamp)"
+  }
+
+  def offset: Long = {
+    import scala.collection.JavaConverters._
+
+    for (offsetAndRange <- offsetRanges.asScala) {
+      if (minOffsetAndRange.offset > offsetAndRange.offset)
+        minOffsetAndRange = offsetAndRange
+    }
+    minOffsetAndRange.offset
+  }
+
+  def lowerKey: Long = if (minOffsetAndRange.lowerKey.isPresent) minOffsetAndRange.lowerKey.get else -1L
+
+  def upperKey: Long = if (minOffsetAndRange.upperKey.isPresent) minOffsetAndRange.upperKey.get else -1L
 }
 
 object OffsetAndMetadata {

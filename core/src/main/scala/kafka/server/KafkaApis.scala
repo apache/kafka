@@ -2174,7 +2174,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val currentTimestamp = time.milliseconds
     offsetsMap.map { case (topicPartition, partitionData) =>
       val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
-      topicPartition -> new OffsetAndMetadata(offset = partitionData.offset, Optional.empty(), Optional.empty(), Optional.empty(), leaderEpoch = partitionData.leaderEpoch, metadata = metadata, commitTimestamp = currentTimestamp, expireTimestamp = None)
+      topicPartition -> new OffsetAndMetadata(offsetRanges = java.util.Collections.singletonList(OffsetAndRange(offset = partitionData.offset, Optional.empty(), Optional.empty())),
+        leaderEpoch = partitionData.leaderEpoch, metadata = metadata, commitTimestamp = currentTimestamp, expireTimestamp = None)
     }
   }
 

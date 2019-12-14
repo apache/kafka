@@ -39,20 +39,20 @@ public class OffsetAndMetadata implements Serializable {
     // initialize its value to null.
     private final Integer leaderEpoch;
 
-    private final Map<Long, RecordKeyRange> offsetRanges;
+    private final RecordKeyRange keyRange;
 
-    //private final RecordKeyRange offsetRanges;
+    //private final RecordKeyRange keyRange;
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
      * @param offset The offset to be committed
      * @param leaderEpoch Optional leader epoch of the last consumed record
-     * @param offsetRanges The key range committed
+     * @param keyRange The key range committed
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset,
                              Optional<Integer> leaderEpoch,
-                             Map<Long, RecordKeyRange> offsetRanges,
+                             RecordKeyRange keyRange,
                              String metadata) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
@@ -66,7 +66,7 @@ public class OffsetAndMetadata implements Serializable {
             this.metadata = OffsetFetchResponse.NO_METADATA;
         else
             this.metadata = metadata;
-        this.offsetRanges = offsetRanges;
+        this.keyRange = keyRange;
     }
 
     /**
@@ -78,8 +78,8 @@ public class OffsetAndMetadata implements Serializable {
         this(offset, Optional.empty(), null, metadata);
     }
 
-    public OffsetAndMetadata(long offset, Map<Long, RecordKeyRange> offsetRanges, String metadata) {
-        this(offset, Optional.empty(), offsetRanges, metadata);
+    public OffsetAndMetadata(long offset, RecordKeyRange keyRange, String metadata) {
+        this(offset, Optional.empty(), keyRange, metadata);
     }
 
     /**
@@ -95,8 +95,8 @@ public class OffsetAndMetadata implements Serializable {
         return offset;
     }
 
-    public Map<Long, RecordKeyRange> offsetRanges() {
-        return offsetRanges;
+    public RecordKeyRange keyRange() {
+        return keyRange;
     }
 
     public String metadata() {

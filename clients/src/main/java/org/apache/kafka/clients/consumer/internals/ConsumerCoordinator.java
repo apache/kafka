@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RecordKeyRange;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
@@ -1046,8 +1047,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
                     .setPartitionIndex(topicPartition.partition())
                     .setCommittedOffset(offsetAndMetadata.offset())
-                    .setLowerKeyRange(offsetAndMetadata.offsetRanges().get(offsetAndMetadata.offset()).lowerBound())
-                    .setUpperKeyRange(offsetAndMetadata.offsetRanges().get(offsetAndMetadata.offset()).upperBound())
+                    .setLowerKeyRange(offsetAndMetadata.keyRange().lowerBound())
+                    .setUpperKeyRange(offsetAndMetadata.keyRange().upperBound())
                     .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setCommittedMetadata(offsetAndMetadata.metadata())
             );
@@ -1239,7 +1240,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch);
                     // if there's no committed offset, record as null
-                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, null, data.metadata));
+                    RecordKeyRange range = new RecordKeyRange(data.keyLowerRange.orElseGet(() -> -1L), data.keyUpperRange.orElseGet(() -> -1L));
+                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, range, data.metadata));
                 } else {
                     log.info("Found no committed offset for partition {}", tp);
                     offsets.put(tp, null);

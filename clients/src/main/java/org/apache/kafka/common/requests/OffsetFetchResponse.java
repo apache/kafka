@@ -71,6 +71,9 @@ public class OffsetFetchResponse extends AbstractResponse {
         public final Errors error;
         public final Optional<Integer> leaderEpoch;
 
+        public Optional<Long> keyLowerRange;
+        public Optional<Long> keyUpperRange;
+
         public PartitionData(long offset,
                              Optional<Integer> leaderEpoch,
                              String metadata,
@@ -79,10 +82,23 @@ public class OffsetFetchResponse extends AbstractResponse {
             this.leaderEpoch = leaderEpoch;
             this.metadata = metadata;
             this.error = error;
+
+            this.keyLowerRange = Optional.empty();
+            this.keyUpperRange = Optional.empty();
         }
 
         public boolean hasError() {
             return this.error != Errors.NONE;
+        }
+
+        public PartitionData setKeyLowerRange(long lowerRange) {
+            this.keyLowerRange = Optional.of(lowerRange);
+            return this;
+        }
+
+        public PartitionData setKeyUpperRange(long upperRange) {
+            this.keyUpperRange = Optional.of(upperRange);
+            return this;
         }
 
         @Override
@@ -138,6 +154,8 @@ public class OffsetFetchResponse extends AbstractResponse {
                                        .setPartitionIndex(entry.getKey().partition())
                                        .setErrorCode(partitionData.error.code())
                                        .setCommittedOffset(partitionData.offset)
+                                       .setLowerKeyRange(partitionData.keyLowerRange.orElseGet(() -> -1L))
+                                       .setUpperKeyRange(partitionData.keyUpperRange.orElseGet(() -> -1L))
                                        .setCommittedLeaderEpoch(
                                            partitionData.leaderEpoch.orElse(NO_PARTITION_LEADER_EPOCH))
                                        .setMetadata(partitionData.metadata)

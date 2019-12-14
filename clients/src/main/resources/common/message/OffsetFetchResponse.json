@@ -45,14 +45,10 @@
           "about": "The partition index." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0+",
           "about": "The committed message offset." },
-        { "name":  "OffsetRanges", "type":  "[]OffsetAndRange", "versions": "7+", "about": "The committed offsets and their key ranges", "fields": [
-          {"name": "CommittedOffset", "type": "int64", "versions": "7+",
-            "about": "The offset to be committed." },
-          {"name": "LowerKeyRange", "type": "int64", "versions": "7+",
-            "about": "The lower bound key range to be committed." },
-          {"name": "UpperKeyRange", "type": "int64", "versions": "7+",
-            "about": "The upper bound key range to be committed." }
-        ]},
+        {"name": "LowerKeyRange", "type": "int64", "versions": "7+",
+          "about": "The lower bound key range to be committed." },
+        {"name": "UpperKeyRange", "type": "int64", "versions": "7+",
+          "about": "The upper bound key range to be committed." },
         { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "5+", "default": "-1",
           "ignorable": true, "about": "The leader epoch." },
         { "name": "Metadata", "type": "string", "versions": "0+", "nullableVersions": "0+",

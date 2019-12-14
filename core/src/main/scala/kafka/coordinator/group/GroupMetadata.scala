@@ -686,8 +686,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def merge(oldCommitRecordMetadataAndOffset: CommitRecordMetadataAndOffset, newOffsetAndRange: OffsetAndRange): Unit = {
+    import scala.collection.JavaConverters._
+
     var merged = false
-    for (offsetAndRange : OffsetAndRange <- oldCommitRecordMetadataAndOffset.offsetAndMetadata.offsetRanges) {
+    for (offsetAndRange <- oldCommitRecordMetadataAndOffset.offsetAndMetadata.offsetRanges.asScala) {
       if (offsetAndRange.offset == newOffsetAndRange.offset) {
         if (offsetAndRange.lowerKey.get == newOffsetAndRange.upperKey.get + 1L) {
           offsetAndRange.lowerKey = newOffsetAndRange.lowerKey
