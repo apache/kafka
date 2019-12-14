@@ -19,6 +19,6 @@ limitations under the License.
 var context={
     "version": "24",
     "dotVersion": "2.4",
-    "fullDotVersion": "2.4.0",
+    "fullDotVersion": "2.4.1",
     "scalaVersion": "2.12"
 };
