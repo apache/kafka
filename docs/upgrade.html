@@ -75,13 +75,11 @@
     <li>ZooKeeper has been upgraded to 3.5.6. ZooKeeper upgrade from 3.4.X to 3.5.6 can fail if there are no snapshot files in 3.4 data directory.
         This usually happens in test upgrades where ZooKeeper 3.5.6 is trying to load an existing 3.4 data dir in which no snapshot file has been created.
         For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>.
-        For multi-node ZooKeeper cluster upgrades, set <code>snapshot.trust.empty=true</code> in <code>zookeeper.properties</code> before the upgrade
-        to avoid <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>. After the new version starts successfully, it is safe to remove this config.
-        See <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_advancedConfiguration">ZooKeeper advanced configuration</a> for more details.
-        For standalone cluster upgrades, we have observed a data loss issue when using <code>snapshot.trust.empty=true</code> config.
-        For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3644">ZOOKEEPER-3644</a>.
-        The workaround is need to manually copy the <a href="https://issues.apache.org/jira/secure/attachment/12928686/snapshot.0">snapshot</a> file to the 3.4 data directory.
-        For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
+        A fix is given in <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3056">ZOOKEEPER-3056</a>, which is to set <code>snapshot.trust.empty=true</code>
+        config in <code>zookeeper.properties</code> before the upgrade. But we have observed data loss in standalone cluster upgrades when using
+        <code>snapshot.trust.empty=true</code> config. For more details about the issue please refer to <a href="https://issues.apache.org/jira/browse/ZOOKEEPER-3644">ZOOKEEPER-3644</a>.
+        So we recommend the safe workaround of copying empty <a href="https://issues.apache.org/jira/secure/attachment/12928686/snapshot.0">snapshot</a> file to the 3.4 data directory,
+        if there are no snapshot files in 3.4 data directory. For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
     </li>
     <li>
         An embedded Jetty based <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
