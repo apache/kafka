@@ -604,7 +604,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
                 ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
             changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
         }
 

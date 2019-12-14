@@ -243,7 +243,7 @@ public abstract class WindowBytesStoreTest {
         windowStore.flush();
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
             changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
         }
 
@@ -390,148 +390,83 @@ public abstract class WindowBytesStoreTest {
 
         assertEquals(
             new HashSet<>(Collections.singletonList("zero")),
-            toSet(windowStore.fetch(
-                0,
-                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L))));
+            toSet(windowStore.fetch(0, ofEpochMilli(startTime + 0L - WINDOW_SIZE), ofEpochMilli(startTime + 0L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("one")),
-            toSet(windowStore.fetch(
-                1,
-                ofEpochMilli(startTime + 1L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 1L))));
+            toSet(windowStore.fetch(1, ofEpochMilli(startTime + 1L - WINDOW_SIZE), ofEpochMilli(startTime + 1L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("two")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 2L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 2L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 2L - WINDOW_SIZE), ofEpochMilli(startTime + 2L))));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                3,
-                ofEpochMilli(startTime + 3L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 3L))));
+            toSet(windowStore.fetch(3, ofEpochMilli(startTime + 3L - WINDOW_SIZE), ofEpochMilli(startTime + 3L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("four")),
-            toSet(windowStore.fetch(
-                4,
-                ofEpochMilli(startTime + 4L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 4L))));
+            toSet(windowStore.fetch(4, ofEpochMilli(startTime + 4L - WINDOW_SIZE), ofEpochMilli(startTime + 4L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("five")),
-            toSet(windowStore.fetch(
-                5,
-                ofEpochMilli(startTime + 5L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 5L))));
+            toSet(windowStore.fetch(5, ofEpochMilli(startTime + 5L - WINDOW_SIZE), ofEpochMilli(startTime + 5L))));
 
         putSecondBatch(windowStore, startTime, context);
 
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime - 1L - WINDOW_SIZE),
-                ofEpochMilli(startTime - 1L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime - 1L - WINDOW_SIZE), ofEpochMilli(startTime - 1L))));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 0L - WINDOW_SIZE), ofEpochMilli(startTime + 0L))));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 1L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 1L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 1L - WINDOW_SIZE), ofEpochMilli(startTime + 1L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("two")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 2L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 2L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 2L - WINDOW_SIZE), ofEpochMilli(startTime + 2L))));
         assertEquals(
             new HashSet<>(asList("two", "two+1")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 3L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 3L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 3L - WINDOW_SIZE), ofEpochMilli(startTime + 3L))));
         assertEquals(
             new HashSet<>(asList("two", "two+1", "two+2")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 4L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 4L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 4L - WINDOW_SIZE), ofEpochMilli(startTime + 4L))));
         assertEquals(
             new HashSet<>(asList("two", "two+1", "two+2", "two+3")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 5L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 5L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 5L - WINDOW_SIZE), ofEpochMilli(startTime + 5L))));
         assertEquals(
             new HashSet<>(asList("two+1", "two+2", "two+3", "two+4")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 6L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 6L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 6L - WINDOW_SIZE), ofEpochMilli(startTime + 6L))));
         assertEquals(
             new HashSet<>(asList("two+2", "two+3", "two+4", "two+5")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 7L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 7L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 7L - WINDOW_SIZE), ofEpochMilli(startTime + 7L))));
         assertEquals(
             new HashSet<>(asList("two+3", "two+4", "two+5", "two+6")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 8L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 8L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 8L - WINDOW_SIZE), ofEpochMilli(startTime + 8L))));
         assertEquals(
             new HashSet<>(asList("two+4", "two+5", "two+6")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 9L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 9L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 9L - WINDOW_SIZE), ofEpochMilli(startTime + 9L))));
         assertEquals(
             new HashSet<>(asList("two+5", "two+6")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 10L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 10L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 10L - WINDOW_SIZE), ofEpochMilli(startTime + 10L))));
         assertEquals(
             new HashSet<>(Collections.singletonList("two+6")),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 11L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 11L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 11L - WINDOW_SIZE), ofEpochMilli(startTime + 11L))));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 12L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 12L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 12L - WINDOW_SIZE), ofEpochMilli(startTime + 12L))));
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            toSet(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + 13L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 13L))));
+            toSet(windowStore.fetch(2, ofEpochMilli(startTime + 13L - WINDOW_SIZE), ofEpochMilli(startTime + 13L))));
 
         // Flush the store and verify all current entries were properly flushed ...
         windowStore.flush();
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
             changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
         }
 
         final Map<Integer, Set<String>> entriesByKey = entriesByKey(changeLog, startTime);
         assertEquals(Utils.mkSet("zero@0"), entriesByKey.get(0));
         assertEquals(Utils.mkSet("one@1"), entriesByKey.get(1));
-        assertEquals(
-            Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"),
-            entriesByKey.get(2));
+        assertEquals(Utils.mkSet("two@2", "two+1@3", "two+2@4", "two+3@5", "two+4@6", "two+5@7", "two+6@8"), entriesByKey.get(2));
         assertNull(entriesByKey.get(3));
         assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
         assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
@@ -636,7 +571,7 @@ public abstract class WindowBytesStoreTest {
         windowStore.flush();
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
             changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
         }
 
@@ -708,7 +643,7 @@ public abstract class WindowBytesStoreTest {
         windowStore.flush();
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
-        for (ProducerRecord<Object, Object> record : recordCollector.collected()) {
+        for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
             changeLog.add(new KeyValue<>(((Bytes) record.key()).get(), (byte[]) record.value()));
         }
 

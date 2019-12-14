@@ -74,9 +74,11 @@ public class CompositeReadOnlyKeyValueStoreTest {
                 Serdes.String())
                 .build();
 
-        store.init(new InternalMockProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName), Serdes.String(), Serdes.String()),
-                                                    new MockRecordCollector()),
-                store);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(new StateSerdes<>(ProcessorStateManager.storeChangelogTopic("appId", storeName),
+            Serdes.String(), Serdes.String()), new MockRecordCollector());
+        context.setTime(1L);
+
+        store.init(context, store);
 
         return store;
     }

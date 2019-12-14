@@ -55,6 +55,8 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
 
     @Override
     public RecordCollector recordCollector() {
+        // return null collector specifically since in standby task it should not be called;
+        // if ever then we would throw NPE, which should never happen
         return null;
     }
 
