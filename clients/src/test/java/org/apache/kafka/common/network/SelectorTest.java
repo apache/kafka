@@ -371,7 +371,7 @@ public class SelectorTest {
         ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
             @Override
             public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                    MemoryPool memoryPool) throws KafkaException {
+                    MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
                 throw new RuntimeException("Test exception");
             }
             @Override
@@ -744,6 +744,62 @@ public class SelectorTest {
 
         assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
         assertEquals((double) conns, getMetric("connection-count").metricValue());
+    }
+
+    @Test
+    public void testConnectionsByClientMetric() throws Exception {
+        String node = "0";
+        Map<String, String> unknownNameAndVersion = softwareNameAndVersionTags(
+            ClientInformation.UNKNOWN_NAME_OR_VERSION, ClientInformation.UNKNOWN_NAME_OR_VERSION);
+        Map<String, String> knownNameAndVersion = softwareNameAndVersionTags("A", "B");
+
+        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+            ss.bind(new InetSocketAddress(0));
+            InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
+
+            Thread sender = createSender(serverAddress, randomPayload(1));
+            sender.start();
+            SocketChannel channel = ss.accept();
+            channel.configureBlocking(false);
+
+            // Metric with unknown / unknown should be there
+            selector.register(node, channel);
+            assertEquals(1,
+                getMetric("connections", unknownNameAndVersion).metricValue());
+            assertEquals(ClientInformation.EMPTY,
+                selector.channel(node).channelMetadataRegistry().clientInformation());
+
+            // Metric with unknown / unknown should not be there, metric with A / B should be there
+            ClientInformation clientInformation = new ClientInformation("A", "B");
+            selector.channel(node).channelMetadataRegistry()
+                .registerClientInformation(clientInformation);
+            assertEquals(clientInformation,
+                selector.channel(node).channelMetadataRegistry().clientInformation());
+            assertEquals(0, getMetric("connections", unknownNameAndVersion).metricValue());
+            assertEquals(1, getMetric("connections", knownNameAndVersion).metricValue());
+
+            // Metric with A / B should not be there,
+            selector.close(node);
+            assertEquals(0, getMetric("connections", knownNameAndVersion).metricValue());
+        }
+    }
+
+    private Map<String, String> softwareNameAndVersionTags(String clientSoftwareName, String clientSoftwareVersion) {
+        Map<String, String> tags = new HashMap<>(2);
+        tags.put("clientSoftwareName", clientSoftwareName);
+        tags.put("clientSoftwareVersion", clientSoftwareVersion);
+        return tags;
+    }
+
+    private KafkaMetric getMetric(String name, Map<String, String> tags) throws Exception {
+        Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
+            .filter(entry ->
+                entry.getKey().name().equals(name) && entry.getKey().tags().equals(tags))
+            .findFirst();
+        if (!metric.isPresent())
+            throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags.toString()));
+
+        return metric.get().getValue();
     }
 
     @SuppressWarnings("unchecked")

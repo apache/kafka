@@ -1221,6 +1221,7 @@ project(':streams') {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
       include('log4j*jar')
+      include('*hamcrest*')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
