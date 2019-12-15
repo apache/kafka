@@ -157,7 +157,7 @@ object ConfigCommand extends Config {
 
     adminZkClient.changeConfigs(entityType, entityName, configs)
 
-    println(s"Completed Updating config for entity: $entity.")
+    println(s"Completed updating config for entity: $entity.")
   }
 
   private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
@@ -284,7 +284,7 @@ object ConfigCommand extends Config {
     val entityNames = opts.entityNames
     if (entityNames.size > 1)
       throw new IllegalArgumentException(s"At most one entity name must be specified with --bootstrap-server")
-    else if (opts.options.has(opts.alterOpt) && entityNames.size != 0)
+    else if (opts.options.has(opts.alterOpt) && entityNames.size != 1)
       throw new IllegalArgumentException(s"Exactly one entity name must be specified with --bootstrap-server for --alter")
 
     try {
