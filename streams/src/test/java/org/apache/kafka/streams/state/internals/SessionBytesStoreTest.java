@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.toSet;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -32,7 +34,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -60,6 +61,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 
 public abstract class SessionBytesStoreTest {
 
@@ -555,23 +557,4 @@ public abstract class SessionBytesStoreTest {
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
                 + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
-
-    protected static <K, V> Set<V> valuesToSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<V> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
-
-    private static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
-    }
-
 }
