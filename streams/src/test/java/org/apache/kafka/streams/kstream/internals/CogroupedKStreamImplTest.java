@@ -42,6 +42,9 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
@@ -133,8 +136,13 @@ public class CogroupedKStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotHaveNullWindowOnWindowedBy() {
-        cogroupedStream.windowedBy(null);
+    public void shouldNotHaveNullWindowOnWindowedByTime() {
+        cogroupedStream.windowedBy((Windows<? extends Window>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullWindowOnWindowedBySession() {
+        cogroupedStream.windowedBy((SessionWindows) null);
     }
 
     @Test

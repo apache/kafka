@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
 import java.util.Map;
 
@@ -49,12 +50,17 @@ public interface StreamsMetrics {
      * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
      * {@link Sensor#record(double)} calls.
      *
+     * The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
+     *
      * @param scopeName          name of the scope, which will be used as part of the metric type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
      * @param operationName      name of the operation, which will be used as the name of the metric, e.g.: "[operation]-latency-avg".
      * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags               additional tags of the sensor
      * @return The added sensor.
+     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #removeSensor(Sensor)
+     * @see #addSensor(String, RecordingLevel, Sensor...)
      */
     Sensor addLatencyRateTotalSensor(final String scopeName,
                                      final String entityName,
@@ -74,12 +80,17 @@ public interface StreamsMetrics {
      * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
      * {@link Sensor#record(double)} calls.
      *
+     * The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
+     *
      * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
      * @param operationName      name of the operation, which will be used as the name of the metric, e.g.: "[operation]-total".
      * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
      * @param tags               additional tags of the sensor
      * @return The added sensor.
+     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #removeSensor(Sensor)
+     * @see #addSensor(String, RecordingLevel, Sensor...)
      */
     Sensor addRateTotalSensor(final String scopeName,
                               final String entityName,
@@ -170,14 +181,17 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor.
      * Note that for most cases it is advisable to use
-     * {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
-     * metric name well-formedness and conformity with the rest of the streams code base.
+     * {@link #addRateTotalSensor(String, String, String, RecordingLevel, String...) addRateTotalSensor()}
+     * or {@link #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...) addLatencyRateTotalSensor()}
+     * to ensure metric name well-formedness and conformity with the rest of the Kafka Streams code base.
      * However, if the above two methods are not sufficient, this method can also be used.
      *
      * @param name           name of the sensor.
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor
      * @return The added sensor.
+     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,
                      final Sensor.RecordingLevel recordingLevel);
@@ -185,14 +199,17 @@ public interface StreamsMetrics {
     /**
      * Generic method to create a sensor with parent sensors.
      * Note that for most cases it is advisable to use
-     * {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
-     * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
-     * metric name well-formedness and conformity with the rest of the streams code base.
+     * {@link #addRateTotalSensor(String, String, String, RecordingLevel, String...) addRateTotalSensor()}
+     * or {@link #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...) addLatencyRateTotalSensor()}
+     * to ensure metric name well-formedness and conformity with the rest of the Kafka Streams code base.
      * However, if the above two methods are not sufficient, this method can also be used.
      *
      * @param name           name of the sensor
      * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor
      * @return The added sensor.
+     * @see #addRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #addLatencyRateTotalSensor(String, String, String, RecordingLevel, String...)
+     * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,
                      final Sensor.RecordingLevel recordingLevel,
