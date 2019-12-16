@@ -77,13 +77,10 @@ public abstract class WindowBytesStoreTest {
 
     WindowStore<Integer, String> windowStore;
     InternalMockProcessorContext context;
+    MockRecordCollector recordCollector;
 
     final File baseDir = TestUtils.tempDirectory("test");
-    final MockRecordCollector recordCollector = new MockRecordCollector();
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
-    private final Producer<byte[], byte[]> producer = new MockProducer<>(true,
-        Serdes.ByteArray().serializer(),
-        Serdes.ByteArray().serializer());
 
     abstract <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
                                                                final long windowSize,
@@ -99,8 +96,7 @@ public abstract class WindowBytesStoreTest {
     public void setup() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
-        recordCollector.init(producer);
-
+        recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext(
             baseDir,
             Serdes.String(),
@@ -827,7 +823,6 @@ public abstract class WindowBytesStoreTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
-        recordCollector.init(producer);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),

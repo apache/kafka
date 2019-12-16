@@ -37,8 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -70,16 +68,13 @@ public abstract class SessionBytesStoreTest {
 
     SessionStore<String, Long> sessionStore;
 
-    private InternalMockProcessorContext context;
-    private final Producer<byte[], byte[]> producer = new MockProducer<>(true,
-        Serdes.ByteArray().serializer(),
-        Serdes.ByteArray().serializer());
+    private MockRecordCollector recordCollector;
 
-    private final MockRecordCollector recordCollector = new MockRecordCollector();
+    private InternalMockProcessorContext context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                          final Serde<K> keySerde,
-                                                          final Serde<V> valueSerde);
+                                                         final Serde<K> keySerde,
+                                                         final Serde<V> valueSerde);
 
     abstract String getMetricsScope();
 
@@ -88,8 +83,7 @@ public abstract class SessionBytesStoreTest {
     @Before
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        recordCollector.init(producer);
-
+        recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -425,7 +419,6 @@ public abstract class SessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        recordCollector.init(producer);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
