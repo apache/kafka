@@ -868,7 +868,16 @@ class SocketServerTest {
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
-  def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
+  def testClientDisconnectionUpdatesRequestMetrics: Unit = {
+    // The way we detect a connection close from the client depends on the response size. If it's small, an
+    // IOException ("Connection reset by peer") is thrown when the Selector reads from the socket. If
+    // it's large, an IOException ("Broken pipe") is thrown when the Selector writes to the socket. We test
+    // both paths to ensure they are handled correctly.
+    checkClientDisconnectionUpdatesRequestMetrics(0)
+    checkClientDisconnectionUpdatesRequestMetrics(550000)
+  }
+
+  private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
@@ -896,7 +905,7 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(0))
+      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(responseBufferSize))
       channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
 
       val expectedTotalTimeCount = totalTimeHistCount() + 1
