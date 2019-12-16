@@ -76,20 +76,12 @@ public class RecordCollectorTest {
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
     private final StringSerializer stringSerializer = new StringSerializer();
 
-    private final StreamPartitioner<String, Object> streamPartitioner = (topic, key, value, numPartitions) -> {
-        return Integer.parseInt(key) % numPartitions;
-    };
-
-    private final String topic1TimeoutHint = "Timeout exception caught when sending record to topic topic1." +
-            " This might happen if the producer cannot send data to the Kafka cluster and thus, its internal buffer fills up." +
-            " This can also happen if the broker is slow to respond, if the network connection to the broker was interrupted, or if similar circumstances arise." +
-            " You can increase producer parameter `max.block.ms` to increase this timeout.";
+    private final StreamPartitioner<String, Object> streamPartitioner = (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
     @Test
     public void testSpecificPartition() {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-            "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -127,7 +119,6 @@ public class RecordCollectorTest {
     public void testStreamPartitioner() {
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-            "RecordCollectorTest-TestStreamPartitioner",
             new LogContext("RecordCollectorTest-TestStreamPartitioner "),
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -161,7 +152,6 @@ public class RecordCollectorTest {
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-            "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -184,7 +174,6 @@ public class RecordCollectorTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -203,7 +192,6 @@ public class RecordCollectorTest {
     @Test(expected = RecoverableClientException.class)
     public void shouldThrowRecoverableExceptionWhenProducerFencedInCallback() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("skipped-records"));
@@ -223,7 +211,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFailsWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -248,7 +235,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -275,7 +261,6 @@ public class RecordCollectorTest {
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
         sensor.add(metricName, new WindowedSum());
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             metrics.sensor("dropped-records")
@@ -289,7 +274,8 @@ public class RecordCollectorTest {
         });
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         assertEquals(1.0, metrics.metrics().get(metricName).metricValue());
-        assertTrue(logCaptureAppender.getMessages().contains("test Error sending records topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error. Enable TRACE logging to view failed messages key and value."));
+        final List<String> messages = logCaptureAppender.getMessages();
+        assertTrue(messages.get(messages.size() - 1).endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded."));
         LogCaptureAppender.unregister(logCaptureAppender);
     }
 
@@ -297,7 +283,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnFlushIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -321,7 +306,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionWithTimeoutHintOnProducerTimeoutWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-                "test",
                 logContext,
                 new DefaultProductionExceptionHandler(),
                 new Metrics().sensor("skipped-records"));
@@ -335,16 +319,15 @@ public class RecordCollectorTest {
 
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        final StreamsException expected = assertThrows(StreamsException.class, () -> collector.flush());
+        final StreamsException expected = assertThrows(StreamsException.class, collector::flush);
         assertTrue(expected.getCause() instanceof TimeoutException);
-        assertTrue(expected.getMessage().endsWith(topic1TimeoutHint));
+        assertTrue(expected.getMessage().endsWith("Exception handler choose to FAIL the processing, no more records would be sent."));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowStreamsExceptionOnFlushIfASendFailedWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -366,7 +349,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowStreamsExceptionOnCloseIfASendFailedWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -391,7 +373,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotThrowStreamsExceptionOnCloseIfASendFailedWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -413,7 +394,6 @@ public class RecordCollectorTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowIfTopicIsUnknownWithDefaultExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -432,7 +412,6 @@ public class RecordCollectorTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowIfTopicIsUnknownWithContinueExceptionHandler() {
         final RecordCollector collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -454,7 +433,6 @@ public class RecordCollectorTest {
         keySerializer.configure(Collections.emptyMap(), true);
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-            "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
@@ -477,7 +455,6 @@ public class RecordCollectorTest {
     @Test
     public void testShouldNotThrowNPEOnCloseIfProducerIsNotInitialized() {
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-            "NoNPE",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")

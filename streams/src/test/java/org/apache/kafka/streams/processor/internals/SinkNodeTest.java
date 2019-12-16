@@ -38,7 +38,6 @@ public class SinkNodeTest {
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final RecordCollector recordCollector =  new RecordCollectorImpl(
-        null,
         new LogContext("sinknode-test "),
         new DefaultProductionExceptionHandler(),
         new Metrics().sensor("dropped-records")

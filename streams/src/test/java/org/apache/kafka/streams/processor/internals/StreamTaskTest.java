@@ -1348,7 +1348,7 @@ public class StreamTaskTest {
             task.flushState();
             fail("Expected a TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
+            assertThat(expected.migratedTaskId(), is(task));
         }
     }
 
@@ -1414,7 +1414,7 @@ public class StreamTaskTest {
             task.process();
             fail("Expected a TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
+            assertThat(expected.migratedTaskId(), is(task));
         }
     }
 
@@ -1422,8 +1422,7 @@ public class StreamTaskTest {
     public void shouldMigrateTaskIfFencedDuringPunctuate() {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
 
-        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
-                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+        final RecordCollectorImpl recordCollector = new RecordCollectorImpl(new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         recordCollector.init(producer);
 
         task.initializeStateStores();
@@ -1447,7 +1446,7 @@ public class StreamTaskTest {
             );
             fail("Expected a TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
+            assertThat(expected.migratedTaskId(), is(task));
         }
     }
 
@@ -1481,8 +1480,7 @@ public class StreamTaskTest {
             }
         };
 
-        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
-                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+        final RecordCollectorImpl recordCollector = new RecordCollectorImpl(new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         recordCollector.init(producer);
 
         task.initializeStateStores();
@@ -1492,7 +1490,7 @@ public class StreamTaskTest {
             task.commit();
             fail("Expected a TaskMigratedException");
         } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
+            assertThat(expected.migratedTaskId(), is(task));
         }
     }
 
@@ -1903,7 +1901,6 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
 
         final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(
-            "StreamTask",
             new LogContext("StreamTaskTest "),
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")

@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -39,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static java.lang.String.format;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
@@ -70,7 +73,6 @@ public class ProcessorStateManager implements StateManager {
     // of the same topic can be assigned to the same task.
     private final Map<String, TopicPartition> partitionForTopic;
 
-    private final boolean eosEnabled;
     private final File baseDir;
     private OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
@@ -86,14 +88,11 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
-                                 final boolean eosEnabled,
-                                 final LogContext logContext) throws IOException {
-        this.eosEnabled = eosEnabled;
-
-        log = logContext.logger(ProcessorStateManager.class);
+                                 final LogContext logContext) throws ProcessorStateException {
+        this.log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
         this.changelogReader = changelogReader;
-        logPrefix = String.format("task [%s] ", taskId);
+        this.logPrefix = format("task [%s] ", taskId);
 
         partitionForTopic = new HashMap<>();
         for (final TopicPartition source : sources) {
@@ -108,20 +107,35 @@ public class ProcessorStateManager implements StateManager {
 
         baseDir = stateDirectory.directoryForTask(taskId);
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-        initialLoadedCheckpoints = checkpointFile.read();
 
-        log.trace("Checkpointable offsets read from checkpoint: {}", initialLoadedCheckpoints);
+        try {
+            // load the checkpointed offsets and then delete the checkpoint file
+            initialLoadedCheckpoints = checkpointFile.read();
 
-        if (eosEnabled) {
-            // with EOS enabled, there should never be a checkpoint file _during_ processing.
-            // delete the checkpoint file after loading its stored offsets.
             checkpointFile.delete();
             checkpointFile = null;
+            log.trace("Checkpointable offsets read from checkpoint: {}", initialLoadedCheckpoints);
+        } catch (IOException e) {
+            throw new ProcessorStateException(format("%sError loading and deleting checkpoint file when creating the state manager",
+                logPrefix), e);
         }
 
         log.debug("Created state store manager for task {}", taskId);
     }
 
+    void clearCheckpoints() throws ProcessorStateException {
+        try {
+            if (checkpointFile != null) {
+                checkpointFile.delete();
+                checkpointFile = null;
+
+                checkpointFileCache.clear();
+            }
+        } catch (final IOException e) {
+            throw new ProcessorStateException(format("%sError while deleting the checkpoint file", logPrefix), e);
+        }
+
+    }
 
     public static String storeChangelogTopic(final String applicationId,
                                              final String storeName) {
@@ -140,11 +154,11 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Registering state store {} to its state manager", storeName);
 
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
-            throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, storeName));
+            throw new IllegalArgumentException(format("%sIllegal store name: %s", logPrefix, storeName));
         }
 
         if (registeredStores.containsKey(storeName) && registeredStores.get(storeName).isPresent()) {
-            throw new IllegalArgumentException(String.format("%sStore %s has already been registered.", logPrefix, storeName));
+            throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
         // check that the underlying change log topic exist or not
@@ -199,15 +213,6 @@ public class ProcessorStateManager implements StateManager {
         );
     }
 
-    void clearCheckpoints() throws IOException {
-        if (checkpointFile != null) {
-            checkpointFile.delete();
-            checkpointFile = null;
-
-            checkpointFileCache.clear();
-        }
-    }
-
     @Override
     public Map<TopicPartition, Long> checkpointed() {
         updateCheckpointFileCache(emptyMap());
@@ -239,7 +244,7 @@ public class ProcessorStateManager implements StateManager {
             try {
                 restoreCallback.restoreBatch(convertedRecords);
             } catch (final RuntimeException e) {
-                throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
+                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
         }
 
@@ -262,9 +267,14 @@ public class ProcessorStateManager implements StateManager {
         return registeredStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
+    /**
+     * @throws ProcessorStateException error when flushing the state store; for example IO exception
+     * @throws StreamsException fatal error sending changelog records that should cause the thread to die
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     */
     @Override
     public void flush() {
-        ProcessorStateException firstException = null;
+        RuntimeException firstException = null;
         // attempting to flush the stores
         if (!registeredStores.isEmpty()) {
             log.debug("Flushing all stores registered in the state manager");
@@ -276,7 +286,12 @@ public class ProcessorStateManager implements StateManager {
                         store.flush();
                     } catch (final RuntimeException e) {
                         if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+                            // do NOT wrap the error if it is actually caused by Streams itself
+                            if (e instanceof StreamsException)
+                                firstException = e;
+                            else
+                                firstException = new ProcessorStateException(
+                                    format("%sFailed to flush state store %s", logPrefix, store.name()), e);
                         }
                         log.error("Failed to flush state store {}: ", store.name(), e);
                     }
@@ -313,22 +328,13 @@ public class ProcessorStateManager implements StateManager {
                         registeredStores.put(store.name(), Optional.empty());
                     } catch (final RuntimeException e) {
                         if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, store.name()), e);
+                            firstException = new ProcessorStateException(format("%sFailed to close state store %s", logPrefix, store.name()), e);
                         }
                         log.error("Failed to close state store {}: ", store.name(), e);
                     }
                 } else {
                     log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
-            }
-        }
-
-        if (!clean && eosEnabled) {
-            // delete the checkpoint file if this is an unclean close
-            try {
-                clearCheckpoints();
-            } catch (final IOException e) {
-                throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
 

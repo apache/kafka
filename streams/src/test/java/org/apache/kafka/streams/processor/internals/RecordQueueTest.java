@@ -61,7 +61,6 @@ public class RecordQueueTest {
     final InternalMockProcessorContext context = new InternalMockProcessorContext(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
-            null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
             droppedRecordsSensor
