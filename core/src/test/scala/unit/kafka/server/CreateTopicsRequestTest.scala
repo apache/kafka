@@ -144,7 +144,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testAllCreateTopicsRequest(): Unit = {
+  def testCreateTopicsRequestVersions(): Unit = {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
