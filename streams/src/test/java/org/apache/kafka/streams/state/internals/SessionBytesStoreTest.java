@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.toSet;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -32,13 +34,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -63,6 +62,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+
 public abstract class SessionBytesStoreTest {
 
     static final long SEGMENT_INTERVAL = 60_000L;
@@ -70,16 +70,13 @@ public abstract class SessionBytesStoreTest {
 
     SessionStore<String, Long> sessionStore;
 
-    private InternalMockProcessorContext context;
-    private final Producer<byte[], byte[]> producer = new MockProducer<>(true,
-        Serdes.ByteArray().serializer(),
-        Serdes.ByteArray().serializer());
+    private MockRecordCollector recordCollector;
 
-    private final MockRecordCollector recordCollector = new MockRecordCollector();
+    private InternalMockProcessorContext context;
 
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                          final Serde<K> keySerde,
-                                                          final Serde<V> valueSerde);
+                                                         final Serde<K> keySerde,
+                                                         final Serde<V> valueSerde);
 
     abstract String getMetricsScope();
 
@@ -88,8 +85,7 @@ public abstract class SessionBytesStoreTest {
     @Before
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        recordCollector.init(producer);
-
+        recordCollector = new MockRecordCollector();
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -425,7 +421,6 @@ public abstract class SessionBytesStoreTest {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
-        recordCollector.init(producer);
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig),
@@ -562,23 +557,4 @@ public abstract class SessionBytesStoreTest {
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
                 + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
-
-    protected static <K, V> Set<V> valuesToSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<V> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
-
-    private static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
-    }
-
 }
