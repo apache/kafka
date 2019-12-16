@@ -21,6 +21,8 @@ import kafka.utils._
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfigCollection
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
@@ -142,17 +144,15 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testOldestCreateTopicsRequest(): Unit = {
-    for (version <- ApiKeys.CREATE_TOPICS.oldestVersion() to ApiKeys.CREATE_TOPICS.latestVersion()) {
+  def testAllCreateTopicsRequest(): Unit = {
+    for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
       data.setTimeoutMs(10000)
       data.setValidateOnly(false)
       data.setTopics(new CreatableTopicCollection(List(
-        new CreatableTopic()
-          .setName(topic)
-          .setNumPartitions(1)
-          .setReplicationFactor(1)
+        topicReq(topic, numPartitions = 1, replicationFactor = 1,
+          config = Map("min.insync.replicas" -> "2"))
       ).asJava.iterator()))
 
       val request = new CreateTopicsRequest.Builder(data).build(version.asInstanceOf[Short])
@@ -160,14 +160,18 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
       val topicResponse = response.data.topics.find(topic)
       assertNotNull(topicResponse)
-      assertEquals(topic, topicResponse.name())
-      assertEquals(Errors.NONE.code(), topicResponse.errorCode())
+      assertEquals(topic, topicResponse.name)
+      assertEquals(Errors.NONE.code, topicResponse.errorCode)
       if (version >= 5) {
-        assertEquals(1, topicResponse.numPartitions())
-        assertEquals(1, topicResponse.replicationFactor())
+        assertEquals(1, topicResponse.numPartitions)
+        assertEquals(1, topicResponse.replicationFactor)
+        val config = topicResponse.configs().asScala.find(_.name == "min.insync.replicas")
+        assertTrue(config.isDefined)
+        assertEquals("2", config.get.value)
       } else {
-        assertEquals(-1, topicResponse.numPartitions())
-        assertEquals(-1, topicResponse.replicationFactor())
+        assertEquals(-1, topicResponse.numPartitions)
+        assertEquals(-1, topicResponse.replicationFactor)
+        assertTrue(topicResponse.configs.isEmpty)
       }
     }
   }
