@@ -483,7 +483,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         args = self.args.copy()
         if self.KAFKA_STREAMS_VERSION in [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2),
                                           str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
-                                          str(LATEST_2_0), str(LATEST_2_1)]:
+                                          str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2)]:
             args['kafka'] = self.kafka.bootstrap_servers()
         else:
             args['kafka'] = ""
