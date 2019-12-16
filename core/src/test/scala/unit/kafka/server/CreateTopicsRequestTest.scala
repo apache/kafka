@@ -19,10 +19,7 @@ package kafka.server
 
 import kafka.utils._
 import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfigCollection
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
