@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -41,7 +42,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -65,13 +66,10 @@ import static org.junit.Assert.assertNull;
 
 @SuppressWarnings("unchecked")
 public class KTableImplTest {
-
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
@@ -94,30 +92,51 @@ public class KTableImplTest {
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(Integer::new);
-
         table2.toStream().process(supplier);
 
         final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);
-
         table3.toStream().process(supplier);
-
         table1.toStream().to(topic2, produced);
-        final KTable<String, String> table4 = builder.table(topic2, consumed);
 
+        final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "03"));
-            driver.pipeInput(recordFactory.create(topic1, "D", "04"));
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("A", "01", 5L);
+            inputTopic.pipeInput("B", "02", 100L);
+            inputTopic.pipeInput("C", "03", 0L);
+            inputTopic.pipeInput("D", "04", 0L);
+            inputTopic.pipeInput("A", "05", 10L);
+            inputTopic.pipeInput("A", "06", 8L);
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
-        assertEquals(asList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
-        assertEquals(asList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
-        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", 3, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", 5, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", null, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", null, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed);
     }
 
     @Test
@@ -246,10 +265,9 @@ public class KTableImplTest {
 
     @Test
     public void testStateStoreLazyEval() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -266,10 +284,9 @@ public class KTableImplTest {
 
     @Test
     public void testStateStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -301,10 +318,9 @@ public class KTableImplTest {
 
     @Test
     public void shouldCreateSourceAndSinkNodesForRepartitioningTopic() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(
@@ -356,7 +372,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSelectorOnToStream() {
-        table.toStream(null);
+        table.toStream((KeyValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)

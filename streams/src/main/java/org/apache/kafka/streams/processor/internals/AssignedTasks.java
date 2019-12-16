@@ -38,14 +38,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 abstract class AssignedTasks<T extends Task> {
     final Logger log;
-    private final String taskTypeName;
-    private final Map<TaskId, T> created = new HashMap<>();
-    private final Map<TaskId, T> suspended = new HashMap<>();
-    private final Set<TaskId> previousActiveTasks = new HashSet<>();
+    final String taskTypeName;
+    final Map<TaskId, T> created = new HashMap<>();
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
-    private final Map<TopicPartition, T> runningByPartition = new HashMap<>();
+    final Map<TopicPartition, T> runningByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
@@ -59,7 +57,7 @@ abstract class AssignedTasks<T extends Task> {
 
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
+     * @throws StreamsException if the store's changelog does not contain the partition
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void initializeNewTasks() {
@@ -69,92 +67,42 @@ abstract class AssignedTasks<T extends Task> {
         for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             try {
-                if (!entry.getValue().initializeStateStores()) {
+                final T task = entry.getValue();
+                task.initializeMetadata();
+
+                // don't remove from created until the task has been successfully initialized
+                removeTaskFromAllStateMaps(task, created);
+
+                if (!task.initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
+                    ((AssignedStreamsTasks) this).addTaskToRestoring((StreamTask) task);
                 } else {
-                    transitionToRunning(entry.getValue());
+                    transitionToRunning(task);
                 }
+
                 it.remove();
             } catch (final LockException e) {
-                // made this trace as it will spam the logs in the poll loop.
-                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
+                // If this is a permanent error, then we could spam the log since this is in the run loop. But, other related
+                // messages show up anyway. So keeping in debug for sake of faster discoverability of problem
+                log.debug("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
             }
         }
     }
 
     boolean allTasksRunning() {
-        return created.isEmpty()
-                && suspended.isEmpty();
+        return created.isEmpty();
     }
 
     Collection<T> running() {
         return running.values();
     }
 
-    RuntimeException suspend() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
-        firstException.compareAndSet(null, suspendTasks(running.values()));
-        log.trace("Close created {} {}", taskTypeName, created.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(created.values()));
-        previousActiveTasks.clear();
-        previousActiveTasks.addAll(running.keySet());
-        running.clear();
-        created.clear();
-        runningByPartition.clear();
-        return firstException.get();
-    }
-
-    RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
-        RuntimeException exception = null;
-        for (final T task : tasks) {
-            try {
-                task.close(false, false);
-            } catch (final RuntimeException e) {
-                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
-                if (exception == null) {
-                    exception = e;
-                }
-            }
-        }
-        return exception;
-    }
-
-    private RuntimeException suspendTasks(final Collection<T> tasks) {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final Iterator<T> it = tasks.iterator(); it.hasNext(); ) {
-            final T task = it.next();
-            try {
-                task.suspend();
-                suspended.put(task.id(), task);
-            } catch (final TaskMigratedException closeAsZombieAndSwallow) {
-                // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
-                log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
-                firstException.compareAndSet(null, closeZombieTask(task));
-                it.remove();
-            } catch (final RuntimeException e) {
-                log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
-                firstException.compareAndSet(null, e);
-                try {
-                    task.close(false, false);
-                } catch (final RuntimeException f) {
-                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
-                }
-            }
-        }
-        return firstException.get();
-    }
-
-    RuntimeException closeZombieTask(final T task) {
+    void tryCloseZombieTask(final T task) {
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
             log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
-            return e;
         }
-        return null;
     }
 
     boolean hasRunningTasks() {
@@ -164,41 +112,8 @@ abstract class AssignedTasks<T extends Task> {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-        if (suspended.containsKey(taskId)) {
-            final T task = suspended.get(taskId);
-            log.trace("found suspended {} {}", taskTypeName, taskId);
-            if (task.partitions().equals(partitions)) {
-                suspended.remove(taskId);
-                task.resume();
-                try {
-                    transitionToRunning(task);
-                } catch (final TaskMigratedException e) {
-                    // we need to catch migration exception internally since this function
-                    // is triggered in the rebalance callback
-                    log.info("Failed to resume {} {} since it got migrated to another thread already. " +
-                            "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
-                    final RuntimeException fatalException = closeZombieTask(task);
-                    running.remove(task.id());
-                    if (fatalException != null) {
-                        throw fatalException;
-                    }
-                    throw e;
-                }
-                log.trace("resuming suspended {} {}", taskTypeName, task.id());
-                return true;
-            } else {
-                log.warn("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-            }
-        }
-        return false;
-    }
-
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
     void transitionToRunning(final T task) {
-        log.debug("transitioning {} {} to running", taskTypeName, task.id());
+        log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
@@ -206,6 +121,27 @@ abstract class AssignedTasks<T extends Task> {
         }
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
+        }
+    }
+
+    /**
+     * Removes the passed in task (and its corresponding partitions) from all state maps and sets,
+     * except for the one it currently resides in.
+     *
+     * @param task the task to be removed
+     * @param currentStateMap the current state map, which the task should not be removed from
+     */
+    void removeTaskFromAllStateMaps(final T task, final Map<TaskId, T> currentStateMap) {
+        final TaskId id = task.id();
+        final Set<TopicPartition> taskPartitions = new HashSet<>(task.partitions());
+        taskPartitions.addAll(task.changelogPartitions());
+
+        if (currentStateMap != running) {
+            running.remove(id);
+            runningByPartition.keySet().removeAll(taskPartitions);
+        }
+        if (currentStateMap != created) {
+            created.remove(id);
         }
     }
 
@@ -228,16 +164,16 @@ abstract class AssignedTasks<T extends Task> {
 
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
-        describe(builder, running.values(), indent, "Running:");
-        describe(builder, suspended.values(), indent, "Suspended:");
-        describe(builder, created.values(), indent, "New:");
+        describeTasks(builder, running.values(), indent, "Running:");
+        describePartitions(builder, runningByPartition.keySet(), indent, "Running Partitions:");
+        describeTasks(builder, created.values(), indent, "New:");
         return builder.toString();
     }
 
-    void describe(final StringBuilder builder,
-                  final Collection<T> tasks,
-                  final String indent,
-                  final String name) {
+    void describeTasks(final StringBuilder builder,
+                       final Collection<T> tasks,
+                       final String indent,
+                       final String name) {
         builder.append(indent).append(name);
         for (final T t : tasks) {
             builder.append(indent).append(t.toString(indent + "\t\t"));
@@ -245,10 +181,20 @@ abstract class AssignedTasks<T extends Task> {
         builder.append("\n");
     }
 
+    void describePartitions(final StringBuilder builder,
+                            final Collection<TopicPartition> partitions,
+                            final String indent,
+                            final String name) {
+        builder.append(indent).append(name);
+        for (final TopicPartition tp : partitions) {
+            builder.append(indent).append(tp.toString());
+        }
+        builder.append("\n");
+    }
+
     List<T> allTasks() {
         final List<T> tasks = new ArrayList<>();
         tasks.addAll(running.values());
-        tasks.addAll(suspended.values());
         tasks.addAll(created.values());
         return tasks;
     }
@@ -256,7 +202,6 @@ abstract class AssignedTasks<T extends Task> {
     Set<TaskId> allAssignedTaskIds() {
         final Set<TaskId> taskIds = new HashSet<>();
         taskIds.addAll(running.keySet());
-        taskIds.addAll(suspended.keySet());
         taskIds.addAll(created.keySet());
         return taskIds;
     }
@@ -265,11 +210,6 @@ abstract class AssignedTasks<T extends Task> {
         runningByPartition.clear();
         running.clear();
         created.clear();
-        suspended.clear();
-    }
-
-    Set<TaskId> previousTaskIds() {
-        return previousActiveTasks;
     }
 
     /**
@@ -280,8 +220,7 @@ abstract class AssignedTasks<T extends Task> {
         int committed = 0;
         RuntimeException firstException = null;
 
-        for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
-            final T task = it.next();
+        for (final T task : running.values()) {
             try {
                 if (task.commitNeeded()) {
                     task.commit();
@@ -289,12 +228,7 @@ abstract class AssignedTasks<T extends Task> {
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
+                        "Will trigger a new rebalance and close all tasks as zombies together.", taskTypeName, task.id());
                 throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to commit {} {} due to the following error:",
@@ -314,44 +248,25 @@ abstract class AssignedTasks<T extends Task> {
         return committed;
     }
 
-    void closeNonAssignedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
-        final Iterator<T> standByTaskIterator = suspended.values().iterator();
-        while (standByTaskIterator.hasNext()) {
-            final T suspendedTask = standByTaskIterator.next();
-            if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {
-                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
-                try {
-                    suspendedTask.closeSuspended(true, false, null);
-                } catch (final Exception e) {
-                    log.error("Failed to remove suspended {} {} due to the following error:", taskTypeName, suspendedTask.id(), e);
-                } finally {
-                    standByTaskIterator.remove();
-                }
-            }
-        }
-    }
-
-    void close(final boolean clean) {
+    void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final T task : allTasks()) {
+
+        for (final T task: allTasks()) {
             try {
-                task.close(clean, false);
+                closeTask(task, clean);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to close {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
-                firstException.compareAndSet(null, closeZombieTask(task));
+                    "Closing it as zombie and move on.", taskTypeName, task.id());
+                tryCloseZombieTask(task);
             } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",
-                          task.getClass().getSimpleName(),
-                          task.id(),
-                          t);
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    t);
                 if (clean) {
-                    if (!closeUnclean(task)) {
-                        firstException.compareAndSet(null, t);
-                    }
-                } else {
-                    firstException.compareAndSet(null, t);
+                    closeUnclean(task);
                 }
+                firstException.compareAndSet(null, t);
             }
         }
 
@@ -363,7 +278,11 @@ abstract class AssignedTasks<T extends Task> {
         }
     }
 
-    private boolean closeUnclean(final T task) {
+    void closeTask(final T task, final boolean clean) {
+        task.close(clean, false);
+    }
+
+    private void closeUnclean(final T task) {
         log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
         try {
             task.close(false, false);
@@ -372,9 +291,7 @@ abstract class AssignedTasks<T extends Task> {
                 task.getClass().getSimpleName(),
                 task.id(),
                 fatalException);
-            return false;
         }
-
-        return true;
     }
+
 }

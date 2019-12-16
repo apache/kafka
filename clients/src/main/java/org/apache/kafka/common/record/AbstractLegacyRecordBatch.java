@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
@@ -32,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
@@ -226,7 +228,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(BufferSupplier.NO_CACHING);
     }
 
-    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
+    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
@@ -439,13 +441,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             BasicLegacyRecordBatch that = (BasicLegacyRecordBatch) o;
 
             return offset == that.offset &&
-                    (record != null ? record.equals(that.record) : that.record == null);
+                Objects.equals(record, that.record);
         }
 
         @Override
         public int hashCode() {
             int result = record != null ? record.hashCode() : 0;
-            result = 31 * result + (int) (offset ^ (offset >>> 32));
+            result = 31 * result + Long.hashCode(offset);
             return result;
         }
     }
@@ -502,6 +504,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
         }
 
+        /**
+         * LegacyRecordBatch does not implement this iterator and would hence fallback to the normal iterator.
+         *
+         * @return An iterator over the records contained within this batch
+         */
+        @Override
+        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
+            return CloseableIterator.wrap(iterator(bufferSupplier));
+        }
+
         @Override
         public void writeTo(ByteBufferOutputStream outputStream) {
             outputStream.write(buffer.duplicate());
@@ -516,7 +528,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
             ByteBufferLegacyRecordBatch that = (ByteBufferLegacyRecordBatch) o;
 
-            return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
+            return Objects.equals(buffer, that.buffer);
         }
 
         @Override

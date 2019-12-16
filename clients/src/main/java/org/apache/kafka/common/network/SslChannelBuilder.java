@@ -35,7 +35,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -51,7 +50,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private SslPrincipalMapper sslPrincipalMapper;
 
     /**
-     * Constructs a SSL channel builder. ListenerName is provided only
+     * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
     public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean isInterBrokerListener) {
@@ -63,8 +62,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            @SuppressWarnings("unchecked")
-            List<String> sslPrincipalMappingRules = (List<String>) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
+            String sslPrincipalMappingRules = (String) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
             this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
@@ -95,12 +93,15 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     }
 
     @Override
-    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
+    public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
+                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         try {
-            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
+            SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key,
+                peerHost(key), metadataRegistry);
+            Supplier<Authenticator> authenticatorCreator = () ->
+                new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -110,9 +111,11 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     @Override
     public void close() {}
 
-    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+    protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
+                                                    String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        return SslTransportLayer.create(id, key, sslFactory.createSslEngine(host, socketChannel.socket().getPort()));
+        return SslTransportLayer.create(id, key, sslFactory.createSslEngine(host, socketChannel.socket().getPort()),
+            metadataRegistry);
     }
 
     /**

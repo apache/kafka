@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -36,6 +35,8 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -54,12 +55,12 @@ public class InternalTopicManager {
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
     private final short replicationFactor;
-    private final AdminClient adminClient;
+    private final Admin adminClient;
 
     private final int retries;
     private final long retryBackOffMs;
 
-    public InternalTopicManager(final AdminClient adminClient,
+    public InternalTopicManager(final Admin adminClient,
                                 final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
@@ -72,9 +73,9 @@ public class InternalTopicManager {
         retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
         retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
-        log.debug("Configs:" + Utils.NL,
-            "\t{} = {}" + Utils.NL,
-            "\t{} = {}" + Utils.NL,
+        log.debug("Configs:" + Utils.NL +
+            "\t{} = {}" + Utils.NL +
+            "\t{} = {}" + Utils.NL +
             "\t{} = {}",
             AdminClientConfig.RETRIES_CONFIG, retries,
             StreamsConfig.REPLICATION_FACTOR_CONFIG, replicationFactor,
@@ -104,11 +105,11 @@ public class InternalTopicManager {
         while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
 
-            if (topicsNotReady.size() > 0) {
+            if (!topicsNotReady.isEmpty()) {
                 final Set<NewTopic> newTopics = new HashSet<>();
 
                 for (final String topicName : topicsNotReady) {
-                    final InternalTopicConfig internalTopicConfig = Utils.notNull(topics.get(topicName));
+                    final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
                     final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
                     log.debug("Going to create topic {} with {} partitions and config {}.",
@@ -120,7 +121,7 @@ public class InternalTopicManager {
                         new NewTopic(
                             internalTopicConfig.name(),
                             internalTopicConfig.numberOfPartitions(),
-                            replicationFactor)
+                            Optional.of(replicationFactor))
                             .configs(topicConfig));
                 }
 
@@ -156,12 +157,7 @@ public class InternalTopicManager {
             if (!topicsNotReady.isEmpty()) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
 
-                try {
-                    Thread.sleep(retryBackOffMs);
-                } catch (final InterruptedException e) {
-                    // this is okay, we just wake up early
-                    Thread.currentThread().interrupt();
-                }
+                Utils.sleep(retryBackOffMs);
 
                 remainingRetries--;
             }
@@ -204,9 +200,7 @@ public class InternalTopicManager {
             } catch (final ExecutionException couldNotDescribeTopicException) {
                 final Throwable cause = couldNotDescribeTopicException.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
-                    cause instanceof LeaderNotAvailableException ||
-                    (cause instanceof InvalidTopicException &&
-                        cause.getMessage().equals("Topic " + topicName + " not found."))) {
+                    cause instanceof LeaderNotAvailableException) {
                     // This topic didn't exist or leader is not known yet, proceed to try to create it
                     log.debug("Topic {} is unknown or not found, hence not existed yet.", topicName);
                 } else {
@@ -231,13 +225,13 @@ public class InternalTopicManager {
         final Set<String> topicsToCreate = new HashSet<>();
         for (final Map.Entry<String, InternalTopicConfig> entry : topicsMap.entrySet()) {
             final String topicName = entry.getKey();
-            final int numberOfPartitions = entry.getValue().numberOfPartitions();
-            if (existedTopicPartition.containsKey(topicName)) {
-                if (!existedTopicPartition.get(topicName).equals(numberOfPartitions)) {
+            final Optional<Integer> numberOfPartitions = entry.getValue().numberOfPartitions();
+            if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
+                if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
                             "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
-                        topicName, numberOfPartitions, existedTopicPartition.get(topicName));
+                        topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }

@@ -18,14 +18,19 @@ package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
+
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
+import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
+import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -37,6 +42,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -86,6 +92,58 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Test
+    public void testConnectionWithCustomKeyManager() throws Exception {
+
+        TestProviderCreator testProviderCreator = new TestProviderCreator();
+
+        int requestSize = 100 * 1024;
+        final String node = "0";
+        String request = TestUtils.randomString(requestSize);
+
+        Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(
+                TestKeyManagerFactory.ALGORITHM,
+                TestTrustManagerFactory.ALGORITHM
+        );
+        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
+        EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
+        server.start();
+        Time time = new MockTime();
+        File trustStoreFile = new File(TestKeyManagerFactory.TestKeyManager.mockTrustStoreFile);
+        Map<String, Object> sslClientConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT, trustStoreFile, "client");
+
+        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        channelBuilder.configure(sslClientConfigs);
+        Metrics metrics = new Metrics();
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+
+        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        while (!selector.connected().contains(node))
+            selector.poll(10000L);
+        while (!selector.isChannelReady(node))
+            selector.poll(10000L);
+
+        selector.send(createSend(node, request));
+
+        waitForBytesBuffered(selector, node);
+
+        TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
+            "Waiting for cipher metrics to be created.");
+        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
+        assertNotNull(selector.channel(node).channelMetadataRegistry().cipherInformation());
+
+        selector.close(node);
+        super.verifySelectorEmpty(selector);
+
+        assertEquals(1, cipherMetrics(metrics).size());
+        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
+
+        Security.removeProvider(testProviderCreator.getProvider().getName());
+        selector.close();
+        server.close();
+        metrics.close();
+    }
+
+    @Test
     public void testDisconnectWithIntermediateBufferedBytes() throws Exception {
         int requestSize = 100 * 1024;
         final String node = "0";
@@ -106,15 +164,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     private void waitForBytesBuffered(Selector selector, String node) throws Exception {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(0L);
-                    return selector.channel(node).hasBytesBuffered();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(0L);
+                return selector.channel(node).hasBytesBuffered();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 2000L, "Failed to reach socket state with bytes buffered");
     }
@@ -314,10 +369,11 @@ public class SslSelectorTest extends SelectorTest {
         }
 
         @Override
-        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
+                                                        String host, ChannelMetadataRegistry metadataRegistry) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
-            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
+            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
             return transportLayer;
         }
 
@@ -329,8 +385,9 @@ public class SslSelectorTest extends SelectorTest {
             static Map<String, TestSslTransportLayer> transportLayers = new HashMap<>();
             boolean muteSocket = false;
 
-            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-                super(channelId, key, sslEngine);
+            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+                                         ChannelMetadataRegistry metadataRegistry) throws IOException {
+                super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }
 
@@ -354,5 +411,4 @@ public class SslSelectorTest extends SelectorTest {
             }
         }
     }
-
 }

@@ -121,11 +121,6 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
                 return iterator.next();
             }
 
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
-            }
         };
     }
 
@@ -168,11 +163,6 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
                 return iterator.next();
             }
 
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
-            }
         };
     }
 
@@ -219,11 +209,6 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
                 return iterator.next();
             }
 
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
-            }
         };
     }
 
@@ -297,11 +282,6 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         @Override
         public KeyValue<Long, E> next() {
             return underlying.next();
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
         }
     }
 }

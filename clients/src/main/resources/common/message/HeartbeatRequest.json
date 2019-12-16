@@ -18,13 +18,21 @@
   "type": "request",
   "name": "HeartbeatRequest",
   // Version 1 and version 2 are the same as version 0.
-  "validVersions": "0-2",
+  //
+  // Starting from version 3, we add a new field called groupInstanceId to indicate member identity across restarts.
+  //
+  // Version 4 is the first flexible version.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group id." },
-    { "name": "Generationid", "type": "int32", "versions": "0+",
+    { "name": "GenerationId", "type": "int32", "versions": "0+",
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "0+",
-      "about": "The member ID." }
+      "about": "The member ID." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "3+",
+      "nullableVersions": "3+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." }
   ]
 }

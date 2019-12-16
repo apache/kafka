@@ -26,9 +26,7 @@ import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -40,19 +38,18 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class CompositeReadOnlyWindowStoreTest {
 
     private static final long WINDOW_SIZE = 30_000;
+
     private final String storeName = "window-store";
     private StateStoreProviderStub stubProviderOne;
     private StateStoreProviderStub stubProviderTwo;
     private CompositeReadOnlyWindowStore<String, String> windowStore;
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
     private ReadOnlyWindowStoreStub<String, String> otherUnderlyingStore;
-
-    @Rule
-    public final ExpectedException windowStoreIteratorException = ExpectedException.none();
 
     @Before
     public void before() {
@@ -151,9 +148,7 @@ public class CompositeReadOnlyWindowStoreTest {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-
-        windowStoreIteratorException.expect(NoSuchElementException.class);
-        windowStoreIterator.peekNextKey();
+        assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
     }
 
     @Test
@@ -161,9 +156,7 @@ public class CompositeReadOnlyWindowStoreTest {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-
-        windowStoreIteratorException.expect(NoSuchElementException.class);
-        windowStoreIterator.next();
+        assertThrows(NoSuchElementException.class, windowStoreIterator::next);
     }
 
     @Test

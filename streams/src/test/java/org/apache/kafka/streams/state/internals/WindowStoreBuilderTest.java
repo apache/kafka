@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -34,6 +33,8 @@ import org.junit.runner.RunWith;
 
 import java.util.Collections;
 
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
@@ -47,16 +48,16 @@ public class WindowStoreBuilderTest {
     private WindowStoreBuilder<String, String> builder;
 
     @Before
-    public void setUp() throws Exception {
-        EasyMock.expect(supplier.get()).andReturn(inner);
-        EasyMock.expect(supplier.name()).andReturn("name");
-        EasyMock.replay(supplier);
+    public void setUp() {
+        expect(supplier.get()).andReturn(inner);
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
 
-        builder = new WindowStoreBuilder<>(supplier,
-                                           Serdes.String(),
-                                           Serdes.String(),
-                                           new MockTime());
-
+        builder = new WindowStoreBuilder<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
     }
 
     @Test
@@ -68,21 +69,21 @@ public class WindowStoreBuilderTest {
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
         final WindowStore<String, String> store = builder.build();
-        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, instanceOf(ChangeLoggingWindowBytesStore.class));
     }
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
         final WindowStore<String, String> store = builder.withLoggingDisabled().build();
-        final StateStore next = ((WrappedStateStore) store).wrappedStore();
-        assertThat(next, CoreMatchers.<StateStore>equalTo(inner));
+        final StateStore next = ((WrappedStateStore) store).wrapped();
+        assertThat(next, CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
         final WindowStore<String, String> store = builder.withCachingEnabled().build();
-        final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
         assertThat(wrapped, instanceOf(CachingWindowStore.class));
     }
@@ -90,28 +91,29 @@ public class WindowStoreBuilderTest {
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         final WindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.<String, String>emptyMap())
+                .withLoggingEnabled(Collections.emptyMap())
                 .build();
-        final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingWindowBytesStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
+        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         final WindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.<String, String>emptyMap())
+                .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
                 .build();
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrappedStore();
-        final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrappedStore();
+        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
         assertThat(caching, instanceOf(CachingWindowStore.class));
         assertThat(changeLogging, instanceOf(ChangeLoggingWindowBytesStore.class));
-        assertThat(changeLogging.wrappedStore(), CoreMatchers.<StateStore>equalTo(inner));
+        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
+    @SuppressWarnings("all")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfInnerIsNull() {
         new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());

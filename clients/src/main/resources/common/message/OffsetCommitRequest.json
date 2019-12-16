@@ -26,19 +26,27 @@
   // Version 5 removes the retention time, which is now controlled only by a broker configuration.
   //
   // Version 6 adds the leader epoch for fencing.
-  "validVersions": "0-6",
+  //
+  // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
+  //
+  // Version 8 is the first flexible version.
+  "validVersions": "0-8",
+  "flexibleVersions": "8+",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
     { "name": "GenerationId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "1+", "ignorable": true,
       "about": "The member ID assigned by the group coordinator." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "7+",
+      "nullableVersions": "7+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
     { "name": "RetentionTimeMs", "type": "int64", "versions": "2-4", "default": "-1", "ignorable": true,
       "about": "The time period in ms to retain the offset." },
     { "name": "Topics", "type": "[]OffsetCommitRequestTopic", "versions": "0+",
       "about": "The topics to commit offsets for.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetCommitRequestPartition", "versions": "0+",
         "about": "Each partition to commit offsets for.", "fields": [

@@ -193,7 +193,7 @@ public class KeyValueStoreTestDriver<K, V> {
             "KeyValueStoreTestDriver",
             new LogContext("KeyValueStoreTestDriver "),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         ) {
             @Override
             public <K1, V1> void send(final String topic,
@@ -238,6 +238,7 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
         context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());

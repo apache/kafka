@@ -17,45 +17,55 @@
 
 package org.apache.kafka.connect.runtime.health;
 
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
-import org.apache.kafka.connect.runtime.HerderProvider;
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
+    
+    private final long herderRequestTimeoutMs;
+    private final ConnectClusterDetails clusterDetails;
+    private final Herder herder;
 
-    private HerderProvider herderProvider;
-
-    public ConnectClusterStateImpl(HerderProvider herderProvider) {
-        this.herderProvider = herderProvider;
+    public ConnectClusterStateImpl(
+        long connectorsTimeoutMs,
+        ConnectClusterDetails clusterDetails,
+        Herder herder
+    ) {
+        this.herderRequestTimeoutMs = connectorsTimeoutMs;
+        this.clusterDetails = clusterDetails;
+        this.herder = herder;
     }
 
     @Override
     public Collection<String> connectors() {
-        final Collection<String> connectors = new ArrayList<>();
-        herderProvider.get().connectors(new Callback<java.util.Collection<String>>() {
-            @Override
-            public void onCompletion(Throwable error, Collection<String> result) {
-                connectors.addAll(result);
-            }
-        });
-        return connectors;
+        FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
+        herder.connectors(connectorsCallback);
+        try {
+            return connectorsCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException("Failed to retrieve list of connectors", e);
+        }
     }
 
     @Override
     public ConnectorHealth connectorHealth(String connName) {
-
-        ConnectorStateInfo state = herderProvider.get().connectorStatus(connName);
+        ConnectorStateInfo state = herder.connectorStatus(connName);
         ConnectorState connectorState = new ConnectorState(
             state.connector().state(),
             state.connector().workerId(),
@@ -71,6 +81,25 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         return connectorHealth;
     }
 
+    @Override
+    public Map<String, String> connectorConfig(String connName) {
+        FutureCallback<Map<String, String>> connectorConfigCallback = new FutureCallback<>();
+        herder.connectorConfig(connName, connectorConfigCallback);
+        try {
+            return connectorConfigCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException(
+                String.format("Failed to retrieve configuration for connector '%s'", connName),
+                e
+            );
+        }
+    }
+
+    @Override
+    public ConnectClusterDetails clusterDetails() {
+        return clusterDetails;
+    }
+
     private Map<Integer, TaskState> taskStates(List<ConnectorStateInfo.TaskState> states) {
 
         Map<Integer, TaskState> taskStates = new HashMap<>();
@@ -78,7 +107,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         for (ConnectorStateInfo.TaskState state : states) {
             taskStates.put(
                 state.id(),
-                new TaskState(state.id(), state.workerId(), state.state(), state.trace())
+                new TaskState(state.id(), state.state(), state.workerId(), state.trace())
             );
         }
         return taskStates;

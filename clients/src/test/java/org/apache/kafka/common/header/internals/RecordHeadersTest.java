@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.common.header.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
-import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RecordHeadersTest {
 
@@ -204,6 +204,11 @@ public class RecordHeadersTest {
         //Ensure new headers are modified
         assertHeader("key", "value2", newHeaders.lastHeader("key"));
         assertEquals(2, getCount(newHeaders));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNpeWhenAddingNullHeader() {
+        new RecordHeaders().add(null);
     }
 
     private int getCount(Headers headers) {

@@ -32,12 +32,12 @@ import org.apache.kafka.streams.state.StateSerdes;
  */
 class StoreChangeLogger<K, V> {
 
-    protected final StateSerdes<K, V> serialization;
-
     private final String topic;
     private final int partition;
     private final ProcessorContext context;
     private final RecordCollector collector;
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
 
     StoreChangeLogger(final String storeName,
                       final ProcessorContext context,
@@ -49,20 +49,23 @@ class StoreChangeLogger<K, V> {
                               final ProcessorContext context,
                               final int partition,
                               final StateSerdes<K, V> serialization) {
-        this.topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+        topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         this.context = context;
         this.partition = partition;
-        this.serialization = serialization;
         this.collector = ((RecordCollector.Supplier) context).recordCollector();
+        keySerializer = serialization.keySerializer();
+        valueSerializer = serialization.valueSerializer();
     }
 
     void logChange(final K key,
                    final V value) {
-        if (collector != null) {
-            final Serializer<K> keySerializer = serialization.keySerializer();
-            final Serializer<V> valueSerializer = serialization.valueSerializer();
-            // Sending null headers to changelog topics (KIP-244)
-            collector.send(this.topic, key, value, null, this.partition, context.timestamp(), keySerializer, valueSerializer);
-        }
+        logChange(key, value, context.timestamp());
+    }
+
+    void logChange(final K key,
+                   final V value,
+                   final long timestamp) {
+        // Sending null headers to changelog topics (KIP-244)
+        collector.send(topic, key, value, null, partition, timestamp, keySerializer, valueSerializer);
     }
 }

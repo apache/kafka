@@ -20,12 +20,13 @@ import java.util
 
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException
@@ -36,9 +37,9 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: AdminClient = null
+  var adminClient: Admin = null
 
-  override def numBrokers = 1
+  override def brokerCount = 1
 
   @Before
   override def setUp(): Unit = {
@@ -47,11 +48,11 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
       enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
-    props.foreach(propertyOverrides)
+    props.foreach(brokerPropertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 

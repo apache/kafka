@@ -48,11 +48,15 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -106,7 +110,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
         changelogReader.restore(active);
         assertTrue(functionCalled.get());
     }
@@ -143,7 +148,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -155,7 +161,7 @@ public class StoreChangelogReaderTest {
     public void shouldRecoverFromInvalidOffsetExceptionAndFinishRestore() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        consumer.setException(new InvalidOffsetException("Try Again!") {
+        consumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(topicPartition);
@@ -167,7 +173,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         EasyMock.expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         EasyMock.replay(active, task);
@@ -181,7 +188,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
         // retry restore should succeed
         assertEquals(1, changelogReader.restore(active).size());
         assertThat(callback.restored.size(), equalTo(messages));
@@ -200,12 +208,13 @@ public class StoreChangelogReaderTest {
         consumer.assign(Collections.emptyList());
 
         final StateRestorer stateRestorer = new StateRestorer(
-                topicPartition,
-                restoreListener,
-                expiredCheckpoint,
-                Long.MAX_VALUE,
-                true,
-                "storeName");
+            topicPartition,
+            restoreListener,
+            expiredCheckpoint,
+            Long.MAX_VALUE,
+            true,
+            "storeName",
+            identity());
         changelogReader.register(stateRestorer);
 
         EasyMock.expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
@@ -234,7 +243,8 @@ public class StoreChangelogReaderTest {
             5L,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(5));
@@ -250,7 +260,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -266,7 +277,8 @@ public class StoreChangelogReaderTest {
             null,
             3,
             true,
-            "storeName");
+            "storeName",
+            identity());
         changelogReader.register(restorer);
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
@@ -293,21 +305,24 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName1"));
+            "storeName1",
+            identity()));
         changelogReader.register(new StateRestorer(
             one,
             restoreListener1,
             null,
             Long.MAX_VALUE,
             true,
-            "storeName2"));
+            "storeName2",
+            identity()));
         changelogReader.register(new StateRestorer(
             two,
             restoreListener2,
             null,
             Long.MAX_VALUE,
             true,
-            "storeName3"));
+            "storeName3",
+            identity()));
 
         expect(active.restoringTaskFor(one)).andStubReturn(task);
         expect(active.restoringTaskFor(two)).andStubReturn(task);
@@ -338,21 +353,24 @@ public class StoreChangelogReaderTest {
             0L,
             Long.MAX_VALUE,
             true,
-            "storeName1"));
+            "storeName1",
+            identity()));
         changelogReader.register(new StateRestorer(
             one,
             restoreListener1,
             0L,
             Long.MAX_VALUE,
             true,
-            "storeName2"));
+            "storeName2",
+            identity()));
         changelogReader.register(new StateRestorer(
             two,
             restoreListener2,
             0L,
             Long.MAX_VALUE,
             true,
-            "storeName3"));
+            "storeName3",
+            identity()));
 
         expect(active.restoringTaskFor(one)).andReturn(task);
         expect(active.restoringTaskFor(two)).andReturn(task);
@@ -386,7 +404,8 @@ public class StoreChangelogReaderTest {
             0L,
             5,
             true,
-            "storeName1"));
+            "storeName1",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -421,7 +440,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName");
+            "storeName",
+            identity());
         setupConsumer(0, topicPartition);
         changelogReader.register(restorer);
 
@@ -440,7 +460,8 @@ public class StoreChangelogReaderTest {
             endOffset,
             Long.MAX_VALUE,
             true,
-            "storeName");
+            "storeName",
+            identity());
 
         changelogReader.register(restorer);
 
@@ -458,7 +479,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -476,7 +498,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             false,
-            "storeName"));
+            "storeName",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -498,7 +521,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             false,
-            "storeName"));
+            "storeName",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -516,7 +540,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "store"));
+            "store",
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
 
@@ -537,7 +562,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             false,
-            "storeName"));
+            "storeName",
+            identity()));
 
         final TopicPartition postInitialization = new TopicPartition("other", 0);
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
@@ -558,7 +584,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             false,
-            "otherStore"));
+            "otherStore",
+            identity()));
 
         final Collection<TopicPartition> expected = Utils.mkSet(topicPartition, postInitialization);
         consumer.assign(expected);
@@ -581,7 +608,8 @@ public class StoreChangelogReaderTest {
             null,
             9L,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -593,6 +621,7 @@ public class StoreChangelogReaderTest {
     public void shouldNotThrowTaskMigratedExceptionDuringRestoreForChangelogTopicWhenEndOffsetNotExceededEOSEnabled() {
         final int totalMessages = 10;
         setupConsumer(totalMessages, topicPartition);
+        // EOS enabled simulated by setting offsets with commit marker
         // records have offsets of 0..9 10 is commit marker so 11 is end offset
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 11L));
 
@@ -602,13 +631,41 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
 
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(10));
+    }
+
+    @Test
+    public void shouldReinitializeStateStoresWhenNoCheckpointFoundAndEOSEnabled() {
+        final int totalMessages = 10;
+        setupConsumer(totalMessages, topicPartition);
+        // EOS enabled simulated by setting offsets with commit marker
+        // records have offsets of 0..9 10 is commit marker so 11 is end offset
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 11L));
+
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            null,
+            Long.MAX_VALUE,
+            true,
+            "storeName",
+            identity()));
+
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
+        expect(task.isEosEnabled()).andReturn(true);
+        task.reinitializeStateStoresForPartitions(Collections.singleton(anyObject(TopicPartition.class)));
+        expectLastCall();
+        replay(active, task);
+
+        changelogReader.restore(active);
+        verify(active, task);
     }
 
     @Test
@@ -622,7 +679,8 @@ public class StoreChangelogReaderTest {
             null,
             Long.MAX_VALUE,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -641,7 +699,8 @@ public class StoreChangelogReaderTest {
             null,
             5,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -661,7 +720,8 @@ public class StoreChangelogReaderTest {
             null,
             10,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -676,7 +736,8 @@ public class StoreChangelogReaderTest {
         assignPartition(totalMessages, topicPartition);
         // records 0..4 last offset before commit is 4
         addRecords(5, topicPartition, 0);
-        //EOS enabled so commit marker at offset 5 so records start at 6
+        // EOS enabled simulated by setting offsets with commit marker
+        // EOS enabled so commit marker at offset 5 so records start at 6
         addRecords(5, topicPartition, 6);
         consumer.assign(Collections.emptyList());
         // commit marker is 5 so ending offset is 12
@@ -688,7 +749,8 @@ public class StoreChangelogReaderTest {
             null,
             6,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -701,6 +763,7 @@ public class StoreChangelogReaderTest {
     public void shouldNotThrowTaskMigratedExceptionIfEndOffsetNotExceededDuringRestoreForSourceTopicEOSEnabled() {
         final int totalMessages = 10;
         setupConsumer(totalMessages, topicPartition);
+        // EOS enabled simulated by setting offsets with commit marker
         // records have offsets 0..9 10 is commit marker so 11 is ending offset
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 11L));
 
@@ -710,13 +773,72 @@ public class StoreChangelogReaderTest {
             null,
             11,
             true,
-            "storeName"));
+            "storeName",
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
 
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(10));
+    }
+
+    @Test
+    public void shouldRestoreUpToOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            2L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.restored.size(), equalTo(3));
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 2L, 4L, 3L);
+    }
+
+    @Test
+    public void shouldNotRestoreIfCheckpointIsEqualToOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            5L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
+    }
+
+    @Test
+    public void shouldNotRestoreIfCheckpointIsGreaterThanOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            10L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
     }
 
     private void setupConsumer(final long messages,

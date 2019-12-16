@@ -17,13 +17,16 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -41,19 +44,25 @@ public class StopReplicaResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        errors.put(new TopicPartition("foo", 0), Errors.NONE);
-        errors.put(new TopicPartition("foo", 1), Errors.NOT_LEADER_FOR_PARTITION);
-        StopReplicaResponse response = new StopReplicaResponse(Errors.UNKNOWN_SERVER_ERROR, errors);
+        List<StopReplicaPartitionError> errors = new ArrayList<>();
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(0));
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(1)
+            .setErrorCode(Errors.NOT_LEADER_FOR_PARTITION.code()));
+        StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData()
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setPartitionErrors(errors));
         assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
     }
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        errors.put(new TopicPartition("foo", 0), Errors.NONE);
-        errors.put(new TopicPartition("foo", 1), Errors.CLUSTER_AUTHORIZATION_FAILED);
-        StopReplicaResponse response = new StopReplicaResponse(Errors.NONE, errors);
+        List<StopReplicaPartitionError> errors = new ArrayList<>();
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(0));
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(1)
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
+        StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(errors));
         Map<Errors, Integer> errorCounts = response.errorCounts();
         assertEquals(2, errorCounts.size());
         assertEquals(1, errorCounts.get(Errors.NONE).intValue());
@@ -62,14 +71,15 @@ public class StopReplicaResponseTest {
 
     @Test
     public void testToString() {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        errors.put(new TopicPartition("foo", 0), Errors.NONE);
-        errors.put(new TopicPartition("foo", 1), Errors.CLUSTER_AUTHORIZATION_FAILED);
-        StopReplicaResponse response = new StopReplicaResponse(Errors.NONE, errors);
+        List<StopReplicaPartitionError> errors = new ArrayList<>();
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(0));
+        errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(1)
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
+        StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData().setPartitionErrors(errors));
         String responseStr = response.toString();
         assertTrue(responseStr.contains(StopReplicaResponse.class.getSimpleName()));
         assertTrue(responseStr.contains(errors.toString()));
-        assertTrue(responseStr.contains(Errors.NONE.name()));
+        assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
 }

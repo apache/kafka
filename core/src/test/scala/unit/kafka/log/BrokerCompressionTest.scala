@@ -19,7 +19,6 @@ package kafka.log
 
 import kafka.utils._
 import kafka.message._
-import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
 import org.junit.runner.RunWith
@@ -29,12 +28,12 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBat
 import org.apache.kafka.common.utils.Utils
 import java.util.{Collection, Properties}
 
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
 
 import scala.collection.JavaConverters._
 
 @RunWith(value = classOf[Parameterized])
-class BrokerCompressionTest(messageCompression: String, brokerCompression: String) extends JUnitSuite {
+class BrokerCompressionTest(messageCompression: String, brokerCompression: String) {
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
@@ -42,7 +41,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
   val logConfig = LogConfig()
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Utils.delete(tmpDir)
   }
 
@@ -50,7 +49,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
    * Test broker-side compression configuration
    */
   @Test
-  def testBrokerSideCompression() {
+  def testBrokerSideCompression(): Unit = {
     val messageCompressionCode = CompressionCodec.getCompressionCodec(messageCompression)
     val logProps = new Properties()
     logProps.put(LogConfig.CompressionTypeProp, brokerCompression)
@@ -65,8 +64,10 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
           new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
 
     def readBatch(offset: Int): RecordBatch = {
-      val fetchInfo = log.read(offset, 4096, maxOffset = None,
-        includeAbortedTxns = false, minOneMessage = true)
+      val fetchInfo = log.read(offset,
+        maxLength = 4096,
+        isolation = FetchLogEnd,
+        minOneMessage = true)
       fetchInfo.records.batches.iterator.next()
     }
 

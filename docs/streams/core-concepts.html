@@ -49,7 +49,7 @@
         <li>Has <b>no external dependencies on systems other than Apache Kafka itself</b> as the internal messaging layer; notably, it uses Kafka's partitioning model to horizontally scale processing while maintaining strong ordering guarantees.</li>
         <li>Supports <b>fault-tolerant local state</b>, which enables very fast and efficient stateful operations like windowed joins and aggregations.</li>
         <li>Supports <b>exactly-once</b> processing semantics to guarantee that each record will be processed once and only once even when there is a failure on either Streams clients or Kafka brokers in the middle of processing.</li>
-        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with late arrival of records.</li>
+        <li>Employs <b>one-record-at-a-time processing</b> to achieve millisecond processing latency, and supports <b>event-time based windowing operations</b> with out-of-order arrival of records.</li>
         <li>Offers necessary stream processing primitives, along with a <b>high-level Streams DSL</b> and a <b>low-level Processor API</b>.</li>
 
     </ul>
@@ -63,7 +63,7 @@
     <ul>
         <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
         <li>A <b>stream processing application</b> is any program that makes use of the Kafka Streams library. It defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
-        <li>A <b><a id="streams_processor_node" href="#streams_processor_node">stream processor</a></b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently produce one or more output records to its downstream processors. </li>
+        <li>A <a id="defining-a-stream-processor" href="/{{version}}/documentation/streams/developer-guide/processor-api#defining-a-stream-processor"><b>stream processor</b></a> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently produce one or more output records to its downstream processors. </li>
     </ul>
 
     There are two special processors in the topology:
@@ -124,7 +124,7 @@
     <ul>
         <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
         <li> When new output records are generated via periodic functions such as <code>Punctuator#punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
-        <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
+        <li> For aggregations, the timestamp of a result update record will be the maximum timestamp of all input records contributing to the result.</li>
     </ul>
 
     <p>
@@ -137,7 +137,7 @@
     </p>
 
     <p>
-        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the out-of-order arrival of further records after the value was produced and emitted. When such out-of-order arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
     </p>
 
     <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
@@ -145,10 +145,10 @@
         Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
     </p>
     <p>
-        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>retention period</strong> for the window. This retention period controls how long Kafka Streams will wait for <strong>out-of-order</strong> or <strong>late-arriving</strong> data records for a given window. If a record arrives after the retention period of a window has passed, the record is discarded and will not be processed in that window.
+        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>grace period</strong> for the window. This grace period controls how long Kafka Streams will wait for <strong>out-of-order</strong> data records for a given window. If a record arrives after the grace period of a window has passed, the record is discarded and will not be processed in that window. Specifically, a record is discarded if its timestamp dictates it belongs to a window, but the current stream time is greater than the end of the window plus the grace period.
     </p>
     <p>
-        Late-arriving records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how late records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records can only be considered as such (i.e. as arriving &quot;late&quot;) for event-time or ingestion-time semantics. In both cases, Kafka Streams is able to properly handle late-arriving records.
+        Out-of-order records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how out-of-order records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of out-of-order records is not applicable as, by definition, no record can be out-of-order. Hence, out-of-order records can only be considered as such for event-time. In both cases, Kafka Streams is able to properly handle out-of-order records.
     </p>
 
     <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
@@ -159,25 +159,24 @@
     </p>
 
     <p>
-        Any stream processing technology must therefore provide <strong>first-class support for streams and tables</strong>.
-        Kafka's Streams API provides such functionality through its core abstractions for
-        <code class="interpreted-text" data-role="ref">streams &lt;streams_concepts_kstream&gt;</code> and
-        <code class="interpreted-text" data-role="ref">tables &lt;streams_concepts_ktable&gt;</code>, which we will talk about in a minute.
-        Now, an interesting observation is that there is actually a <strong>close relationship between streams and tables</strong>,
-        the so-called stream-table duality.
-        And Kafka exploits this duality in many ways: for example, to make your applications
-        <code class="interpreted-text" data-role="ref">elastic &lt;streams_developer-guide_execution-scaling&gt;</code>,
-        to support <code class="interpreted-text" data-role="ref">fault-tolerant stateful processing &lt;streams_developer-guide_state-store_fault-tolerance&gt;</code>,
-        or to run <code class="interpreted-text" data-role="ref">interactive queries &lt;streams_concepts_interactive-queries&gt;</code>
-        against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
-        also allows developers to exploit this duality in their own applications.
-    </p>
+      Any stream processing technology must therefore provide <strong>first-class support for streams and tables</strong>.
+      Kafka's Streams API provides such functionality through its core abstractions for 
+      <a id="streams_concepts_kstream" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_kstream">streams</a>
+      and <a id="streams_concepts_ktable" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_ktable">tables</a>,
+      which we will talk about in a minute. Now, an interesting observation is that there is actually a <strong>close relationship between streams and tables</strong>,
+      the so-called stream-table duality. And Kafka exploits this duality in many ways: for example, to make your applications
+      <a id="streams-developer-guide-execution-scaling" href="/{{version}}/documentation/streams/developer-guide/running-app#elastic-scaling-of-your-application">elastic</a>,
+      to support <a id="streams_architecture_recovery" href="/{{version}}/documentation/streams/architecture#streams_architecture_recovery">fault-tolerant stateful processing</a>,
+      or to run <a id="streams-developer-guide-interactive-queries" href="/{{version}}/documentation/streams/developer-guide/interactive-queries#interactive-queries">interactive queries</a>
+      against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
+      also allows developers to exploit this duality in their own applications.
+  </p>
 
-    <p>
-        Before we discuss concepts such as <code class="interpreted-text" data-role="ref">aggregations &lt;streams_concepts_aggregations&gt;</code>
-        in Kafka Streams we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
-        Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
-    </p>
+  <p>
+      Before we discuss concepts such as <a id="streams-developer-guide-dsl-aggregating" href="/{{version}}/documentation/streams/developer-guide/dsl-api#aggregating">aggregations</a>
+      in Kafka Streams, we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
+      Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
+  </p>
 
     <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
@@ -185,7 +184,7 @@
         Some stream processing applications don't require state, which means the processing of a message is independent from
         the processing of all other messages.
         However, being able to maintain state opens up many possibilities for sophisticated stream processing applications: you
-        can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="/{{version}}/documentation/streams/developer-guide#streams_dsl"><b>Kafka Streams DSL</b></a>.
+        can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html"><b>Kafka Streams DSL</b></a>.
     </p>
     <p>
         Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data.
@@ -224,7 +223,7 @@
 
     <p>
         Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
-        handle <a href="https://www.confluent.io/wp-content/uploads/streams-tables-two-sides-same-coin.pdf">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
+        handle <a href="https://dl.acm.org/citation.cfm?id=3242155">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
         result in out-of-order data arrivals with respect to their timestamps:
     </p>
 

@@ -506,7 +506,7 @@ public class SimpleBenchmark {
                         }
                         iter.close();
 
-                        store.put(key, value);
+                        store.put(key, value, timestamp);
                     }
                 };
             }

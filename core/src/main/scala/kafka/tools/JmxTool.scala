@@ -18,17 +18,18 @@
  */
 package kafka.tools
 
-import java.util.Date
+import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
+import javax.rmi.ssl.SslRMIClientSocketFactory
 
 import joptsimple.OptionParser
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils , Exit, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 
 /**
@@ -39,7 +40,7 @@ import kafka.utils.{CommandLineUtils , Exit, Logging}
   */
 object JmxTool extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     // Parse command line
     val parser = new OptionParser(false)
     val objectNameOpt =
@@ -82,6 +83,16 @@ object JmxTool extends Logging {
       .describedAs("report-format")
       .ofType(classOf[java.lang.String])
       .defaultsTo("original")
+    val jmxAuthPropOpt = parser.accepts("jmx-auth-prop", "A mechanism to pass property in the form 'username=password' " +
+      "when enabling remote JMX with password authentication.")
+      .withRequiredArg
+      .describedAs("jmx-auth-prop")
+      .ofType(classOf[String])
+    val jmxSslEnableOpt = parser.accepts("jmx-ssl-enable", "Flag to enable remote JMX with SSL.")
+      .withRequiredArg
+      .describedAs("ssl-enable")
+      .ofType(classOf[java.lang.Boolean])
+      .defaultsTo(false)
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
     val helpOpt = parser.accepts("help", "Print usage information.")
@@ -109,6 +120,9 @@ object JmxTool extends Logging {
     val reportFormat = parseFormat(options.valueOf(reportFormatOpt).toLowerCase)
     val reportFormatOriginal = reportFormat.equals("original")
 
+    val enablePasswordAuth = options.has(jmxAuthPropOpt)
+    val enableSsl = options.has(jmxSslEnableOpt)
+
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
     var connected = false
@@ -117,7 +131,18 @@ object JmxTool extends Logging {
     do {
       try {
         System.err.println(s"Trying to connect to JMX url: $url.")
-        jmxc = JMXConnectorFactory.connect(url, null)
+        val env = new java.util.HashMap[String, AnyRef]
+        // ssl enable
+        if (enableSsl) {
+          val csf = new SslRMIClientSocketFactory
+          env.put("com.sun.jndi.rmi.factory.socket", csf)
+        }
+        // password authentication enable
+        if (enablePasswordAuth) {
+          val credentials = options.valueOf(jmxAuthPropOpt).split("=", 2)
+          env.put(JMXConnector.CREDENTIALS, credentials)
+        }
+        jmxc = JMXConnectorFactory.connect(url, env)
         mbsc = jmxc.getMBeanServerConnection
         connected = true
       } catch {
@@ -140,7 +165,7 @@ object JmxTool extends Logging {
       else
         List(null)
 
-    val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
+    val hasPatternQueries = queries.filterNot(Objects.isNull).exists((name: ObjectName) => name.isPattern)
 
     var names: Iterable[ObjectName] = null
     def namesSet = Option(names).toSet.flatten
@@ -165,12 +190,20 @@ object JmxTool extends Logging {
     }
 
     val numExpectedAttributes: Map[ObjectName, Int] =
-      if (attributesWhitelistExists)
-        queries.map((_, attributesWhitelist.get.length)).toMap
-      else {
-        names.map{(name: ObjectName) =>
+      if (!attributesWhitelistExists)
+        names.map{name: ObjectName =>
           val mbean = mbsc.getMBeanInfo(name)
           (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
+      else {
+        if (!hasPatternQueries)
+          names.map{name: ObjectName =>
+            val mbean = mbsc.getMBeanInfo(name)
+            val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
+            val expectedAttributes = attributes.asScala.asInstanceOf[mutable.Buffer[Attribute]]
+              .filter(attr => attributesWhitelist.get.contains(attr.getName))
+            (name, expectedAttributes.size)}.toMap.filter(_._2 > 0)
+        else
+          queries.map((_, attributesWhitelist.get.length)).toMap
       }
 
     if(numExpectedAttributes.isEmpty) {

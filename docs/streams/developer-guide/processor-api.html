@@ -195,7 +195,7 @@
                     <a class="reference internal" href="#streams-developer-guide-state-store-custom"><span class="std std-ref">implement your own custom store type</span></a>.
                     It&#8217;s common practice to leverage an existing store type via the <code class="docutils literal"><span class="pre">Stores</span></code> factory.</p>
                 <p>Note that, when using Kafka Streams, you normally don&#8217;t create or instantiate state stores directly in your code.
-                    Rather, you define state stores indirectly by creating a so-called <code class="docutils literal"><span class="pre">StoreBuilder</span></code>.  This buildeer is used by
+                    Rather, you define state stores indirectly by creating a so-called <code class="docutils literal"><span class="pre">StoreBuilder</span></code>.  This builder is used by
                     Kafka Streams as a factory to instantiate the actual state stores locally in application instances when and where
                     needed.</p>
                 <p>The following store types are available out of the box.</p>
@@ -227,7 +227,7 @@
                                 space.</li>
                             <li>RocksDB settings can be fine-tuned, see
                                 <a class="reference internal" href="config-streams.html#streams-developer-guide-rocksdb-config"><span class="std std-ref">RocksDB configuration</span></a>.</li>
-                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.PersistentKeyValueFactory.html">store variants</a>:
+                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore-java.lang.String-">store variants</a>:
                                 time window key-value store, session window key-value store.</li>
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating a persistent key-value store:</span>
@@ -258,6 +258,8 @@
                             <li>Useful when application instances run in an environment where local
                                 disk space is either not available or local disk space is wiped
                                 in-between app instance restarts.</li>
+                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore-java.lang.String-">store variants</a>:
+                                time window key-value store, session window key-value store.</li>
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating an in-memory key-value store:</span>
 <span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.</span>
@@ -287,11 +289,11 @@
                     you experience machine failure, the state store and the application&#8217;s state can be fully restored from its changelog. You can
                     <a class="reference internal" href="#streams-developer-guide-state-store-enable-disable-fault-tolerance"><span class="std std-ref">enable or disable this backup feature</span></a> for a
                     state store.</p>
-                <p>By default, persistent key-value stores are fault-tolerant.  They are backed by a
+                <p>Fault-tolerant state stores are backed by a
                     <a class="reference external" href="https://kafka.apache.org/documentation.html#compaction">compacted</a> changelog topic.  The purpose of compacting this
                     topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster,
                     and to minimize recovery time if a state store needs to be restored from its changelog topic.</p>
-                <p>Similarly, persistent window stores are fault-tolerant.  They are backed by a topic that uses both compaction and
+                <p>Fault-tolerant windowed state stores are backed by a topic that uses both compaction and
                     deletion. Because of the structure of the message keys that are being sent to the changelog topics, this combination of
                     deletion and compaction is required for the changelog topics of window stores. For window stores, the message keys are
                     composite keys that include the &#8220;normal&#8221; key and window timestamps.  For these types of composite keys it would not
@@ -307,7 +309,7 @@
                 <span id="streams-developer-guide-state-store-enable-disable-fault-tolerance"></span><h3><a class="toc-backref" href="#id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a><a class="headerlink" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" title="Permalink to this headline"></a></h3>
                 <p>You can enable or disable fault tolerance for a state store by enabling or disabling the change logging
                     of the store through <code class="docutils literal"><span class="pre">enableLogging()</span></code> and <code class="docutils literal"><span class="pre">disableLogging()</span></code>.
-                    You can also fine-tune the associated topic’s configuration if needed.</p>
+                    You can also fine-tune the associated topic&#8217;s configuration if needed.</p>
                 <p>Example for disabling fault-tolerance:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
@@ -324,14 +326,14 @@
                     <p class="last">If the changelog is disabled then the attached state store is no longer fault tolerant and it can&#8217;t have any <a class="reference internal" href="config-streams.html#streams-developer-guide-standby-replicas"><span class="std std-ref">standby replicas</span></a>.</p>
                 </div>
                 <p>Here is an example for enabling fault tolerance, with additional changelog-topic configuration:
-                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/core/src/main/scala/kafka/log/LogConfig.scala#L61">kafka.log.LogConfig</a>.
+                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala">kafka.log.LogConfig</a>.
                     Unrecognized configs will be ignored.</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
 
 <span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">changelogConfig</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">();</span>
 <span class="c1">// override min.insync.replicas</span>
-<span class="n">changelogConfig</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">&quot;min.insyc.replicas&quot;</span><span class="o">,</span> <span class="s">&quot;1&quot;</span><span class="o">)</span>
+<span class="n">changelogConfig</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">TopicConfig</span><span class="o">.</span><span class="na">MIN_IN_SYNC_REPLICAS_CONFIG</span><span class="o">,</span> <span class="s">&quot;1&quot;</span><span class="o">)</span>
 
 <span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span> <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
   <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>

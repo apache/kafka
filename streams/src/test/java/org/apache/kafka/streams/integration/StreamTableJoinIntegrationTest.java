@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -34,8 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -64,6 +64,7 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
     @Test
     public void testShouldAutoShutdownOnIncompleteMetadata() throws InterruptedException {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-incomplete");
+        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         final KStream<Long, String> notExistStream = builder.stream(INPUT_TOPIC_LEFT + "-not-existed");
 
@@ -79,64 +80,64 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         streams.setStreamThreadStateListener(listener);
         streams.start();
 
-        TestUtils.waitForCondition(listener::revokedToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
+        TestUtils.waitForCondition(listener::transitToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
 
         streams.close();
-        assertEquals(listener.createdToRevokedSeen(), true);
-        assertEquals(listener.revokedToPendingShutdownSeen(), true);
+        assertTrue(listener.transitToPendingShutdownSeen());
     }
 
     @Test
-    public void testInner() throws Exception {
+    public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
-        final List<List<String>> expectedResult = Arrays.asList(
-                null,
-                null,
-                null,
-                null,
-                Collections.singletonList("B-a"),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                Collections.singletonList("D-d")
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
         );
 
         leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
+        runTestWithDriver(expectedResult);
     }
 
     @Test
-    public void testLeft() throws Exception {
+    public void testLeft() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
+        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
-        final List<List<String>> expectedResult = Arrays.asList(
-                null,
-                null,
-                Collections.singletonList("A-null"),
-                null,
-                Collections.singletonList("B-a"),
-                null,
-                null,
-                null,
-                Collections.singletonList("C-null"),
-                null,
-                null,
-                null,
-                null,
-                null,
-                Collections.singletonList("D-d")
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
         );
 
         leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
-        runTest(expectedResult);
+        runTestWithDriver(expectedResult);
     }
 }

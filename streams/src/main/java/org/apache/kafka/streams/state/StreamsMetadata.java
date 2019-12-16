@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KafkaStreams;
 
 import java.util.Collections;
@@ -30,7 +29,6 @@ import java.util.Set;
  * the instance and the Set of {@link TopicPartition}s available on the instance.
  * NOTE: This is a point in time view. It may change when rebalances happen.
  */
-@InterfaceStability.Evolving
 public class StreamsMetadata {
     /**
      * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
@@ -69,6 +67,7 @@ public class StreamsMetadata {
         return hostInfo.host();
     }
 
+    @SuppressWarnings("unused")
     public int port() {
         return hostInfo.port();
     }

@@ -78,4 +78,9 @@ public class TaskDone extends TaskState {
     public boolean cancelled() {
         return cancelled;
     }
+
+    @Override
+    public TaskStateType stateType() {
+        return TaskStateType.DONE;
+    }
 }

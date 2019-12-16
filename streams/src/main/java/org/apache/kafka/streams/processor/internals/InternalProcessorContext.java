@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -47,6 +49,9 @@ public interface InternalProcessorContext extends ProcessorContext {
      */
     void setCurrentNode(ProcessorNode currentNode);
 
+    /**
+     * Get the current {@link ProcessorNode}
+     */
     ProcessorNode currentNode();
 
     /**
@@ -64,5 +69,14 @@ public interface InternalProcessorContext extends ProcessorContext {
      */
     void uninitialize();
 
-    long streamTime();
+    /**
+     * Get a correctly typed state store, given a handle on the original builder.
+     * @param builder
+     * @param <T>
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return (T) getStateStore(builder.name());
+    }
 }

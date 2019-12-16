@@ -25,15 +25,16 @@ import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, IsolationLevel, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.util.Random
 
 /**
@@ -44,7 +45,11 @@ class FetchRequestTest extends BaseRequestTest {
 
   private var producer: KafkaProducer[String, String] = null
 
-  override def tearDown() {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
+  }
+
+  override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
     super.tearDown()
@@ -66,8 +71,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, request.version)
+    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
   }
 
   private def initProducer(): Unit = {
@@ -205,7 +209,7 @@ class FetchRequestTest extends BaseRequestTest {
       Seq(topicPartition))).build()
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
-    assertEquals(Errors.NOT_LEADER_FOR_PARTITION, partitionData.error)
+    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionData.error)
   }
 
   @Test
@@ -238,14 +242,14 @@ class FetchRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NONE, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NONE, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
   /**
-   * Tests that down-conversions dont leak memory. Large down conversions are triggered
+   * Tests that down-conversions don't leak memory. Large down conversions are triggered
    * in the server. The client closes its connection after reading partial data when the
    * channel is muted in the server. If buffers are not released this will result in OOM.
    */
@@ -257,6 +261,7 @@ class FetchRequestTest extends BaseRequestTest {
     val batchSize = 4 * msgValueLen
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
       batchSize = batchSize,
       keySerializer = new StringSerializer,
       valueSerializer = new ByteArraySerializer)
@@ -278,7 +283,7 @@ class FetchRequestTest extends BaseRequestTest {
 
       val socket = connect(brokerSocketServer(leaderId))
       try {
-        send(fetchRequest, ApiKeys.FETCH, socket)
+        send(fetchRequest, socket)
         if (closeAfterPartialResponse) {
           // read some data to ensure broker has muted this channel and then close socket
           val size = new DataInputStream(socket.getInputStream).readInt()
@@ -289,7 +294,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(FetchResponse.parse(receive(socket), version))
+          Some(receive[FetchResponse[MemoryRecords]](socket, ApiKeys.FETCH, version))
         }
       } finally {
         socket.close()
@@ -555,7 +560,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
-    partitionData.records.records.asScala.toIndexedSeq
+    partitionData.records.records.asScala.toBuffer
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
@@ -573,7 +578,7 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val batches = records.batches.asScala.toIndexedSeq
+      val batches = records.batches.asScala.toBuffer
       assertTrue(batches.size < numMessagesPerPartition)
       val batchesSize = batches.map(_.sizeInBytes).sum
       responseSize += batchesSize

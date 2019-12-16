@@ -49,14 +49,26 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
+/**
+ * This test asserts that when Kafka Streams is closing and shuts
+ * down a StreamThread the closing of the GlobalStreamThread happens
+ * after all the StreamThreads are completely stopped.
+ *
+ * The test validates the Processor still has access to the GlobalStateStore while closing.
+ * Otherwise if the GlobalStreamThread were to close underneath the StreamThread
+ * an exception would be thrown as the GlobalStreamThread closes all global stores on closing.
+ */
 @Category({IntegrationTest.class})
 public class GlobalThreadShutDownOrderTest {
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
+    private final AtomicInteger closeCounter = new AtomicInteger(0);
+    private final int expectedCloseCount = 1;
 
     static {
         BROKER_CONFIG = new Properties();
@@ -88,7 +100,6 @@ public class GlobalThreadShutDownOrderTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
@@ -137,6 +148,7 @@ public class GlobalThreadShutDownOrderTest {
 
         final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);
+        assertEquals(expectedCloseCount, closeCounter.get());
     }
 
 
@@ -189,6 +201,7 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void close() {
+            closeCounter.getAndIncrement();
             final List<String> keys = Arrays.asList("A", "B", "C", "D");
             for (final String key : keys) {
                 // need to simulate thread slow in closing

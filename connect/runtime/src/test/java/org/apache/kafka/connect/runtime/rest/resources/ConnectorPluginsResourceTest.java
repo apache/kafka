@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.ws.rs.core.HttpHeaders;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -30,7 +31,6 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.apache.kafka.connect.runtime.TestSourceConnector;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -183,11 +183,11 @@ public class ConnectorPluginsResourceTest {
     @Before
     public void setUp() throws Exception {
         PowerMock.mockStatic(RestClient.class,
-                RestClient.class.getMethod("httpRequest", String.class, String.class, Object.class, TypeReference.class, WorkerConfig.class));
+                RestClient.class.getMethod("httpRequest", String.class, String.class, HttpHeaders.class, Object.class, TypeReference.class, WorkerConfig.class));
 
         plugins = PowerMock.createMock(Plugins.class);
         herder = PowerMock.createMock(AbstractHerder.class);
-        connectorPluginsResource = new ConnectorPluginsResource(new HerderProvider(herder));
+        connectorPluginsResource = new ConnectorPluginsResource(herder);
     }
 
     private void expectPlugins() {

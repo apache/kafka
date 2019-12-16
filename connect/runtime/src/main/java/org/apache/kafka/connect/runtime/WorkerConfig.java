@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -186,6 +187,14 @@ public class WorkerConfig extends AbstractConfig {
         + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
+    public static final String ADMIN_LISTENERS_CONFIG = "admin.listeners";
+    protected static final String ADMIN_LISTENERS_DOC = "List of comma-separated URIs the Admin REST API will listen on." +
+            " The supported protocols are HTTP and HTTPS." +
+            " An empty or blank string will disable this feature." +
+            " The default behavior is to use the regular listener (specified by the 'listeners' property).";
+    protected static final List<String> ADMIN_LISTENERS_DEFAULT = null;
+    public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
+
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
     protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
             + "contain plugins (connectors, converters, transformations). The list should consist"
@@ -211,6 +220,14 @@ public class WorkerConfig extends AbstractConfig {
             + "in the order specified. Implementing the interface  "
             + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
             + "Typically used to add custom capability like logging, security, etc. ";
+
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
+        "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
+        + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "
+        + "and `Principal`. ";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "None";
+
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
@@ -289,7 +306,11 @@ public class WorkerConfig extends AbstractConfig {
                         Collections.emptyList(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
-                        Importance.LOW, REST_EXTENSION_CLASSES_DOC);
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
+                        new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
+                .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
@@ -344,6 +365,10 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    public Integer getRebalanceTimeout() {
+        return null;
+    }
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
@@ -359,6 +384,33 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
+    }
+
+    private static class AdminListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+
+            if (!(value instanceof List)) {
+                throw new ConfigException("Invalid value type (list expected).");
+            }
+
+            List items = (List) value;
+            if (items.isEmpty()) {
+                return;
+            }
+
+            for (Object item: items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for admin listener (expected String).");
+                }
+                if (((String) item).trim().isEmpty()) {
+                    throw new ConfigException("Empty listener found when parsing list.");
+                }
+            }
+        }
     }
 
 }

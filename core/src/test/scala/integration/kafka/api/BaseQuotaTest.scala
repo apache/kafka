@@ -14,6 +14,7 @@
 
 package kafka.api
 
+import java.time.Duration
 import java.util.{Collections, HashMap, Properties}
 
 import kafka.api.QuotaTestClients._
@@ -32,7 +33,7 @@ import scala.collection.JavaConverters._
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
-  override val serverCount = 2
+  override val brokerCount = 2
 
   protected def producerClientId = "QuotasTestProducer-1"
   protected def consumerClientId = "QuotasTestConsumer-1"
@@ -65,18 +66,18 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   var quotaTestClients: QuotaTestClients = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     val numPartitions = 1
-    val leaders = createTopic(topic1, numPartitions, serverCount)
+    val leaders = createTopic(topic1, numPartitions, brokerCount)
     leaderNode = if (leaders(0) == servers.head.config.brokerId) servers.head else servers(1)
     followerNode = if (leaders(0) != servers.head.config.brokerId) servers.head else servers(1)
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
   @Test
-  def testThrottledProducerConsumer() {
+  def testThrottledProducerConsumer(): Unit = {
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
@@ -87,7 +88,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testProducerConsumerOverrideUnthrottled() {
+  def testProducerConsumerOverrideUnthrottled(): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, Long.MaxValue.toString)
@@ -106,7 +107,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testQuotaOverrideDelete() {
+  def testQuotaOverrideDelete(): Unit = {
     // Override producer and consumer quotas to unlimited
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Int.MaxValue)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Int.MaxValue)
@@ -131,7 +132,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testThrottledRequest() {
+  def testThrottledRequest(): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, 0.1)
 
@@ -140,7 +141,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
     while ((!throttled || quotaTestClients.exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
-      consumer.poll(100)
+      consumer.poll(Duration.ofMillis(100L))
       val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
@@ -167,8 +168,8 @@ abstract class QuotaTestClients(topic: String,
                                 val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
 
   def userPrincipal: KafkaPrincipal
-  def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double)
-  def removeQuotaOverrides()
+  def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit
+  def removeQuotaOverrides(): Unit
 
   def quotaMetricTags(clientId: String): Map[String, String]
 
@@ -197,7 +198,7 @@ abstract class QuotaTestClients(topic: String,
     var numConsumed = 0
     var throttled = false
     do {
-      numConsumed += consumer.poll(100).count
+      numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
     }  while (numConsumed < maxRecords && !throttled)
@@ -206,7 +207,7 @@ abstract class QuotaTestClients(topic: String,
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
       while (numConsumed < minRecords)
-        numConsumed += consumer.poll(100).count
+        numConsumed += consumer.poll(Duration.ofMillis(100L)).count
     }
     numConsumed
   }
@@ -247,7 +248,7 @@ abstract class QuotaTestClients(topic: String,
     leaderNode.metrics.metrics.get(metricName)
   }
 
-  def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean) {
+  def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
     val tags = new HashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
@@ -260,7 +261,7 @@ abstract class QuotaTestClients(topic: String,
       assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
   }
 
-  def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None) {
+  def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
     val tags = new HashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
@@ -283,7 +284,7 @@ abstract class QuotaTestClients(topic: String,
     props
   }
 
-  def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: KafkaServer = leaderNode) {
+  def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: KafkaServer = leaderNode): Unit = {
     TestUtils.retry(10000) {
       val quotaManagers = server.dataPlaneRequestProcessor.quotas
       val overrideProducerQuota = quota(quotaManagers.produce, userPrincipal, producerClientId)

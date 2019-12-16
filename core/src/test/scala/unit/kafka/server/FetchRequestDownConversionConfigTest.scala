@@ -23,7 +23,7 @@ import kafka.log.LogConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
@@ -32,7 +32,7 @@ import org.junit.Test
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
 
   override def setUp(): Unit = {
     super.setUp()
@@ -45,8 +45,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  override protected def propertyOverrides(properties: Properties): Unit = {
-    super.propertyOverrides(properties)
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
   }
 
@@ -79,8 +79,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   }
 
   private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, request.version)
+    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
   }
 
   /**

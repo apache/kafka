@@ -28,7 +28,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -41,7 +41,6 @@ import scala.collection._
 
 
 /**
- * This script can be used to change configs for topics/clients/brokers dynamically
  * This script can be used to change configs for topics/clients/users/brokers dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
@@ -50,12 +49,15 @@ import scala.collection._
  *     <li> user: --entity-type users --entity-name <user-principal>
  *     <li> <user, client>: --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
  *     <li> broker: --entity-type brokers --entity-name <broker>
+ *     <li> broker-logger: --entity-type broker-loggers --entity-name <broker>
  * </ul>
  * --entity-default may be used instead of --entity-name when describing or altering default configuration for users and clients.
  *
  */
 object ConfigCommand extends Config {
 
+  val BrokerLoggerConfigType = "broker-loggers"
+  val BrokerSupportedConfigTypes = Seq(ConfigType.Broker, BrokerLoggerConfigType)
   val DefaultScramIterations = 4096
   // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
   // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
@@ -88,6 +90,7 @@ object ConfigCommand extends Config {
         Exit.exit(1)
 
       case t: Throwable =>
+        logger.debug(s"Error while executing config command with args '${args.mkString(" ")}'", t)
         System.err.println(s"Error while executing config command with args '${args.mkString(" ")}'")
         t.printStackTrace(System.err)
         Exit.exit(1)
@@ -108,7 +111,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -125,7 +128,7 @@ object ConfigCommand extends Config {
       if (dynamicBrokerConfigs.nonEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
         val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
-        val info = "Broker configuraton updates using ZooKeeper are supported for bootstrapping before brokers" +
+        val info = "Broker configuration updates using ZooKeeper are supported for bootstrapping before brokers" +
           " are started to enable encrypted password configs to be stored in ZooKeeper."
         if (perBrokerConfig) {
           adminZkClient.parseBroker(entityName).foreach { brokerId =>
@@ -154,7 +157,7 @@ object ConfigCommand extends Config {
     println(s"Completed Updating config for entity: $entity.")
   }
 
-  private def preProcessScramCredentials(configsToBeAdded: Properties) {
+  private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
     def scramCredential(mechanism: ScramMechanism, credentialStr: String): String = {
       val pattern = "(?:iterations=([0-9]*),)?password=(.*)".r
       val (iterations, password) = credentialStr match {
@@ -191,9 +194,9 @@ object ConfigCommand extends Config {
    * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
-  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
+  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {
     val passwordEncoderConfigs = new Properties
-    passwordEncoderConfigs ++= configsToBeAdded.asScala.filterKeys(_.startsWith("password.encoder."))
+    passwordEncoderConfigs ++= configsToBeAdded.asScala.filter { case (key, _) => key.startsWith("password.encoder.") }
     if (!passwordEncoderConfigs.isEmpty) {
       info(s"Password encoder configs ${passwordEncoderConfigs.keySet} will be used for encrypting" +
         " passwords, but will not be stored in ZooKeeper.")
@@ -218,7 +221,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
     val entities = configEntity.getAllEntities(zkClient)
@@ -273,49 +276,61 @@ object ConfigCommand extends Config {
     val adminClient = JAdminClient.create(props)
     val entityName = if (opts.options.has(opts.entityName))
       opts.options.valueOf(opts.entityName)
-    else if (opts.options.has(opts.entityDefault))
+    else // default entity
       ""
-    else
-      throw new IllegalArgumentException("At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
 
     val entityTypes = opts.options.valuesOf(opts.entityType).asScala
     if (entityTypes.size != 1)
-      throw new IllegalArgumentException("Exactly one --entity-type must be specified with --bootstrap-server")
-    if (entityTypes.head != ConfigType.Broker)
-      throw new IllegalArgumentException(s"--zookeeper option must be specified for entity-type $entityTypes")
+      throw new IllegalArgumentException(s"Exactly one --entity-type (out of ${BrokerSupportedConfigTypes.mkString(",")}) must be specified with --bootstrap-server")
 
     try {
       if (opts.options.has(opts.alterOpt))
-        alterBrokerConfig(adminClient, opts, entityName)
+        alterBrokerConfig(adminClient, opts, entityTypes.head, entityName)
       else if (opts.options.has(opts.describeOpt))
-        describeBrokerConfig(adminClient, opts, entityName)
+        describeBrokerConfig(adminClient, opts, entityTypes.head, entityName)
     } finally {
       adminClient.close()
     }
   }
 
-  private[admin] def alterBrokerConfig(adminClient: JAdminClient, opts: ConfigCommandOptions, entityName: String) {
+  private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
+                                       entityType: String, entityName: String): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts).asScala.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
-    // compile the final set of configs
-    val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
-    val oldConfig = brokerConfig(adminClient, entityName, includeSynonyms = false)
+    if (entityType == ConfigType.Broker) {
+      val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
+      val oldConfig = brokerConfig(adminClient, entityName, includeSynonyms = false)
         .map { entry => (entry.name, entry) }.toMap
 
-    // fail the command if any of the configs to be deleted does not exist
-    val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-    if (invalidConfigs.nonEmpty)
-      throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+      // fail the command if any of the configs to be deleted does not exist
+      val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+      if (invalidConfigs.nonEmpty)
+        throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-    val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
-    val sensitiveEntries = newEntries.filter(_._2.value == null)
-    if (sensitiveEntries.nonEmpty)
-      throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-    val newConfig = new JConfig(newEntries.asJava.values)
+      val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
+      val sensitiveEntries = newEntries.filter(_._2.value == null)
+      if (sensitiveEntries.nonEmpty)
+        throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
+      val newConfig = new JConfig(newEntries.asJava.values)
 
-    val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-    adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+      val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+      adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+    } else if (entityType == BrokerLoggerConfigType) {
+      val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
+      val validLoggers = brokerLoggerConfigs(adminClient, entityName).map(_.name)
+      // fail the command if any of the configured broker loggers do not exist
+      val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
+      if (invalidBrokerLoggers.nonEmpty)
+        throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
+
+      val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+      val alterLogLevelEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+        ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+      ).asJavaCollection
+
+      adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+    }
 
     if (entityName.nonEmpty)
       println(s"Completed updating config for broker: $entityName.")
@@ -323,8 +338,13 @@ object ConfigCommand extends Config {
       println(s"Completed updating default config for brokers in the cluster,")
   }
 
-  private def describeBrokerConfig(adminClient: JAdminClient, opts: ConfigCommandOptions, entityName: String) {
-    val configs = brokerConfig(adminClient, entityName, includeSynonyms = true)
+  private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
+                                   entityType: String, entityName: String): Unit = {
+    val configs = if (entityType == ConfigType.Broker)
+      brokerConfig(adminClient, entityName, includeSynonyms = true)
+    else // broker logger
+      brokerLoggerConfigs(adminClient, entityName)
+
     if (entityName.nonEmpty)
       println(s"Configs for broker $entityName are:")
     else
@@ -335,7 +355,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def brokerConfig(adminClient: JAdminClient, entityName: String, includeSynonyms: Boolean): Seq[ConfigEntry] = {
+  private def brokerConfig(adminClient: Admin, entityName: String, includeSynonyms: Boolean): Seq[ConfigEntry] = {
     val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
     val configSource = if (!entityName.isEmpty)
       ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG
@@ -346,6 +366,15 @@ object ConfigCommand extends Config {
     configs.get(configResource).entries.asScala
       .filter(entry => entry.source == configSource)
       .toSeq
+  }
+
+  /**
+    * Returns all the valid broker logger configurations
+    */
+  private def brokerLoggerConfigs(adminClient: Admin, entityName: String): Seq[ConfigEntry] = {
+    val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
+    val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
+    configs.get(configResource).entries.asScala.toSeq
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
@@ -415,36 +444,25 @@ object ConfigCommand extends Config {
   }
 
   private[admin] def parseEntity(opts: ConfigCommandOptions): ConfigEntity = {
-    val entityTypes = opts.options.valuesOf(opts.entityType).asScala
+    val entityTypes = opts.entityTypes
+    val entityNames = opts.entityNames
     if (entityTypes.head == ConfigType.User || entityTypes.head == ConfigType.Client)
-      parseQuotaEntity(opts)
+      parseQuotaEntity(opts, entityTypes, entityNames)
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
-      val name = if (opts.options.has(opts.entityName))
-        Some(opts.options.valueOf(opts.entityName))
-      else if (entityTypes.head == ConfigType.Broker && opts.options.has(opts.entityDefault))
-        Some(ConfigEntityName.Default)
-      else
-        None
+      val name = entityNames.headOption match {
+        case Some("") => Some(ConfigEntityName.Default)
+        case v => v
+      }
       ConfigEntity(Entity(entityTypes.head, name), None)
     }
   }
 
-  private def entityNames(opts: ConfigCommandOptions): Seq[String] = {
-    val namesIterator = opts.options.valuesOf(opts.entityName).iterator
-    opts.options.specs.asScala
-      .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))
-      .map(spec => if (spec.options.contains("entity-name")) namesIterator.next else "")
-  }
-
-  private def parseQuotaEntity(opts: ConfigCommandOptions): ConfigEntity = {
-    val types = opts.options.valuesOf(opts.entityType).asScala
-    val names = entityNames(opts)
-
+  private def parseQuotaEntity(opts: ConfigCommandOptions, types: List[String], names: List[String]): ConfigEntity = {
     if (opts.options.has(opts.alterOpt) && names.size != types.size)
       throw new IllegalArgumentException("--entity-name or --entity-default must be specified with each --entity-type for --alter")
 
-    val reverse = types.size == 2 && types(0) == ConfigType.Client
+    val reverse = types.size == 2 && types.head == ConfigType.Client
     val entityTypes = if (reverse) types.reverse else types
     val sortedNames = (if (reverse && names.length == 2) names.reverse else names).iterator
 
@@ -465,7 +483,7 @@ object ConfigCommand extends Config {
 
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
             "Multiple URLS can be given to allow fail-over.")
             .withRequiredArg
             .describedAs("urls")
@@ -482,7 +500,7 @@ object ConfigCommand extends Config {
       .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
             .withRequiredArg
             .ofType(classOf[String])
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
@@ -493,9 +511,9 @@ object ConfigCommand extends Config {
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
             "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
@@ -504,45 +522,122 @@ object ConfigCommand extends Config {
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
     val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val topic = parser.accepts("topic", "The topic's name.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val client = parser.accepts("client", "The client's ID.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val clientDefaults = parser.accepts("client-defaults", "The config defaults for all clients.")
+    val user = parser.accepts("user", "The user's principal name.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val userDefaults = parser.accepts("user-defaults", "The config defaults for all users.")
+    val broker = parser.accepts("broker", "The broker's ID.")
+      .withRequiredArg
+      .ofType(classOf[String])
+    val brokerDefaults = parser.accepts("broker-defaults", "The config defaults for all brokers.")
+    val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
+      .withRequiredArg
+      .ofType(classOf[String])
     options = parser.parse(args : _*)
 
-    val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
+    private val entityFlags = List((topic, ConfigType.Topic),
+      (client, ConfigType.Client),
+      (user, ConfigType.User),
+      (broker, ConfigType.Broker),
+      (brokerLogger, BrokerLoggerConfigType))
 
-    def checkArgs() {
+    private val entityDefaultsFlags = List((clientDefaults, ConfigType.Client),
+      (userDefaults, ConfigType.User),
+      (brokerDefaults, ConfigType.Broker))
+
+    private[admin] def entityTypes(): List[String] = {
+      options.valuesOf(entityType).asScala.toList ++
+        (entityFlags ++ entityDefaultsFlags).filter(entity => options.has(entity._1)).map(_._2)
+    }
+
+    private[admin] def entityNames(): List[String] = {
+      val namesIterator = options.valuesOf(entityName).iterator
+      options.specs.asScala
+        .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))
+        .map(spec => if (spec.options.contains("entity-name")) namesIterator.next else "").toList ++
+      entityFlags
+        .filter(entity => options.has(entity._1))
+        .map(entity => options.valueOf(entity._1)) ++
+      entityDefaultsFlags
+        .filter(entity => options.has(entity._1))
+        .map(_ => "")
+    }
+
+    def checkArgs(): Unit = {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
-      if(actions != 1)
+      if (actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
-
       // check required args
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
-      val entityTypeVals = options.valuesOf(entityType).asScala
 
-      if (options.has(bootstrapServerOpt) == options.has(zkConnectOpt))
+      val entityTypeVals = entityTypes
+      if (entityTypeVals.size != entityTypeVals.distinct.size)
+        throw new IllegalArgumentException(s"Duplicate entity type(s) specified: ${entityTypeVals.diff(entityTypeVals.distinct).mkString(",")}")
+
+      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
+        (BrokerSupportedConfigTypes, "--bootstrap-server")
+      else
+        (ConfigType.all, "--zookeeper")
+
+      entityTypeVals.foreach(entityTypeVal =>
+        if (!allowedEntityTypes.contains(entityTypeVal))
+          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
+      )
+      if (entityTypeVals.isEmpty)
+        throw new IllegalArgumentException("At least one entity type must be specified")
+      else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
+        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
+
+      if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&
+        (entityFlags ++ entityDefaultsFlags).exists(entity => options.has(entity._1)))
+        throw new IllegalArgumentException("--entity-{type,name,default} should not be used in conjunction with specific entity flags")
+
+      val hasEntityName = options.has(entityName) || entityFlags.exists(entity => options.has(entity._1))
+      val hasEntityDefault = options.has(entityDefault) || entityDefaultsFlags.exists(entity => options.has(entity._1))
+
+      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
+        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
+      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+      else if (options.has(bootstrapServerOpt) && !hasEntityName && !hasEntityDefault)
+        throw new IllegalArgumentException(s"At least one entity name or default entity must be specified with --bootstrap-server")
+
+      if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
+        Seq(entityName, broker, brokerLogger).filter(options.has(_)).map(options.valueOf(_)).foreach { brokerId =>
+          try brokerId.toInt catch {
+            case _: NumberFormatException =>
+              throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid integer broker id, but it is: $brokerId")
+          }
+        }
+      }
+
       if (entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Topic) || entityTypeVals.contains(ConfigType.User))
-        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
-      if(options.has(alterOpt)) {
+        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+
+      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+        throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+
+      if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Broker)) {
-          if (!options.has(entityName) && !options.has(entityDefault))
-            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
-        } else if (!options.has(entityName))
-            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}")
+          if (!hasEntityName && !hasEntityDefault)
+            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients or brokers")
+        } else if (!hasEntityName)
+          throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if(! isAddConfigPresent && ! isDeleteConfigPresent)
+        if (!isAddConfigPresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      entityTypeVals.foreach(entityTypeVal =>
-        if (!ConfigType.all.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity-type ${entityTypeVal}, --entity-type must be one of ${ConfigType.all}")
-      )
-      if (entityTypeVals.isEmpty)
-        throw new IllegalArgumentException("At least one --entity-type must be specified")
-      else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
-        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
     }
   }
 }

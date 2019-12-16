@@ -20,11 +20,18 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 adds the current leader epoch to support fencing.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds ReplicaId (the default is -2 which conventionally represents a
+  //    "debug" consumer which is allowed to see offsets beyond the high watermark).
+  //    Followers will use this replicaId when using an older version of the protocol.
+  "validVersions": "0-3",
+  "flexibleVersions": "none",
   "fields": [
+    { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true,
+      "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
     { "name": "Topics", "type": "[]OffsetForLeaderTopic", "versions": "0+",
       "about": "Each topic to get offsets for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetForLeaderPartition", "versions": "0+",
         "about": "Each partition to get offsets for.", "fields": [

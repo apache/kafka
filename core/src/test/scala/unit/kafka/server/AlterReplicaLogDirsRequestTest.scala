@@ -17,12 +17,11 @@
 
 package kafka.server
 
-import kafka.network.SocketServer
-import kafka.utils._
 import java.io.File
 
+import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -33,12 +32,12 @@ import scala.util.Random
 
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 5
-  override val numBrokers = 1
+  override val brokerCount = 1
 
   val topic = "topic"
 
   @Test
-  def testAlterReplicaLogDirsRequest() {
+  def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
     // Alter replica dir before topic creation
@@ -110,10 +109,9 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 2)))
   }
 
-  private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String], socketServer: SocketServer = controllerSocketServer): AlterReplicaLogDirsResponse = {
+  private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String]): AlterReplicaLogDirsResponse = {
     val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
-    val response = connectAndSend(request, ApiKeys.ALTER_REPLICA_LOG_DIRS, socketServer)
-    AlterReplicaLogDirsResponse.parse(response, request.version)
+    connectAndReceive[AlterReplicaLogDirsResponse](request, destination = controllerSocketServer)
   }
 
 }

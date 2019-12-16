@@ -24,32 +24,32 @@ import org.junit.Assert._
 import java.util.{Arrays, Collections}
 
 import org.junit._
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 
-class OffsetIndexTest extends JUnitSuite {
+class OffsetIndexTest {
   
   var idx: OffsetIndex = null
   val maxEntries = 30
   val baseOffset = 45L
   
   @Before
-  def setup() {
+  def setup(): Unit = {
     this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 8)
   }
   
   @After
-  def teardown() {
+  def teardown(): Unit = {
     if(this.idx != null)
       this.idx.file.delete()
   }
   
   @Test
-  def randomLookupTest() {
+  def randomLookupTest(): Unit = {
     assertEquals("Not present value should return physical offset 0.", OffsetPosition(idx.baseOffset, 0), idx.lookup(92L))
     
     // append some random values
@@ -77,7 +77,7 @@ class OffsetIndexTest extends JUnitSuite {
   }
   
   @Test
-  def lookupExtremeCases() {
+  def lookupExtremeCases(): Unit = {
     assertEquals("Lookup on empty file", OffsetPosition(idx.baseOffset, 0), idx.lookup(idx.baseOffset))
     for(i <- 0 until idx.maxEntries)
       idx.append(idx.baseOffset + i + 1, i)
@@ -85,9 +85,22 @@ class OffsetIndexTest extends JUnitSuite {
     assertEquals(OffsetPosition(idx.baseOffset, 0), idx.lookup(idx.baseOffset))
     assertEquals(OffsetPosition(idx.baseOffset + idx.maxEntries, idx.maxEntries - 1), idx.lookup(idx.baseOffset + idx.maxEntries))
   }
+
+  @Test
+  def testEntry(): Unit = {
+    for (i <- 0 until idx.maxEntries)
+      idx.append(idx.baseOffset + i + 1, i)
+    for (i <- 0 until idx.maxEntries)
+      assertEquals(OffsetPosition(idx.baseOffset + i + 1, i), idx.entry(i))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntryOverflow(): Unit = {
+    idx.entry(0)
+  }
   
   @Test
-  def appendTooMany() {
+  def appendTooMany(): Unit = {
     for(i <- 0 until idx.maxEntries) {
       val offset = idx.baseOffset + i + 1
       idx.append(offset, i)
@@ -96,13 +109,13 @@ class OffsetIndexTest extends JUnitSuite {
   }
   
   @Test(expected = classOf[InvalidOffsetException])
-  def appendOutOfOrder() {
+  def appendOutOfOrder(): Unit = {
     idx.append(51, 0)
     idx.append(50, 1)
   }
 
   @Test
-  def testFetchUpperBoundOffset() {
+  def testFetchUpperBoundOffset(): Unit = {
     val first = OffsetPosition(baseOffset + 0, 0)
     val second = OffsetPosition(baseOffset + 1, 10)
     val third = OffsetPosition(baseOffset + 2, 23)
@@ -124,7 +137,7 @@ class OffsetIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testReopen() {
+  def testReopen(): Unit = {
     val first = OffsetPosition(51, 0)
     val sec = OffsetPosition(52, 1)
     idx.append(first.offset, first.position)
@@ -139,7 +152,7 @@ class OffsetIndexTest extends JUnitSuite {
   }
   
   @Test
-  def truncate() {
+  def truncate(): Unit = {
 	val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
 	idx.truncate()
     for(i <- 1 until 10)
@@ -188,7 +201,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.sanityCheck()
   }
   
-  def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {
+  def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]): Unit = {
     try {
       idx.append(offset, 1)
       fail(message)

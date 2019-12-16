@@ -25,9 +25,12 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -63,35 +66,35 @@ public class StreamsBuilder {
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic name; cannot be {@code null}
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
         return stream(Collections.singleton(topic));
     }
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
      * are defined by the options in {@link Consumed} are used.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic names; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
@@ -145,7 +148,9 @@ public class StreamsBuilder {
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -164,7 +169,9 @@ public class StreamsBuilder {
      * are defined by the options in {@link Consumed} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
-     * them and there is no ordering guarantee between records from different topics.
+     * them and there is no ordering guarantee between records from different topics. This also means that the work
+     * will not be parallelized for multiple topics, and the number of tasks will scale with the maximum partition
+     * count of any matching topic rather than the total number of partitions across all topics.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -226,8 +233,10 @@ public class StreamsBuilder {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
+
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
+
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
@@ -277,8 +286,12 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()), internalStreamsBuilder, topic + "-");
+            new MaterializedInternal<>(
+                    Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                    internalStreamsBuilder, topic + "-");
+
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
@@ -304,8 +317,10 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
+
         final ConsumedInternal<K, V> consumedInternal =
                 new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
 
@@ -333,8 +348,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()), internalStreamsBuilder, topic + "-");
+            new MaterializedInternal<>(
+                Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
+                internalStreamsBuilder, topic + "-");
 
         return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
@@ -400,6 +418,7 @@ public class StreamsBuilder {
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
         materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
+
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
 
@@ -447,6 +466,9 @@ public class StreamsBuilder {
 
     /**
      * Adds a state store to the underlying {@link Topology}.
+     * <p>
+     * It is required to connect state stores to {@link Processor Processors}, {@link Transformer Transformers},
+     * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
      * @return itself
@@ -489,9 +511,14 @@ public class StreamsBuilder {
      * of the input topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
+     * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
+     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
+     * from the source.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
+     * <p>
+     * It is not required to connect a global store to {@link Processor Processors}, {@link Transformer Transformers},
+     * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from

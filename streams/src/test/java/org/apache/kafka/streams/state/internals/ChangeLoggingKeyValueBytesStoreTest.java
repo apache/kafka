@@ -42,8 +42,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ChangeLoggingKeyValueBytesStoreTest {
 
-    private InternalMockProcessorContext context;
-    private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
+    private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
     private final Map<Object, Object> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
@@ -66,7 +65,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
                 sent.put(key, value);
             }
         };
-        context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
@@ -90,7 +89,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldLogChangeOnPut() {
         store.put(hi, there);
-        assertThat((byte[]) sent.get(hi), equalTo(there));
+        assertThat(sent.get(hi), equalTo(there));
     }
 
     @Test
@@ -105,8 +104,8 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldLogChangesOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, there),
                                    KeyValue.pair(hello, world)));
-        assertThat((byte[]) sent.get(hi), equalTo(there));
-        assertThat((byte[]) sent.get(hello), equalTo(world));
+        assertThat(sent.get(hi), equalTo(there));
+        assertThat(sent.get(hello), equalTo(world));
     }
 
     @Test
@@ -147,14 +146,14 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         store.putIfAbsent(hi, there);
-        assertThat((byte[]) sent.get(hi), equalTo(there));
+        assertThat(sent.get(hi), equalTo(there));
     }
 
     @Test
     public void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
-        assertThat((byte[]) sent.get(hi), equalTo(there));
+        assertThat(sent.get(hi), equalTo(there));
     }
 
     @Test

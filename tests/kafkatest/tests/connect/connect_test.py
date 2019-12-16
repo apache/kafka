@@ -22,8 +22,7 @@ from ducktape.errors import TimeoutError
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.connect import ConnectStandaloneService
-from kafkatest.services.connect import ErrorTolerance
+from kafkatest.services.connect import ConnectServiceBase, ConnectStandaloneService, ErrorTolerance
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -47,7 +46,7 @@ class ConnectStandaloneFileTest(Test):
 
     OFFSETS_FILE = "/mnt/connect.offsets"
 
-    TOPIC = "${file:/mnt/connect/connect-external-configs.properties:topic.external}"
+    TOPIC = "${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
     TOPIC_TEST = "test"
 
     FIRST_INPUT_LIST = ["foo", "bar", "baz"]

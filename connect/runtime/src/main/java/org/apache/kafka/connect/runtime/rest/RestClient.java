@@ -19,6 +19,10 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
+
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -50,17 +54,39 @@ public class RestClient {
      *
      * @param url             HTTP connection will be established with this url.
      * @param method          HTTP method ("GET", "POST", "PUT", etc.)
+     * @param headers         HTTP headers from REST endpoint
      * @param requestBodyData Object to serialize as JSON and send in the request body.
      * @param responseFormat  Expected format of the response to the HTTP request.
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
+    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat, WorkerConfig config) {
+        return httpRequest(url, method, headers, requestBodyData, responseFormat, config, null, null);
+    }
+
+    /**
+     * Sends HTTP request to remote REST server
+     *
+     * @param url                       HTTP connection will be established with this url.
+     * @param method                    HTTP method ("GET", "POST", "PUT", etc.)
+     * @param headers                   HTTP headers from REST endpoint
+     * @param requestBodyData           Object to serialize as JSON and send in the request body.
+     * @param responseFormat            Expected format of the response to the HTTP request.
+     * @param <T>                       The type of the deserialized response to the HTTP request.
+     * @param sessionKey                The key to sign the request with (intended for internal requests only);
+     *                                  may be null if the request doesn't need to be signed
+     * @param requestSignatureAlgorithm The algorithm to sign the request with (intended for internal requests only);
+     *                                  may be null if the request doesn't need to be signed
+     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     */
+    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat, WorkerConfig config,
+                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
         HttpClient client;
 
         if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createSslContextFactory(config, true));
+            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
         } else {
             client = new HttpClient();
         }
@@ -82,8 +108,18 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
+            addHeadersToRequest(headers, req);
+
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+                if (sessionKey != null && requestSignatureAlgorithm != null) {
+                    InternalRequestSignature.addToRequest(
+                        sessionKey,
+                        serializedBody.getBytes(StandardCharsets.UTF_8),
+                        requestSignatureAlgorithm,
+                        req
+                    );
+                }
             }
 
             ContentResponse res = req.send();
@@ -107,12 +143,26 @@ public class RestClient {
             log.error("IO error forwarding REST request: ", e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
         } finally {
-            if (client != null)
-                try {
-                    client.stop();
-                } catch (Exception e) {
-                    log.error("Failed to stop HTTP client", e);
-                }
+            try {
+                client.stop();
+            } catch (Exception e) {
+                log.error("Failed to stop HTTP client", e);
+            }
+        }
+    }
+
+
+    /**
+     * Extract headers from REST call and add to client request
+     * @param headers         Headers from REST endpoint
+     * @param req             The client request to modify
+     */
+    private static void addHeadersToRequest(HttpHeaders headers, Request req) {
+        if (headers != null) {
+            String credentialAuthorization = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
+            if (credentialAuthorization != null) {
+                req.header(HttpHeaders.AUTHORIZATION, credentialAuthorization);
+            }
         }
     }
 

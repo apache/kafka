@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -29,6 +28,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +49,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
@@ -83,7 +84,7 @@ public class InternalTopologyBuilder {
     // map from source processor names to regex subscription patterns
     private final Map<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
 
-    // map from sink processor names to subscribed topic (without application-id prefix for internal topics)
+    // map from sink processor names to sink topic (without application-id prefix for internal topics)
     private final Map<String, String> nodeToSinkTopic = new HashMap<>();
 
     // map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
@@ -122,9 +123,6 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    // TODO: this is only temporary for 2.0 and should be removed
-    private final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
-
     public static class StateStoreFactory {
         private final StoreBuilder builder;
         private final Set<String> users = new HashSet<>();
@@ -140,6 +138,8 @@ public class InternalTopologyBuilder {
         long retentionPeriod() {
             if (builder instanceof WindowStoreBuilder) {
                 return ((WindowStoreBuilder) builder).retentionPeriod();
+            } else if (builder instanceof TimestampedWindowStoreBuilder) {
+                return ((TimestampedWindowStoreBuilder) builder).retentionPeriod();
             } else if (builder instanceof SessionStoreBuilder) {
                 return ((SessionStoreBuilder) builder).retentionPeriod();
             } else {
@@ -160,7 +160,9 @@ public class InternalTopologyBuilder {
         }
 
         private boolean isWindowStore() {
-            return builder instanceof WindowStoreBuilder || builder instanceof SessionStoreBuilder;
+            return builder instanceof WindowStoreBuilder
+                || builder instanceof TimestampedWindowStoreBuilder
+                || builder instanceof SessionStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
@@ -280,7 +282,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            return new Source(name, new HashSet<>(topics), pattern);
+            return new Source(name, topics.size() == 0 ? null : new HashSet<>(topics), pattern);
         }
     }
 
@@ -353,10 +355,6 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
-
-        // adjust the topology if optimization is turned on.
-        // TODO: to be removed post 2.0
-        adjust(config);
 
         return this;
     }
@@ -601,20 +599,12 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    private void connectSourceStoreAndTopic(final String sourceStoreName,
+    public void connectSourceStoreAndTopic(final String sourceStoreName,
                                             final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
-    }
-
-    public final void markSourceStoreAndTopic(final StoreBuilder storeBuilder,
-                                              final String topic) {
-        if (storeToSourceChangelogTopic.containsKey(storeBuilder)) {
-            throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
-        }
-        storeToSourceChangelogTopic.put(storeBuilder, topic);
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -758,25 +748,16 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
+    // Order node groups by their position in the actual topology, ie upstream subtopologies come before downstream
     private Map<Integer, Set<String>> makeNodeGroups() {
         final Map<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final Map<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
 
-        // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        final Set<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
-        allSourceNodes.addAll(nodeToSourcePatterns.keySet());
-
-        for (final String nodeName : Utils.sorted(allSourceNodes)) {
+        // Traverse in topological order
+        for (final String nodeName : nodeFactories.keySet()) {
             nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-        }
-
-        // Go through non-source nodes
-        for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
-            if (!nodeToSourceTopics.containsKey(nodeName)) {
-                nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
-            }
         }
 
         return nodeGroups;
@@ -1066,25 +1047,6 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    // Adjust the generated topology based on the configs.
-    // Not exposed as public API and should be removed post 2.0
-    private void adjust(final StreamsConfig config) {
-        final boolean enableOptimization20 =
-            config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
-
-        if (enableOptimization20) {
-            for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
-                final StoreBuilder storeBuilder = entry.getKey();
-                final String topicName = entry.getValue();
-
-                // update store map to disable logging for this store
-                storeBuilder.withLoggingDisabled();
-                addStateStore(storeBuilder, true);
-                connectSourceStoreAndTopic(storeBuilder.name(), topicName);
-            }
-        }
-    }
-
     private void setRegexMatchedTopicsToSourceNodes() {
         if (subscriptionUpdates.hasUpdates()) {
             for (final Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
@@ -1178,21 +1140,45 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized Collection<Set<String>> copartitionGroups() {
-        final List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
-        for (final Set<String> nodeNames : copartitionSourceGroups) {
-            final Set<String> copartitionGroup = new HashSet<>();
-            for (final String node : nodeNames) {
-                final List<String> topics = nodeToSourceTopics.get(node);
-                if (topics != null) {
-                    copartitionGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+        // compute transitive closures of copartitionGroups to relieve registering code to know all members
+        // of a copartitionGroup at the same time
+        final List<Set<String>> copartitionSourceTopics =
+            copartitionSourceGroups
+                .stream()
+                .map(sourceGroup ->
+                         sourceGroup
+                             .stream()
+                             .flatMap(node -> maybeDecorateInternalSourceTopics(nodeToSourceTopics.get(node)).stream())
+                             .collect(Collectors.toSet())
+                ).collect(Collectors.toList());
+
+        final Map<String, Set<String>> topicsToCopartitionGroup = new LinkedHashMap<>();
+        for (final Set<String> topics : copartitionSourceTopics) {
+            if (topics != null) {
+                Set<String> coparititonGroup = null;
+                for (final String topic : topics) {
+                    coparititonGroup = topicsToCopartitionGroup.get(topic);
+                    if (coparititonGroup != null) {
+                        break;
+                    }
+                }
+                if (coparititonGroup == null) {
+                    coparititonGroup = new HashSet<>();
+                }
+                coparititonGroup.addAll(maybeDecorateInternalSourceTopics(topics));
+                for (final String topic : topics) {
+                    topicsToCopartitionGroup.put(topic, coparititonGroup);
                 }
             }
-            list.add(Collections.unmodifiableSet(copartitionGroup));
         }
-        return Collections.unmodifiableList(list);
+        final Set<Set<String>> uniqueCopartitionGroups = new HashSet<>(topicsToCopartitionGroup.values());
+        return Collections.unmodifiableList(new ArrayList<>(uniqueCopartitionGroups));
     }
 
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
+        if (sourceTopics == null) {
+            return Collections.emptyList();
+        }
         final List<String> decoratedTopics = new ArrayList<>();
         for (final String topic : sourceTopics) {
             if (internalTopicNames.contains(topic)) {
@@ -1225,6 +1211,7 @@ public class InternalTopologyBuilder {
                 for (final List<String> topics : nodeToSourceTopics.values()) {
                     allSourceTopics.addAll(maybeDecorateInternalSourceTopics(topics));
                 }
+                allSourceTopics.removeAll(globalTopics);
             }
             Collections.sort(allSourceTopics);
 
@@ -1310,6 +1297,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Node node1,
                            final TopologyDescription.Node node2) {
+            if (node1.equals(node2)) {
+                return 0;
+            }
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
@@ -1428,6 +1418,7 @@ public class InternalTopologyBuilder {
         int size;
 
         AbstractNode(final String name) {
+            Objects.requireNonNull(name, "name cannot be null");
             this.name = name;
             this.size = 1;
         }
@@ -1464,6 +1455,13 @@ public class InternalTopologyBuilder {
                       final Set<String> topics,
                       final Pattern pattern) {
             super(name);
+            if (topics == null && pattern == null) {
+                throw new IllegalArgumentException("Either topics or pattern must be not-null, but both are null.");
+            }
+            if (topics != null && pattern != null) {
+                throw new IllegalArgumentException("Either topics or pattern must be null, but both are not null.");
+            }
+
             this.topics = topics;
             this.topicPattern = pattern;
         }
@@ -1508,8 +1506,9 @@ public class InternalTopologyBuilder {
             final Source source = (Source) o;
             // omit successor to avoid infinite loops
             return name.equals(source.name)
-                && topics.equals(source.topics)
-                && topicPattern.equals(source.topicPattern);
+                && Objects.equals(topics, source.topics)
+                && (topicPattern == null ? source.topicPattern == null :
+                    topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override
@@ -1738,6 +1737,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.GlobalStore globalStore1,
                            final TopologyDescription.GlobalStore globalStore2) {
+            if (globalStore1.equals(globalStore2)) {
+                return 0;
+            }
             return globalStore1.id() - globalStore2.id();
         }
     }
@@ -1748,6 +1750,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Subtopology subtopology1,
                            final TopologyDescription.Subtopology subtopology2) {
+            if (subtopology1.equals(subtopology2)) {
+                return 0;
+            }
             return subtopology1.id() - subtopology2.id();
         }
     }
@@ -1890,11 +1895,11 @@ public class InternalTopologyBuilder {
 
     // following functions are for test only
 
-    public synchronized Set<String> getSourceTopicNames() {
+    public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }
 
-    public synchronized Map<String, StateStoreFactory> getStateStores() {
+    public synchronized Map<String, StateStoreFactory> stateStores() {
         return stateFactories;
     }
 }

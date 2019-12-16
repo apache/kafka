@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -31,6 +30,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
@@ -110,14 +110,14 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }

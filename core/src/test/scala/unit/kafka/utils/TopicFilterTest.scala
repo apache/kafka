@@ -20,12 +20,11 @@ package kafka.utils
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class TopicFilterTest extends JUnitSuite {
+class TopicFilterTest {
 
   @Test
-  def testWhitelists() {
+  def testWhitelists(): Unit = {
 
     val topicFilter1 = Whitelist("white1,white2")
     assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))

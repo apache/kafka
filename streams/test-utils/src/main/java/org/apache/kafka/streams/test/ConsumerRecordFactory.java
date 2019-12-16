@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.ArrayList;
@@ -33,12 +33,14 @@ import java.util.Objects;
  * Factory to create {@link ConsumerRecord consumer records} for a single single-partitioned topic with given key and
  * value {@link Serializer serializers}.
  *
+ * @deprecated Since 2.4 use methods of {@link TestInputTopic} instead
+ *
  * @param <K> the type of the key
  * @param <V> the type of the value
  *
  * @see TopologyTestDriver
  */
-@InterfaceStability.Evolving
+@Deprecated
 public class ConsumerRecordFactory<K, V> {
     private final String topicName;
     private final Serializer<K> keySerializer;

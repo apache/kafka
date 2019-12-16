@@ -34,11 +34,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -48,13 +50,18 @@ import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -71,6 +78,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -88,26 +96,16 @@ public class SuppressionDurabilityIntegrationTest {
     private static final int COMMIT_INTERVAL = 100;
     private final boolean eosEnabled;
 
-    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
-    }
-
     @Parameters(name = "{index}: eosEnabled={0}")
     public static Collection<Object[]> parameters() {
-        return Arrays.asList(new Object[] {false}, new Object[] {true});
+        return asList(
+            new Object[] {false},
+            new Object[] {true}
+        );
     }
 
-    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
-        return builder
-            .table(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(STRING_SERDE, STRING_SERDE)
-                    .withCachingDisabled()
-                    .withLoggingDisabled()
-            )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
-            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
+        this.eosEnabled = eosEnabled;
     }
 
     @Test
@@ -115,13 +113,21 @@ public class SuppressionDurabilityIntegrationTest {
         final String testId = "-shouldRecoverBufferAfterShutdown";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
+        final String storeName = "counts";
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
 
-        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
+        // create multiple partitions as a trap, in case the buffer doesn't properly set the
+        // partition on the records, but instead relies on the default key partitioner
+        cleanStateBeforeTest(CLUSTER, 2, input, outputRaw, outputSuppressed);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+        final KTable<String, Long> valueCounts = builder
+            .stream(
+                input,
+                Consumed.with(STRING_SERDE, STRING_SERDE))
+            .groupByKey()
+            .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(storeName).withCachingDisabled());
 
         final KStream<String, Long> suppressedCounts = valueCounts
             .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(3L).emitEarlyWhenFull()))
@@ -130,11 +136,16 @@ public class SuppressionDurabilityIntegrationTest {
         final AtomicInteger eventCount = new AtomicInteger(0);
         suppressedCounts.foreach((key, value) -> eventCount.incrementAndGet());
 
+        // expect all post-suppress records to keep the right input topic
+        final MetadataValidator metadataValidator = new MetadataValidator(input);
+
         suppressedCounts
+            .transform(metadataValidator)
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
+            .transform(metadataValidator)
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
@@ -149,7 +160,9 @@ public class SuppressionDurabilityIntegrationTest {
         KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
         try {
             // start by putting some stuff in the buffer
-            produceSynchronously(
+            // note, we send all input records to partition 0
+            // to make sure that supppress doesn't erroneously send records to other partitions.
+            produceSynchronouslyToPartitionZero(
                 input,
                 asList(
                     new KeyValueTimestamp<>("k1", "v1", scaledTime(1L)),
@@ -159,16 +172,16 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                asList(
-                    new KeyValueTimestamp<>("v1", 1L, scaledTime(1L)),
-                    new KeyValueTimestamp<>("v2", 1L, scaledTime(2L)),
-                    new KeyValueTimestamp<>("v3", 1L, scaledTime(3L))
-                )
+                new HashSet<>(asList(
+                    new KeyValueTimestamp<>("k1", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", 1L, scaledTime(2L)),
+                    new KeyValueTimestamp<>("k3", 1L, scaledTime(3L))
+                ))
             );
             assertThat(eventCount.get(), is(0));
 
             // flush two of the first three events out.
-            produceSynchronously(
+            produceSynchronouslyToPartitionZero(
                 input,
                 asList(
                     new KeyValueTimestamp<>("k4", "v4", scaledTime(4L)),
@@ -177,17 +190,17 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                asList(
-                    new KeyValueTimestamp<>("v4", 1L, scaledTime(4L)),
-                    new KeyValueTimestamp<>("v5", 1L, scaledTime(5L))
-                )
+                new HashSet<>(asList(
+                    new KeyValueTimestamp<>("k4", 1L, scaledTime(4L)),
+                    new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
+                ))
             );
             assertThat(eventCount.get(), is(2));
             verifyOutput(
                 outputSuppressed,
                 asList(
-                    new KeyValueTimestamp<>("v1", 1L, scaledTime(1L)),
-                    new KeyValueTimestamp<>("v2", 1L, scaledTime(2L))
+                    new KeyValueTimestamp<>("k1", 1L, scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", 1L, scaledTime(2L))
                 )
             );
 
@@ -201,7 +214,7 @@ public class SuppressionDurabilityIntegrationTest {
 
 
             // flush those recovered buffered events out.
-            produceSynchronously(
+            produceSynchronouslyToPartitionZero(
                 input,
                 asList(
                     new KeyValueTimestamp<>("k6", "v6", scaledTime(6L)),
@@ -211,25 +224,74 @@ public class SuppressionDurabilityIntegrationTest {
             );
             verifyOutput(
                 outputRaw,
-                asList(
-                    new KeyValueTimestamp<>("v6", 1L, scaledTime(6L)),
-                    new KeyValueTimestamp<>("v7", 1L, scaledTime(7L)),
-                    new KeyValueTimestamp<>("v8", 1L, scaledTime(8L))
-                )
+                new HashSet<>(asList(
+                    new KeyValueTimestamp<>("k6", 1L, scaledTime(6L)),
+                    new KeyValueTimestamp<>("k7", 1L, scaledTime(7L)),
+                    new KeyValueTimestamp<>("k8", 1L, scaledTime(8L))
+                ))
             );
-            assertThat(eventCount.get(), is(5));
+            assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
+                       eventCount.get(), is(5));
+
             verifyOutput(
                 outputSuppressed,
                 asList(
-                    new KeyValueTimestamp<>("v3", 1L, scaledTime(3L)),
-                    new KeyValueTimestamp<>("v4", 1L, scaledTime(4L)),
-                    new KeyValueTimestamp<>("v5", 1L, scaledTime(5L))
+                    new KeyValueTimestamp<>("k3", 1L, scaledTime(3L)),
+                    new KeyValueTimestamp<>("k4", 1L, scaledTime(4L)),
+                    new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
                 )
             );
+
+            metadataValidator.raiseExceptionIfAny();
 
         } finally {
             driver.close();
             cleanStateAfterTest(CLUSTER, driver);
+        }
+    }
+
+    private static final class MetadataValidator implements TransformerSupplier<String, Long, KeyValue<String, Long>> {
+        private static final Logger LOG = LoggerFactory.getLogger(MetadataValidator.class);
+        private final AtomicReference<Throwable> firstException = new AtomicReference<>();
+        private final String topic;
+
+        public MetadataValidator(final String topic) {
+            this.topic = topic;
+        }
+
+        @Override
+        public Transformer<String, Long, KeyValue<String, Long>> get() {
+            return new Transformer<String, Long, KeyValue<String, Long>>() {
+                private ProcessorContext context;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    this.context = context;
+                }
+
+                @Override
+                public KeyValue<String, Long> transform(final String key, final Long value) {
+                    try {
+                        assertThat(context.topic(), equalTo(topic));
+                    } catch (final Throwable e) {
+                        firstException.compareAndSet(null, e);
+                        LOG.error("Validation Failed", e);
+                    }
+                    return new KeyValue<>(key, value);
+                }
+
+                @Override
+                public void close() {
+
+                }
+            };
+        }
+
+        void raiseExceptionIfAny() {
+            final Throwable exception = firstException.get();
+            if (exception != null) {
+                throw new AssertionError("Got an exception during run", exception);
+            }
         }
     }
 
@@ -243,7 +305,18 @@ public class SuppressionDurabilityIntegrationTest {
             )
         );
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
+    }
 
+    private void verifyOutput(final String topic, final Set<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
+        final Properties properties = mkProperties(
+            mkMap(
+                mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
+                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
+                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
+            )
+        );
+        IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
     }
 
     /**
@@ -254,13 +327,13 @@ public class SuppressionDurabilityIntegrationTest {
         return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
-    private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
+    private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
         final Properties producerConfig = mkProperties(mkMap(
             mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
             mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
-        IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, toProduce);
+        IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.of(0), toProduce);
     }
 }

@@ -20,7 +20,8 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, KafkaVersion
+from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_1_0, LATEST_1_1, \
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -70,6 +71,9 @@ class StreamsBrokerCompatibility(Test):
 
         self.kafka.stop()
 
+    @parametrize(broker_version=str(LATEST_2_3))
+    @parametrize(broker_version=str(LATEST_2_2))
+    @parametrize(broker_version=str(LATEST_2_1))
     @parametrize(broker_version=str(LATEST_2_0))
     @parametrize(broker_version=str(LATEST_1_1))
     @parametrize(broker_version=str(LATEST_1_0))

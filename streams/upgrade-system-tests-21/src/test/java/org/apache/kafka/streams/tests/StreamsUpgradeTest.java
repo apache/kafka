@@ -16,33 +16,29 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.util.Properties;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class StreamsUpgradeTest {
+import java.util.Properties;
 
+public class StreamsUpgradeTest {
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("StreamsUpgradeTest requires three argument (kafka-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] : ""));
+        if (args.length < 1) {
+            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but  provided none");
         }
-        final String kafka = args[0];
-        final String propFileName = args.length > 1 ? args[1] : null;
+        final String propFileName = args[0];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.1)");
-        System.out.println("kafka=" + kafka);
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -52,47 +48,39 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                streams.close();
-                System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
-                System.out.flush();
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            streams.close();
+            System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
+            System.out.flush();
+        }));
     }
 
     private static <K, V> ProcessorSupplier<K, V> printProcessorSupplier() {
-        return new ProcessorSupplier<K, V>() {
-            public Processor<K, V> get() {
-                return new AbstractProcessor<K, V>() {
-                    private int numRecordsProcessed = 0;
+        return () -> new AbstractProcessor<K, V>() {
+            private int numRecordsProcessed = 0;
 
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        System.out.println("initializing processor: topic=data taskId=" + context.taskId());
-                        numRecordsProcessed = 0;
-                    }
-
-                    @Override
-                    public void process(final K key, final V value) {
-                        numRecordsProcessed++;
-                        if (numRecordsProcessed % 100 == 0) {
-                            System.out.println("processed " + numRecordsProcessed + " records from topic=data");
-                        }
-                    }
-
-                    @Override
-                    public void close() {}
-                };
+            @Override
+            public void init(final ProcessorContext context) {
+                System.out.println("[2.1] initializing processor: topic=data taskId=" + context.taskId());
+                numRecordsProcessed = 0;
             }
+
+            @Override
+            public void process(final K key, final V value) {
+                numRecordsProcessed++;
+                if (numRecordsProcessed % 100 == 0) {
+                    System.out.println("processed " + numRecordsProcessed + " records from topic=data");
+                }
+            }
+
+            @Override
+            public void close() {}
         };
     }
 }

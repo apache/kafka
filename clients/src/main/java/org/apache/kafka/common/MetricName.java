@@ -17,8 +17,7 @@
 package org.apache.kafka.common;
 
 import java.util.Map;
-
-import org.apache.kafka.common.utils.Utils;
+import java.util.Objects;
 
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
@@ -78,10 +77,10 @@ public final class MetricName {
      * @param tags        additional key/value attributes of the metric
      */
     public MetricName(String name, String group, String description, Map<String, String> tags) {
-        this.name = Utils.notNull(name);
-        this.group = Utils.notNull(group);
-        this.description = Utils.notNull(description);
-        this.tags = Utils.notNull(tags);
+        this.name = Objects.requireNonNull(name);
+        this.group = Objects.requireNonNull(group);
+        this.description = Objects.requireNonNull(description);
+        this.tags = Objects.requireNonNull(tags);
     }
 
     public String name() {

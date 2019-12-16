@@ -70,12 +70,16 @@ class KiboshTest(Test):
                 [self.nodes[0].name], KiboshTest.TARGET, "/foo", 12)
         node = self.nodes[0]
 
-        def check(self, node):
+        def check(self, node, expected_json):
             fault_json = self.kibosh.get_fault_json(node)
-            expected_json = json.dumps({"faults": [spec.kibosh_message]})
             self.logger.info("Read back: [%s].  Expected: [%s]." % (fault_json, expected_json))
             return fault_json == expected_json
 
+        wait_until(lambda: check(self, node, '{"faults":[]}'),
+                   timeout_sec=10, backoff_sec=.2, err_msg="Failed to read back initial empty fault array.")
         self.kibosh.set_faults(node, [spec])
-        wait_until(lambda: check(self, node),
+        wait_until(lambda: check(self, node, json.dumps({"faults": [spec.kibosh_message]})),
                    timeout_sec=10, backoff_sec=.2, err_msg="Failed to read back fault array.")
+        self.kibosh.set_faults(node, [])
+        wait_until(lambda: check(self, node, "{}"),
+                   timeout_sec=10, backoff_sec=.2, err_msg="Failed to read back final empty fault array.")

@@ -20,25 +20,24 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * Iterate over multiple Segments
+ * Iterate over multiple KeyValueSegments
  */
-class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
+class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;
-    protected final Iterator<Segment> segments;
+    protected final Iterator<S> segments;
     protected final HasNextCondition hasNextCondition;
 
-    protected KeyValueStore<Bytes, byte[]> currentSegment;
-    protected KeyValueIterator<Bytes, byte[]> currentIterator;
+    private S currentSegment;
+    KeyValueIterator<Bytes, byte[]> currentIterator;
 
-    SegmentIterator(final Iterator<Segment> segments,
+    SegmentIterator(final Iterator<S> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
                     final Bytes to) {
@@ -48,6 +47,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         this.to = to;
     }
 
+    @Override
     public void close() {
         if (currentIterator != null) {
             currentIterator.close();
@@ -93,14 +93,11 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         return hasNext;
     }
 
+    @Override
     public KeyValue<Bytes, byte[]> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return currentIterator.next();
-    }
-
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }

@@ -51,7 +51,7 @@ public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyVa
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore<>(inner, keySerde, valueSerde);
+        return new CachingKeyValueStore(inner);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {

@@ -27,6 +27,6 @@ public interface Stat {
      * @param value The value to record
      * @param timeMs The POSIX time in milliseconds this value occurred
      */
-    public void record(MetricConfig config, double value, long timeMs);
+    void record(MetricConfig config, double value, long timeMs);
 
 }

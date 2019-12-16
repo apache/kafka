@@ -18,20 +18,22 @@
 package kafka.api
 
 import java.util.Properties
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.errors.{InvalidTimestampException, SerializationException}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.errors.{InvalidTimestampException, SerializationException, TimeoutException}
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.intercept
+
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test(expected = classOf[SerializationException])
-  def testWrongSerializer() {
+  def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
@@ -42,24 +44,26 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testBatchSizeZero() {
+  def testBatchSizeZero(): Unit = {
     val producer = createProducer(brokerList = brokerList,
       lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
       batchSize = 0)
     sendAndVerify(producer)
   }
 
   @Test
-  def testSendCompressedMessageWithLogAppendTime() {
+  def testSendCompressedMessageWithLogAppendTime(): Unit = {
     val producer = createProducer(brokerList = brokerList,
       compressionType = "gzip",
-      lingerMs = Int.MaxValue)
+      lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
   @Test
-  def testSendNonCompressedMessageWithLogAppendTime() {
-    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue)
+  def testSendNonCompressedMessageWithLogAppendTime(): Unit = {
+    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
@@ -69,7 +73,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    * The topic should be created upon sending the first message
    */
   @Test
-  def testAutoCreateTopic() {
+  def testAutoCreateTopic(): Unit = {
     val producer = createProducer(brokerList)
     try {
       // Send a message to auto-create the topic
@@ -85,7 +89,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testSendWithInvalidCreateTime() {
+  def testSendWithInvalidCreateTime(): Unit = {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
     createTopic(topic, 1, 2, topicProps)
@@ -112,4 +116,56 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
   }
 
+  // Test that producer with max.block.ms=0 can be used to send in non-blocking mode
+  // where requests are failed immediately without blocking if metadata is not available
+  // or buffer is full.
+  @Test
+  def testNonBlockingProducer(): Unit = {
+
+    def send(producer: KafkaProducer[Array[Byte],Array[Byte]]): Future[RecordMetadata] = {
+      producer.send(new ProducerRecord(topic, 0, "key".getBytes, new Array[Byte](1000)))
+    }
+
+    def sendUntilQueued(producer: KafkaProducer[Array[Byte],Array[Byte]]): Future[RecordMetadata] = {
+      val (future, _) = TestUtils.computeUntilTrue(send(producer))(future => {
+        if (future.isDone) {
+          try {
+            future.get
+            true  // Send was queued and completed successfully
+          } catch {
+            case _: ExecutionException => false
+          }
+        } else
+          true    // Send future not yet complete, so it has been queued to be sent
+      })
+      future
+    }
+
+    def verifySendSuccess(future: Future[RecordMetadata]): Unit = {
+      val recordMetadata = future.get(10, TimeUnit.SECONDS)
+      assertEquals(topic, recordMetadata.topic)
+      assertEquals(0, recordMetadata.partition)
+      assertTrue(s"Invalid offset $recordMetadata", recordMetadata.offset >= 0)
+    }
+
+    def verifySendFailure(future: Future[RecordMetadata]): Unit = {
+      assertTrue(future.isDone)  // verify future was completed immediately
+      assertEquals(classOf[TimeoutException], intercept[ExecutionException](future.get).getCause.getClass)
+    }
+
+    // Topic metadata not available, send should fail without blocking
+    val producer = createProducer(brokerList = brokerList, maxBlockMs = 0)
+    verifySendFailure(send(producer))
+
+    // Test that send starts succeeding once metadata is available
+    val future = sendUntilQueued(producer)
+    verifySendSuccess(future)
+
+    // Verify that send fails immediately without blocking when there is no space left in the buffer
+    val producer2 = createProducer(brokerList = brokerList, maxBlockMs = 0,
+                                   lingerMs = 15000, batchSize = 1100, bufferSize = 1500)
+    val future2 = sendUntilQueued(producer2) // wait until metadata is available and one record is queued
+    verifySendFailure(send(producer2))       // should fail send since buffer is full
+    verifySendSuccess(future2)               // previous batch should be completed and sent now
+  }
 }

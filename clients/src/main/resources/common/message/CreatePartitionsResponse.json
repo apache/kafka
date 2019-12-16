@@ -19,12 +19,13 @@
   "name": "CreatePartitionsResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Results", "type": "[]CreatePartitionsTopicResult", "versions": "0+",
       "about": "The partition creation results for each topic.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The result error, or zero if there was no error."},

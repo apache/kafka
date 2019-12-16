@@ -16,13 +16,28 @@
  */
 package kafka.server
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.junit.Assert._
 
+import scala.collection.JavaConverters._
+
 class AbstractFetcherManagerTest {
+
+  @Before
+  def cleanMetricRegistry(): Unit = {
+    TestUtils.clearYammerMetrics()
+  }
+
+  private def getMetricValue(name: String): Any = {
+    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getName == name).values.headOption.get.
+      asInstanceOf[Gauge[Int]].value()
+  }
 
   @Test
   def testAddAndRemovePartition(): Unit = {
@@ -44,7 +59,7 @@ class AbstractFetcherManagerTest {
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
     EasyMock.expect(fetcher.fetchState(tp))
-      .andReturn(Some(PartitionFetchState(fetchOffset, leaderEpoch, Truncating)))
+      .andReturn(Some(PartitionFetchState(fetchOffset, None, leaderEpoch, Truncating)))
     EasyMock.expect(fetcher.removePartitions(Set(tp)))
     EasyMock.expect(fetcher.fetchState(tp)).andReturn(None)
     EasyMock.replay(fetcher)
@@ -58,4 +73,62 @@ class AbstractFetcherManagerTest {
     EasyMock.verify(fetcher)
   }
 
+  @Test
+  def testMetricFailedPartitionCount(): Unit = {
+    val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+        fetcher
+      }
+    }
+
+    val tp = new TopicPartition("topic", 0)
+    val metricName = "FailedPartitionsCount"
+
+    // initial value for failed partition count
+    assertEquals(0, getMetricValue(metricName))
+
+    // partition marked as failed increments the count for failed partitions
+    fetcherManager.failedPartitions.add(tp)
+    assertEquals(1, getMetricValue(metricName))
+
+    // removing fetcher for the partition would remove the partition from set of failed partitions and decrement the
+    // count for failed partitions
+    fetcherManager.removeFetcherForPartitions(Set(tp))
+    assertEquals(0, getMetricValue(metricName))
+  }
+  @Test
+  def testDeadThreadCountMetric(): Unit = {
+    val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
+    val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+        fetcher
+      }
+    }
+
+    val fetchOffset = 10L
+    val leaderEpoch = 15
+    val tp = new TopicPartition("topic", 0)
+    val initialFetchState = InitialFetchState(
+      leader = new BrokerEndPoint(0, "localhost", 9092),
+      currentLeaderEpoch = leaderEpoch,
+      initOffset = fetchOffset)
+
+    EasyMock.expect(fetcher.start())
+    EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(true)
+    EasyMock.replay(fetcher)
+
+    fetcherManager.addFetcherForPartitions(Map(tp -> initialFetchState))
+
+    assertEquals(1, fetcherManager.deadThreadCount)
+    EasyMock.verify(fetcher)
+
+    EasyMock.reset(fetcher)
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(false)
+    EasyMock.replay(fetcher)
+
+    assertEquals(0, fetcherManager.deadThreadCount)
+    EasyMock.verify(fetcher)
+  }
 }

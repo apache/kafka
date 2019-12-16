@@ -78,7 +78,7 @@ public final class GraphGraceSearchUtil {
             } else if (processorSupplier instanceof KStreamSessionWindowAggregate) {
                 final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;
                 final SessionWindows windows = kStreamSessionWindowAggregate.windows();
-                return windows.gracePeriodMs();
+                return windows.gracePeriodMs() + windows.inactivityGap();
             } else {
                 return null;
             }

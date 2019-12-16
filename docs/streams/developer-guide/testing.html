@@ -92,30 +92,23 @@ props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
 TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
         </pre>
             <p>
-                The test driver accepts <code>ConsumerRecord</code>s with key and value type <code>byte[]</code>.
-                Because <code>byte[]</code> types can be problematic, you can use the <code>ConsumerRecordFactory</code>
-                to generate those records
-                by providing regular Java types for key and values and the corresponding serializers.
+                With the test driver you can create <code>TestInputTopic</code> giving topic name and the corresponding serializers.
+                <code>TestInputTopic</code> provides various methods to pipe new message values, keys and values, or list of KeyValue objects.
             </p>
             <pre>
-ConsumerRecordFactory&lt;String, Integer&gt; factory = new ConsumerRecordFactory&lt;&gt;("input-topic", new StringSerializer(), new IntegerSerializer());
-testDriver.pipe(factory.create("key", 42L));
+TestInputTopic&lt;String, Long&gt; inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
+inputTopic.pipeInput("key", 42L);
         </pre>
             <p>
-                To verify the output, the test driver produces <code>ProducerRecord</code>s with key and value type
-                <code>byte[]</code>.
-                For result verification, you can specify corresponding deserializers when reading the output record from
-                the driver.
-            <pre>
-ProducerRecord&lt;String, Integer&gt; outputRecord = testDriver.readOutput("output-topic", new StringDeserializer(), new LongDeserializer());
-        </pre>
-            <p>
-                For result verification, you can use <code>OutputVerifier</code>.
-                It offers helper methods to compare only certain parts of the result record:
-                for example, you might only care about the key and value, but not the timestamp of the result record.
+                To verify the output, you can use <code>TestOutputTopic</code>
+                where you configure the topic and the corresponding deserializers during initialization.
+                It offers helper methods to read only certain parts of the result records or the collection of records.
+                For example, you can validate returned <code>KeyValue</code> with standard assertions
+                if you only care about the key and value, but not the timestamp of the result record.
             </p>
             <pre>
-OutputVerifier.compareKeyValue(outputRecord, "key", 42L); // throws AssertionError if key or value does not match
+TestOutputTopic&lt;String, Long&gt; outputTopic = testDriver.createOutputTopic("result-topic", stringSerde.deserializer(), longSerde.deserializer());
+assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("key", 42L)));
         </pre>
             <p>
                 <code>TopologyTestDriver</code> supports punctuations, too.
@@ -124,7 +117,7 @@ OutputVerifier.compareKeyValue(outputRecord, "key", 42L); // throws AssertionErr
                 driver mocks wall-clock-time internally to give users control over it).
             </p>
             <pre>
-testDriver.advanceWallClockTime(20L);
+testDriver.advanceWallClockTime(Duration.ofSeconds(20));
         </pre>
             <p>
                 Additionally, you can access state stores via the test driver before or after a test.
@@ -151,11 +144,12 @@ testDriver.close();
             </p>
             <pre>
 private TopologyTestDriver testDriver;
+private TestInputTopic&lt;String, Long&gt; inputTopic;
+private TestOutputTopic&lt;String, Long&gt; outputTopic;
 private KeyValueStore&lt;String, Long&gt; store;
 
-private StringDeserializer stringDeserializer = new StringDeserializer();
-private LongDeserializer longDeserializer = new LongDeserializer();
-private ConsumerRecordFactory&lt;String, Long&gt; recordFactory = new ConsumerRecordFactory&lt;&gt;(new StringSerializer(), new LongSerializer());
+private Serde&lt;String&gt; stringSerde = new Serdes.StringSerde();
+private Serde&lt;Long&gt; longSerde = new Serdes.LongSerde();
 
 @Before
 public void setup() {
@@ -178,6 +172,10 @@ public void setup() {
     props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
     testDriver = new TopologyTestDriver(topology, props);
 
+    // setup test topics
+    inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
+    outputTopic = testDriver.createOutputTopic("result-topic", stringSerde.deserializer(), longSerde.deserializer());
+
     // pre-populate store
     store = testDriver.getKeyValueStore("aggStore");
     store.put("a", 21L);
@@ -190,54 +188,55 @@ public void tearDown() {
 
 @Test
 public void shouldFlushStoreForFirstInput() {
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("a", 1L);
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 @Test
 public void shouldNotUpdateStoreForSmallerValue() {
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    Assert.assertThat(store.get("a"), equalTo(21L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("a", 1L);
+    assertThat(store.get("a"), equalTo(21L));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 @Test
 public void shouldNotUpdateStoreForLargerValue() {
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
-    Assert.assertThat(store.get("a"), equalTo(42L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("a", 42L);
+    assertThat(store.get("a"), equalTo(42L));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 42L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 @Test
 public void shouldUpdateStoreForNewKey() {
-    testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
-    Assert.assertThat(store.get("b"), equalTo(21L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("b", 21L);
+    assertThat(store.get("b"), equalTo(21L));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("b", 21L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 @Test
 public void shouldPunctuateIfEvenTimeAdvances() {
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+    final Instant recordTime = Instant.now();
+    inputTopic.pipeInput("a", 1L,  recordTime);
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
 
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("a", 1L,  recordTime);
+    assertThat(outputTopic.isEmpty(), is(true));
 
-    testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 10000L));
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    inputTopic.pipeInput("a", 1L, recordTime.plusSeconds(10L));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 @Test
 public void shouldPunctuateIfWallClockTimeAdvances() {
-    testDriver.advanceWallClockTime(60000);
-    OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    testDriver.advanceWallClockTime(Duration.ofSeconds(60));
+    assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("a", 21L)));
+    assertThat(outputTopic.isEmpty(), is(true));
 }
 
 public class CustomMaxAggregatorSupplier implements ProcessorSupplier&lt;String, Long&gt; {

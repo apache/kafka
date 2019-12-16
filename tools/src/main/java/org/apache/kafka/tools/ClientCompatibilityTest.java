@@ -20,7 +20,7 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicListing;
@@ -247,7 +247,7 @@ public class ClientCompatibilityTest {
     void testAdminClient() throws Throwable {
         Properties adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
-        try (final AdminClient client = AdminClient.create(adminProps)) {
+        try (final Admin client = Admin.create(adminProps)) {
             while (true) {
                 Collection<Node> nodes = client.describeCluster().nodes().get();
                 if (nodes.size() == testConfig.numClusterNodes) {
@@ -297,7 +297,7 @@ public class ClientCompatibilityTest {
         }
     }
 
-    private void createTopicsResultTest(AdminClient client, Collection<String> topics)
+    private void createTopicsResultTest(Admin client, Collection<String> topics)
             throws InterruptedException, ExecutionException {
         while (true) {
             try {
@@ -340,18 +340,8 @@ public class ClientCompatibilityTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // nothing to do
-        }
-
-        @Override
         public byte[] deserialize(String topic, byte[] data) {
             return data;
-        }
-
-        @Override
-        public void close() {
-            // nothing to do
         }
 
         @Override

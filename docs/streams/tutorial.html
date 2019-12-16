@@ -74,8 +74,12 @@
     </pre>
 
     <p>
-        The <code>pom.xml</code> file included in the project already has the Streams dependency defined,
-        and there are already several example programs written with Streams library under <code>src/main/java</code>.
+        The <code>pom.xml</code> file included in the project already has the Streams dependency defined.
+        Note, that the generated <code>pom.xml</code> targets Java 8, and does not work with higher Java versions.
+    </p>
+
+    <p>
+        There are already several example programs written with Streams library under <code>src/main/java</code>.
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
 
@@ -86,7 +90,7 @@
 
     <h4><a id="tutorial_code_pipe" href="#tutorial_code_pipe">Writing a first Streams application: Pipe</a></h4>
 
-    It's coding time now! Feel free to open your favorite IDE and import this Maven project, or simply open a text editor and create a java file under <code>src/main/java</code>.
+    It's coding time now! Feel free to open your favorite IDE and import this Maven project, or simply open a text editor and create a java file under <code>src/main/java/myapps</code>.
     Let's name it <code>Pipe.java</code>:
 
     <pre class="brush: java;">
@@ -604,7 +608,7 @@
                       .groupBy((key, value) -> value)
                       .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
                       .toStream()
-                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
                 final Topology topology = builder.build();
                 final KafkaStreams streams = new KafkaStreams(topology, props);

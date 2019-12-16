@@ -21,6 +21,7 @@ import java.io._
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 
+import joptsimple.{OptionException, OptionParser, OptionSet}
 import kafka.common._
 import kafka.message._
 import kafka.utils.Implicits._
@@ -44,7 +45,7 @@ object ConsoleProducer {
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
-          override def run() {
+          override def run(): Unit = {
             producer.close()
           }
         })
@@ -213,7 +214,7 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
 
-    options = parser.parse(args : _*)
+    options = tryParse(parser, args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
@@ -232,6 +233,15 @@ object ConsoleProducer {
     val readerClass = options.valueOf(messageReaderOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
+
+    def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
+      try
+        parser.parse(args: _*)
+      catch {
+        case e: OptionException =>
+          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+      }
+    }
   }
 
   class LineMessageReader extends MessageReader {
@@ -242,7 +252,7 @@ object ConsoleProducer {
     var ignoreError = false
     var lineNumber = 0
 
-    override def init(inputStream: InputStream, props: Properties) {
+    override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")

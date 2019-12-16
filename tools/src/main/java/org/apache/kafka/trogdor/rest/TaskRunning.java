@@ -43,4 +43,9 @@ public class TaskRunning extends TaskState {
     public long startedMs() {
         return startedMs;
     }
+
+    @Override
+    public TaskStateType stateType() {
+        return TaskStateType.RUNNING;
+    }
 }

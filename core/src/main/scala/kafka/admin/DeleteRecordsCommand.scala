@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 /**
  * A command for delete records of the given partitions down to the specified offset.
@@ -99,7 +100,7 @@ object DeleteRecordsCommand {
     adminClient.close()
   }
 
-  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.AdminClient = {
+  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.Admin = {
     val props = if (opts.options.has(opts.commandConfigOpt))
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else

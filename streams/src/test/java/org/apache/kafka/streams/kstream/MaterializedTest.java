@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -32,7 +32,7 @@ public class MaterializedTest {
         Materialized.as("valid_name");
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAllowInvalidTopicNames() {
         Materialized.as("not:valid");
     }

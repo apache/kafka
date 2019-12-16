@@ -51,6 +51,7 @@ public class Connect {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
 
             herder.start();
+            rest.initializeResources(herder);
 
             log.info("Kafka Connect started");
         } finally {
@@ -85,6 +86,10 @@ public class Connect {
     // Visible for testing
     public URI restUrl() {
         return rest.serverUrl();
+    }
+
+    public URI adminUrl() {
+        return rest.adminUrl();
     }
 
     private class ShutdownHook extends Thread {

@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -29,151 +34,167 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.io.File;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableLeftJoinTest {
-
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
-
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
-    private File stateDir = null;
-
-    @SuppressWarnings("deprecation")
-    @Rule
-    public final org.apache.kafka.test.KStreamTestDriver driver = new org.apache.kafka.test.KStreamTestDriver();
-    private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
-
-    @Before
-    public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
-    }
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
+    private final String output = "output";
+    private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1 = builder.table(topic1, consumed);
         final KTable<Integer, String> table2 = builder.table(topic2, consumed);
         final KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
-        joined.toStream().process(supplier);
+        joined.toStream().to(output);
 
-        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+        final Collection<Set<String>> copartitionGroups =
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        @SuppressWarnings("unchecked")
-        final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestOutputTopic<Integer, String> outputTopic =
+                    driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
 
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
+            // push two items to the primary stream. the other table is empty
+            for (int i = 0; i < 2; i++) {
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            assertOutputKeyValueTimestamp(outputTopic, 0, "X0+null", 5L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "X1+null", 6L);
+            assertTrue(outputTopic.isEmpty());
 
-        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            // push two items to the other stream. this should produce two items.
+            for (int i = 0; i < 2; i++) {
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "X0+Y0", 5L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "X1+Y1", 10L);
+            assertTrue(outputTopic.isEmpty());
 
-        final KTableValueGetter<Integer, String> getter = getterSupplier.get();
-        getter.init(driver.context());
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XX0+Y0", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XX1+Y1", 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XX2+null", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XX3+null", 7L);
+            assertTrue(outputTopic.isEmpty());
 
-        // push two items to the primary stream. the other table is empty
+            // push all items to the other stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XX0+YY0", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XX1+YY1", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
+            }
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XXX0+YY0", 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XXX1+YY1", 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XXX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XXX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
+
+            // push two items with null to the other stream as deletes. this should produce two item.
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XXX0+null", 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XXX1+null", 7L);
+            assertTrue(outputTopic.isEmpty());
+
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
+            }
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XXXX0+null", 13L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XXXX1+null", 13L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XXXX2+YY2", 13L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XXXX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
+
+            // push three items to the primary stream with null. this should produce four items.
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(outputTopic, 0, null, 0L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, null, 42L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, null, 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, null, 20L);
+            assertTrue(outputTopic.isEmpty());
         }
-        // pass tuple with null key, it will be discarded in join process
-        driver.process(topic1, null, "SomeVal");
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
-        checkJoinedValues(getter, kv(0, "X0+null"), kv(1, "X1+null"), kv(2, null), kv(3, null));
-
-        // push two items to the other stream. this should produce two items.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-        // pass tuple with null key, it will be discarded in join process
-        driver.process(topic2, null, "AnotherVal");
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
-        checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, null), kv(3, null));
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
-        checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"), kv(2, "X2+null"), kv(3, "X3+null"));
-
-        // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
-        checkJoinedValues(getter, kv(0, "X0+YY0"), kv(1, "X1+YY1"), kv(2, "X2+YY2"), kv(3, "X3+YY3"));
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
-        checkJoinedValues(getter, kv(0, "X0+YY0"), kv(1, "X1+YY1"), kv(2, "X2+YY2"), kv(3, "X3+YY3"));
-
-        // push two items with null to the other stream as deletes. this should produce two item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
-        checkJoinedValues(getter, kv(0, "X0+null"), kv(1, "X1+null"), kv(2, "X2+YY2"), kv(3, "X3+YY3"));
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-        driver.flushState();
-        processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
-        checkJoinedValues(getter, kv(0, "XX0+null"), kv(1, "XX1+null"), kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
     }
 
     @Test
     public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -185,78 +206,112 @@ public class KTableKTableLeftJoinTest {
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         supplier = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
+            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
 
-        assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-        assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-        assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            // push two items to the primary stream. the other table is empty
+            for (int i = 0; i < 2; i++) {
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+null", null), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+null", null), 6));
 
-        // push two items to the primary stream. the other table is empty
+            // push two items to the other stream. this should produce two items.
+            for (int i = 0; i < 2; i++) {
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", null), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+Y1", null), 10));
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+Y0", null), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+Y1", null), 10),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+null", null), 7),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+null", null), 7));
+
+            // push all items to the other stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+YY0", null), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+YY1", null), 7),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+YY2", null), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+YY3", null), 15));
+
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
+            }
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+YY0", null), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+YY1", null), 6),
+                new KeyValueTimestamp<>(2, new Change<>("XXX2+YY2", null), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", null), 15));
+
+            // push two items with null to the other stream as deletes. this should produce two item.
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+null", null), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+null", null), 7));
+
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
+            }
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXXX0+null", null), 13),
+                new KeyValueTimestamp<>(1, new Change<>("XXXX1+null", null), 13),
+                new KeyValueTimestamp<>(2, new Change<>("XXXX2+YY2", null), 13),
+                new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", null), 15));
+
+            // push four items to the primary stream with null. this should produce four items.
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, null), 0),
+                new KeyValueTimestamp<>(1, new Change<>(null, null), 42),
+                new KeyValueTimestamp<>(2, new Change<>(null, null), 10),
+                new KeyValueTimestamp<>(3, new Change<>(null, null), 20));
         }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+null<-null)", "1:(X1+null<-null)");
-
-        // push two items to the other stream. this should produce two items.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)", "2:(X2+null<-null)", "3:(X3+null<-null)");
-
-        // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
-
-        // push two items with null to the other stream as deletes. this should produce two item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+null<-null)", "1:(X1+null<-null)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(XX0+null<-null)", "1:(XX1+null<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
     }
 
     @Test
     public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -270,71 +325,103 @@ public class KTableKTableLeftJoinTest {
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
         supplier = new MockProcessorSupplier<>();
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
+        try (final TopologyTestDriver driver = new TopologyTestDriverWrapper(topology, props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-        final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
+            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
 
-        assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-        assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-        assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            // push two items to the primary stream. the other table is empty
+            for (int i = 0; i < 2; i++) {
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+null", null), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+null", null), 6));
 
-        // push two items to the primary stream. the other table is empty
+            // push two items to the other stream. this should produce two items.
+            for (int i = 0; i < 2; i++) {
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
+            }
+            // pass tuple with null key, it will be discarded in join process
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", "X0+null"), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+Y1", "X1+null"), 10));
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+Y0", "X0+Y0"), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+Y1", "X1+Y1"), 10),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+null", null), 7),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+null", null), 7));
+
+            // push all items to the other stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
+            }
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+YY0", "XX0+Y0"), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+YY1", "XX1+Y1"), 7),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+YY2", "XX2+null"), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+YY3", "XX3+null"), 15));
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
+            }
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+YY0", "XX0+YY0"), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+YY1", "XX1+YY1"), 6),
+                new KeyValueTimestamp<>(2, new Change<>("XXX2+YY2", "XX2+YY2"), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", "XX3+YY3"), 15));
+
+            // push two items with null to the other stream as deletes. this should produce two item.
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+null", "XXX0+YY0"), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+null", "XXX1+YY1"), 7));
+
+            // push all four items to the primary stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
+            }
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXXX0+null", "XXX0+null"), 13),
+                new KeyValueTimestamp<>(1, new Change<>("XXXX1+null", "XXX1+null"), 13),
+                new KeyValueTimestamp<>(2, new Change<>("XXXX2+YY2", "XXX2+YY2"), 13),
+                new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", "XXX3+YY3"), 15));
+            // push four items to the primary stream with null. this should produce four items.
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, "XXXX0+null"), 0),
+                new KeyValueTimestamp<>(1, new Change<>(null, "XXXX1+null"), 42),
+                new KeyValueTimestamp<>(2, new Change<>(null, "XXXX2+YY2"), 10),
+                new KeyValueTimestamp<>(3, new Change<>(null, "XXXX3+YY3"), 20));
         }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+null<-null)", "1:(X1+null<-null)");
-
-        // push two items to the other stream. this should produce two items.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+Y0<-X0+null)", "1:(X1+Y1<-X1+null)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+Y0<-X0+Y0)", "1:(X1+Y1<-X1+Y1)", "2:(X2+null<-null)", "3:(X3+null<-null)");
-
-        // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+YY0<-X0+Y0)", "1:(X1+YY1<-X1+Y1)", "2:(X2+YY2<-X2+null)", "3:(X3+YY3<-X3+null)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+YY0<-X0+YY0)", "1:(X1+YY1<-X1+YY1)", "2:(X2+YY2<-X2+YY2)", "3:(X3+YY3<-X3+YY3)");
-
-        // push two items with null to the other stream as deletes. this should produce two item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(X0+null<-X0+YY0)", "1:(X1+null<-X1+YY1)");
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-        driver.flushState();
-        proc.checkAndClearProcessResult("0:(XX0+null<-X0+null)", "1:(XX1+null<-X1+null)", "2:(XX2+YY2<-X2+YY2)", "3:(XX3+YY3<-X3+YY3)");
     }
 
     /**
@@ -356,16 +443,37 @@ public class KTableKTableLeftJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
-            .table(agg, consumed)
+            .table(agg, consumed, Materialized.as(Stores.inMemoryKeyValueStore("agg-base-store")))
             .groupBy(KeyValue::new, Grouped.with(Serdes.Long(), Serdes.String()))
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.as("agg-store"));
+            .reduce(
+                MockReducer.STRING_ADDER,
+                MockReducer.STRING_ADDER,
+                Materialized.as(Stores.inMemoryKeyValueStore("agg-store")));
 
-        final KTable<Long, String> one = builder.table(tableOne, consumed);
-        final KTable<Long, String> two = builder.table(tableTwo, consumed);
-        final KTable<Long, String> three = builder.table(tableThree, consumed);
-        final KTable<Long, String> four = builder.table(tableFour, consumed);
-        final KTable<Long, String> five = builder.table(tableFive, consumed);
-        final KTable<Long, String> six = builder.table(tableSix, consumed);
+        final KTable<Long, String> one = builder.table(
+            tableOne,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableOne-base-store")));
+        final KTable<Long, String> two = builder.table(
+            tableTwo,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableTwo-base-store")));
+        final KTable<Long, String> three = builder.table(
+            tableThree,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableThree-base-store")));
+        final KTable<Long, String> four = builder.table(
+            tableFour,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableFour-base-store")));
+        final KTable<Long, String> five = builder.table(
+            tableFive,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableFive-base-store")));
+        final KTable<Long, String> six = builder.table(
+            tableSix,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableSix-base-store")));
 
         final ValueMapper<String, String> mapper = value -> value.toUpperCase(Locale.ROOT);
 
@@ -382,59 +490,67 @@ public class KTableKTableLeftJoinTest {
             .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
             .mapValues(mapper);
 
-        driver.setUp(builder, stateDir, 250);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final String[] values = {
+                "a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
+                "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
+                "T", "UU", "VVVVVVVVVVVVVVVVVVV"
+            };
 
-        final String[] values = {
-            "a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
-            "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
-            "T", "UU", "VVVVVVVVVVVVVVVVVVV"
-        };
-
-        final Random random = new Random();
-        for (int i = 0; i < 1000; i++) {
-            for (final String input : inputs) {
-                final Long key = (long) random.nextInt(1000);
-                final String value = values[random.nextInt(values.length)];
-                driver.process(input, key, value);
+            TestInputTopic<Long, String> inputTopic;
+            final Random random = new Random();
+            for (int i = 0; i < 1000; i++) {
+                for (final String input : inputs) {
+                    final Long key = (long) random.nextInt(1000);
+                    final String value = values[random.nextInt(values.length)];
+                    inputTopic = driver.createInputTopic(input, Serdes.Long().serializer(), Serdes.String().serializer());
+                    inputTopic.pipeInput(key, value);
+                }
             }
         }
     }
 
     @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersionLatest() {
+        shouldLogAndMeterSkippedRecordsDueToNullLeftKey(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKeyWithBuiltInMetricsVersion0100To24() {
+        shouldLogAndMeterSkippedRecordsDueToNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
+    }
+
+    private void shouldLogAndMeterSkippedRecordsDueToNullLeftKey(final String builtInMetricsVersion) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         @SuppressWarnings("unchecked")
         final Processor<String, Change<String>> join = new KTableKTableLeftJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
             null
         ).get();
 
-        final MockProcessorContext context = new MockProcessorContext();
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+        final MockProcessorContext context = new MockProcessorContext(props);
         context.setRecordMetadata("left", -1, -2, null, -3);
         join.init(context);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         join.process(null, new Change<>("new", "old"));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
+            assertEquals(
+                1.0,
+                getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            );
+        }
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
-    private KeyValue<Integer, String> kv(final Integer key, final String value) {
-        return new KeyValue<>(key, value);
-    }
-
-    @SafeVarargs
-    private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
-        for (final KeyValue<Integer, String> kv : expected) {
-            final String value = getter.get(kv.key);
-            if (kv.value == null) {
-                assertNull(value);
-            } else {
-                assertEquals(kv.value, value);
-            }
-        }
+    private void assertOutputKeyValueTimestamp(final TestOutputTopic<Integer, String> outputTopic,
+                                               final Integer expectedKey,
+                                               final String expectedValue,
+                                               final long expectedTimestamp) {
+        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<Integer, String>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 }
