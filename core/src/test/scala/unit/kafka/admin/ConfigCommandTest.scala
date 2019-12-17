@@ -374,12 +374,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         assertEquals(ConfigResource.Type.TOPIC, resource.`type`)
         assertEquals(3, alterConfigOps.size)
 
-        val expectedConfigOps = List(
+        val expectedConfigOps = Set(
           new AlterConfigOp(newConfigEntry("delete.retention.ms", "1000000"), AlterConfigOp.OpType.SET),
           new AlterConfigOp(newConfigEntry("min.insync.replicas", "2"), AlterConfigOp.OpType.SET),
           new AlterConfigOp(newConfigEntry("unclean.leader.election.enable", ""), AlterConfigOp.OpType.DELETE)
         )
-        assertEquals(expectedConfigOps, alterConfigOps.asScala.toList)
+        assertEquals(expectedConfigOps, alterConfigOps.asScala.toSet)
         alteredConfigs = true
         alterResult
       }
