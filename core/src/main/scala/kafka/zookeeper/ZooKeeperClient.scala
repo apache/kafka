@@ -33,6 +33,7 @@ import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
+import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.JavaConverters._
 import scala.collection.Seq
@@ -46,6 +47,7 @@ import scala.collection.mutable.Set
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
  * @param name name of the client instance
+ * @param zkClientConfig ZooKeeper client configuration, for TLS configs if desired
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
@@ -54,7 +56,8 @@ class ZooKeeperClient(connectString: String,
                       time: Time,
                       metricGroup: String,
                       metricType: String,
-                      name: Option[String]) extends Logging with KafkaMetricsGroup {
+                      name: Option[String],
+                      zkClientConfig: Option[ZKClientConfig]) extends Logging with KafkaMetricsGroup {
 
   def this(connectString: String,
            sessionTimeoutMs: Int,
@@ -63,7 +66,8 @@ class ZooKeeperClient(connectString: String,
            time: Time,
            metricGroup: String,
            metricType: String) = {
-    this(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, None)
+    this(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, None,
+      None)
   }
 
   this.logIdent = name match {
@@ -99,9 +103,13 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
+  private val clientConfig = zkClientConfig getOrElse new ZKClientConfig()
+
   info(s"Initializing a new session to $connectString.")
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
-  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
+  @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher,
+    clientConfig)
+  private[zookeeper] def getClientConfig = clientConfig
 
   newGauge("SessionState", () => connectionState.toString)
 
@@ -370,7 +378,7 @@ class ZooKeeperClient(connectString: String,
         var connected = false
         while (!connected) {
           try {
-            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
+            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher, clientConfig)
             connected = true
           } catch {
             case e: Exception =>

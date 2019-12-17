@@ -17,13 +17,16 @@
 
 package kafka.admin
 
+import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
+import kafka.server.KafkaConfig
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
@@ -77,7 +80,7 @@ object ZkSecurityMigrator extends Logging {
     if (!JaasUtils.isZkSecurityEnabled()) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
       System.out.println("ERROR: %s".format(errorMsg))
-      throw new IllegalArgumentException("Incorrect configuration") 
+      throw new IllegalArgumentException("Incorrect configuration")
     }
 
     val zkAcl: Boolean = opts.options.valueOf(opts.zkAclOpt) match {
@@ -94,7 +97,7 @@ object ZkSecurityMigrator extends Logging {
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
-      Int.MaxValue, Time.SYSTEM)
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile))
     val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run(enablePathCheck)
@@ -104,10 +107,33 @@ object ZkSecurityMigrator extends Logging {
     try {
       run(args)
     } catch {
-        case e: Exception =>
+        case e: Exception => {
           e.printStackTrace()
+          // must exit with non-zero status so system tests will know we failed
+          Exit.exit(1)
+        }
     }
   }
+
+  def createZkClientConfigFromFile(filename: String) : ZKClientConfig = {
+    val zkTlsConfigFileProps = Utils.loadProps(filename, KafkaConfig.ZkSslProps.asJava)
+    val zkClientConfig = new ZKClientConfig() // Initializes based on any system properties that have been set
+    // Now override any set system properties with explicitly-provided values from the config file
+    // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
+    info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
+    zkTlsConfigFileProps.entrySet().asScala.foreach(entry => {
+      val key = entry.getKey.toString
+      info(s"Setting $key")
+      zkClientConfig.setProperty(key, entry.getValue.toString)
+    })
+    zkClientConfig
+  }
+
+  private[admin] def createZkClientConfigFromOption(options: OptionSet, option: ArgumentAcceptingOptionSpec[String]) : Option[ZKClientConfig] =
+    if (!options.has(option))
+      None
+    else
+      Some(createZkClientConfigFromFile(options.valueOf(option)))
 
   class ZkSecurityMigratorOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
@@ -121,6 +147,10 @@ object ZkSecurityMigrator extends Logging {
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
       "before migration. If not, exit the command.")
+    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+      "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
+        KafkaConfig.ZkSslProps.mkString(", ") + " are ignored.")
+      .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }
 }
@@ -262,7 +292,8 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
       println("That might be due to an incorrect chroot is specified when executing the command.")
       if (enablePathCheck) {
         println("Exit the command.")
-        Exit.exit(0)
+        // must exit with non-zero status so system tests will know we failed
+        Exit.exit(1)
       }
     }
   }

@@ -25,7 +25,7 @@ import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Delete, Deny, Describe, DescribeConfigs, Read, Write}
-import kafka.server.KafkaConfig
+import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk._
@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer.{AclCreateResult, AclDeleteResult, Action, AuthorizableRequestContext, AuthorizationResult, Authorizer, AuthorizerServerInfo}
+import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -46,10 +47,11 @@ import scala.util.{Failure, Random, Success, Try}
 object AclAuthorizer {
   // Optional override zookeeper cluster configuration where acls will be stored. If not specified,
   // acls will be stored in the same zookeeper where all other kafka broker metadata is stored.
-  val ZkUrlProp = "authorizer.zookeeper.url"
-  val ZkConnectionTimeOutProp = "authorizer.zookeeper.connection.timeout.ms"
-  val ZkSessionTimeOutProp = "authorizer.zookeeper.session.timeout.ms"
-  val ZkMaxInFlightRequests = "authorizer.zookeeper.max.in.flight.requests"
+  val configPrefix = "authorizer."
+  val ZkUrlProp = s"${configPrefix}zookeeper.url"
+  val ZkConnectionTimeOutProp = s"${configPrefix}zookeeper.connection.timeout.ms"
+  val ZkSessionTimeOutProp = s"${configPrefix}zookeeper.session.timeout.ms"
+  val ZkMaxInFlightRequests = s"${configPrefix}zookeeper.max.in.flight.requests"
 
   // Semi-colon separated list of users that will be treated as super users and will have access to all the resources
   // for all actions from all hosts, defaults to no super users.
@@ -77,6 +79,24 @@ object AclAuthorizer {
           (a.name compare b.name) * -1
       }
     }
+  }
+
+  def zkClientConfig(configs: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
+    val clientConfig = new ZKClientConfig()
+    def setConfigValue(unprefixedKey: String, defaultValue: Option[Any] = None): Unit = {
+      val prefixedValue = configs.get(s"$configPrefix$unprefixedKey")
+      prefixedValue.map(value => Some(value.toString)).getOrElse(defaultValue).foreach(defaultedValue =>
+        clientConfig.setProperty(unprefixedKey, defaultedValue.toString))
+      }
+    KafkaConfig.ZkSslProps.foreach(prop => prop match {
+        case KafkaConfig.ZkSslHostnameVerificationEnableProp =>
+          setConfigValue(prop, Some(Defaults.ZkSslHostnameVerificationEnable))
+        case KafkaConfig.ZkSslCrlEnableProp => setConfigValue(prop, Some(Defaults.ZkSslCrlEnable))
+        case KafkaConfig.ZkSslOcspEnableProp => setConfigValue(prop, Some(Defaults.ZkSslOcspEnable))
+        case KafkaConfig.ZkSslProtocolProp => setConfigValue(prop, Some(Defaults.ZkSslProtocol))
+        case propWithNoDefault => setConfigValue(propWithNoDefault)
+    })
+    Some(clientConfig)
   }
 }
 
@@ -122,9 +142,21 @@ class AclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(AclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
     val zkMaxInFlightRequests = configs.get(AclAuthorizer.ZkMaxInFlightRequests).map(_.toString.toInt).getOrElse(kafkaConfig.zkMaxInFlightRequests)
 
+    val zkClientSecure = configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkClientSecureProp).
+      map(_.toString).getOrElse(kafkaConfig.zkClientSecure.toString).toBoolean
+    val usePrefix = zkClientSecure && configs.get(AclAuthorizer.configPrefix + KafkaConfig.ZkClientSecureProp).
+      isDefined
+    val zkClientConfig =
+      if (!zkClientSecure)
+        None
+      else if (!usePrefix)
+        KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig)
+      else
+        AclAuthorizer.zkClientConfig(configs)
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
-      zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"))
+      zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),
+      zkClientConfig = zkClientConfig)
     zkClient.createAclPaths()
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1

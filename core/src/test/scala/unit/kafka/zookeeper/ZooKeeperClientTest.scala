@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
 
 import scala.collection.Seq
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.zk.ZooKeeperTestHarness
@@ -31,12 +30,14 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
@@ -94,6 +95,30 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       val threads = Thread.getAllStackTraces.keySet.asScala.map(_.getName)
       assertTrue(s"ZooKeeperClient event thread not found, threads=$threads",
         threads.exists(_.contains(ZooKeeperTestHarness.ZkClientEventThreadSuffix)))
+    } finally {
+      client.close()
+    }
+  }
+
+  @Test
+  def testConnectionViaNettyClient(): Unit = {
+    // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
+    // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
+    // to kafka.zk.EmbeddedZoopeeper
+    val clientConfig = new ZKClientConfig()
+    val propKey = "zookeeper.clientCnxnSocket"
+    val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
+    clientConfig.setProperty(propKey, propVal)
+    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
+      "testMetricType", None, Some(clientConfig))
+    try {
+      assertEquals(propVal, client.getClientConfig.getProperty(propKey))
+      // For a sanity check, make sure a bad client connection socket class name generates an exception
+      val badClientConfig = new ZKClientConfig()
+      badClientConfig.setProperty(propKey, propVal + "BadClassName")
+      assertTrue("Client should not have been able to connect with a bad client connection socket class",
+        Try(new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
+          "testMetricType", None, Some(badClientConfig))).isFailure)
     } finally {
       client.close()
     }

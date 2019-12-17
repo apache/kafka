@@ -17,9 +17,13 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import org.scalatest.Assertions.intercept
 
 class KafkaServerTest extends ZooKeeperTestHarness {
@@ -38,6 +42,25 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)
 
     TestUtils.shutdownServers(Seq(server1, server2))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfig(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+
+    // should get None if TLS is not enabled
+    props.put(KafkaConfig.ZkClientSecureProp, "false")
+    assertEquals(None, KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
+
+    // should get correct config for all properties if TLS is enabled
+    def isBooleanProp(k: String) : Boolean =
+      k == KafkaConfig.ZkClientSecureProp || k == KafkaConfig.ZkSslHostnameVerificationEnableProp ||
+      k == KafkaConfig.ZkSslCrlEnableProp || k == KafkaConfig.ZkSslOcspEnableProp
+    KafkaConfig.ZkSslProps.foreach(k => props.put(k, if (isBooleanProp(k)) "true" else k))
+    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    KafkaConfig.ZkSslProps.foreach(k =>
+      assertEquals(if (isBooleanProp(k)) "true" else k, zkClientConfig.get.getProperty(k)))
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {

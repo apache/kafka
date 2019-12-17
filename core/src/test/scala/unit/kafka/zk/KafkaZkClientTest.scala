@@ -24,7 +24,7 @@ import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
 import kafka.security.auth._
-import kafka.server.ConfigType
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -46,6 +46,7 @@ import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -84,6 +85,31 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   private val topicPartition = new TopicPartition("topic", 0)
+
+  @Test
+  def testConnectionViaNettyClient(): Unit = {
+    // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
+    // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
+    // to kafka.zk.EmbeddedZoopeeper
+    val clientConfig = new ZKClientConfig()
+    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
+    clientConfig.setProperty(propKey, propVal)
+    val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig))
+    try {
+      assertEquals(propVal, client.currentZooKeeper.getClientConfig.getProperty(propKey))
+      // For a sanity check, make sure a bad client connection socket class name generates an exception
+      val badClientConfig = new ZKClientConfig()
+      badClientConfig.setProperty(propKey, propVal + "BadClassName")
+      intercept[Exception] {
+        KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig))
+      }
+    } finally {
+      client.close()
+    }
+  }
 
   @Test
   def testSetAndGetConsumerOffset(): Unit = {

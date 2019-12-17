@@ -48,6 +48,7 @@ import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -90,6 +91,29 @@ object KafkaServer {
       .recordLevel(Sensor.RecordingLevel.forName(kafkaConfig.metricRecordingLevel))
       .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
   }
+
+  def zkClientConfigFromKafkaConfig(config: KafkaConfig) =
+    if (!config.zkClientSecure)
+      None
+    else {
+      val clientConfig = new ZKClientConfig()
+      clientConfig.setProperty(KafkaConfig.ZkClientSecureProp, "true")
+      config.zkClientCnxnSocketClassName.foreach(clientConfig.setProperty(KafkaConfig.ZkClientCnxnSocketProp, _))
+      config.zkSslKeyStoreLocation.foreach(clientConfig.setProperty(KafkaConfig.ZkSslKeyStoreLocationProp, _))
+      config.zkSslKeyStorePassword.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslKeyStorePasswordProp, x.value))
+      config.zkSslKeyStoreType.foreach(clientConfig.setProperty(KafkaConfig.ZkSslKeyStoreTypeProp, _))
+      config.zkSslTrustStoreLocation.foreach(clientConfig.setProperty(KafkaConfig.ZkSslTrustStoreLocationProp, _))
+      config.zkSslTrustStorePassword.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslTrustStorePasswordProp, x.value))
+      config.zkSslTrustStoreType.foreach(clientConfig.setProperty(KafkaConfig.ZkSslTrustStoreTypeProp, _))
+      config.ZkSslProtocol.foreach(clientConfig.setProperty(KafkaConfig.ZkSslProtocolProp, _))
+      config.ZkSslEnabledProtocols.foreach(clientConfig.setProperty(KafkaConfig.ZkSslEnabledProtocolsProp, _))
+      config.ZkSslCipherSuites.foreach(clientConfig.setProperty(KafkaConfig.ZkSslCipherSuitesProp, _))
+      config.ZkSslContextSupplierClass.foreach(clientConfig.setProperty(KafkaConfig.ZkSslContextSupplierClassProp, _))
+      config.ZkSslHostnameVerificationEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslHostnameVerificationEnableProp, x.toString))
+      config.ZkSslCrlEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslCrlEnableProp, x.toString))
+      config.ZkSslOcspEnable.foreach(x => clientConfig.setProperty(KafkaConfig.ZkSslOcspEnableProp, x.toString))
+      Some(clientConfig)
+    }
 
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
@@ -349,9 +373,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
-    def createZkClient(zkConnect: String, isSecure: Boolean) =
+    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(config)
+
+    def createZkClient(zkConnect: String, isSecure: Boolean) = {
       KafkaZkClient(zkConnect, isSecure, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-        config.zkMaxInFlightRequests, time, name = Some("Kafka server"))
+        config.zkMaxInFlightRequests, time, name = Some("Kafka server"), zkClientConfig = zkClientConfig)
+    }
 
     val chrootIndex = config.zkConnect.indexOf("/")
     val chrootOption = {

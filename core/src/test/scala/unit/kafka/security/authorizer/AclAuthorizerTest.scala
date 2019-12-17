@@ -24,8 +24,8 @@ import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.auth.Resource
 import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipal}
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.server.{Defaults, KafkaConfig}
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.acl._
@@ -48,6 +48,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
@@ -783,6 +784,38 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val actual = getAclChangeEventAsString(LITERAL)
 
     assertEquals(expected, actual)
+  }
+
+  @Test
+  def testAuthorizerZkConfigDefaults(): Unit = {
+    val noTlsConfigs: mutable.Map[String, Any] = mutable.Map()
+    val zkClientConfig = AclAuthorizer.zkClientConfig(noTlsConfigs)
+    // confirm we get all the default values we expect
+    KafkaConfig.ZkSslProps.foreach(prop => prop match {
+      case KafkaConfig.ZkSslProtocolProp =>
+        assertEquals(Defaults.ZkSslProtocol.toString, zkClientConfig.get.getProperty(prop))
+      case KafkaConfig.ZkSslCrlEnableProp =>
+        assertEquals(Defaults.ZkSslCrlEnable.toString, zkClientConfig.get.getProperty(prop))
+      case KafkaConfig.ZkSslOcspEnableProp =>
+        assertEquals(Defaults.ZkSslOcspEnable.toString, zkClientConfig.get.getProperty(prop))
+      case KafkaConfig.ZkSslHostnameVerificationEnableProp =>
+        assertEquals(Defaults.ZkSslHostnameVerificationEnable.toString, zkClientConfig.get.getProperty(prop))
+      case anyOtherProp => assertNull(zkClientConfig.get.getProperty(anyOtherProp))
+    })
+  }
+
+  @Test
+  def testAuthorizerZkConfigExplicitValues(): Unit = {
+    val prefix = "authorizer."
+    val allExplicitTlsConfigs: mutable.Map[String, Any] = mutable.Map()
+    KafkaConfig.ZkSslProps.foreach(key => allExplicitTlsConfigs(s"$prefix$key") = key)
+    allExplicitTlsConfigs(s"$prefix${KafkaConfig.ZkClientSecureProp}") = "true"
+    val zkClientConfig = AclAuthorizer.zkClientConfig(allExplicitTlsConfigs)
+    KafkaConfig.ZkSslProps.foreach(prop => prop match {
+      case KafkaConfig.ZkClientSecureProp =>
+        assertEquals("true", zkClientConfig.get.getProperty(prop))
+      case anyOtherProp => assertEquals(anyOtherProp, zkClientConfig.get.getProperty(anyOtherProp))
+    })
   }
 
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {

@@ -22,7 +22,7 @@ import java.util.concurrent.ExecutionException
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
-import kafka.server.{ConfigType, DynamicConfig}
+import kafka.server.{ConfigType, DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -52,7 +52,8 @@ object ReassignPartitionsCommand extends Logging {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
     val time = Time.SYSTEM
-    val zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
+    val zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time,
+      zkClientConfig = ZkSecurityMigrator.createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile))
 
     val adminClientOpt = createAdminClient(opts)
 
@@ -497,6 +498,10 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("timeout")
                       .ofType(classOf[Long])
                       .defaultsTo(10000)
+    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+      "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
+        KafkaConfig.ZkSslProps.mkString(", ") + " are ignored.")
+      .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }
 }
