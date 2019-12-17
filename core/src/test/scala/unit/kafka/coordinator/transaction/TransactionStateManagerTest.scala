@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import org.easymock.{Capture, EasyMock, IAnswer}
+import org.scalatest.Assertions.assertThrows
 
 import scala.collection.Map
 import scala.collection.mutable
@@ -467,6 +468,44 @@ class TransactionStateManagerTest {
     setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
     verifyMetadataDoesExistAndIsUsable(transactionalId1)
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
+  }
+
+  @Test
+  def testReloadMetadataAfterException(): Unit = {
+    txnMetadata1.state = PrepareCommit
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
+    val startOffset = 0L
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    // immigrate partition at epoch 0
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertEquals(0, transactionManager.leavingPartitions.size)
+
+    // emigrate partition; simulate ZK session timeout
+    EasyMock.reset(zkClient)
+    EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+      .andThrow(new RuntimeException)
+      .once()
+      .andReturn(Some(numPartitions))
+      .anyTimes()
+    EasyMock.replay(zkClient)
+
+    assertThrows[RuntimeException] {
+      transactionManager.removeTransactionsForTxnTopicPartition(partitionId, 0)
+    }
+
+    // immigrate partition at epoch 1
+    prepareTxnLog(topicPartition, 0, records)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertEquals(0, transactionManager.leavingPartitions.size)
+    assertTrue(transactionManager.transactionMetadataCache.get(partitionId).isDefined)
   }
 
   private def verifyMetadataDoesExistAndIsUsable(transactionalId: String): Unit = {
