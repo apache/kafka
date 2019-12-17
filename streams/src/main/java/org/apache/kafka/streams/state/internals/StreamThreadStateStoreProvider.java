@@ -48,7 +48,6 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
-        // TODO: This needs to be rethought
         if (!streamThread.isRunning()) {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
                 streamThread.state() + ", not RUNNING");

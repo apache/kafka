@@ -360,6 +360,18 @@ public class TaskManager {
         return standby.runningTaskMap();
     }
 
+    List<StreamTask> allStreamsTasks() {
+        return active.allTasks();
+    }
+
+    Set<TaskId> restoringTaskIds() {
+        return active.restoringTaskIds();
+    }
+
+    List<StandbyTask> allStandbyTasks() {
+        return standby.allTasks();
+    }
+
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
         this.consumer = consumer;
     }

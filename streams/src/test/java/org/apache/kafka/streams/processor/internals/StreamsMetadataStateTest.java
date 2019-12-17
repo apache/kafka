@@ -140,11 +140,11 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetAllStreamInstances() {
         final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet(globalTable, "table-one", "table-two", "merged-table"),
-                Utils.mkSet(topic1P0, topic2P1, topic4P0), null, null);
+                Utils.mkSet(topic1P0, topic2P1, topic4P0), Collections.emptySet(), Collections.emptySet());
         final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-one", "merged-table"),
-                Utils.mkSet(topic2P0, topic1P1), null, null);
+                Utils.mkSet(topic2P0, topic1P1), Collections.emptySet(), Collections.emptySet());
         final StreamsMetadata three = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
-                Collections.singleton(topic3P0), null, null);
+                Collections.singleton(topic3P0), Collections.emptySet(), Collections.emptySet());
 
         final Collection<StreamsMetadata> actual = metadataState.getAllMetadata();
         assertEquals(3, actual.size());
@@ -170,7 +170,7 @@ public class StreamsMetadataStateTest {
             cluster.withPartitions(Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null))));
 
         final StreamsMetadata expected = new StreamsMetadata(hostFour, Collections.singleton(globalTable),
-                Collections.singleton(tp5), null, null);
+                Collections.singleton(tp5), Collections.emptySet(), Collections.emptySet());
         final Collection<StreamsMetadata> actual = metadataState.getAllMetadata();
         assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
     }
@@ -178,9 +178,9 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetInstancesForStoreName() {
         final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet(globalTable, "table-one", "table-two", "merged-table"),
-                Utils.mkSet(topic1P0, topic2P1, topic4P0), null, null);
+                Utils.mkSet(topic1P0, topic2P1, topic4P0), Collections.emptySet(), Collections.emptySet());
         final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-one", "merged-table"),
-                Utils.mkSet(topic2P0, topic1P1), null, null);
+                Utils.mkSet(topic2P0, topic1P1), Collections.emptySet(), Collections.emptySet());
         final Collection<StreamsMetadata> actual = metadataState.getAllMetadataForStore("table-one");
         assertEquals(2, actual.size());
         assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
@@ -208,7 +208,7 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, Collections.<HostInfo>emptySet(), 0);
 
-        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataWithKey("table-three",
+        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("table-three",
                                                                     "the-key",
                                                                     Serdes.String().serializer());
 
@@ -225,7 +225,7 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Collections.<HostInfo>emptySet(), 1);
 
-        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataWithKey("table-three",
+        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("table-three",
                 "the-key",
                 partitioner);
         assertEquals(expected, actual);
@@ -234,7 +234,7 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldReturnNotAvailableWhenClusterIsEmpty() {
         metadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), Collections.emptyMap(), Cluster.empty());
-        final KeyQueryMetadata result = metadataState.getKeyQueryMetadataWithKey("table-one", "a", Serdes.String().serializer());
+        final KeyQueryMetadata result = metadataState.getKeyQueryMetadataForKey("table-one", "a", Serdes.String().serializer());
         assertEquals(KeyQueryMetadata.NOT_AVAILABLE, result);
     }
 
@@ -247,7 +247,7 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Collections.<HostInfo>emptySet(), 2);
 
-        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataWithKey("merged-table",  "the-key", new StreamPartitioner<String, Object>() {
+        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("merged-table",  "the-key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
                 return 2;
@@ -260,7 +260,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldReturnNullOnGetWithKeyWhenStoreDoesntExist() {
-        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataWithKey("not-a-store",
+        final KeyQueryMetadata actual = metadataState.getKeyQueryMetadataForKey("not-a-store",
                 "key",
                 Serdes.String().serializer());
         assertNull(actual);
@@ -268,23 +268,23 @@ public class StreamsMetadataStateTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowWhenKeyIsNull() {
-        metadataState.getKeyQueryMetadataWithKey("table-three", null, Serdes.String().serializer());
+        metadataState.getKeyQueryMetadataForKey("table-three", null, Serdes.String().serializer());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowWhenSerializerIsNull() {
-        metadataState.getKeyQueryMetadataWithKey("table-three", "key", (Serializer<Object>) null);
+        metadataState.getKeyQueryMetadataForKey("table-three", "key", (Serializer<Object>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfStoreNameIsNull() {
-        metadataState.getKeyQueryMetadataWithKey(null, "key", Serdes.String().serializer());
+        metadataState.getKeyQueryMetadataForKey(null, "key", Serdes.String().serializer());
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfStreamPartitionerIsNull() {
-        metadataState.getKeyQueryMetadataWithKey(null, "key", (StreamPartitioner) null);
+        metadataState.getKeyQueryMetadataForKey(null, "key", (StreamPartitioner) null);
     }
 
     @Test
@@ -298,7 +298,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetMyMetadataForGlobalStoreWithKey() {
-        final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataWithKey(globalTable, "key", Serdes.String().serializer());
+        final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataForKey(globalTable, "key", Serdes.String().serializer());
         assertEquals(hostOne, metadata.getActiveHost());
     }
 
@@ -306,12 +306,12 @@ public class StreamsMetadataStateTest {
     public void shouldGetAnyHostForGlobalStoreByKeyIfMyHostUnknown() {
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, Collections.emptyMap(), cluster);
-        assertNotNull(streamsMetadataState.getKeyQueryMetadataWithKey(globalTable, "key", Serdes.String().serializer()));
+        assertNotNull(streamsMetadataState.getKeyQueryMetadataForKey(globalTable, "key", Serdes.String().serializer()));
     }
 
     @Test
     public void shouldGetMyMetadataForGlobalStoreWithKeyAndPartitioner() {
-        final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataWithKey(globalTable, "key", partitioner);
+        final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataForKey(globalTable, "key", partitioner);
         assertEquals(hostOne, metadata.getActiveHost());
     }
 
@@ -319,7 +319,7 @@ public class StreamsMetadataStateTest {
     public void shouldGetAnyHostForGlobalStoreByKeyAndPartitionerIfMyHostUnknown() {
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), StreamsMetadataState.UNKNOWN_HOST);
         streamsMetadataState.onChange(hostToPartitions, Collections.emptyMap(), cluster);
-        assertNotNull(streamsMetadataState.getKeyQueryMetadataWithKey(globalTable, "key", partitioner));
+        assertNotNull(streamsMetadataState.getKeyQueryMetadataForKey(globalTable, "key", partitioner));
     }
 
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import java.util.Objects;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
 
@@ -41,10 +42,23 @@ public class StreamsMetadata {
                                                                             Collections.emptySet());
 
     private final HostInfo hostInfo;
+    /**
+     * State stores owned by the instance as an active replica
+     */
     private final Set<String> stateStoreNames;
+    /**
+     * Topic partitions consumed by the instance as an active replica
+     */
     private final Set<TopicPartition> topicPartitions;
-    private final Set<TopicPartition> standbyTopicPartitions;
+    /**
+     * State stores owned by the instance as a standby replica
+     */
     private final Set<String> standbyStateStoreNames;
+    /**
+     * (Source) Topic partitions for which the instance acts as standby.
+     */
+    private final Set<TopicPartition> standbyTopicPartitions;
+
 
     public StreamsMetadata(final HostInfo hostInfo,
                            final Set<String> stateStoreNames,
@@ -103,16 +117,19 @@ public class StreamsMetadata {
         if (!stateStoreNames.equals(that.stateStoreNames)) {
             return false;
         }
-        return topicPartitions.equals(that.topicPartitions);
+        if (!topicPartitions.equals(that.topicPartitions)) {
+            return false;
+        }
+        if (!standbyStateStoreNames.equals(that.standbyStateStoreNames)) {
+            return false;
+        }
 
+        return standbyTopicPartitions.equals(that.standbyTopicPartitions);
     }
 
     @Override
     public int hashCode() {
-        int result = hostInfo.hashCode();
-        result = 31 * result + stateStoreNames.hashCode();
-        result = 31 * result + topicPartitions.hashCode();
-        return result;
+        return Objects.hash(hostInfo, stateStoreNames, topicPartitions, standbyStateStoreNames, standbyTopicPartitions);
     }
 
     @Override
@@ -121,6 +138,8 @@ public class StreamsMetadata {
                 "hostInfo=" + hostInfo +
                 ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +
+                ", standbyStateStoreNames=" + standbyStateStoreNames +
+                ", standbyTopicPartitions=" + standbyTopicPartitions +
                 '}';
     }
 }

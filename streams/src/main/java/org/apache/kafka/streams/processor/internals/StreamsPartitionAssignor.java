@@ -637,7 +637,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         topicPartitions.addAll(partitionsForTask.get(id));
                     }
 
-                    // TODO: why do we have standby tasks even for non stateful sub topologies?
                     for (final TaskId id : state.standbyTasks()) {
                         standbyPartitions.addAll(partitionsForTask.get(id));
                     }

@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -56,7 +59,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
@@ -1134,7 +1136,7 @@ public class KafkaStreams implements AutoCloseable {
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, keySerializer);
+        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer);
     }
 
     /**
@@ -1151,50 +1153,84 @@ public class KafkaStreams implements AutoCloseable {
                                                     final K key,
                                                     final StreamPartitioner<? super K, ?> partitioner) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataWithKey(storeName, key, partitioner);
+        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, partitioner);
     }
 
     /**
-     * Returns mapping from partition to another map of store name to offset lag info, for all {partitions, stores} local to this Streams instance. It includes both active and standby store partitions.
+     * Returns offset lag info, for all store partitions (active or standby) local to this Streams instance. Note that the
+     * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
+     * partition is fresh enough for querying.
+     *
+     * @return map of store names to another map of partition to offset lags
      */
     public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
-
         final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
-        for (int i = 0; i < this.threads.length; i++) {
-            final Map<TaskId, StreamTask> streamTaskMap = this.threads[i].tasks();
-            final Map<TaskId, StandbyTask> standbyTaskMap = this.threads[i].standbyTasks();
-            final Set<String> activeStateStores = streamsMetadataState.getMyMetadata().stateStoreNames();
-            final Set<String> standbyStateStores = streamsMetadataState.getMyMetadata().standbyStateStoreNames();
+        final Map<TopicPartition, Long> standbyChangelogPositions = new HashMap<>();
+        final Map<TopicPartition, Long> activeChangelogPositions = new HashMap<>();
+        final long unknownPosition = 0;
 
-            for (final Map.Entry<TaskId, StreamTask> taskEntry : streamTaskMap.entrySet()) {
-                addLagInfoToOutputMap(activeStateStores, taskEntry.getKey().partition, taskEntry.getValue(), localOffsetLags);
+        // Obtain the current positions, of all the active-restoring and standby tasks
+        for (final StreamThread streamThread : this.threads) {
+            final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
+
+            for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
+                final Map<TopicPartition, Long> changelogPartitionLimits = standbyTask.checkpointedOffsets();
+                standbyTask.changelogPartitions().forEach(topicPartition ->
+                    standbyChangelogPositions.put(topicPartition,
+                        changelogPartitionLimits.getOrDefault(topicPartition, unknownPosition)));
             }
-            for (final Map.Entry<TaskId, StandbyTask> taskEntry : standbyTaskMap.entrySet()) {
-                addLagInfoToOutputMap(standbyStateStores, taskEntry.getKey().partition, taskEntry.getValue(), localOffsetLags);
+
+            for (final StreamTask activeTask : streamThread.allStreamsTasks()) {
+                final boolean isRestoring = restoringTaskIds.contains(activeTask.id());
+                final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
+                activeTask.changelogPartitions().forEach(topicPartition -> {
+                    if (isRestoring) {
+                        activeChangelogPositions.put(topicPartition, restoredOffsets.getOrDefault(topicPartition, unknownPosition));
+                    } else {
+                        activeChangelogPositions.put(topicPartition, unknownPosition);
+                    }
+                });
             }
         }
+
+        log.info("Current changelog positions, for active: " + activeChangelogPositions + " standby:" + standbyChangelogPositions);
+        final Map<TopicPartition, OffsetSpec> offsetSpecMap = new HashMap<>();
+        Stream.concat(activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
+            .forEach(topicPartition ->  offsetSpecMap.put(topicPartition, OffsetSpec.latest()));
+        try {
+            final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = adminClient.listOffsets(offsetSpecMap).all().get();
+            log.info("Current end offsets :" + allEndOffsets);
+            allEndOffsets.forEach((topicPartition, offsetsResultInfo) -> {
+                final String storeName = streamsMetadataState.getStoreForChangelogTopic(topicPartition.topic());
+                final long offsetPosition;
+                if (activeChangelogPositions.containsKey(topicPartition)) {
+                    // if unknown, assume it's positioned at the tail of changelog partition
+                    offsetPosition = activeChangelogPositions.get(topicPartition) == unknownPosition ?
+                        offsetsResultInfo.offset() : activeChangelogPositions.get(topicPartition);
+                } else if (standbyChangelogPositions.containsKey(topicPartition)) {
+                    // if unknown, assume it's positioned at the head of changelog partition
+                    offsetPosition = standbyChangelogPositions.get(topicPartition) == unknownPosition ?
+                        0 : standbyChangelogPositions.get(topicPartition);
+                } else {
+                    throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
+                }
+
+                final long offsetLag = offsetsResultInfo.offset() - offsetPosition;
+                final Map<Integer, Long> partitionToOffsetLag = localOffsetLags
+                    .getOrDefault(storeName, new HashMap<>());
+                if (!partitionToOffsetLag.containsKey(topicPartition.partition())) {
+                    partitionToOffsetLag.put(topicPartition.partition(), offsetLag);
+                } else {
+                    throw new IllegalStateException("Encountered the same store partition" + storeName + ","
+                        + topicPartition.partition() + " more than once");
+                }
+                localOffsetLags.put(storeName, partitionToOffsetLag);
+            });
+        } catch (final Exception e) {
+            throw new StreamsException("Unable to obtain end offsets from kafka", e);
+        }
+
         return localOffsetLags;
-    }
-
-    private void addLagInfoToOutputMap(final Set<String> stateStores,
-                                       final int partition,
-                                       final AbstractTask task,
-                                       final Map<String, Map<Integer, Long>> outputLocalOffsetLags) {
-
-        for (final String storeName : stateStores) {
-            final TopicPartition topicPartition = new TopicPartition(streamsMetadataState.getChangelogTopicForStore(storeName), partition);
-            final long offsetLimit = task.offsetLimit(topicPartition);
-            final long checkpointedOffset = task.checkpointedOffsets().get(topicPartition);
-            final long offsetLag = offsetLimit - checkpointedOffset;
-
-            outputLocalOffsetLags.putIfAbsent(storeName, new HashMap<>());
-            final Map<Integer, Long> partitionToOffsetLag = outputLocalOffsetLags.getOrDefault(storeName, new HashMap<>());
-            if (!partitionToOffsetLag.containsKey(partition)) {
-                partitionToOffsetLag.put(partition, offsetLag);
-            } else {
-                throw new IllegalStateException("Encountered the same store partition" + storeName + "," + partition + " more than once");
-            }
-        }
     }
 
     /**

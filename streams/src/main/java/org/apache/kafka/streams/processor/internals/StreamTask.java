@@ -57,7 +57,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -248,17 +247,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         stateMgr.putOffsetLimits(committedOffsetsForChangelogs);
         offsetLimits.putAll(committedOffsetsForChangelogs);
-    }
-
-    @Override
-    public long offsetLimit(final TopicPartition partition) {
-        final Long limit = offsetLimits.get(partition);
-        return limit != null ? limit : Long.MAX_VALUE;
-    }
-
-    @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
-        return Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
     private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {

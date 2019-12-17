@@ -195,7 +195,6 @@ public class StandbyTask extends AbstractTask {
         return remainingRecords;
     }
 
-    @Override
     public Map<TopicPartition, Long> checkpointedOffsets() {
         return Collections.unmodifiableMap(stateMgr.checkpointed());
     }
@@ -219,12 +218,6 @@ public class StandbyTask extends AbstractTask {
         updateOffsetLimits = false;
 
         return offsetLimits.get(partition);
-    }
-
-    @Override
-    public long offsetLimit(final TopicPartition partition) {
-        final Long limit = offsetLimits.get(partition);
-        return limit != null ? limit : Long.MAX_VALUE;
     }
 
     private Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {

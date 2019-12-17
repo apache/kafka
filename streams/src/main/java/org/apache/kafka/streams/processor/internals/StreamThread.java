@@ -235,11 +235,6 @@ public class StreamThread extends Thread {
         return oldState;
     }
 
-    public boolean isRunningAndNotRebalancing() {
-        // we do not need to grab stateLock since it is a single read
-        return state == State.RUNNING;
-    }
-
     public boolean isRunning() {
         synchronized (stateLock) {
             return state.isRunning();
@@ -1199,6 +1194,18 @@ public class StreamThread extends Thread {
         return taskManager.standbyTasks();
     }
 
+    public List<StreamTask> allStreamsTasks() {
+        return taskManager.allStreamsTasks();
+    }
+
+    public List<StandbyTask> allStandbyTasks() {
+        return taskManager.allStandbyTasks();
+    }
+
+    public Set<TaskId> restoringTaskIds() {
+        return taskManager.restoringTaskIds();
+    }
+
     /**
      * Produces a string representation containing useful information about a StreamThread.
      * This is useful in debugging scenarios.
@@ -1268,9 +1275,5 @@ public class StreamThread extends Thread {
 
     int currentNumIterations() {
         return numIterations;
-    }
-
-    public StreamThread.StateListener stateListener() {
-        return stateListener;
     }
 }

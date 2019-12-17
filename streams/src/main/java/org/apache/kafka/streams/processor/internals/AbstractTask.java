@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -32,7 +33,6 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -99,10 +99,6 @@ public abstract class AbstractTask implements Task {
     public TaskId id() {
         return id;
     }
-
-    public abstract long offsetLimit(final TopicPartition partition);
-
-    public abstract Map<TopicPartition, Long> checkpointedOffsets();
 
     @Override
     public String applicationId() {
@@ -260,4 +256,7 @@ public abstract class AbstractTask implements Task {
         return stateMgr.changelogPartitions();
     }
 
+    public Map<TopicPartition, Long> restoredOffsets() {
+        return stateMgr.changelogReader().restoredOffsets();
+    }
 }

@@ -409,6 +409,10 @@ public class ProcessorStateManager implements StateManager {
         return unmodifiableList(changelogPartitions);
     }
 
+    ChangelogReader changelogReader() {
+        return changelogReader;
+    }
+
     void ensureStoresRegistered() {
         for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
             if (!entry.getValue().isPresent()) {

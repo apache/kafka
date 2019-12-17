@@ -16,13 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.HostInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -30,15 +25,22 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.HostInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AssignmentInfo {
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
@@ -163,8 +165,7 @@ public class AssignmentInfo {
                     out.writeInt(usedVersion);
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
-                    encodePartitionsByHostAsDictionary(out);
-                    encodeStandbyPartitionsByHostAsDictionary(out);
+                    encodeActiveAndStandbyHostPartitions(out);
                     out.writeInt(errCode);
                     break;
                 default:
@@ -208,27 +209,9 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeHostPartitionMapAsDictionary(final DataOutputStream out,
-                                                    final Map<HostInfo, Set<TopicPartition>> hostPartitionMap) throws IOException {
-
-        // Build a dictionary to encode topicNames
-        int topicIndex = 0;
-        final Map<String, Integer> topicNameDict = new HashMap<>();
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : hostPartitionMap.entrySet()) {
-            for (final TopicPartition topicPartition : entry.getValue()) {
-                if (!topicNameDict.containsKey(topicPartition.topic())) {
-                    topicNameDict.put(topicPartition.topic(), topicIndex++);
-                }
-            }
-        }
-
-        // write the topic name dictionary out
-        out.writeInt(topicNameDict.size());
-        for (final Map.Entry<String, Integer> entry : topicNameDict.entrySet()) {
-            out.writeInt(entry.getValue());
-            out.writeUTF(entry.getKey());
-        }
-
+    private void encodeHostPartitionMapUsingDictionary(final DataOutputStream out,
+                                                       final Map<String, Integer> topicNameDict,
+                                                       final Map<HostInfo, Set<TopicPartition>> hostPartitionMap) throws IOException {
         // encode partitions by host
         out.writeInt(hostPartitionMap.size());
 
@@ -243,12 +226,41 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodePartitionsByHostAsDictionary(final DataOutputStream out) throws IOException {
-        encodeHostPartitionMapAsDictionary(out, partitionsByHost);
+    private Map<String, Integer> encodeTopicDictionaryAndGet(final DataOutputStream out,
+                                                             final Set<TopicPartition> topicPartitions) throws IOException {
+        // Build a dictionary to encode topicNames
+        int topicIndex = 0;
+        final Map<String, Integer> topicNameDict = new HashMap<>();
+        for (final TopicPartition topicPartition : topicPartitions) {
+            if (!topicNameDict.containsKey(topicPartition.topic())) {
+                topicNameDict.put(topicPartition.topic(), topicIndex++);
+            }
+        }
+
+        // write the topic name dictionary out
+        out.writeInt(topicNameDict.size());
+        for (final Map.Entry<String, Integer> entry : topicNameDict.entrySet()) {
+            out.writeInt(entry.getValue());
+            out.writeUTF(entry.getKey());
+        }
+
+        return topicNameDict;
     }
 
-    private void encodeStandbyPartitionsByHostAsDictionary(final DataOutputStream out) throws IOException {
-        encodeHostPartitionMapAsDictionary(out, standbyPartitionsByHost);
+    private void encodePartitionsByHostAsDictionary(final DataOutputStream out) throws IOException {
+        final Set<TopicPartition> allTopicPartitions = partitionsByHost.values().stream()
+            .flatMap(Collection::stream).collect(Collectors.toSet());
+        final Map<String, Integer> topicNameDict = encodeTopicDictionaryAndGet(out, allTopicPartitions);
+        encodeHostPartitionMapUsingDictionary(out, topicNameDict, partitionsByHost);
+    }
+
+    private void encodeActiveAndStandbyHostPartitions(final DataOutputStream out) throws IOException {
+        final Set<TopicPartition> allTopicPartitions = Stream
+            .concat(partitionsByHost.values().stream(), standbyPartitionsByHost.values().stream())
+            .flatMap(Collection::stream).collect(Collectors.toSet());
+        final Map<String, Integer> topicNameDict = encodeTopicDictionaryAndGet(out, allTopicPartitions);
+        encodeHostPartitionMapUsingDictionary(out, topicNameDict, partitionsByHost);
+        encodeHostPartitionMapUsingDictionary(out, topicNameDict, standbyPartitionsByHost);
     }
 
     private void writeHostInfo(final DataOutputStream out, final HostInfo hostInfo) throws IOException {
@@ -318,8 +330,7 @@ public class AssignmentInfo {
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeActiveTasks(assignmentInfo, in);
                     decodeStandbyTasks(assignmentInfo, in);
-                    decodePartitionsByHostUsingDictionary(assignmentInfo, in);
-                    decodeStandbyPartitionsByHostUsingDictionary(assignmentInfo, in);
+                    decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
                     break;
                 default:
@@ -373,15 +384,18 @@ public class AssignmentInfo {
         return partitions;
     }
 
-    private static Map<HostInfo, Set<TopicPartition>> decodeHostPartitionMapUsingDictionary(final AssignmentInfo assignmentInfo,
-                                                                                            final DataInputStream in) throws IOException {
-        final Map<HostInfo, Set<TopicPartition>> hostPartitionMap = new HashMap<>();
+    private static Map<Integer, String> decodeTopicIndexAndGet(final DataInputStream in) throws IOException {
         final int dictSize = in.readInt();
         final Map<Integer, String> topicIndexDict = new HashMap<>(dictSize);
         for (int i = 0; i < dictSize; i++) {
             topicIndexDict.put(in.readInt(), in.readUTF());
         }
+        return topicIndexDict;
+    }
 
+    private static Map<HostInfo, Set<TopicPartition>> decodeHostPartitionMapUsingDictionary(final DataInputStream in,
+                                                                                            final Map<Integer, String> topicIndexDict) throws IOException {
+        final Map<HostInfo, Set<TopicPartition>> hostPartitionMap = new HashMap<>();
         final int numEntries = in.readInt();
         for (int i = 0; i < numEntries; i++) {
             final HostInfo hostInfo = new HostInfo(in.readUTF(), in.readInt());
@@ -392,12 +406,15 @@ public class AssignmentInfo {
 
     private static void decodePartitionsByHostUsingDictionary(final AssignmentInfo assignmentInfo,
                                                               final DataInputStream in) throws IOException {
-        assignmentInfo.partitionsByHost = decodeHostPartitionMapUsingDictionary(assignmentInfo, in);
+        final Map<Integer, String> topicIndexDict = decodeTopicIndexAndGet(in);
+        assignmentInfo.partitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
     }
 
-    private static void decodeStandbyPartitionsByHostUsingDictionary(final AssignmentInfo assignmentInfo,
-                                                                     final DataInputStream in) throws IOException {
-        assignmentInfo.standbyPartitionsByHost = decodeHostPartitionMapUsingDictionary(assignmentInfo, in);
+    private static void decodeActiveAndStandbyHostPartitions(final AssignmentInfo assignmentInfo,
+                                                             final DataInputStream in) throws IOException {
+        final Map<Integer, String> topicIndexDict = decodeTopicIndexAndGet(in);
+        assignmentInfo.partitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
+        assignmentInfo.standbyPartitionsByHost = decodeHostPartitionMapUsingDictionary(in, topicIndexDict);
     }
 
     private static Set<TopicPartition> readTopicPartitions(final DataInputStream in,
