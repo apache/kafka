@@ -1632,6 +1632,29 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Set broker replication quotas and enable throttling for a set of partitions. This
+   * will override any previous replication quotas, but will leave the throttling status
+   * of other partitions unaffected.
+   */
+  def setReplicationThrottleForPartitions(admin: Admin,
+                                          brokerIds: Seq[Int],
+                                          partitions: Set[TopicPartition],
+                                          throttleBytes: Int): Unit = {
+    throttleAllBrokersReplication(admin, brokerIds, throttleBytes)
+    assignThrottledPartitionReplicas(admin, partitions.map(_ -> brokerIds).toMap)
+  }
+
+  /**
+   * Remove a set of throttled partitions and reset the overall replication quota.
+   */
+  def removeReplicationThrottleForPartitions(admin: Admin,
+                                             brokerIds: Seq[Int],
+                                             partitions: Set[TopicPartition]): Unit = {
+    removePartitionReplicaThrottles(admin, partitions)
+    resetBrokersThrottle(admin, brokerIds)
+  }
+
+  /**
     * Throttles all replication across the cluster.
     * @param adminClient is the adminClient to use for making connection with the cluster
     * @param brokerIds all broker ids in the cluster
