@@ -661,11 +661,10 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
-    produceMessages(testTopicName, numMessages = 10, acks = -1, valueLength = 128)
+    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
 
     val brokerIds = servers.map(_.config.brokerId)
-    TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttleBytes = 1)
-    TestUtils.assignThrottledPartitionReplicas(adminClient, Map(tp -> brokerIds))
+    TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
 
     val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
@@ -693,8 +692,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
     assertEquals("--under-replicated-partitions shouldn't return anything", "", underReplicatedOutput)
 
-    TestUtils.resetBrokersThrottle(adminClient, brokerIds)
-    TestUtils.removePartitionReplicaThrottles(adminClient, Set(tp))
+    TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp))
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
@@ -795,9 +793,4 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
-  private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {
-    val records = (0 until numMessages).map(_ => new ProducerRecord[Array[Byte], Array[Byte]](topic,
-      new Array[Byte](valueLength)))
-    TestUtils.produceMessages(servers, records, acks)
-  }
 }
