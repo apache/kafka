@@ -433,11 +433,11 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCreateTopicsRetryBackoff() throws Exception {
-        Cluster cluster = mockCluster(3, 0);
         MockTime time = new MockTime();
         int retryBackoff = 100;
 
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+                mockCluster(3, 0),
                 newStrMap(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "" + retryBackoff))) {
             MockClient mockClient = env.kafkaClient();
 
