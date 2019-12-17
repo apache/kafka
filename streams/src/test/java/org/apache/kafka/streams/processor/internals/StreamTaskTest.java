@@ -978,22 +978,18 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCloseStateManagerIfFailureOnTaskClose() {
+    public void shouldCloseStateManagerEvenFailureOnUncleanTaskClose() {
         task = createStatefulTaskThatThrowsExceptionOnClose();
+        stateManager.close(EasyMock.eq(false));
+        EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
 
         task.initializeStateStores();
         task.initializeTopology();
 
-        try {
-            task.close(true);
-            fail("should have thrown an exception");
-        } catch (final Exception e) {
-            // all good
-        }
+        task.close(false);
 
-        task = null;
-        assertFalse(stateStore.isOpen());
+        EasyMock.verify(stateManager);
     }
 
     @Test
@@ -1022,6 +1018,10 @@ public class StreamTaskTest {
             Collections.singleton(repartition.topic())
         );
         consumer.assign(asList(partition1, repartition));
+
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
 
         task = new StreamTask(
             taskId00,
@@ -1124,7 +1124,8 @@ public class StreamTaskTest {
             singletonList(stateStore),
             logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
 
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(new TopicPartition(storeName + "-changelog", 1)));
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(
+            logged ? Collections.singleton(new TopicPartition(storeName + "-changelog", 1)) : Collections.emptySet());
 
         return new StreamTask(
             taskId00,
@@ -1176,7 +1177,8 @@ public class StreamTaskTest {
         source2.addChild(processorSystemTime);
 
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
-        EasyMock.replay(stateManager);
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
 
         return new StreamTask(
             taskId00,
