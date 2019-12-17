@@ -58,7 +58,7 @@ which are outlined here:
    "StreamsUpgradeTestJobRunnerService" on line 484 to make sure the correct arguments are passed
    during the system test run.
    
-3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
+3. Update the vagrant/base.sh file to include all new versions, including the newly released version
    and all point releases for existing releases. You only need to list the latest version in 
    this file.
    
