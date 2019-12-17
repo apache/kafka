@@ -88,13 +88,13 @@ class TransactionStateManager(brokerId: Int,
   private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
-  private val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
+  private[transaction] val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
 
   /** partitions of transaction topic that are being removed, state lock should be called BEFORE accessing this set */
-  private val leavingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
+  private[transaction] val leavingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
 
   /** transaction metadata cache indexed by assigned transaction topic partition ids */
-  private val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
+  private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
@@ -371,22 +371,15 @@ class TransactionStateManager(brokerId: Int,
 
   /**
    * Add a transaction topic partition into the cache
-   *
-   * Make it package-private to be used only for unit tests.
    */
-  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
-    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, metadataPerTransactionalId)
+  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
+                                                        coordinatorEpoch: Int,
+                                                        loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
+    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
     val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
-    if (currentTxnMetadataCacheEntry.isDefined) {
-      val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
-      val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
-      val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
-        s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
-        s"this should not happen"
-      fatal(errorMsg)
-      throw new IllegalStateException(errorMsg)
-    }
+    if (currentTxnMetadataCacheEntry.isDefined)
+      info(s"Unloaded $currentTxnMetadataCacheEntry for $txnTopicPartition as part of loading metadata at epoch $coordinatorEpoch")
   }
 
   /**
@@ -465,11 +458,10 @@ class TransactionStateManager(brokerId: Int,
         if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
           transactionMetadataCache.remove(partitionId) match {
             case Some(txnMetadataCacheEntry) =>
-              info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
+              info(s"Unloaded $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
             case None =>
-              info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
-                s"it is likely that another process for removing the cached entries has just executed earlier before")
+              info(s"No cached metadata found for $topicPartition during become-follower transition")
           }
 
           leavingPartitions.remove(partitionAndLeaderEpoch)
@@ -662,7 +654,12 @@ class TransactionStateManager(brokerId: Int,
 }
 
 
-private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata])
+private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
+                                                      metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
+  override def toString: String = {
+    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, cacheSize=${metadataPerTransactionalId.size})"
+  }
+}
 
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
                                                                transactionMetadata: TransactionMetadata)
