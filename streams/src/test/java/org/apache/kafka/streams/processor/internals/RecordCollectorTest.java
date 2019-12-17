@@ -29,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -201,6 +202,44 @@ public class RecordCollectorTest {
 
     @SuppressWarnings("unchecked")
     @Test(expected = RecoverableClientException.class)
+    public void shouldThrowRecoverableExceptionOnProducerFencedException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                throw new KafkaException(new ProducerFencedException("asdf"));
+            }
+        });
+
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = RecoverableClientException.class)
+    public void shouldThrowRecoverableExceptionOnUnknownProducerException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                throw new KafkaException(new UnknownProducerIdException("asdf"));
+            }
+        });
+
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = RecoverableClientException.class)
     public void shouldThrowRecoverableExceptionWhenProducerFencedInCallback() {
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
@@ -211,6 +250,26 @@ public class RecordCollectorTest {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
                 callback.onCompletion(null, new ProducerFencedException("asdf"));
+                return null;
+            }
+        });
+
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = RecoverableClientException.class)
+    public void shouldThrowRecoverableExceptionWhenProducerForgottenInCallback() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records"));
+        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                callback.onCompletion(null, new UnknownProducerIdException("asdf"));
                 return null;
             }
         });

@@ -231,8 +231,10 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             });
         } catch (final RuntimeException uncaughtException) {
-            if (uncaughtException instanceof KafkaException &&
-                uncaughtException.getCause() instanceof ProducerFencedException) {
+            if (uncaughtException instanceof KafkaException &&(
+                uncaughtException.getCause() instanceof ProducerFencedException ||
+                uncaughtException.getCause() instanceof UnknownProducerIdException
+            )) {
                 final KafkaException kafkaException = (KafkaException) uncaughtException;
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
