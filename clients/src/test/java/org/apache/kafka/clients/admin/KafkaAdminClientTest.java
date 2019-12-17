@@ -238,7 +238,7 @@ public class KafkaAdminClientTest {
     private static Cluster mockCluster(int numNodes, int controllerIndex) {
         HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; i++)
-            nodes.put(i, new Node(i, "localhost", 8120 + i));
+            nodes.put(i, new Node(i, "localhost", 8121 + i));
         return new Cluster("mockClusterId", nodes.values(),
             Collections.emptySet(), Collections.emptySet(),
             Collections.emptySet(), nodes.get(controllerIndex));
