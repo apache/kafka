@@ -30,6 +30,7 @@ import java.util.regex.Pattern
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
+import kafka.log.remote.RemoteLogManager
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
@@ -1594,7 +1595,7 @@ class Log(@volatile var dir: File,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
-  def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1635,17 +1636,35 @@ class Log(@volatile var dir: File,
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
       }
 
+      var isFirstSegment = false
       val targetSeg = {
         // Get all the segments whose largest timestamp is smaller than target timestamp
         val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
         // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-        if (earlierSegs.length < segmentsCopy.length)
+        if (earlierSegs.length < segmentsCopy.length) {
+          isFirstSegment = (earlierSegs.length == 0)
           Some(segmentsCopy(earlierSegs.length))
-        else
+        } else
           None
       }
 
-      targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+      if (isFirstSegment && remoteLogManager.isDefined) {
+        val localOffset = targetSeg.get.findOffsetByTimestamp(targetTimestamp, logStartOffset)
+        val remoteOffset = remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset)
+
+        if (localOffset.isEmpty)
+          return remoteOffset
+
+        if (remoteOffset.isEmpty)
+          return localOffset
+
+        if (localOffset.get.offset <= remoteOffset.get.offset)
+          return localOffset
+
+        remoteOffset
+      } else {
+        targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+      }
     }
   }
 

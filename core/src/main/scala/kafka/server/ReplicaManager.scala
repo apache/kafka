@@ -845,7 +845,7 @@ class ReplicaManager(val config: KafkaConfig,
                               currentLeaderEpoch: Optional[Integer],
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
     val partition = getPartitionOrException(topicPartition, expectLeader = fetchOnlyFromLeader)
-    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
+    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader, remoteLogManager)
   }
 
   def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,
@@ -1125,7 +1125,6 @@ class ReplicaManager(val config: KafkaConfig,
           // If it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
           if (remoteLogManager.isDefined && log != null && !log.config.compact && !Request.isValidBrokerId(replicaId)) {
-            val rlm = remoteLogManager.get
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
             val leaderLogEndOffset = log.logEndOffset

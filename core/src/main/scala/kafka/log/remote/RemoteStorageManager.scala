@@ -21,6 +21,7 @@ import java.io.IOException
 
 import kafka.log.LogSegment
 import org.apache.kafka.common.annotation.InterfaceStability
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
@@ -130,6 +131,21 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    */
   @throws(classOf[IOException])
   def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long, minOneMessage: Boolean): Records
+
+
+  /**
+   * Search forward for the first message that meets the following requirements:
+   * - Message's timestamp is greater than or equals to the targetTimestamp.
+   * - Message's offset is greater than or equals to the startingOffset.
+   *
+   * @param targetTimestamp The timestamp to search for.
+   * @param startingOffset  The starting offset to search.
+   * @return The timestamp and offset of the message found. Null if no message is found.
+   */
+  @throws(classOf[IOException])
+  def findOffsetByTimestamp(remoteLogIndexEntry: RemoteLogIndexEntry,
+                            targetTimestamp: Long,
+                            startingOffset: Long): TimestampAndOffset
 
   /**
    * Release any system resources used by this instance.

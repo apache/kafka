@@ -80,15 +80,15 @@ object RemoteLogIndexTest {
     val rdi = "rdi://foo/bar/" + System.currentTimeMillis()
     val rdiBytes = rdi.getBytes
     var firstOffset = baseOffset
-    var firstTimestamp: Long = baseOffset + 10L
+    var firstTimestamp: Long = baseOffset * 1000L
     for (i <- 1 to numEntries) {
-      val lastOffset = firstOffset + 2
-      val lastTimestamp = firstTimestamp + 1
+      val lastOffset = firstOffset + offsetStep - 1
+      val lastTimestamp = lastOffset * 1000L
       val dataLength = Math.abs(new Random().nextInt())
       val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp,
         dataLength, rdiBytes)
       firstOffset += offsetStep
-      firstTimestamp += 1
+      firstTimestamp = firstOffset * 1000L
 
       entries += entry
     }

@@ -176,6 +176,9 @@ object RemoteLogIndexEntry extends Logging {
 
   def parseEntry(ch: FileChannel, position: Long): Option[RemoteLogIndexEntry] = {
     val magicBuffer = ByteBuffer.allocate(2)
+    // The last 8 bytes of remote log index file is the "last offset" rather than a regular index entry
+    if (position + 8 >= ch.size)
+      return None
     val readCt = ch.read(magicBuffer, position)
     if (readCt > 0) {
       magicBuffer.flip()

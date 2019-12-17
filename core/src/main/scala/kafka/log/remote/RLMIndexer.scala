@@ -34,13 +34,15 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
   private val remoteIndexes: util.concurrent.ConcurrentMap[TopicPartition, TopicPartitionRemoteIndex] = new ConcurrentHashMap[TopicPartition, TopicPartitionRemoteIndex]()
 
   def lookupLastOffset(tp: TopicPartition): Option[Long] = {
-    val remoteIndex = maybeLoadIndex(tp)
-    if (remoteIndex != null) remoteIndex.lastOffset else None
+    maybeLoadIndex(tp).flatMap(_.lastOffset)
   }
 
   def lookupEntryForOffset(tp: TopicPartition, offset: Long): Option[RemoteLogIndexEntry] = {
-    val indexEntry = maybeLoadIndex(tp)
-    if (indexEntry != null) indexEntry.lookupEntryForOffset(offset) else None
+    maybeLoadIndex(tp).flatMap(_.lookupEntryForOffset(offset))
+  }
+
+  def lookupEntryForTimestamp(tp: TopicPartition, timestamp: Long, startingOffset: Long): Option[RemoteLogIndexEntry] = {
+    maybeLoadIndex(tp).flatMap(_.lookupEntryForTimestamp(timestamp, startingOffset))
   }
 
   /**
@@ -49,11 +51,11 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
    * @return the offset of the topic-partition that is already indexed if it has done earlier, else it returns -1.
    */
   def getOrLoadIndexOffset(tp: TopicPartition): Option[Long] = {
-    maybeLoadIndex(tp).lastOffset
+    maybeLoadIndex(tp).flatMap(_.lastOffset)
   }
 
-  def maybeLoadIndex(tp: TopicPartition): TopicPartitionRemoteIndex = {
-    remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
+  def maybeLoadIndex(tp: TopicPartition): Option[TopicPartitionRemoteIndex] = {
+    Option(remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
       override def apply(tp: TopicPartition): TopicPartitionRemoteIndex = {
         val log = logFetcher(tp).getOrElse(
           throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))
@@ -61,7 +63,7 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
         val parentDir = log.dir
         TopicPartitionRemoteIndex.open(tp, parentDir)
       }
-    })
+    }))
   }
 
   def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {
