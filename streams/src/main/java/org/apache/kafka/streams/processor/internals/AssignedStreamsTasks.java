@@ -75,7 +75,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     void closeTask(final StreamTask task, final boolean clean) {
         if (suspended.containsKey(task.id())) {
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean);
         } else {
             task.close(clean);
         }
@@ -248,7 +248,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
         try {
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean);
         } catch (final RuntimeException e) {
             log.error("Failed to close the suspended stream task {} due to the following error:", task.id(), e);
             return e;
@@ -325,7 +325,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 return true;
             } else {
                 log.warn("Couldn't resume stream task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-                task.closeSuspended(true, null);
+                task.closeSuspended(true);
             }
         }
         return false;

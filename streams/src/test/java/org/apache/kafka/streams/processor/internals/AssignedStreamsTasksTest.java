@@ -556,7 +556,7 @@ public class AssignedStreamsTasksTest {
             public void additionalSetup(final StreamTask task) {
                 task.initializeTopology();
                 task.suspend();
-                task.closeSuspended(false, null);
+                task.closeSuspended(false);
             }
 
             @Override

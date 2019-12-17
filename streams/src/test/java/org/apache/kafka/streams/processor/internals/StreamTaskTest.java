@@ -25,7 +25,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -36,7 +35,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,16 +42,12 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -68,14 +62,11 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
-
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -86,7 +77,6 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -128,17 +118,8 @@ public class StreamTaskTest {
     private final String storeName = "store";
     private final StateStore stateStore = new MockKeyValueStore(storeName, false);
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 0);
-    private final Long offset = 543L;
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Duration.ZERO, stateRestoreListener, new LogContext("stream-task-test ")) {
-        @Override
-        public Map<TopicPartition, Long> restoredOffsets() {
-            return Collections.singletonMap(changelogPartition, offset);
-        }
-    };
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
@@ -211,8 +192,6 @@ public class StreamTaskTest {
     public void setup() {
         consumer.assign(asList(partition1, partition2));
         stateDirectory = new StateDirectory(createConfig(false), new MockTime(), true);
-
-        //EasyMock.replay(stateManager, recordCollector);
     }
 
     @After
@@ -228,24 +207,6 @@ public class StreamTaskTest {
         } finally {
             Utils.delete(BASE_DIR);
         }
-    }
-
-    private void assertTimeoutErrorLog(final LogCaptureAppender appender) {
-
-        final String expectedErrorLogMessage =
-            "stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Timeout exception caught when initializing transactions for task 0_0. " +
-                "This might happen if the broker is slow to respond, if the network " +
-                "connection to the broker was interrupted, or if similar circumstances arise. " +
-                "You can increase producer parameter `max.block.ms` to increase this timeout.";
-
-        final List<String> expectedError =
-            appender
-                .getEvents()
-                .stream()
-                .filter(event -> event.getMessage().equals(expectedErrorLogMessage))
-                .map(LogCaptureAppender.Event::getLevel)
-                .collect(Collectors.toList());
-        assertThat(expectedError, is(singletonList("ERROR")));
     }
 
     @Test
@@ -899,6 +860,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnCommit() {
+        final Long offset = 543L;
+
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
         EasyMock.expectLastCall();
@@ -979,10 +942,31 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCloseStateManagerEvenFailureOnUncleanTaskClose() {
-        task = createStatefulTaskThatThrowsExceptionOnClose();
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
+            asList(source1, source3),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
+            singletonList(stateStore),
+            Collections.emptyMap());
+
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        stateManager.registerGlobalStateStores(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
         stateManager.close(EasyMock.eq(false));
         EasyMock.expectLastCall();
         EasyMock.replay(stateManager);
+
+        task = new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            stateManager,
+            recordCollector);
 
         task.initializeStateStores();
         task.initializeTopology();
@@ -1133,29 +1117,6 @@ public class StreamTaskTest {
             topology,
             consumer,
             config,
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            stateManager,
-            recordCollector);
-    }
-
-    private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
-        final ProcessorTopology topology = ProcessorTopologyFactories.with(
-            asList(source1, source3),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
-            singletonList(stateStore),
-            Collections.emptyMap());
-
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
-
-        return new StreamTask(
-            taskId00,
-            partitions,
-            topology,
-            consumer,
-            createConfig(true),
             streamsMetrics,
             stateDirectory,
             null,

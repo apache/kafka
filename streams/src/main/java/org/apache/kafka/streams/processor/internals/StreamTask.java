@@ -571,24 +571,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    // TODO: we should let the task itself to decide, based on the state, whether to close as suspended or as running
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
-    void closeSuspended(final boolean clean, RuntimeException firstException) {
+    void closeSuspended(final boolean clean) {
+
         try {
             closeStateManager(clean);
-        } catch (final RuntimeException e) {
-            if (firstException == null) {
-                firstException = e;
+        } catch (final RuntimeException error) {
+            if (clean) {
+                throw error;
             }
-            log.error("Could not close state manager due to the following error:", e);
-        }
+        } finally {
+            partitionGroup.close();
+            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
 
-        partitionGroup.close();
-        streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
-
-        closeTaskSensor.record();
-
-        if (firstException != null) {
-            throw firstException;
+            closeTaskSensor.record();
         }
     }
 
@@ -608,19 +605,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     @Override
-    public void close(boolean clean) {
+    public void close(final boolean clean) {
         log.debug("Closing");
 
-        RuntimeException firstException = null;
         try {
+            // If it is an unclean close, then the suspend would never
+            // throw since it would swallow all exception; otherwise if suspension
+            // throws we do not need to proceed to further steps and should just notify
+            // the caller thread. Therefore it is always safe to proceed without try-catch
             suspend(clean);
-        } catch (final RuntimeException e) {
-            clean = false;
-            firstException = e;
-            log.error("Could not close task due to the following error:", e);
-        }
 
-        closeSuspended(clean, firstException);
+            closeSuspended(clean);
+        } catch (final RuntimeException error) {
+            if (clean) {
+                throw error;
+            }
+        }
 
         taskClosed = true;
     }
