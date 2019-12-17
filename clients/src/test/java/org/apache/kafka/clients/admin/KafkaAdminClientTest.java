@@ -830,9 +830,9 @@ public class KafkaAdminClientTest {
     @Test
     public void testHandleTimeout() throws Exception {
         MockTime time = new MockTime();
-        Cluster cluster = mockCluster(1, 0);
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
-            AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1",
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time,
+                mockCluster(1, 0),
+                AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1",
                 AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, "1")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             assertEquals(time, env.time());
