@@ -43,6 +43,9 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -377,22 +380,38 @@ public class TopologyTestDriver implements Closeable {
         }
 
         if (!partitionsByTopic.isEmpty()) {
+            final LogContext logContext = new LogContext("topology-test-driver ");
+            final ProcessorStateManager stateManager = new ProcessorStateManager(
+                TASK_ID,
+                new HashSet<>(partitionsByTopic.values()),
+                false,
+                stateDirectory,
+                processorTopology.storeToChangelogTopic(),
+                new StoreChangelogReader(
+                    createRestoreConsumer(processorTopology.storeToChangelogTopic()),
+                    Duration.ZERO,
+                    stateRestoreListener,
+                    logContext),
+                logContext);
+            final RecordCollector recordCollector = new RecordCollectorImpl(
+                TASK_ID,
+                streamsConfig,
+                logContext,
+                streamsMetrics,
+                consumer,
+                (taskId) -> producer);
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByTopic.values()),
                 processorTopology,
                 consumer,
-                new StoreChangelogReader(
-                    createRestoreConsumer(processorTopology.storeToChangelogTopic()),
-                    Duration.ZERO,
-                    stateRestoreListener,
-                    new LogContext("topology-test-driver ")),
                 streamsConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                () -> producer);
+                stateManager,
+                recordCollector);
             task.initializeStateStores();
             task.initializeTopology();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
@@ -978,7 +997,7 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            task.close(true, false);
+            task.close(true);
         }
         if (globalStateTask != null) {
             try {

@@ -385,7 +385,6 @@ public class StreamThread extends Thread {
                 logContext,
                 streamsMetrics,
                 consumer,
-                stateManager,
                 producerSupplier);
 
             return new StreamTask(
@@ -465,14 +464,23 @@ public class StreamThread extends Thread {
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
             if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
+                final ProcessorStateManager stateManager = new ProcessorStateManager(
+                    taskId,
+                    partitions,
+                    true,
+                    stateDirectory,
+                    topology.storeToChangelogTopic(),
+                    storeChangelogReader,
+                    logContext);
+
                 return new StandbyTask(
                     taskId,
                     partitions,
                     topology,
                     consumer,
-                    storeChangelogReader,
                     config,
                     streamsMetrics,
+                    stateManager,
                     stateDirectory);
             } else {
                 log.trace(
@@ -744,8 +752,7 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                        "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
-                    ignoreAndRejoinGroup.migratedTaskId(), ignoreAndRejoinGroup.migratedTaskId().toString(">"));
+                        "Will try to rejoin the consumer group.", ignoreAndRejoinGroup.migratedTaskId());
 
                 enforceRebalance();
             }

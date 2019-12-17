@@ -63,6 +63,8 @@ import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.Mock;
+import org.easymock.MockType;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -164,6 +166,9 @@ public class StandbyTaskTest {
     private final StreamsMetricsImpl streamsMetrics =
         new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
+    @Mock(type = MockType.NICE)
+    private ProcessorStateManager stateManager;
+
     @Before
     public void setup() throws Exception {
         restoreStateConsumer.reset();
@@ -185,7 +190,7 @@ public class StandbyTaskTest {
     @After
     public void cleanup() throws IOException {
         if (task != null && !task.isClosed()) {
-            task.close(true, false);
+            task.close(true);
             task = null;
         }
         Utils.delete(baseDir);
@@ -195,29 +200,28 @@ public class StandbyTaskTest {
     public void testStorePartitions() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
+            topicPartitions,
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateManager,
+            stateDirectory);
         task.initializeStateStores();
         assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testUpdateNonInitializedStore() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
+            topicPartitions,
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateManager,
+            stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -247,13 +251,13 @@ public class StandbyTaskTest {
     public void testUpdate() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
         task = new StandbyTask(taskId,
-                               topicPartitions,
-                               topology,
-                               consumer,
-                               changelogReader,
-                               config,
-                               streamsMetrics,
-                               stateDirectory);
+            topicPartitions,
+            topology,
+            consumer,
+            config,
+            streamsMetrics,
+            stateManager,
+            stateDirectory);
         task.initializeStateStores();
         assertThat(task.checkpointedOffsets(),
                    equalTo(mkMap(mkEntry(partition1, -1L), mkEntry(partition2, -1L))));
@@ -340,14 +344,9 @@ public class StandbyTaskTest {
             partitions,
             internalTopologyBuilder.build(0),
             consumer,
-            new StoreChangelogReader(
-                restoreStateConsumer,
-                Duration.ZERO,
-                stateRestoreListener,
-                new LogContext("standby-task-test ")
-            ),
             createConfig(baseDir),
             new MockStreamsMetrics(new Metrics()),
+            stateManager,
             stateDirectory
         );
 
@@ -438,9 +437,9 @@ public class StandbyTaskTest {
             partitions,
             internalTopologyBuilder.build(0),
             consumer,
-            changelogReader,
             createConfig(baseDir),
             new MockStreamsMetrics(new Metrics()),
+            stateManager,
             stateDirectory
         );
         task.initializeStateStores();
@@ -453,7 +452,7 @@ public class StandbyTaskTest {
             singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
         );
 
-        task.close(true, false);
+        task.close(true);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, StateManagerUtil.CHECKPOINT_FILE_NAME));
@@ -493,9 +492,9 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             createConfig(baseDir),
             streamsMetrics,
+            stateManager,
             stateDirectory
         );
         task.initializeStateStores();
@@ -587,9 +586,9 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             createConfig(baseDir),
             streamsMetrics,
+            stateManager,
             stateDirectory
         );
         task.initializeStateStores();
@@ -620,9 +619,9 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             createConfig(baseDir),
             streamsMetrics,
+            stateManager,
             stateDirectory
         );
         task.initializeStateStores();
@@ -683,9 +682,9 @@ public class StandbyTaskTest {
             emptySet(),
             topology,
             consumer,
-            changelogReader,
             config,
             new MockStreamsMetrics(new Metrics()),
+            stateManager,
             stateDirectory
         );
 
@@ -715,9 +714,9 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             config,
             streamsMetrics,
+            stateManager,
             stateDirectory
         );
         task.initializeStateStores();
@@ -764,9 +763,9 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             config,
             streamsMetrics,
+            stateManager,
             stateDirectory
         ) {
             @Override
@@ -781,7 +780,7 @@ public class StandbyTaskTest {
         };
         task.initializeStateStores();
         try {
-            task.close(true, false);
+            task.close(true);
             fail("should have thrown exception");
         } catch (final Exception e) {
             // expected
@@ -813,15 +812,13 @@ public class StandbyTaskTest {
             ktablePartitions,
             ktableTopology,
             consumer,
-            changelogReader,
             createConfig(baseDir),
             streamsMetrics,
+            stateManager,
             stateDirectory
         );
 
-        final boolean clean = true;
-        final boolean isZombie = false;
-        task.close(clean, isZombie);
+        task.close(true);
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

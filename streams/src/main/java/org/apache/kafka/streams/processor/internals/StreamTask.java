@@ -158,6 +158,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
     }
 
+    public boolean isEosEnabled() {
+        return StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    }
+
     @Override
     public void initializeMetadata() {
         try {
@@ -412,8 +416,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         commitState();
 
         // this is an optimization for non-EOS only
-        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        if (!eosEnabled) {
+        if (!isEosEnabled()) {
             stateMgr.checkpoint(checkpointableOffsets());
         }
     }
@@ -505,7 +508,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     public void suspend() {
         log.debug("Suspending");
-        suspend(true, false);
+        suspend(true);
     }
 
     /**
@@ -516,14 +519,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *  3. then flush the record collector
      *  4. then commit the record collector -- for EOS this is the synchronization barrier
      *  5. then checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
-     *
      * </pre>
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    private void suspend(final boolean clean,
-                 final boolean isZombie) {
+    private void suspend(final boolean clean) {
         try {
             // If the suspension is from unclean shutdown, then only need to close topology and flush state to make sure that when later
             // closing the states, there's no records triggering any processing anymore; also swallow all caught exceptions
@@ -593,30 +594,26 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     /**
      * <pre>
-     * - {@link #suspend(boolean, boolean) suspend(clean)}
-     *   - close topology
-     *   - if (clean) {@link #commit()}
-     *     - flush state and producer
-     *     - commit offsets
-     * - close state
-     *   - if (clean) write checkpoint
-     * - if (eos) close producer
+     * the following order must be followed:
+     *  1. first close topology to make sure all cached records in the topology are processed
+     *  2. then flush the state, send any left changelog records
+     *  3. then flush the record collector
+     *  4. then commit the record collector -- for EOS this is the synchronization barrier
+     *  5. then checkpoint the state manager -- even if we crash before this step, EOS is still guaranteed
      * </pre>
      *
      * @param clean    shut down cleanly (ie, incl. flush and commit) if {@code true} --
      *                 otherwise, just close open resources
-     * @param isZombie {@code true} is this task is a zombie or not (this will repress {@link TaskMigratedException}
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
     @Override
-    public void close(boolean clean,
-                      final boolean isZombie) {
+    public void close(boolean clean) {
         log.debug("Closing");
 
         RuntimeException firstException = null;
         try {
-            suspend(clean, isZombie);
+            suspend(clean);
         } catch (final RuntimeException e) {
             clean = false;
             firstException = e;

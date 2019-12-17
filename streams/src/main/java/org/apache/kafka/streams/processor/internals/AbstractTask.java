@@ -23,7 +23,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -120,10 +119,6 @@ public abstract class AbstractTask implements Task {
         return toString("");
     }
 
-    public boolean isEosEnabled() {
-        return eosEnabled;
-    }
-
     /**
      * Produces a string representation containing useful information about a Task starting with the given indent.
      * This is useful in debugging scenarios.
@@ -152,15 +147,6 @@ public abstract class AbstractTask implements Task {
             sb.append("]\n");
         }
         return sb.toString();
-    }
-
-    /**
-     * Flush all state stores owned by this task
-     */
-    void flushState() {
-        log.trace("Flushing state stores");
-
-        stateMgr.flush();
     }
 
     /**

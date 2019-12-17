@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRecordCollector;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -35,18 +32,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-    private final RecordCollector recordCollector =  new RecordCollectorImpl(
-        new LogContext("sinknode-test "),
-        new DefaultProductionExceptionHandler(),
-        new Metrics().sensor("dropped-records")
-    );
+    private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
+    private final RecordCollector recordCollector = new MockRecordCollector();
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
-        anyStateSerde,
-        recordCollector
-    );
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
@@ -56,7 +46,6 @@ public class SinkNodeTest {
 
     @Before
     public void before() {
-        recordCollector.init(new MockProducer<>(true, anySerializer, anySerializer));
         sink.init(context);
     }
 

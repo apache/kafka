@@ -80,7 +80,6 @@ public class ProcessorStateManager implements StateManager {
 
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
-     * @throws IOException             if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(final TaskId taskId,
                                  final Collection<TopicPartition> sources,
@@ -115,7 +114,7 @@ public class ProcessorStateManager implements StateManager {
             checkpointFile.delete();
             checkpointFile = null;
             log.trace("Checkpointable offsets read from checkpoint: {}", initialLoadedCheckpoints);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException(format("%sError loading and deleting checkpoint file when creating the state manager",
                 logPrefix), e);
         }
@@ -202,7 +201,6 @@ public class ProcessorStateManager implements StateManager {
     public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
                                                      final InternalProcessorContext processorContext) {
         StateManagerUtil.reinitializeStateStoresForPartitions(log,
-                                                              eosEnabled,
                                                               baseDir,
                                                               registeredStores,
                                                               storeToChangelogTopic,

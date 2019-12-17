@@ -47,8 +47,6 @@ public interface RecordCollector extends AutoCloseable {
 
     void commit(final Map<TopicPartition, OffsetAndMetadata> offsets);
 
-    void clear();
-
     /**
      * Flush the internal {@link Producer}.
      */

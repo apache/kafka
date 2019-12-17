@@ -163,7 +163,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                                      final InternalProcessorContext processorContext) {
         StateManagerUtil.reinitializeStateStoresForPartitions(
             log,
-            eosEnabled,
             baseDir,
             globalStores,
             topology.storeToChangelogTopic(),

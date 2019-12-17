@@ -79,24 +79,27 @@ public class RecordCollectorImpl implements RecordCollector {
                                final LogContext logContext,
                                final StreamsMetricsImpl streamsMetrics,
                                final Consumer<byte[], byte[]> consumer,
-                               final ProcessorStateManager stateManager,
                                final StreamThread.ProducerSupplier producerSupplier) {
         this.taskId = taskId;
         this.consumer = consumer;
         this.offsets = new HashMap<>();
         this.log = logContext.logger(getClass());
-        this.producerSupplier = producerSupplier;
 
+        this.producerSupplier = producerSupplier;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.productionExceptionHandler = config.defaultProductionExceptionHandler();
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+    }
 
-        producer = producerSupplier.get(taskId);
+    private void maybeInitialize() {
+        if (producer == null) {
+            producer = producerSupplier.get(taskId);
 
-        maybeInitTxns();
+            maybeInitTxns();
+        }
     }
 
     private void maybeInitTxns() {
@@ -106,7 +109,7 @@ public class RecordCollectorImpl implements RecordCollector {
             try {
                 producer.initTransactions();
             } catch (final TimeoutException exception) {
-                String errorMessage = "Timeout exception caught when initializing transactions for task " + taskId + ". " +
+                final String errorMessage = "Timeout exception caught when initializing transactions for task " + taskId + ". " +
                     "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\n Consider overwriting `max.block.ms` to a larger value to avoid timeout errors";
@@ -148,15 +151,12 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
-    @Override
-    public void clear() {
-        maybeAbortTxn();
-    }
+    public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        maybeInitialize();
 
-
-
-    public void commit( Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (eosEnabled) {
+            maybeBeginTxn();
+
             try {
                 producer.sendOffsetsToTransaction(offsets, applicationId);
                 producer.commitTransaction();
@@ -184,34 +184,6 @@ public class RecordCollectorImpl implements RecordCollector {
             }
         }
 
-    }
-
-    /**
-     * @throws StreamsException fatal error that should cause the thread to die
-     * @throws TaskMigratedException recoverable error that would cause the task to be removed
-     */
-    @Override
-    public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final StreamPartitioner<? super K, ? super V> partitioner) {
-        Integer partition = null;
-
-        if (partitioner != null) {
-            final List<PartitionInfo> partitions = producer.partitionsFor(topic);
-            if (partitions.size() > 0) {
-                partition = partitioner.partition(topic, key, value, partitions.size());
-            } else {
-                throw new StreamsException("Could not get partition information for topic '" + topic + "'  for task " + taskId +
-                    ". This can happen if the topic does not exist.");
-            }
-        }
-
-        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
     }
 
     private boolean productionExceptionIsFatal(final Exception exception) {
@@ -258,6 +230,36 @@ public class RecordCollectorImpl implements RecordCollector {
         log.error(errorMessage);
     }
 
+    /**
+     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws TaskMigratedException recoverable error that would cause the task to be removed
+     */
+    @Override
+    public <K, V> void send(final String topic,
+                            final K key,
+                            final V value,
+                            final Headers headers,
+                            final Long timestamp,
+                            final Serializer<K> keySerializer,
+                            final Serializer<V> valueSerializer,
+                            final StreamPartitioner<? super K, ? super V> partitioner) {
+        maybeInitialize();
+
+        Integer partition = null;
+
+        if (partitioner != null) {
+            final List<PartitionInfo> partitions = producer.partitionsFor(topic);
+            if (partitions.size() > 0) {
+                partition = partitioner.partition(topic, key, value, partitions.size());
+            } else {
+                throw new StreamsException("Could not get partition information for topic '" + topic + "'  for task " + taskId +
+                    ". This can happen if the topic does not exist.");
+            }
+        }
+
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
+    }
+
     @Override
     public <K, V> void send(final String topic,
                             final K key,
@@ -267,9 +269,11 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer) {
-        checkForException();
+        maybeInitialize();
 
         maybeBeginTxn();
+
+        checkForException();
 
         final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
         final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
@@ -301,7 +305,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
                 throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", kafkaException);
             } else {
-                String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, uncaughtException.toString());
+                final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, uncaughtException.toString());
                 throw new StreamsException(errorMessage, uncaughtException);
             }
         }
@@ -319,7 +323,8 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     @Override
     public void flush() {
-        log.debug("Flushing producer");
+        log.debug("Flushing record collector");
+        maybeInitialize();
         producer.flush();
         checkForException();
     }
@@ -330,8 +335,11 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     @Override
     public void close() {
-        log.debug("Closing producer");
-        if (producer != null) {
+        log.debug("Closing record collector");
+        maybeInitialize();
+        maybeAbortTxn();
+
+        if (eosEnabled) {
             try {
                 producer.close();
             } catch (final KafkaException e) {
@@ -339,6 +347,7 @@ public class RecordCollectorImpl implements RecordCollector {
             }
             producer = null;
         }
+
         checkForException();
     }
 

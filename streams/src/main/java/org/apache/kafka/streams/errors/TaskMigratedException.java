@@ -19,7 +19,6 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task;
 
 /**
  * Indicates that a task got migrated to another thread.
