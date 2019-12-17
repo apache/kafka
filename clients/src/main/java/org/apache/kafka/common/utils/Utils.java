@@ -555,6 +555,15 @@ public final class Utils {
      * @param filename The path of the file to read
      */
     public static Properties loadProps(String filename) throws IOException {
+        return loadProps(filename, null);
+    }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     * @param onlyIncludeKeys When non-null, only return values associated with these keys and ignore all others
+     */
+    public static Properties loadProps(String filename, List<String> onlyIncludeKeys) throws IOException {
         Properties props = new Properties();
 
         if (filename != null) {
@@ -565,7 +574,15 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
-        return props;
+        if (onlyIncludeKeys == null || onlyIncludeKeys.size() == 0)
+            return props;
+        Properties requestedProps = new Properties();
+        onlyIncludeKeys.forEach(key -> {
+            String value = props.getProperty(key);
+            if (value != null)
+                requestedProps.setProperty(key, value);
+        });
+        return requestedProps;
     }
 
     /**
