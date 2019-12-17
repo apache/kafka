@@ -453,7 +453,7 @@ public class TaskManager {
     }
 
     public void setHostPartitionMappings(final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
-        final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost) {
+                                         final Map<HostInfo, Set<TopicPartition>> standbyPartitionsByHost) {
         this.streamsMetadataState.onChange(partitionsByHost, standbyPartitionsByHost, cluster);
     }
 

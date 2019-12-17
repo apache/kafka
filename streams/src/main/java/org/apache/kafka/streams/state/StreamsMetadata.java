@@ -134,7 +134,7 @@ public class StreamsMetadata {
 
     @Override
     public String toString() {
-        return "StreamsMetadata{" +
+        return "StreamsMetadata {" +
                 "hostInfo=" + hostInfo +
                 ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +

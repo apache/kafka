@@ -23,11 +23,11 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Represents all the metadata where a particular key resides in a {@link KafkaStreams} application.
- * It contains the user supplied {@link HostInfo} and the Set of standby Hosts where the key would be found in case an application
- * has more than one standby. It also contains the partition number where the key belongs, this information would be useful in
- * developing another apis on top, to fetch Offset Lag or Time based lag for the partition where the key belongs.
- * NOTE: This is a point in time view. It may change when rebalances happen.
+ * Represents all the metadata related to a key, where a particular key resides in a {@link KafkaStreams} application.
+ * It contains the active {@link HostInfo} and a set of standby {@link HostInfo}s, denoting the instances where the key resides.
+ * It also contains the partition number where the key belongs, which could be useful when used in conjunction with other APIs.
+ * e.g: Relating with lags for that store partition using {@link KafkaStreams#allLocalOffsetLags()}
+ * NOTE: This is a point in time view. It may change as rebalances happen.
  */
 public class KeyQueryMetadata {
     /**
@@ -42,7 +42,6 @@ public class KeyQueryMetadata {
     private final HostInfo activeHost;
     // Streams instances that host the key as standbys
     private final Set<HostInfo> standbyHosts;
-
     // Store partition corresponding to the key.
     private final int partition;
 

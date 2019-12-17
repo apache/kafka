@@ -74,8 +74,7 @@ public class StreamsMetadataState {
     }
 
     /**
-     * Get the {@link StreamsMetadata}s for local instance in a
-     * {@link KafkaStreams application}
+     * Get the {@link StreamsMetadata}s for the local instance in a {@link KafkaStreams application}
      *
      * @return the {@link StreamsMetadata}s for the local instance in a {@link KafkaStreams} application
      */
@@ -165,9 +164,9 @@ public class StreamsMetadataState {
         }
 
         return getStreamsMetadataForKey(storeName,
-                key,
-                new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
-                sourceTopicsInfo);
+                                        key,
+                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
+                                        sourceTopicsInfo);
     }
 
     /**
@@ -190,15 +189,15 @@ public class StreamsMetadataState {
                                                                        final Serializer<K> keySerializer) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         return getKeyQueryMetadataForKey(storeName,
-            key,
-            new DefaultStreamPartitioner<>(keySerializer, clusterMetadata));
+                                         key,
+                                         new DefaultStreamPartitioner<>(keySerializer, clusterMetadata));
     }
 
     /**
      * Find the {@link KeyQueryMetadata}s for a given storeName and key
      *
-     * Note: the key may not exist in the {@link StateStore},
-     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
+     * Note: the key may not exist in the {@link StateStore},this method provides a way of finding which
+     * {@link StreamsMetadata} it would exist on.
      *
      * @param storeName   Name of the store
      * @param key         Key to use
@@ -208,8 +207,8 @@ public class StreamsMetadataState {
      * if streams is (re-)initializing
      */
     public synchronized <K> KeyQueryMetadata getKeyQueryMetadataForKey(final String storeName,
-                                                                        final K key,
-                                                                        final StreamPartitioner<? super K, ?> partitioner) {
+                                                                       final K key,
+                                                                       final StreamPartitioner<? super K, ?> partitioner) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
@@ -284,7 +283,8 @@ public class StreamsMetadataState {
      * @param clusterMetadata         the current clusterMetadata {@link Cluster}
      */
     synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> activePartitionHostMap,
-                               final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap, final Cluster clusterMetadata) {
+                               final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap,
+                               final Cluster clusterMetadata) {
         this.clusterMetadata = clusterMetadata;
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
     }

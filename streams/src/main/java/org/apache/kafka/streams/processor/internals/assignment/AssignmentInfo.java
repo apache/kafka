@@ -57,12 +57,12 @@ public class AssignmentInfo {
     public AssignmentInfo(final int version,
                           final int commonlySupportedVersion) {
         this(version,
-                commonlySupportedVersion,
-                Collections.emptyList(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                0);
+             commonlySupportedVersion,
+             Collections.emptyList(),
+             Collections.emptyMap(),
+             Collections.emptyMap(),
+             Collections.emptyMap(),
+            0);
     }
 
     public AssignmentInfo(final int version,
@@ -91,7 +91,7 @@ public class AssignmentInfo {
 
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
-                    + "; was: " + version);
+                + "; was: " + version);
         }
     }
 
@@ -125,7 +125,7 @@ public class AssignmentInfo {
 
     /**
      * @throws TaskAssignmentException if method fails to encode the data, e.g., if there is an
-     *                                 IO exception during encoding
+     * IO exception during encoding
      */
     public ByteBuffer encode() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -335,7 +335,7 @@ public class AssignmentInfo {
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
-                            "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                        "used version: " + usedVersion + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
                     log.error(fatalException.getMessage(), fatalException);
                     throw fatalException;
             }
@@ -439,12 +439,12 @@ public class AssignmentInfo {
         if (o instanceof AssignmentInfo) {
             final AssignmentInfo other = (AssignmentInfo) o;
             return usedVersion == other.usedVersion &&
-                    commonlySupportedVersion == other.commonlySupportedVersion &&
-                    errCode == other.errCode &&
-                    activeTasks.equals(other.activeTasks) &&
-                    standbyTasks.equals(other.standbyTasks) &&
-                    partitionsByHost.equals(other.partitionsByHost) &&
-                    standbyPartitionsByHost.equals(other.standbyPartitionsByHost);
+                   commonlySupportedVersion == other.commonlySupportedVersion &&
+                   errCode == other.errCode &&
+                   activeTasks.equals(other.activeTasks) &&
+                   standbyTasks.equals(other.standbyTasks) &&
+                   partitionsByHost.equals(other.partitionsByHost) &&
+                   standbyPartitionsByHost.equals(other.standbyPartitionsByHost);
         } else {
             return false;
         }
@@ -453,11 +453,11 @@ public class AssignmentInfo {
     @Override
     public String toString() {
         return "[version=" + usedVersion
-                + ", supported version=" + commonlySupportedVersion
-                + ", active tasks=" + activeTasks
-                + ", standby tasks=" + standbyTasks
-                + ", partitions by host=" + partitionsByHost
-                + ", standbyPartitions by host=" + standbyPartitionsByHost
-                + "]";
+            + ", supported version=" + commonlySupportedVersion
+            + ", active tasks=" + activeTasks
+            + ", standby tasks=" + standbyTasks
+            + ", partitions by host=" + partitionsByHost
+            + ", standbyPartitions by host=" + standbyPartitionsByHost
+            + "]";
     }
 }

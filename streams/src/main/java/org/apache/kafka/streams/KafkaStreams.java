@@ -1171,8 +1171,6 @@ public class KafkaStreams implements AutoCloseable {
 
         // Obtain the current positions, of all the active-restoring and standby tasks
         for (final StreamThread streamThread : this.threads) {
-            final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
-
             for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
                 final Map<TopicPartition, Long> changelogPartitionLimits = standbyTask.checkpointedOffsets();
                 standbyTask.changelogPartitions().forEach(topicPartition ->
@@ -1180,6 +1178,7 @@ public class KafkaStreams implements AutoCloseable {
                         changelogPartitionLimits.getOrDefault(topicPartition, unknownPosition)));
             }
 
+            final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
             for (final StreamTask activeTask : streamThread.allStreamsTasks()) {
                 final boolean isRestoring = restoringTaskIds.contains(activeTask.id());
                 final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
