@@ -25,8 +25,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import java.util.concurrent.TimeUnit;
 
 public class KafkaConsumerMetrics {
-    private final Metrics metrics;
-
     private Sensor timeBetweenPollSensor;
     private Sensor pollIdleSensor;
     private long lastPollMs;
@@ -34,8 +32,6 @@ public class KafkaConsumerMetrics {
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
-        this.metrics = metrics;
-
         String metricGroupName = metricGrpPrefix + "-metrics";
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
