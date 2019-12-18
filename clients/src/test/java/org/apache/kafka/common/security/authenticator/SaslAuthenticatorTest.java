@@ -1616,7 +1616,7 @@ public class SaslAuthenticatorTest {
          * recognize that data and will throw an assertion error.
          */
         saslServerConfigs.put(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS,
-                new Double(1.1 * 1000L / 0.85).longValue());
+                Double.valueOf(1.1 * 1000L / 0.85).longValue());
 
         server = createEchoServer(securityProtocol);
         createClientConnection(securityProtocol, node);
