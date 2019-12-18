@@ -178,6 +178,7 @@ public class StandbyTaskTest {
             stateManager,
             stateDirectory);
         task.initializeStateStores();
+
         assertEquals(Utils.mkSet(partition), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
 

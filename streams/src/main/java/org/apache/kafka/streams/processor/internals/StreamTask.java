@@ -583,9 +583,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         } finally {
             partitionGroup.close();
-            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
-
+            recordCollector.close();
             closeTaskSensor.record();
+
+            streamsMetrics.removeAllTaskLevelSensors(threadId, id.toString());
         }
     }
 

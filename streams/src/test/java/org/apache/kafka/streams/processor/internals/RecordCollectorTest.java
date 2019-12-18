@@ -417,21 +417,22 @@ public class RecordCollectorTest {
     public void shouldThrowStreamsExceptionOnEOSInitializeTimeout() {
         final Properties props = StreamsTestUtils.getStreamsConfig("test");
         props.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        final RecordCollector collector = new RecordCollectorImpl(
-            taskId,
-            new StreamsConfig(props),
-            logContext,
-            streamsMetrics,
-            null,
-            id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                @Override
-                public void initTransactions() {
-                    throw new TimeoutException("test");
-                }
-            }
-        );
 
-        assertThrows(StreamsException.class, () -> collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner));
+        assertThrows(StreamsException.class, () ->
+            new RecordCollectorImpl(
+                taskId,
+                new StreamsConfig(props),
+                logContext,
+                streamsMetrics,
+                null,
+                id -> new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                    @Override
+                    public void initTransactions() {
+                        throw new TimeoutException("test");
+                    }
+                }
+            )
+        );
     }
 
     @Test

@@ -92,15 +92,20 @@ public class RecordCollectorImpl implements RecordCollector {
 
         final String threadId = Thread.currentThread().getName();
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+
+        producer = producerSupplier.get(taskId);
+
+        // TODO: this should be moved to task when it transits to running from created / restoring
+        // then even if there's a long time between the initialization and the first txn that is also fine.
+        initialize();
     }
 
-    // TODO: this should be moved to task when it transits to running from created / restoring
-    private void maybeInitialize() {
-        if (producer == null) {
-            producer = producerSupplier.get(taskId);
-
-            maybeInitTxns();
-        }
+    /**
+     * @throws StreamsException fatal error that should cause the thread to die
+     */
+    @Override
+    public void initialize() {
+        maybeInitTxns();
     }
 
     private void maybeInitTxns() {
@@ -153,8 +158,6 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        maybeInitialize();
-
         if (eosEnabled) {
             maybeBeginTxn();
 
@@ -244,8 +247,6 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        maybeInitialize();
-
         Integer partition = null;
 
         if (partitioner != null) {
@@ -270,18 +271,16 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer) {
-        maybeInitialize();
-
-        maybeBeginTxn();
-
-        checkForException();
-
-        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
-        final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
-
-        final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
-
         try {
+            maybeBeginTxn();
+
+            checkForException();
+
+            final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
+            final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
+
+            final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
+
             producer.send(serializedRecord, (metadata, exception) -> {
                 // if there's already an exception record, skip logging offsets or new exceptions
                 if (sendException != null) {
@@ -325,7 +324,6 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("Flushing record collector");
-        maybeInitialize();
         producer.flush();
         checkForException();
     }
@@ -337,7 +335,6 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         log.debug("Closing record collector");
-        maybeInitialize();
         maybeAbortTxn();
 
         if (eosEnabled) {

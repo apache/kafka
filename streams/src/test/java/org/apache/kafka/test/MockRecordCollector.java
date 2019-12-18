@@ -43,6 +43,9 @@ public class MockRecordCollector implements RecordCollector {
     private boolean flushed = false;
 
     @Override
+    public void initialize() {}
+
+    @Override
     public <K, V> void send(final String topic,
                             final K key,
                             final V value,
