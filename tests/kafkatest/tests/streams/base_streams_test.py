@@ -101,6 +101,6 @@ class BaseStreamsTest(KafkaTest):
         try:
           return int(result)
         except ValueError:
-          self.logger.warn("Command failed with " + result)
-          return False
+          self.logger.warn("Command failed with ValueError: " + result)
+          return 0
 
