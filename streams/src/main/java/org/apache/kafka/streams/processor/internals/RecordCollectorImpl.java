@@ -94,6 +94,7 @@ public class RecordCollectorImpl implements RecordCollector {
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
     }
 
+    // TODO: this should be moved to task when it transits to running from created / restoring
     private void maybeInitialize() {
         if (producer == null) {
             producer = producerSupplier.get(taskId);
@@ -165,9 +166,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 throw new TaskMigratedException(taskId, "Producer get fenced trying to commit a transaction", error);
             } catch (final TimeoutException error) {
                 // TODO: handle timeout exception as a fatal error
-                throw new KafkaException("Timed out while committing transaction via producer for task " + taskId, error);
+                throw new StreamsException("Timed out while committing transaction via producer for task " + taskId, error);
             } catch (final KafkaException error) {
-                throw new KafkaException("Error encountered sending offsets and committing transaction " +
+                throw new StreamsException("Error encountered sending offsets and committing transaction " +
                     "via producer for task " + taskId, error);
             }
         } else {
@@ -178,9 +179,9 @@ public class RecordCollectorImpl implements RecordCollector {
                     "indicating the corresponding thread is no longer part of the group.", error);
             } catch (final TimeoutException error) {
                 // TODO: handle timeout exception as a fatal error
-                throw new KafkaException("Timed out while committing offsets via consumer for task " + taskId, error);
+                throw new StreamsException("Timed out while committing offsets via consumer for task " + taskId, error);
             } catch (final KafkaException error) {
-                throw new KafkaException("Error encountered committing offsets via consumer for task " + taskId, error);
+                throw new StreamsException("Error encountered committing offsets via consumer for task " + taskId, error);
             }
         }
 
