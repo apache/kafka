@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.function.Function;
@@ -43,20 +44,32 @@ import java.util.function.Function;
  * A {@code KTable} can be transformed record by record, joined with another {@code KTable} or {@link KStream}, or
  * can be re-partitioned and aggregated into a new {@code KTable}.
  * <p>
- * Some {@code KTable}s have an internal state (a {@link TimestampedKeyValueStore}) and are therefore queryable via the
+ * Some {@code KTable}s have an internal state (a {@link ReadOnlyKeyValueStore}) and are therefore queryable via the
  * interactive queries API.
  * For example:
  * <pre>{@code
- *     final KTable table = ...
+ *     final KTable<String, Long> table = ...;
  *     ...
  *     final KafkaStreams streams = ...;
  *     streams.start()
  *     ...
  *     final String queryableStoreName = table.queryableStoreName(); // returns null if KTable is not queryable
- *     TimestampedKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
+ *     ReadOnlyKeyValueStore<String, Long> view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
  *     view.get(key);
- *}</pre>
- *<p>
+ * }</pre>
+ * You may also use a {@link TimestampedKeyValueStore} when querying internal state by calling the corresponding method
+ * on {@link QueryableStoreTypes}.
+ * <pre>{@code
+ *     final KTable<String, Long> table = ...;
+ *     ...
+ *     final KafkaStreams streams = ...;
+ *     streams.start()
+ *     ...
+ *     final String queryableStoreName = table.queryableStoreName(); // returns null if KTable is not queryable
+ *     ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> view = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+ *     view.get(key);
+ * }</pre>
+ * <p>
  * Records from the source topic that have null keys are dropped.
  *
  * @param <K> Type of primary keys
@@ -130,13 +143,13 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
-     * To query the local {@link TimestampedKeyValueStore} it must be obtained via
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // filtering words
-     * TimestampedKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
-     * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     *     KafkaStreams streams = ... // filtering words and assuming a KTable<String, Long>
+     *     ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     *     String key = "some-word"; // Key must be local (application state is shared over all running Kafka Streams instances)
+     *     ValueAndTimestamp<Long> valueForKey = localStore.get(key);
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
@@ -169,13 +182,13 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
-     * To query the local {@link TimestampedKeyValueStore} it must be obtained via
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // filtering words
-     * TimestampedKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
-     * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     *     KafkaStreams streams = ... // filtering words and assuming a KTable<String, Long>
+     *     ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     *     String key = "some-word"; // Key must be local (application state is shared over all running Kafka Streams instances)
+     *     ValueAndTimestamp<Long> valueForKey = localStore.get(key);
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
@@ -255,13 +268,13 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
      * forwarded.
      * <p>
-     * To query the local {@link TimestampedKeyValueStore} it must be obtained via
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // filtering words
-     * TimestampedKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
-     * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     *     KafkaStreams streams = ... // filtering words and assuming a KTable<String, Long>
+     *     ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     *     String key = "some-word"; // Key must be local (application state is shared over all running Kafka Streams instances)
+     *     ValueAndTimestamp<Long> valueForKey = localStore.get(key);
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
@@ -293,13 +306,13 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
      * forwarded.
      * <p>
-     * To query the local {@link TimestampedKeyValueStore} it must be obtained via
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
-     * KafkaStreams streams = ... // filtering words
-     * TimestampedKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
-     * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     *     KafkaStreams streams = ... // filtering words and assuming a KTable<String, Long>
+     *     ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     *     String key = "some-word"; // Key must be local (application state is shared over all running Kafka Streams instances)
+     *     ValueAndTimestamp<Long> valueForKey = localStore.get(key);
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
