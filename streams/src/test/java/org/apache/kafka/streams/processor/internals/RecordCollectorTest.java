@@ -282,7 +282,7 @@ public class RecordCollectorTest {
             "dropped-records-total",
             "stream-task-metrics",
             "The total number of dropped records",
-            Utils.mkMap(Utils.mkEntry("thread-id", "main"), Utils.mkEntry("task-id", taskId.toString()))));
+            Utils.mkMap(Utils.mkEntry("thread-id", Thread.currentThread().getName()), Utils.mkEntry("task-id", taskId.toString()))));
         assertEquals(1.0, metric.metricValue());
 
         final List<String> messages = logCaptureAppender.getMessages();
@@ -501,7 +501,8 @@ public class RecordCollectorTest {
 
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        assertThrows(TaskMigratedException.class, () -> collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner));
+        assertThrows(TaskMigratedException.class,
+            () -> collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner));
     }
 
     @Test

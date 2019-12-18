@@ -271,10 +271,10 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer) {
+        checkForException();
+
         try {
             maybeBeginTxn();
-
-            checkForException();
 
             final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
             final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
