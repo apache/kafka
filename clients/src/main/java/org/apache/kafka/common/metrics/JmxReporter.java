@@ -145,6 +145,7 @@ public class JmxReporter implements MetricsReporter {
         synchronized (LOCK) {
             for (KafkaMbean mbean : this.mbeans.values())
                 unregister(mbean);
+            this.mbeans.clear();
         }
     }
 

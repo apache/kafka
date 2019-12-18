@@ -69,12 +69,14 @@ public class MetricsTest {
     private static final double EPS = 0.000001;
     private MockTime time = new MockTime();
     private MetricConfig config = new MetricConfig();
+    private JmxReporter jmxReporter;
     private Metrics metrics;
     private ExecutorService executorService;
 
     @Before
     public void setup() {
-        this.metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
+        this.jmxReporter = new JmxReporter();
+        this.metrics = new Metrics(config, Arrays.asList(jmxReporter), time, true);
     }
 
     @After
@@ -84,6 +86,7 @@ public class MetricsTest {
             executorService.awaitTermination(5, TimeUnit.SECONDS);
         }
         this.metrics.close();
+        this.jmxReporter = null;
     }
 
     @Test
@@ -872,5 +875,36 @@ public class MetricsTest {
     @Test
     public void testDeprecatedMetricValueMethod() {
         verifyStats(KafkaMetric::value);
+    }
+
+    @Test
+    public void testMetricsClose() {
+        MetricName test1Name = new MetricName("test1", "testGroup", "test metric 1", Collections.emptyMap());
+        MetricName test2Name = new MetricName("test2", "testGroup", "test metric 2", Collections.emptyMap());
+        assertFalse(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test1Name)));
+        assertFalse(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test2Name)));
+        assertEquals(1, metrics.metrics().size());
+        metrics.addMetric(test1Name, new Gauge<Long>() {
+            @Override
+            public Long value(MetricConfig config, long now) {
+                return now;
+            }
+        });
+        assertTrue(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test1Name)));
+        assertEquals(JmxReporter.getMBeanName("", test1Name), JmxReporter.getMBeanName("", test2Name));
+        assertEquals(2, metrics.metrics().size());
+        metrics.addMetric(test2Name, new Gauge<Long>() {
+            @Override
+            public Long value(MetricConfig config, long now) {
+                return now;
+            }
+        });
+        assertTrue(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test1Name)));
+        assertEquals(3, metrics.metrics().size());
+        metrics.close();
+        assertFalse(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test1Name)));
+        metrics.removeMetric(test1Name);
+        assertFalse(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test1Name)));
+        assertFalse(jmxReporter.containsMbean(JmxReporter.getMBeanName("", test2Name)));
     }
 }
