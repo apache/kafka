@@ -379,7 +379,8 @@ class TransactionStateManager(brokerId: Int,
     val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
     if (currentTxnMetadataCacheEntry.isDefined)
-      info(s"Unloaded $currentTxnMetadataCacheEntry for $txnTopicPartition as part of loading metadata at epoch $coordinatorEpoch")
+      info(s"Unloaded transaction metadata ${currentTxnMetadataCacheEntry.get} from $txnTopicPartition as part of " +
+        s"loading metadata at epoch $coordinatorEpoch")
   }
 
   /**
@@ -398,7 +399,7 @@ class TransactionStateManager(brokerId: Int,
     }
 
     def loadTransactions(): Unit = {
-      info(s"Loading transaction metadata from $topicPartition")
+      info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
       inWriteLock(stateLock) {
@@ -433,6 +434,8 @@ class TransactionStateManager(brokerId: Int,
           }
         }
       }
+
+      info(s"Completed loading transaciton metadata from $topicPartition at epoch $coordinatorEpoch")
     }
 
     scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions)
@@ -458,10 +461,10 @@ class TransactionStateManager(brokerId: Int,
         if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
           transactionMetadataCache.remove(partitionId) match {
             case Some(txnMetadataCacheEntry) =>
-              info(s"Unloaded $txnMetadataCacheEntry for $topicPartition on become-follower transition")
+              info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
             case None =>
-              info(s"No cached metadata found for $topicPartition during become-follower transition")
+              info(s"No cached transaction metadata found for $topicPartition during become-follower transition")
           }
 
           leavingPartitions.remove(partitionAndLeaderEpoch)
@@ -657,7 +660,7 @@ class TransactionStateManager(brokerId: Int,
 private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
                                                       metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
   override def toString: String = {
-    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, cacheSize=${metadataPerTransactionalId.size})"
+    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
   }
 }
 
