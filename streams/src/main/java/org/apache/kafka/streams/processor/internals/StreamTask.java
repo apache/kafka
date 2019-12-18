@@ -543,12 +543,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw error;
             }
         }
+
+        partitionGroup.clear();
     }
 
     private void closeTopology() {
         log.trace("Closing processor topology");
-
-        partitionGroup.clear();
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException

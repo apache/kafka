@@ -415,26 +415,6 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldNotChangeOffsetsIfAckedOffsetsIsNull() throws IOException {
-        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
-        checkpoint.write(offsets);
-
-        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            noPartitions,
-            false,
-            stateDirectory,
-            emptyMap(),
-            changelogReader,
-            logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(offsets));
-    }
-
-    @Test
     public void shouldIgnoreIrrelevantLoadedCheckpoints() throws IOException {
         final Map<TopicPartition, Long> offsets = mkMap(
             mkEntry(persistentStorePartition, 99L),

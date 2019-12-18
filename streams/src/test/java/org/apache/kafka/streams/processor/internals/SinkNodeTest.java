@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -34,7 +36,19 @@ import static org.junit.Assert.fail;
 public class SinkNodeTest {
     private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
     private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
-    private final RecordCollector recordCollector = new MockRecordCollector();
+    private final RecordCollector recordCollector = new MockRecordCollector() {
+        @Override
+        public <K, V> void send(final String topic,
+                                final K key,
+                                final V value,
+                                final Headers headers,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {
+            throw new ClassCastException("boom");
+        }
+    };
 
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
@@ -51,13 +65,10 @@ public class SinkNodeTest {
 
     @Test
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
-        final Bytes anyKey = new Bytes("any key".getBytes());
-        final Bytes anyValue = new Bytes("any value".getBytes());
-
         // When/Then
         context.setTime(-1); // ensures a negative timestamp is set for the record we send next
         try {
-            illTypedSink.process(anyKey, anyValue);
+            illTypedSink.process("any key".getBytes(), "any value".getBytes());
             fail("Should have thrown StreamsException");
         } catch (final StreamsException ignored) {
             // expected
@@ -65,14 +76,11 @@ public class SinkNodeTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        final String keyOfDifferentTypeThanSerializer = "key with different type";
-        final String valueOfDifferentTypeThanSerializer = "value with different type";
-
+    public void shouldThrowStreamsExceptionWithClassCastFromRecordCollector() {
         // When/Then
         context.setTime(0);
         try {
-            illTypedSink.process(keyOfDifferentTypeThanSerializer, valueOfDifferentTypeThanSerializer);
+            illTypedSink.process("key", "value");
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
@@ -80,13 +88,11 @@ public class SinkNodeTest {
     }
 
     @Test
-    public void shouldHandleNullKeysWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        final String invalidValueToTriggerSerializerMismatch = "";
-
+    public void shouldThrowStreamsExceptionNullKeyWithClassCastFromRecordCollector() {
         // When/Then
         context.setTime(1);
         try {
-            illTypedSink.process(null, invalidValueToTriggerSerializerMismatch);
+            illTypedSink.process(null, "");
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
@@ -95,13 +101,11 @@ public class SinkNodeTest {
     }
 
     @Test
-    public void shouldHandleNullValuesWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
-        final String invalidKeyToTriggerSerializerMismatch = "";
-
+    public void shouldThrowStreamsExceptionNullValueWithClassCastFromRecordCollector() {
         // When/Then
         context.setTime(1);
         try {
-            illTypedSink.process(invalidKeyToTriggerSerializerMismatch, null);
+            illTypedSink.process("", null);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));

@@ -179,7 +179,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.partitions()).andAnswer(Collections::emptySet).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andAnswer(Collections::emptyList).anyTimes();
 
-        t1.close(false);
+        t1.close(true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
@@ -472,17 +472,6 @@ public class AssignedStreamsTasksTest {
 
         assertThat(assignedTasks.punctuate(), equalTo(1));
         EasyMock.verify(t1);
-    }
-
-    @Test
-    public void shouldCloseCleanlyWithSuspendedTaskAndEOS() {
-        mockTaskInitialization();
-
-        assignedTasks.addNewTask(t1);
-        assignedTasks.initializeNewTasks();
-        assertNull(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs));
-
-        assignedTasks.shutdown(true);
     }
 
     @Test
