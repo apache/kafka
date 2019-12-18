@@ -219,6 +219,17 @@ public class TopologyTestDriver implements Closeable {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final boolean eosEnabled;
 
+    private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
+        @Override
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
+
+        @Override
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
+
+        @Override
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
+    };
+
     /**
      * Create a new test diver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
@@ -315,16 +326,6 @@ public class TopologyTestDriver implements Closeable {
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
             streamsMetrics);
-        final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
-        };
 
         for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
@@ -399,7 +400,7 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 streamsMetrics,
                 consumer,
-                (taskId) -> producer);
+                taskId -> producer);
             task = new StreamTask(
                 TASK_ID,
                 new HashSet<>(partitionsByTopic.values()),

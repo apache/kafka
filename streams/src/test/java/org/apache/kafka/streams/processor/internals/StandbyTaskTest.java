@@ -30,37 +30,15 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.WindowKeySchema;
-import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -74,8 +52,6 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,15 +61,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -106,7 +79,6 @@ public class StandbyTaskTest {
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 1);
     private StandbyTask task;
-    private final Serializer<Integer> intSerializer = new IntegerSerializer();
 
     private final String applicationId = "test-application";
     private final String storeName1 = "store1";
@@ -115,10 +87,7 @@ public class StandbyTaskTest {
     private final String storeChangelogTopicName2 = ProcessorStateManager.storeChangelogTopic(applicationId, storeName2);
     private final String globalStoreName = "ktable1";
 
-    private final TopicPartition partition1 = new TopicPartition(storeChangelogTopicName1, 1);
-    private final TopicPartition partition2 = new TopicPartition(storeChangelogTopicName2, 1);
-    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-
+    private final TopicPartition partition = new TopicPartition(storeChangelogTopicName1, 1);
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
     private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(new MockKeyValueStoreBuilder(storeName1, false).build(),
@@ -156,15 +125,6 @@ public class StandbyTaskTest {
         new IntegerSerializer(),
         new IntegerSerializer()
     );
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(
-        restoreStateConsumer,
-        Duration.ZERO,
-        stateRestoreListener,
-        new LogContext("standby-task-test ")
-    );
-
-    private final byte[] recordValue = intSerializer.serialize(null, 10);
-    private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     private final String threadName = "threadName";
     private final StreamsMetricsImpl streamsMetrics =
@@ -205,7 +165,7 @@ public class StandbyTaskTest {
 
     @Test
     public void testStorePartitions() throws IOException {
-        EasyMock.expect(stateManager.checkpointed()).andReturn(Collections.singletonMap(partition1, 50L));
+        EasyMock.expect(stateManager.checkpointed()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
 
         final StreamsConfig config = createConfig(baseDir);
@@ -218,49 +178,7 @@ public class StandbyTaskTest {
             stateManager,
             stateDirectory);
         task.initializeStateStores();
-        assertEquals(Utils.mkSet(partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
-    }
-
-    private ConsumerRecord<byte[], byte[]> makeWindowedConsumerRecord(final String changelogName,
-                                                                      final int offset,
-                                                                      final int key,
-                                                                      final long start,
-                                                                      final long end) {
-        final Windowed<Integer> data = new Windowed<>(key, new TimeWindow(start, end));
-        final Bytes wrap = Bytes.wrap(new IntegerSerializer().serialize(null, data.key()));
-        final byte[] keyBytes = WindowKeySchema.toStoreKeyBinary(new Windowed<>(wrap, data.window()), 1).get();
-        return new ConsumerRecord<>(
-            changelogName,
-            1,
-            offset,
-            end,
-            TimestampType.CREATE_TIME,
-            0L,
-            0,
-            0,
-            keyBytes,
-            new LongSerializer().serialize(null, 100L)
-        );
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> getWindowedStoreContents(final String storeName,
-                                                                                                final StandbyTask task) {
-        final StandbyContextImpl context = (StandbyContextImpl) task.context();
-
-        final List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> result = new ArrayList<>();
-
-        try (final KeyValueIterator<Windowed<byte[]>, ValueAndTimestamp<Long>> iterator =
-                 ((TimestampedWindowStore) context.getStateMgr().getStore(storeName)).all()) {
-
-            while (iterator.hasNext()) {
-                final KeyValue<Windowed<byte[]>, ValueAndTimestamp<Long>> next = iterator.next();
-                final Integer deserializedKey = new IntegerDeserializer().deserialize(null, next.key.key());
-                result.add(new KeyValue<>(new Windowed<>(deserializedKey, next.key.window()), next.value));
-            }
-        }
-
-        return result;
+        assertEquals(Utils.mkSet(partition), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
 
     @Test
