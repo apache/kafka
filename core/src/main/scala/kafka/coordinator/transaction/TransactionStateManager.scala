@@ -384,8 +384,9 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-   * When this broker becomes a leader for a transaction log partition, load this partition and
-   * populate the transaction metadata cache with the transactional ids.
+   * When this broker becomes a leader for a transaction log partition, load this partition and populate the transaction
+   * metadata cache with the transactional ids. This operation must be resilient to any partial state left off from
+   * the previous loading / unloading operation.
    */
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
     validateTransactionTopicPartitionCountIsStable()
