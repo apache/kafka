@@ -28,7 +28,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   MapperFromFunction,
   PredicateFromFunction,
   ValueMapperFromFunction,
-  ValueMapperWithKeyFromFunction,
+  ValueMapperWithKeyFromFunction
 }
 import org.apache.kafka.streams.state.KeyValueStore
 
