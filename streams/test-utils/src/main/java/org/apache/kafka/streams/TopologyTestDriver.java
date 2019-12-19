@@ -829,7 +829,7 @@ public class TopologyTestDriver implements Closeable {
         }
 
         if (globalStateManager != null) {
-            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            final StateStore stateStore = globalStateManager.getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);

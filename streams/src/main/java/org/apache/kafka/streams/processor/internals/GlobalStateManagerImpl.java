@@ -110,88 +110,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Set<String> initialize() {
-        try {
-            if (!stateDirectory.lockGlobalState()) {
-                throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
-            }
-        } catch (final IOException e) {
-            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir), e);
-        }
-
-        try {
-            checkpointFileCache.putAll(checkpointFile.read());
-        } catch (final IOException e) {
-            try {
-                stateDirectory.unlockGlobalState();
-            } catch (final IOException e1) {
-                log.error("Failed to unlock the global state directory", e);
-            }
-            throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
-        }
-
-        final List<StateStore> stateStores = topology.globalStateStores();
-        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
-        final Set<String> changelogTopics = new HashSet<>();
-        for (final StateStore stateStore : stateStores) {
-            globalStoreNames.add(stateStore.name());
-            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
-            changelogTopics.add(sourceTopic);
-            stateStore.init(globalProcessorContext, stateStore);
-        }
-
-        // make sure each topic-partition from checkpointFileCache is associated with a global state store
-        checkpointFileCache.keySet().forEach(tp -> {
-            if (!changelogTopics.contains(tp.topic())) {
-                log.error("Encountered a topic-partition in the global checkpoint file not associated with any global" +
-                    " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
-                    " an application reset and state store directory cleanup will be required.",
-                    tp.topic(), checkpointFile.toString());
-                try {
-                    stateDirectory.unlockGlobalState();
-                } catch (final IOException e) {
-                    log.error("Failed to unlock the global state directory", e);
-                }
-                throw new StreamsException("Encountered a topic-partition not associated with any global state store");
-            }
-        });
-        return Collections.unmodifiableSet(globalStoreNames);
-    }
-
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
-        StateManagerUtil.reinitializeStateStoresForPartitions(
-            log,
-            baseDir,
-            globalStores,
-            topology.storeToChangelogTopic(),
-            partitions,
-            processorContext,
-            checkpointFile,
-            checkpointFileCache
-        );
-
-        globalConsumer.assign(partitions);
-        globalConsumer.seekToBeginning(partitions);
-    }
-
-    @Override
-    public StateStore getGlobalStore(final String name) {
-        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
-    }
-
-    @Override
     public StateStore getStore(final String name) {
-        return getGlobalStore(name);
+        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     public File baseDir() {
         return baseDir;
     }
 
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback) {
 
         if (globalStores.containsKey(store.name())) {
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
@@ -418,7 +346,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
     }
 

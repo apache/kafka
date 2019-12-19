@@ -165,7 +165,6 @@ public class StandbyTask extends AbstractTask {
         log.trace("Updating standby replicas of its state store for partition [{}]", partition);
         long limit = offsetLimits.getOrDefault(partition, Long.MAX_VALUE);
 
-        long lastOffset = -1L;
         final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
         final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
 
@@ -179,14 +178,13 @@ public class StandbyTask extends AbstractTask {
 
             if (record.offset() < limit) {
                 restoreRecords.add(record);
-                lastOffset = record.offset();
             } else {
                 remainingRecords.add(record);
             }
         }
 
         if (!restoreRecords.isEmpty()) {
-            stateMgr.updateStandbyStates(partition, restoreRecords, lastOffset);
+            stateMgr.restore(partition, restoreRecords);
             commitNeeded = true;
         }
 
@@ -194,7 +192,7 @@ public class StandbyTask extends AbstractTask {
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {
-        return Collections.unmodifiableMap(stateMgr.checkpointed());
+        return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 
     private long updateOffsetLimits(final TopicPartition partition) {

@@ -59,8 +59,8 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback) {}
 
     @Override
     public void flush() {}
@@ -87,7 +87,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public Map<TopicPartition, Long> changelogOffsets() {
         return offsets;
     }
 }

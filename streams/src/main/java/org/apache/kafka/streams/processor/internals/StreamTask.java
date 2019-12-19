@@ -30,6 +30,7 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -155,7 +156,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor);
 
-        stateMgr.registerGlobalStateStores(topology.globalStateStores());
+        for (final StateStore store : topology.globalStateStores()) {
+            stateMgr.registerStore(store, null);
+        }
     }
 
     public boolean isEosEnabled() {
@@ -247,8 +250,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskInitialized = true;
 
         idleStartTime = RecordQueue.UNKNOWN;
-
-        stateMgr.ensureStoresRegistered();
     }
 
     /**
@@ -259,7 +260,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void resume() {
         log.debug("Resuming");
-        stateMgr.clearCheckpoints();
         initializeMetadata();
     }
 

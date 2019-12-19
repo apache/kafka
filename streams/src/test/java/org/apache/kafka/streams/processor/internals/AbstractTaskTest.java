@@ -172,10 +172,10 @@ public class AbstractTaskTest {
 
         task.processorContext = new InternalMockProcessorContext(stateDirectory.directoryForTask(task.id), streamsConfig);
 
-        task.stateMgr.register(store1, new MockRestoreCallback());
-        task.stateMgr.register(store2, new MockRestoreCallback());
-        task.stateMgr.register(store3, new MockRestoreCallback());
-        task.stateMgr.register(store4, new MockRestoreCallback());
+        task.stateMgr.registerStore(store1, new MockRestoreCallback());
+        task.stateMgr.registerStore(store2, new MockRestoreCallback());
+        task.stateMgr.registerStore(store3, new MockRestoreCallback());
+        task.stateMgr.registerStore(store4, new MockRestoreCallback());
 
         // only reinitialize store1 and store3 -- store2 and store4 should be untouched
         task.reinitializeStateStoresForPartitions(Utils.mkSet(storeTopicPartition1, storeTopicPartition3));

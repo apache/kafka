@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateStore;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,26 +38,33 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 /**
  * Updates the state for all Global State Stores.
  */
-public class GlobalStateUpdateTask implements GlobalStateMaintainer {
+public class GlobalStateUpdateTask implements GlobalTask {
 
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
+    private final Consumer<byte[], byte[]> globalConsumer;
+
     private final GlobalStateManager stateMgr;
+    private final StateDirectory stateDirectory;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final LogContext logContext;
 
-    public GlobalStateUpdateTask(final ProcessorTopology topology,
-                                 final InternalProcessorContext processorContext,
+    public GlobalStateUpdateTask(final StreamsConfig config,
+                                 final LogContext logContext,
+                                 final ProcessorTopology topology,
                                  final GlobalStateManager stateMgr,
-                                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                                 final LogContext logContext) {
+                                 final StateDirectory stateDirectory,
+                                 final Consumer<byte[], byte[]> globalConsumer,
+                                 final InternalProcessorContext processorContext) {
         this.topology = topology;
         this.stateMgr = stateMgr;
-        this.processorContext = processorContext;
-        this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.logContext = logContext;
+        this.globalConsumer = globalConsumer;
+        this.stateDirectory = stateDirectory;
+        this.processorContext = processorContext;
+        this.deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
     }
 
     /**
@@ -60,6 +73,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
      */
     @Override
     public Map<TopicPartition, Long> initialize() {
+
         final Set<String> storeNames = stateMgr.initialize();
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
         for (final String storeName : storeNames) {
@@ -79,16 +93,64 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 )
             );
         }
-        initTopology();
+        initializeTopology();
         processorContext.initialize();
-        return stateMgr.checkpointed();
+        return stateMgr.changelogOffsets();
+    }
+
+    public void initializeTopology() {
+        for (final ProcessorNode node : this.topology.processors()) {
+            processorContext.setCurrentNode(node);
+            try {
+                node.init(this.processorContext);
+            } finally {
+                processorContext.setCurrentNode(null);
+            }
+        }
+
+        processorContext.initialize();
+    }
+
+    public boolean initializeStateStores() {
+        try {
+            if (!stateDirectory.lockGlobalState()) {
+                throw new LockException(String.format("Failed to lock the global state directory: %s", stateDirectory.globalStateDir()));
+            }
+        } catch (final IOException e) {
+            throw new LockException(String.format("Failed to lock the global state directory: %s", stateDirectory.globalStateDir()), e);
+        }
+
+        final List<StateStore> stateStores = topology.globalStateStores();
+        for (final StateStore stateStore : stateStores) {
+            stateStore.init(processorContext, stateStore);
+
+            // also initialize the deserializers for all source nodes
+            final String sourceTopic = topology.storeToChangelogTopic().get(stateStore.name());
+            final SourceNode source = topology.source(sourceTopic);
+            deserializers.put(
+                sourceTopic,
+                new RecordDeserializer(
+                    source,
+                    deserializationExceptionHandler,
+                    logContext,
+                    droppedRecordsSensorOrSkippedRecordsSensor(
+                        Thread.currentThread().getName(),
+                        processorContext.taskId().toString(),
+                        processorContext.metrics()
+                    )
+                )
+            );
+        }
+
+        // global update task always have a global state store
+        return false;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void update(final ConsumerRecord<byte[], byte[]> record) {
-        final RecordDeserializer sourceNodeAndDeserializer = deserializers.get(record.topic());
-        final ConsumerRecord<Object, Object> deserialized = sourceNodeAndDeserializer.deserialize(processorContext, record);
+        final RecordDeserializer recordDeserializer = deserializers.get(record.topic());
+        final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, record);
 
         if (deserialized != null) {
             final ProcessorRecordContext recordContext =
@@ -98,11 +160,11 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     deserialized.topic(),
                     deserialized.headers());
             processorContext.setRecordContext(recordContext);
-            processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
-            sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());
+            processorContext.setCurrentNode(recordDeserializer.sourceNode());
+            recordDeserializer.sourceNode().process(deserialized.key(), deserialized.value());
         }
 
-        offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
+        offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset());
     }
 
     public void flushState() {
@@ -116,17 +178,4 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     public void close() throws IOException {
         stateMgr.close(true);
     }
-
-    private void initTopology() {
-        for (final ProcessorNode node : this.topology.processors()) {
-            processorContext.setCurrentNode(node);
-            try {
-                node.init(this.processorContext);
-            } finally {
-                processorContext.setCurrentNode(null);
-            }
-        }
-    }
-
-
 }

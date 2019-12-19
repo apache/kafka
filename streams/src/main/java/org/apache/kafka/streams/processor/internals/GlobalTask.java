@@ -25,7 +25,7 @@ import java.util.Map;
 /**
  * Interface for maintaining global state stores. see {@link GlobalStateUpdateTask}
  */
-interface GlobalStateMaintainer {
+interface GlobalTask {
 
     Map<TopicPartition, Long> initialize();
 

@@ -34,8 +34,8 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback) {}
 
     @Override
     public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
@@ -58,7 +58,7 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public Map<TopicPartition, Long> changelogOffsets() {
         return null;
     }
 

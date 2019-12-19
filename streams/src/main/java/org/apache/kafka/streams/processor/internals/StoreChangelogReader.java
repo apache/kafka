@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -41,31 +42,70 @@ import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
 
+    enum ChangelogState {
+        // registered but need to be initialized
+        REGISTERED("REGISTERED"),
+
+        // initialized and restoring
+        RESTORING("RESTORING"),
+
+        // completed restoring (only for active restoring task)
+        COMPLETED("COMPLETED");
+
+        public final String name;
+
+        ChangelogState(final String name) {
+            this.name = name;
+        }
+    }
+
+    private class ChangelogMetadata {
+
+        private TopicPartition changelogPartition;
+
+        private ChangelogState changelogState;
+
+        private Long restoreEndOffset; // only for active restoring task (for standby it is null)
+
+        private ChangelogMetadata(final TopicPartition changelogPartition) {
+            this.changelogPartition = changelogPartition;
+            this.changelogState = ChangelogState.REGISTERED;
+            this.restoreEndOffset = null;
+        }
+    }
+
     private final Logger log;
+    private final Duration pollTime;
+    private final ProcessorStateManager stateManager;
     private final Consumer<byte[], byte[]> restoreConsumer;
-    private final StateRestoreListener userStateRestoreListener;
+    private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> restoreToOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Set<TopicPartition> needsRestoring = new HashSet<>();
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
-    private final Duration pollTime;
 
-    public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
-                                final Duration pollTime,
-                                final StateRestoreListener userStateRestoreListener,
-                                final LogContext logContext) {
-        this.restoreConsumer = restoreConsumer;
-        this.pollTime = pollTime;
+    private final Map<TopicPartition, ChangelogMetadata> changelogs;
+
+    public StoreChangelogReader(final StreamsConfig config,
+                                final LogContext logContext,
+                                final ProcessorStateManager stateManager,
+                                final Consumer<byte[], byte[]> restoreConsumer,
+                                final StateRestoreListener stateRestoreListener) {
         this.log = logContext.logger(getClass());
-        this.userStateRestoreListener = userStateRestoreListener;
+        this.stateManager = stateManager;
+        this.restoreConsumer = restoreConsumer;
+        this.stateRestoreListener = stateRestoreListener;
+        this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+
+        this.changelogs = new HashMap<>();
     }
 
     @Override
     public void register(final StateRestorer restorer) {
         if (!stateRestorers.containsKey(restorer.partition())) {
-            restorer.setUserRestoreListener(userStateRestoreListener);
+            restorer.setUserRestoreListener(stateRestoreListener);
             stateRestorers.put(restorer.partition(), restorer);
 
             log.trace("Added restorer for changelog {}", restorer.partition());
@@ -74,15 +114,70 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         needsInitializing.add(restorer.partition());
+
+        if (changelogs.putIfAbsent(restorer.partition(), new ChangelogMetadata(restorer.partition())) != null) {
+            throw new IllegalStateException("There is already a changelog registered for " + restorer.partition() +
+                ", this should not happen.");
+        }
+    }
+
+    private boolean hasChangelogsToInit() {
+        return changelogs.values().stream()
+            .anyMatch(metadata -> metadata.changelogState == ChangelogState.REGISTERED);
+    }
+
+    private boolean hasChangelogsToRestore() {
+        return changelogs.values().stream()
+            .anyMatch(metadata -> metadata.changelogState == ChangelogState.RESTORING);
+    }
+
+    private boolean allChangelogsCompleted() {
+        return changelogs.values().stream()
+            .allMatch(metadata -> metadata.changelogState == ChangelogState.COMPLETED);
     }
 
     public Collection<TopicPartition> restore(final RestoringTasks active) {
-        if (!needsInitializing.isEmpty()) {
+        // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
+        // 2. if all changelogs have finished, return early;
+        // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
+        if (hasChangelogsToInit()) {
             initialize(active);
         }
 
-        if (checkForCompletedRestoration()) {
-            return completedRestorers;
+        if (allChangelogsCompleted()) {
+            log.info("Finished restoring all active tasks");
+            restoreConsumer.unsubscribe();
+            return changelogs.keySet();
+        }
+
+        if (hasChangelogsToRestore()) {
+            final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+
+            for (final TopicPartition partition : polledRecords.partitions()) {
+                final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+                if (changelogMetadata == null) {
+                    throw new IllegalStateException("The corresponding changelog restorer for " + partition +
+                        " does not exist, this should not happen.");
+                }
+
+                if (changelogMetadata.changelogState != ChangelogState.RESTORING) {
+                    throw new IllegalStateException("The corresponding changelog restorer for " + partition +
+                        " has already transited to completed state, this should not happen.");
+                }
+
+                final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+            }
+
+            for (final TopicPartition partition : needsRestoring) {
+                final StateRestorer restorer = stateRestorers.get(partition);
+                final long pos = processNext(polledRecords.records(partition), restorer, restoreToOffsets.get(partition));
+                restorer.setRestoredOffset(pos);
+                if (restorer.hasCompleted(pos, restoreToOffsets.get(partition))) {
+                    restorer.restoreDone();
+                    restoreToOffsets.remove(partition);
+                    completedRestorers.add(partition);
+                }
+            }
         }
 
         try {
@@ -186,8 +281,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void startRestoration(final Set<TopicPartition> initialized,
-                                  final RestoringTasks active) {
+    private void startRestoration(final Set<TopicPartition> initialized, final RestoringTasks active) {
         log.debug("Start restoring state stores from changelog topics {}", initialized);
 
         final Set<TopicPartition> assignment = new HashSet<>(restoreConsumer.assignment());
@@ -346,7 +440,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         if (!restoreRecords.isEmpty()) {
-            restorer.restore(restoreRecords);
+            stateManager.restore(restorer.partition(), restoreRecords);
             restorer.restoreBatchCompleted(lastRestoredOffset, records.size());
 
             log.trace("Restored from {} to {} with {} records, ending offset is {}, next starting position is {}",

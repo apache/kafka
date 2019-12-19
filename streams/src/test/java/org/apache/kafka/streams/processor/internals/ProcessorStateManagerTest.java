@@ -127,11 +127,10 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
 
         try {
-            stateMgr.register(persistentStore, batchingRestoreCallback);
-            stateMgr.updateStandbyStates(
+            stateMgr.registerStore(persistentStore, batchingRestoreCallback);
+            stateMgr.restore(
                 persistentStorePartition,
-                singletonList(consumerRecord),
-                consumerRecord.offset()
+                singletonList(consumerRecord)
             );
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
@@ -149,11 +148,10 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
 
         try {
-            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.updateStandbyStates(
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.restore(
                 persistentStorePartition,
-                singletonList(consumerRecord),
-                consumerRecord.offset()
+                singletonList(consumerRecord)
             );
             assertThat(persistentStore.keys.size(), is(1));
             assertTrue(persistentStore.keys.contains(intKey));
@@ -172,11 +170,10 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
 
         try {
-            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.updateStandbyStates(
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.restore(
                 persistentStorePartition,
-                singletonList(consumerRecord),
-                consumerRecord.offset()
+                singletonList(consumerRecord)
             );
             assertThat(persistentStore.keys.size(), is(1));
             assertTrue(persistentStore.keys.contains(intKey));
@@ -204,7 +201,7 @@ public class ProcessorStateManagerTest {
             logContext);
 
         try {
-            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(persistentStoreTopicName, 2)));
         } finally {
             stateMgr.close(true);
@@ -228,7 +225,7 @@ public class ProcessorStateManagerTest {
             logContext);
 
         try {
-            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
         } finally {
             stateMgr.close(true);
@@ -278,11 +275,11 @@ public class ProcessorStateManagerTest {
             logContext);
 
         try {
-            stateMgr.register(store1, store1.stateRestoreCallback);
-            stateMgr.register(store2, store2.stateRestoreCallback);
-            stateMgr.register(store3, store3.stateRestoreCallback);
+            stateMgr.registerStore(store1, store1.stateRestoreCallback);
+            stateMgr.registerStore(store2, store2.stateRestoreCallback);
+            stateMgr.registerStore(store3, store3.stateRestoreCallback);
 
-            final Map<TopicPartition, Long> changeLogOffsets = stateMgr.checkpointed();
+            final Map<TopicPartition, Long> changeLogOffsets = stateMgr.changelogOffsets();
 
             assertEquals(3, changeLogOffsets.size());
             assertTrue(changeLogOffsets.containsKey(partition1));
@@ -309,7 +306,7 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
         try {
-            stateMgr.register(mockKeyValueStore, mockKeyValueStore.stateRestoreCallback);
+            stateMgr.registerStore(mockKeyValueStore, mockKeyValueStore.stateRestoreCallback);
 
             assertNull(stateMgr.getStore("noSuchStore"));
             assertEquals(mockKeyValueStore, stateMgr.getStore(nonPersistentStoreName));
@@ -342,8 +339,8 @@ public class ProcessorStateManagerTest {
             // make sure the checkpoint file is not written yet
             assertFalse(checkpointFile.exists());
 
-            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
             stateMgr.flush();
@@ -382,15 +379,15 @@ public class ProcessorStateManagerTest {
                   mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-        stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         // de-registers the stores, but doesn't re-register them because
         // the context isn't connected to our state manager
         stateMgr.reinitializeStateStoresForPartitions(asList(nonPersistentTopicPartition, persistentTopicPartition),
                                                       new MockInternalProcessorContext());
         // register them in backward order
-        stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         stateMgr.flush();
 
@@ -410,7 +407,7 @@ public class ProcessorStateManagerTest {
             emptyMap(),
             changelogReader,
             logContext);
-        stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
 
@@ -431,7 +428,7 @@ public class ProcessorStateManagerTest {
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
 
@@ -455,7 +452,7 @@ public class ProcessorStateManagerTest {
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
 
@@ -479,7 +476,7 @@ public class ProcessorStateManagerTest {
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         // should ignore irrelevant topic partitions
         changelogReader.setRestoredOffsets(mkMap(
@@ -507,7 +504,7 @@ public class ProcessorStateManagerTest {
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         // should ignore irrelevant topic partitions
         changelogReader.setRestoredOffsets(mkMap(
@@ -537,7 +534,7 @@ public class ProcessorStateManagerTest {
             singletonMap(persistentStore.name(), persistentStoreTopicName),
             changelogReader,
             logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         stateMgr.checkpoint(singletonMap(persistentStorePartition, 10L));
         final Map<TopicPartition, Long> read = checkpoint.read();
@@ -555,13 +552,11 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
         final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
-        stateMgr.updateStandbyStates(
+        stateMgr.restore(
             persistentStorePartition,
-            singletonList(new ConsumerRecord<>("", 0, 0L, bytes, bytes)),
-            888L
-        );
+            singletonList(new ConsumerRecord<>("", 0, 888L, bytes, bytes)));
 
         stateMgr.checkpoint(emptyMap());
 
@@ -583,7 +578,7 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         stateMgr.checkpoint(singletonMap(topicPartition, 876L));
 
         final Map<TopicPartition, Long> read = checkpoint.read();
@@ -601,7 +596,7 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         stateMgr.checkpoint(singletonMap(persistentStorePartition, 987L));
 
@@ -621,7 +616,7 @@ public class ProcessorStateManagerTest {
             logContext);
 
         try {
-            stateManager.register(new MockKeyValueStore(StateManagerUtil.CHECKPOINT_FILE_NAME, true), null);
+            stateManager.registerStore(new MockKeyValueStore(StateManagerUtil.CHECKPOINT_FILE_NAME, true), null);
             fail("should have thrown illegal argument exception when store name same as checkpoint file");
         } catch (final IllegalArgumentException e) {
             //pass
@@ -639,10 +634,10 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateManager.register(mockKeyValueStore, null);
+        stateManager.registerStore(mockKeyValueStore, null);
 
         try {
-            stateManager.register(mockKeyValueStore, null);
+            stateManager.registerStore(mockKeyValueStore, null);
             fail("should have thrown illegal argument exception when store with same name already registered");
         } catch (final IllegalArgumentException e) {
             // pass
@@ -668,7 +663,7 @@ public class ProcessorStateManagerTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.register(stateStore, stateStore.stateRestoreCallback);
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
         try {
             stateManager.flush();
@@ -696,7 +691,7 @@ public class ProcessorStateManagerTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.register(stateStore, stateStore.stateRestoreCallback);
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
 
         try {
             stateManager.close(true);
@@ -726,7 +721,7 @@ public class ProcessorStateManagerTest {
             e.printStackTrace();
             throw new AssertionError(e);
         }
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
         stateDirectory.clean();
         stateMgr.checkpoint(singletonMap(persistentStorePartition, 10L));
@@ -771,8 +766,8 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateManager.register(stateStore1, stateStore1.stateRestoreCallback);
-        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
+        stateManager.registerStore(stateStore1, stateStore1.stateRestoreCallback);
+        stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
             stateManager.flush();
@@ -806,8 +801,8 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateManager.register(stateStore1, stateStore1.stateRestoreCallback);
-        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
+        stateManager.registerStore(stateStore1, stateStore1.stateRestoreCallback);
+        stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
             stateManager.close(true);
@@ -862,8 +857,8 @@ public class ProcessorStateManagerTest {
             changelogReader,
             logContext);
 
-        stateManager.register(stateStore, stateStore.stateRestoreCallback);
-        stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
+        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
+        stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
 
         stateStore.initialized = false;
         stateStore2.initialized = false;
@@ -871,7 +866,7 @@ public class ProcessorStateManagerTest {
         stateManager.reinitializeStateStoresForPartitions(changelogPartitions, new NoOpProcessorContext() {
             @Override
             public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-                stateManager.register(store, stateRestoreCallback);
+                stateManager.registerStore(store, stateRestoreCallback);
             }
         });
 
