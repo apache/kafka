@@ -2258,4 +2258,28 @@ public class KafkaConsumerTest {
         // Avg of three data points
         assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
     }
+
+    private static boolean consumerMetricPresent(KafkaConsumer consumer, String name) {
+        MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
+        return consumer.metrics.metrics().containsKey(metricName);
+    }
+
+    @Test
+    public void testClosingConsumerUnregistersConsumerMetrics() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            new RoundRobinAssignor(), true, groupInstanceId);
+        consumer.subscribe(singletonList(topic));
+        assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
+        assertTrue(consumerMetricPresent(consumer, "time-between-poll-avg"));
+        assertTrue(consumerMetricPresent(consumer, "time-between-poll-max"));
+        consumer.close();
+        assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
+        assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
+        assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
+    }
 }
