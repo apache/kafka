@@ -39,7 +39,9 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -59,6 +61,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.api.easymock.annotation.MockNice;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -83,6 +86,8 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -143,6 +148,9 @@ public class WorkerSinkTaskTest {
     private TaskStatus.Listener statusListener;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
+    @MockNice
+    private RetryWithToleranceOperator retryWithToleranceOperator;
+
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
@@ -172,11 +180,15 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+    }
+
+    private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter, RetryWithToleranceOperator retry) {
         workerTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+            retry);
     }
 
     @After
@@ -369,13 +381,41 @@ public class WorkerSinkTaskTest {
 
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
         assertSinkMetricValue("sink-record-active-count-max", 1.0);
-        assertSinkMetricValue("sink-record-active-count-avg", 0.5);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.25);
         assertTaskMetricValue("status", "running");
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("batch-size-max", 1.0);
-        assertTaskMetricValue("batch-size-avg", 0.5);
+        assertTaskMetricValue("batch-size-avg", 0.333333);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPollRedeliveryWithToleranceOp() throws Exception {
+        createTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
+
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        retryWithToleranceOperator.reset();
+        PowerMock.expectLastCall();
+
+        EasyMock
+            .expect(
+                retryWithToleranceOperator.execute(anyObject(), eq(Stage.TASK_PUT), eq(Void.class)))
+            .andAnswer(() -> {
+                sinkTask.put(Collections.emptyList());
+                return null;
+            });
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration();
+        time.sleep(10000L);
 
         PowerMock.verifyAll();
     }
@@ -544,7 +584,7 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andReturn(offsets);
 
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-        consumer.commitAsync(EasyMock.eq(offsets), EasyMock.capture(callback));
+        consumer.commitAsync(eq(offsets), EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
@@ -667,7 +707,7 @@ public class WorkerSinkTaskTest {
         // Expect extra invalid topic partition to be filtered, which causes the consumer assignment to be logged
         EasyMock.expect(consumer.assignment()).andReturn(workerCurrentOffsets.keySet());
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-        consumer.commitAsync(EasyMock.eq(committableOffsets), EasyMock.capture(callback));
+        consumer.commitAsync(eq(committableOffsets), EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
@@ -781,7 +821,7 @@ public class WorkerSinkTaskTest {
         final ExecutorService executor = Executors.newSingleThreadExecutor();
         final CountDownLatch latch = new CountDownLatch(1);
 
-        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
+        consumer.commitAsync(eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @SuppressWarnings("unchecked")
             @Override
@@ -892,7 +932,7 @@ public class WorkerSinkTaskTest {
         final AtomicReference<Runnable> asyncCallbackRunner = new AtomicReference<>();
         final AtomicBoolean asyncCallbackRan = new AtomicBoolean();
 
-        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
+        consumer.commitAsync(eq(workerCurrentOffsets), EasyMock.<OffsetCommitCallback>anyObject());
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @SuppressWarnings("unchecked")
             @Override
@@ -980,7 +1020,7 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andReturn(postRebalanceCurrentOffsets);
 
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-        consumer.commitAsync(EasyMock.eq(postRebalanceCurrentOffsets), EasyMock.capture(callback));
+        consumer.commitAsync(eq(postRebalanceCurrentOffsets), EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
@@ -1086,7 +1126,7 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andReturn(offsets);
 
         final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-        consumer.commitAsync(EasyMock.eq(offsets), EasyMock.capture(callback));
+        consumer.commitAsync(eq(offsets), EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
@@ -1354,7 +1394,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectInitializeTask() throws Exception {
-        consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
+        consumer.subscribe(eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));

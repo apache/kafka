@@ -47,7 +47,9 @@ class ProcessingContext {
     /**
      * Reset the internal fields before executing operations on a new record.
      */
-    private void reset() {
+    public void reset() {
+        consumedMessage = null;
+        sourceRecord = null;
         attempt = 0;
         position = null;
         klass = null;
@@ -60,8 +62,8 @@ class ProcessingContext {
      * @param consumedMessage the record
      */
     public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
-        this.consumedMessage = consumedMessage;
         reset();
+        this.consumedMessage = consumedMessage;
     }
 
     /**
@@ -84,8 +86,8 @@ class ProcessingContext {
      * @param record the source record
      */
     public void sourceRecord(SourceRecord record) {
-        this.sourceRecord = record;
         reset();
+        this.sourceRecord = record;
     }
 
     /**

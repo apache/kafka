@@ -63,6 +63,8 @@ public class RetryWithToleranceOperator {
         TOLERABLE_EXCEPTIONS.put(Stage.HEADER_CONVERTER, Exception.class);
         TOLERABLE_EXCEPTIONS.put(Stage.KEY_CONVERTER, Exception.class);
         TOLERABLE_EXCEPTIONS.put(Stage.VALUE_CONVERTER, Exception.class);
+        TOLERABLE_EXCEPTIONS.put(Stage.TASK_POLL, org.apache.kafka.common.errors.RetriableException.class);
+        TOLERABLE_EXCEPTIONS.put(Stage.TASK_POLL, org.apache.kafka.connect.errors.RetriableException.class);
     }
 
     private final long errorRetryTimeout;
@@ -262,6 +264,10 @@ public class RetryWithToleranceOperator {
      */
     public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
         this.context.consumerRecord(consumedMessage);
+    }
+
+    public void reset() {
+        this.context.reset();
     }
 
     /**

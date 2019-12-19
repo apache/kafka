@@ -530,13 +530,33 @@ class WorkerSinkTask extends WorkerTask {
         consumer.pause(consumer.assignment());
     }
 
+    private void put(Collection<SinkRecord> records) {
+        retryWithToleranceOperator.reset();
+        retryWithToleranceOperator.execute(() -> {
+            try {
+                task.put(records);
+            } catch (RetriableException e) {
+                log.error("{} RetriableException from SinkTask:", this, e);
+                // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
+                // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
+                pausedForRedelivery = true;
+                pauseAll();
+
+                // Bubble up exception for retries.
+                throw e;
+            }
+            return null;
+        }, Stage.TASK_PUT, Void.class);
+
+    }
+
     private void deliverMessages() {
         // Finally, deliver this batch to the sink
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
-            task.put(new ArrayList<>(messageBatch));
+            put(new ArrayList<>(messageBatch));
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
@@ -548,13 +568,6 @@ class WorkerSinkTask extends WorkerTask {
                     resumeAll();
                 pausedForRedelivery = false;
             }
-        } catch (RetriableException e) {
-            log.error("{} RetriableException from SinkTask:", this, e);
-            // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
-            // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
-            pausedForRedelivery = true;
-            pauseAll();
-            // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
             log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not "
                     + "recover until manually restarted.", this, t);
