@@ -1452,34 +1452,30 @@ public class ConfigDef {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
-        b.append("<ul class=\"config-list\">\n");
 
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
                 continue;
             }
-            b.append("<li>");
-            b.append("<b>");
-            b.append(key.name);
-            b.append("</b>: ");
-            b.append(key.documentation);
-            b.append("<br/>");
-            // details
-            b.append("<ul class=\"horizontal-list\">");
+            b.append(String.format("<h4><a id=\"%1$s\" href=\"#%1$s\">%1$s</a></h4>", key.name));
+            b.append("<p>");
+            b.append(key.documentation.replaceAll("\n", "<br>"));
+            b.append("</p>");
+
+            b.append("<table>" +
+                    "<tbody>");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
-                addConfigDetail(b, detail, getConfigValue(key, detail));
+                b.append("<tr><th>" + detail + "</th><td>" + getConfigValue(key, detail) + "</td></tr>");
             }
             if (hasUpdateModes) {
                 String updateMode = dynamicUpdateModes.get(key.name);
                 if (updateMode == null)
                     updateMode = "read-only";
-                addConfigDetail(b, "Update Mode", updateMode);
+                b.append("<tr><th>Update Mode</th><td>" + updateMode + "</td></tr>");
             }
-            b.append("</ul>");
-            b.append("</li>\n");
+            b.append("</tbody></table>");
         }
-        b.append("</ul>\n");
         return b.toString();
     }
 
