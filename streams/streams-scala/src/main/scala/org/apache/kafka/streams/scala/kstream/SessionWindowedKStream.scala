@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
-import org.apache.kafka.streams.kstream.{KTable => KTableJ, SessionWindowedKStream => SessionWindowedKStreamJ, _}
+import org.apache.kafka.streams.kstream.{KTable => KTableJ, SessionWindowedKStream => SessionWindowedKStreamJ, Windowed}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   AggregatorFromFunction,
   InitializerFromFunction,
@@ -42,7 +42,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
 class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
 
   /**
-   * Aggregate the values of records in this stream by the grouped key and defined [[SessionWindows]].
+   * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
    *
    * @param initializer    the initializer function
    * @param aggregator     the aggregator function
@@ -60,7 +60,7 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
     )
 
   /**
-   * Count the number of records in this stream by the grouped key into [[SessionWindows]].
+   * Count the number of records in this stream by the grouped key into `SessionWindows`.
    *
    * @param materialized  an instance of `Materialized` used to materialize a state store.
    * @return a windowed [[KTable]] that contains "update" records with unmodified keys and `Long` values
@@ -80,7 +80,7 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
   }
 
   /**
-   * Combine values of this stream by the grouped key into [[SessionWindows]].
+   * Combine values of this stream by the grouped key into `SessionWindows`.
    *
    * @param reducer           a reducer function that computes a new aggregate result.
    * @param materialized  an instance of `Materialized` used to materialize a state store.
