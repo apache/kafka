@@ -58,8 +58,9 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   override def entrySize = 12
 
-  debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, maxIndexSize = $maxIndexSize," +
-    s" entries = ${_entries}, lastOffset = ${_lastEntry}, file position = ${mmap.position()}")
+  if (isDebugEnabled)
+    debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, maxIndexSize = $maxIndexSize," +
+          s" entries = ${_entries}, lastOffset = ${_lastEntry}, file position = ${mmap.position()}")
 
   // We override the full check to reserve the last time index entry slot for the on roll call.
   override def isFull: Boolean = entries >= maxEntries - 1
@@ -120,17 +121,20 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       // because that could happen in the following two scenarios:
       // 1. A log segment is closed.
       // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
-      if (_entries != 0 && offset < lastEntry.offset)
-        throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to slot ${_entries} no larger than" +
-          s" the last offset appended (${lastEntry.offset}) to ${file.getAbsolutePath}.")
-      if (_entries != 0 && timestamp < lastEntry.timestamp)
-        throw new IllegalStateException(s"Attempt to append a timestamp ($timestamp) to slot ${_entries} no larger" +
-          s" than the last timestamp appended (${lastEntry.timestamp}) to ${file.getAbsolutePath}.")
+      if (_entries != 0) {
+        if (offset < lastEntry.offset)
+          throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to slot ${_entries} no larger than" +
+                                           s" the last offset appended (${lastEntry.offset}) to ${file.getAbsolutePath}.")
+        if (timestamp < lastEntry.timestamp)
+          throw new IllegalStateException(s"Attempt to append a timestamp ($timestamp) to slot ${_entries} no larger" +
+                                          s" than the last timestamp appended (${lastEntry.timestamp}) to ${file.getAbsolutePath}.")
+      }
       // We only append to the time index when the timestamp is greater than the last inserted timestamp.
       // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
       // index will be empty.
       if (timestamp > lastEntry.timestamp) {
-        trace(s"Adding index entry $timestamp => $offset to ${file.getAbsolutePath}.")
+        if (isTraceEnabled)
+          trace(s"Adding index entry $timestamp => $offset to ${file.getAbsolutePath}.")
         mmap.putLong(timestamp)
         mmap.putInt(relativeOffset(offset))
         _entries += 1
@@ -204,7 +208,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastEntry = lastEntryFromIndexFile
-      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position()} and last entry is now ${_lastEntry}")
+      if (isDebugEnabled)
+        debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position()} and last entry is now ${_lastEntry}")
     }
   }
 
