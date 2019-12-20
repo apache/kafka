@@ -59,24 +59,22 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   2. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
+        //
+        // will be used by the changelog reader to determine if restoration is completed, hence public
         public Long offset;
 
         // could be used for both active restoration and standby
-        public StateRestoreCallback restoreCallback;
+        private StateRestoreCallback restoreCallback;
 
         // record converters used for restoration and standby
-        public RecordConverter recordConverter;
+        private RecordConverter recordConverter;
 
         // corresponding changelog partition of the store
-        public TopicPartition changelogPartition;
-
-        // TODO: temp
-        public StateRestorer stateRestorer;
+        private TopicPartition changelogPartition;
 
         private StateStoreMetadata(final StateStore stateStore) {
             this.stateStore = stateStore;
             this.offset = null;
-            this.stateRestorer = null;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
@@ -187,22 +185,10 @@ public class ProcessorStateManager implements StateManager {
         // is not log enabled OR the store is global (i.e. not logged either), and hence it does not need to be restored
         final String topic = storeToChangelogTopic.get(storeName);
         if (topic != null && stateRestoreCallback != null) {
-            final CompositeRestoreListener restoreListener = new CompositeRestoreListener(stateRestoreCallback);
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
-            final RecordConverter recordConverter = converterForStore(store);
-
             storeMetadata.changelogPartition = storePartition;
             storeMetadata.restoreCallback = stateRestoreCallback;
             storeMetadata.recordConverter = converterForStore(store);
-            storeMetadata.stateRestorer = new StateRestorer(
-                storePartition,
-                restoreListener,
-                -1L,        // TODO
-                Long.MAX_VALUE,
-                store.persistent(),
-                storeName,
-                recordConverter
-            );
 
             changelogReader.register(storePartition, this);
         }

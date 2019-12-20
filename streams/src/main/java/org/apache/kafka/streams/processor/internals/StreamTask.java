@@ -229,7 +229,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     @Override
     public boolean initializeStateStores() {
-        log.debug("Initializing state stores");
         registerStateStores();
         return changelogPartitions().isEmpty();
     }

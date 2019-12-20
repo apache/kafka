@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Performs bulk read operations from a set of partitions. Used to
@@ -37,14 +38,18 @@ public interface ChangelogReader {
 
     /**
      * Restore all registered state stores by reading from their changelogs.
-     * @return all topic partitions that have been restored
      */
-    Collection<TopicPartition> restore(final RestoringTasks active);
+    void restore();
 
     /**
-     * @return the restored offsets for all persistent stores.
+     * Update offset limit of a given changelog partition
      */
-    Map<TopicPartition, Long> restoredOffsets();
+    void updateLimitOffset(final Map<TopicPartition, Long> limitOffsets);
+
+    /**
+     * @return the changelog partitions that have been completed restoring
+     */
+    Set<TopicPartition> completedChangelogs();
 
     /**
      * Removes the passed in partitions from the set of changelogs

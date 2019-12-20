@@ -47,6 +47,9 @@ public class StandbyTask extends AbstractTask {
     private final Sensor closeTaskSensor;
     private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
 
+    private final ChangelogReader changelogReader;
+    private final Set<TopicPartition> changelogPartitions;
+
     /**
      * Create {@link StandbyTask} with its assigned partitions
      *
@@ -71,11 +74,8 @@ public class StandbyTask extends AbstractTask {
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
 
-        final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
-        partitions.stream()
-            .filter(tp -> changelogTopicNames.contains(tp.topic()))
-            .forEach(tp -> offsetLimits.put(tp, 0L));
-        updateOffsetLimits = true;
+        final Set<String> changelogTopics = new HashSet<>(topology.storeToChangelogTopic().values());
+        this.changelogPartitions = partitions.stream().filter(tp -> changelogTopics.contains(tp.topic())).collect(Collectors.toSet());
     }
 
     @Override
@@ -83,7 +83,6 @@ public class StandbyTask extends AbstractTask {
 
     @Override
     public boolean initializeStateStores() {
-        log.trace("Initializing state stores");
         registerStateStores();
         processorContext.initialize();
         taskInitialized = true;
@@ -149,46 +148,6 @@ public class StandbyTask extends AbstractTask {
         }
 
         taskClosed = true;
-    }
-
-    /**
-     * Updates a state store using records from one change log partition
-     *
-     * @return a list of records not consumed
-     */
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
-                                                       final List<ConsumerRecord<byte[], byte[]>> records) {
-        if (records.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        log.trace("Updating standby replicas of its state store for partition [{}]", partition);
-        long limit = offsetLimits.getOrDefault(partition, Long.MAX_VALUE);
-
-        final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
-        final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
-
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            // Check if we're unable to process records due to an offset limit (e.g. when our
-            // partition is both a source and a changelog). If we're limited then try to refresh
-            // the offset limit if possible.
-            if (record.offset() >= limit && updateOffsetLimits) {
-                limit = updateOffsetLimits(partition);
-            }
-
-            if (record.offset() < limit) {
-                restoreRecords.add(record);
-            } else {
-                remainingRecords.add(record);
-            }
-        }
-
-        if (!restoreRecords.isEmpty()) {
-            stateMgr.restore(partition, restoreRecords);
-            commitNeeded = true;
-        }
-
-        return remainingRecords;
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {

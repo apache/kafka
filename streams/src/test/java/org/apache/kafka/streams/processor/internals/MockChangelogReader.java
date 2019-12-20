@@ -39,11 +39,6 @@ public class MockChangelogReader implements ChangelogReader {
         return registered;
     }
 
-    @Override
-    public Map<TopicPartition, Long> restoredOffsets() {
-        return restoredOffsets;
-    }
-
     void setRestoredOffsets(final Map<TopicPartition, Long> restoredOffsets) {
         this.restoredOffsets = restoredOffsets;
     }

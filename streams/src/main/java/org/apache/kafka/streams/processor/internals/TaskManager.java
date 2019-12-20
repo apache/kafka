@@ -385,7 +385,8 @@ public class TaskManager {
         standby.initializeNewTasks();
 
         if (active.hasRestoringTasks()) {
-            final Collection<TopicPartition> restored = changelogReader.restore(active);
+            changelogReader.restore(active);
+            final Collection<TopicPartition> restored = changelogReader.completedChangelogs();
             active.updateRestored(restored);
             removeChangelogsFromRestoreConsumer(restored, false);
         } else {
