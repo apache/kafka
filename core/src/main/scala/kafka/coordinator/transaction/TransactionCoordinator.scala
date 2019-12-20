@@ -310,7 +310,7 @@ class TransactionCoordinator(brokerId: Int,
     // The operations performed during immigration must be resilient to any previous errors we saw or partial state we
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
     // loading it.
-    completeEmigration(txnTopicPartitionId)
+    txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
 
     // Now load the partition.
     txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
@@ -318,10 +318,6 @@ class TransactionCoordinator(brokerId: Int,
 
   def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
     txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
-    completeEmigration(txnTopicPartitionId)
-  }
-
-  private def completeEmigration(txnTopicPartitionId: Int): Unit = {
     txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
   }
 

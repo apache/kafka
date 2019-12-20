@@ -376,11 +376,12 @@ class TransactionStateManager(brokerId: Int,
                                                         coordinatorEpoch: Int,
                                                         loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
     val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
-    val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
+    val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
-    if (currentTxnMetadataCacheEntry.isDefined)
-      info(s"Unloaded transaction metadata ${currentTxnMetadataCacheEntry.get} from $txnTopicPartition as part of " +
+    previousTxnMetadataCacheEntryOpt.foreach { previousTxnMetadataCacheEntry =>
+      warn(s"Unloaded transaction metadata $previousTxnMetadataCacheEntry from $txnTopicPartition as part of " +
         s"loading metadata at epoch $coordinatorEpoch")
+    }
   }
 
   /**
@@ -389,8 +390,6 @@ class TransactionStateManager(brokerId: Int,
    * the previous loading / unloading operation.
    */
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
@@ -401,6 +400,8 @@ class TransactionStateManager(brokerId: Int,
 
     def loadTransactions(): Unit = {
       info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
+      validateTransactionTopicPartitionCountIsStable()
+
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
       inWriteLock(stateLock) {
@@ -436,7 +437,7 @@ class TransactionStateManager(brokerId: Int,
         }
       }
 
-      info(s"Completed loading transaciton metadata from $topicPartition at epoch $coordinatorEpoch")
+      info(s"Completed loading transaction metadata from $topicPartition for coordinator epoch $coordinatorEpoch")
     }
 
     scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions)
@@ -447,8 +448,6 @@ class TransactionStateManager(brokerId: Int,
    * that belong to that partition.
    */
   def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 

@@ -25,8 +25,6 @@ import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
-import org.mockito.ArgumentMatchers
-import org.mockito.Mockito._
 
 import scala.collection.mutable
 
@@ -858,34 +856,6 @@ class TransactionCoordinatorTest {
     coordinator.handleTxnEmigration(0, coordinatorEpoch)
 
     EasyMock.verify(transactionManager, transactionMarkerChannelManager)
-  }
-
-  @Test
-  def shouldRemoveTransactionsForPartitionOnImmigration(): Unit = {
-    val txnTopicPartitionId = 1
-    val transactionManager = mock(classOf[TransactionStateManager])
-    val transactionMarkerChannelManager = mock(classOf[TransactionMarkerChannelManager])
-    val coordinator = new TransactionCoordinator(brokerId,
-      new TransactionConfig(),
-      scheduler,
-      pidManager,
-      transactionManager,
-      transactionMarkerChannelManager,
-      time,
-      new LogContext)
-
-    doNothing().when(transactionMarkerChannelManager).removeMarkersForTxnTopicPartition(txnTopicPartitionId)
-    doNothing().when(transactionManager).loadTransactionsForTxnTopicPartition(ArgumentMatchers.eq(txnTopicPartitionId),
-      ArgumentMatchers.eq(coordinatorEpoch), ArgumentMatchers.any())
-
-    val inOrderVerifier = inOrder(transactionManager, transactionMarkerChannelManager)
-
-    coordinator.handleTxnImmigration(txnTopicPartitionId, coordinatorEpoch)
-
-    // first call must be to remove transaction markers, and then we start loading transactions
-    inOrderVerifier.verify(transactionMarkerChannelManager).removeMarkersForTxnTopicPartition(txnTopicPartitionId)
-    inOrderVerifier.verify(transactionManager).loadTransactionsForTxnTopicPartition(ArgumentMatchers.eq(txnTopicPartitionId),
-      ArgumentMatchers.eq(coordinatorEpoch), ArgumentMatchers.any())
   }
 
   @Test
