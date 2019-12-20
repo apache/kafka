@@ -314,6 +314,21 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def testCompleteNewMemberTimeoutHeartbeat(): Unit = {
+    // New member joins the group
+    var responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, None, DefaultSessionTimeout, DefaultRebalanceTimeout, false)
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+
+    val joinResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 100, TimeUnit.MILLISECONDS))
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    assertEquals(Errors.NONE, joinResult.error)
+    assertEquals(0, group.allMemberMetadata.count(_.isNew))
+
+    // Make sure the delayed heartbeat based on the new member timeout has been completed
+    assertEquals(1, groupCoordinator.heartbeatPurgatory.numDelayed)
+  }
+
+  @Test
   def testNewMemberJoinExpiration(): Unit = {
     // This tests new member expiration during a protracted rebalance. We first create a
     // group with one member which uses a large value for session timeout and rebalance timeout.
