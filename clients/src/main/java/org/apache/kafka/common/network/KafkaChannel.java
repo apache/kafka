@@ -631,15 +631,15 @@ public class KafkaChannel implements AutoCloseable {
     
     /**
      * Return the (always non-null but possibly empty) client-side
-     * {@link NetworkReceive} responses that arrived during re-authentication that
-     * are unrelated to re-authentication, if any. These correspond to requests sent
-     * prior to the beginning of re-authentication; the requests were made when the
-     * channel was successfully authenticated, and the responses arrived during the
+     * {@link NetworkReceive} response that arrived during re-authentication but
+     * is unrelated to re-authentication. This corresponds to a request sent
+     * prior to the beginning of re-authentication; the request was made when the
+     * channel was successfully authenticated, and the response arrived during the
      * re-authentication process.
      * 
-     * @return the (always non-null but possibly empty) client-side
-     *         {@link NetworkReceive} responses that arrived during
-     *         re-authentication that are unrelated to re-authentication, if any
+     * @return client-side {@link NetworkReceive} response that arrived during
+     *         re-authentication that is unrelated to re-authentication. This may
+     *         be empty.
      */
     public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
         return authenticator.pollResponseReceivedDuringReauthentication();

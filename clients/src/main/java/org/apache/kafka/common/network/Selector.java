@@ -470,10 +470,6 @@ public class Selector implements Selectable, AutoCloseable {
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
-        // Update expiry time for closing channels whose buffered receive have been processed
-        if (idleExpiryManager != null)
-          completedReceives.keySet().forEach(channel -> idleExpiryManager.update(channel.id(), endSelect));
-
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
 
@@ -571,14 +567,11 @@ public class Selector implements Selectable, AutoCloseable {
                 }
                 if (channel.ready() && channel.state() == ChannelState.NOT_CONNECTED)
                     channel.state(ChannelState.READY);
-                if (!hasCompletedReceive(channel)) {
-                    Optional<NetworkReceive> responseReceivedDuringReauthentication =
-                            channel.pollResponseReceivedDuringReauthentication();
-                    responseReceivedDuringReauthentication.ifPresent(receive -> {
-                        long currentTimeMs = time.milliseconds();
-                        addToCompletedReceives(channel, receive, currentTimeMs);
-                    });
-                }
+                Optional<NetworkReceive> responseReceivedDuringReauthentication = channel.pollResponseReceivedDuringReauthentication();
+                responseReceivedDuringReauthentication.ifPresent(receive -> {
+                    long currentTimeMs = time.milliseconds();
+                    addToCompletedReceives(channel, receive, currentTimeMs);
+                });
 
                 //if channel is ready and has bytes to read from socket or buffer, and has no
                 //previous completed receive then read from it

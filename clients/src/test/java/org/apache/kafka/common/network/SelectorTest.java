@@ -616,7 +616,7 @@ public class SelectorTest {
         TestUtils.waitForCondition(() -> {
             try {
                 selector.poll(100);
-                return !selector.disconnected().isEmpty() || !selector.completedReceives().isEmpty();
+                return !selector.disconnected().isEmpty();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
