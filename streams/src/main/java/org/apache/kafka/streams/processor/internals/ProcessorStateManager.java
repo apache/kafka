@@ -204,7 +204,7 @@ public class ProcessorStateManager implements StateManager {
                 recordConverter
             );
 
-            changelogReader.register(storeMetadata.stateRestorer);
+            changelogReader.register(storePartition, this);
         }
 
         stores.put(storeName, storeMetadata);
@@ -276,7 +276,6 @@ public class ProcessorStateManager implements StateManager {
             // restore states from changelog records and update the snapshot offset as the batch end record's offset
             final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
             final RecordBatchingStateRestoreCallback restoreCallback = adapt(store.restoreCallback);
-            final CompositeRestoreListener restoreListener = store.stateRestorer.compositeRestoreListener;
             final List<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(restoreRecords.size());
             for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
                 convertedRecords.add(store.recordConverter.convert(record));
@@ -284,9 +283,9 @@ public class ProcessorStateManager implements StateManager {
 
             try {
                 restoreCallback.restoreBatch(convertedRecords);
-                restoreListener.onBatchRestored(changelogPartition, store.stateStore.name(), batchEndOffset, restoreRecords.size());
             } catch (final RuntimeException e) {
-                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s", logPrefix, changelogPartition), e);
+                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
+                    logPrefix, changelogPartition), e);
             }
 
             store.offset = batchEndOffset;

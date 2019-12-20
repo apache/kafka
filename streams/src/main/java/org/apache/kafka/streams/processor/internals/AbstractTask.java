@@ -178,10 +178,6 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions) {
-        stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
-    }
-
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
