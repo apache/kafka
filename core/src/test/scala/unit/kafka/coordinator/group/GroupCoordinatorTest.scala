@@ -314,18 +314,33 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testCompleteNewMemberTimeoutHeartbeat(): Unit = {
-    // New member joins the group
-    var responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, None, DefaultSessionTimeout, DefaultRebalanceTimeout, false)
+  def testNewMemberTimeoutCompletion(): Unit = {
+    val sessionTimeout = GroupCoordinator.NewMemberJoinTimeoutMs + 5000
+    val responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, None, sessionTimeout, DefaultRebalanceTimeout, false)
+
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
 
     val joinResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 100, TimeUnit.MILLISECONDS))
     val group = groupCoordinator.groupManager.getGroup(groupId).get
+    val memberId = joinResult.memberId
+
     assertEquals(Errors.NONE, joinResult.error)
     assertEquals(0, group.allMemberMetadata.count(_.isNew))
 
-    // Make sure the delayed heartbeat based on the new member timeout has been completed
-    assertEquals(1, groupCoordinator.heartbeatPurgatory.numDelayed)
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, joinResult.generationId, memberId, Map(memberId -> Array[Byte]()))
+    val syncGroupError = syncGroupResult._2
+
+    assertEquals(Errors.NONE, syncGroupError)
+    assertEquals(1, group.size)
+
+    timer.advanceClock(GroupCoordinator.NewMemberJoinTimeoutMs + 100)
+
+    // Make sure the NewMemberTimeout is not still in effect, and the member is not kicked
+    assertEquals(1, group.size)
+
+    timer.advanceClock(sessionTimeout + 100)
+    assertEquals(0, group.size)
   }
 
   @Test
