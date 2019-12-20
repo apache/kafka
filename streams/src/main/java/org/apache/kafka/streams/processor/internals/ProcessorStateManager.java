@@ -47,8 +47,8 @@ import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackA
 
 public class ProcessorStateManager implements StateManager {
 
-    private class StateStoreMetadata {
-        private StateStore stateStore;
+    public class StateStoreMetadata {
+        public StateStore stateStore;
 
         // indicating the current snapshot of the store, used for both
         // restoration (active and standby tasks restored offset) and
@@ -59,19 +59,19 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   2. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
-        private Long offset;
+        public Long offset;
 
         // could be used for both active restoration and standby
-        private StateRestoreCallback restoreCallback;
+        public StateRestoreCallback restoreCallback;
 
         // record converters used for restoration and standby
-        private RecordConverter recordConverter;
+        public RecordConverter recordConverter;
 
         // corresponding changelog partition of the store
-        private TopicPartition changelogPartition;
+        public TopicPartition changelogPartition;
 
         // TODO: temp
-        private StateRestorer stateRestorer;
+        public StateRestorer stateRestorer;
 
         private StateStoreMetadata(final StateStore stateStore) {
             this.stateStore = stateStore;
@@ -235,6 +235,16 @@ public class ProcessorStateManager implements StateManager {
             }
         }
         return changelogOffsets;
+    }
+
+    // used by the changelog reader only
+    StateStoreMetadata storeMetadata(final TopicPartition partition) {
+        for (final StateStoreMetadata storeMetadata : stores.values()) {
+            if (storeMetadata.changelogPartition == partition) {
+                return storeMetadata;
+            }
+        }
+        return null;
     }
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
