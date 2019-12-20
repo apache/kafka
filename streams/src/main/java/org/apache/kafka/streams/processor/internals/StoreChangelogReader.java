@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class StoreChangelogReader implements ChangelogReader {
 
@@ -65,9 +66,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
         private ChangelogState changelogState;
 
+        private ProcessorStateManager stateManager;
+
         private Long restoreEndOffset; // only for active restoring task (for standby it is null)
 
-        private ChangelogMetadata(final TopicPartition changelogPartition) {
+        private ChangelogMetadata(final TopicPartition changelogPartition, final ProcessorStateManager stateManager) {
+            this.stateManager = stateManager;
             this.changelogPartition = changelogPartition;
             this.changelogState = ChangelogState.REGISTERED;
             this.restoreEndOffset = null;
@@ -80,13 +84,19 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> restoreToOffsets = new HashMap<>();
-    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Set<TopicPartition> needsRestoring = new HashSet<>();
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
 
     private final Map<TopicPartition, ChangelogMetadata> changelogs;
+
+    // if some partition metadata does not exist yet then it is highly likely that fetching
+    // for their end offsets would timeout; thus we maintain a global partition information
+    // and only try to fetch for the corresponding end offset after we know that this
+    // partition already exists from the broker-side metadata: this is an optimization.
+    private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
+
 
     public StoreChangelogReader(final StreamsConfig config,
                                 final LogContext logContext,
@@ -103,7 +113,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void register(final StateRestorer restorer) {
+    public void register(final StateRestorer restorer, final ProcessorStateManager stateManager) {
         if (!stateRestorers.containsKey(restorer.partition())) {
             restorer.setUserRestoreListener(stateRestoreListener);
             stateRestorers.put(restorer.partition(), restorer);
@@ -121,14 +131,26 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private boolean hasChangelogsToInit() {
+    private Set<TopicPartition> registeredChangelogs() {
         return changelogs.values().stream()
-            .anyMatch(metadata -> metadata.changelogState == ChangelogState.REGISTERED);
+            .filter(metadata -> metadata.changelogState == ChangelogState.REGISTERED)
+            .map(metadata -> metadata.changelogPartition)
+            .collect(Collectors.toSet());
+    }
+
+    private boolean hasChangelogsToInit() {
+        return !registeredChangelogs().isEmpty();
+    }
+
+    private Set<TopicPartition> restoringChangelogs() {
+        return changelogs.values().stream()
+            .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING)
+            .map(metadata -> metadata.changelogPartition)
+            .collect(Collectors.toSet());
     }
 
     private boolean hasChangelogsToRestore() {
-        return changelogs.values().stream()
-            .anyMatch(metadata -> metadata.changelogState == ChangelogState.RESTORING);
+        return !restoringChangelogs().isEmpty();
     }
 
     private boolean allChangelogsCompleted() {
@@ -140,8 +162,10 @@ public class StoreChangelogReader implements ChangelogReader {
         // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
         // 2. if all changelogs have finished, return early;
         // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
-        if (hasChangelogsToInit()) {
-            initialize(active);
+
+        final Set<TopicPartition> registeredChangelogs = registeredChangelogs();
+        if (!registeredChangelogs.isEmpty()) {
+            initialize(registeredChangelogs, active);
         }
 
         if (allChangelogsCompleted()) {
@@ -217,45 +241,80 @@ public class StoreChangelogReader implements ChangelogReader {
         return completedRestorers;
     }
 
-    private void initialize(final RestoringTasks active) {
-        if (!restoreConsumer.subscription().isEmpty()) {
-            throw new StreamsException("Restore consumer should not be subscribed to any topics (" + restoreConsumer.subscription() + ")");
+    private boolean hasPartition(final TopicPartition topicPartition) {
+        final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());
+
+        if (partitions == null) {
+            return false;
         }
 
-        // first refresh the changelog partition information from brokers, since initialize is only called when
-        // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
-        refreshChangelogInfo();
-
-        final Set<TopicPartition> initializable = new HashSet<>();
-        for (final TopicPartition topicPartition : needsInitializing) {
-            if (hasPartition(topicPartition)) {
-                initializable.add(topicPartition);
+        for (final PartitionInfo partition : partitions) {
+            if (partition.partition() == topicPartition.partition()) {
+                return true;
             }
         }
 
-        // try to fetch end offsets for the initializable restorers and remove any partitions
+        return false;
+    }
+
+    private boolean restoredToEnd(final ChangelogMetadata changelogMetadata) {
+        if (changelogMetadata.changelogState != ChangelogState.RESTORING) {
+            throw new IllegalStateException("Should never check a non-restoring changelog if it has restored to end");
+        }
+
+        final Long endOffset = changelogMetadata.restoreEndOffset;
+        final Long currentOffset = changelogMetadata.stateManager.changelogOffsets().get(changelogMetadata.changelogPartition);
+
+        if (endOffset == null) {
+            // end offset is not initialized meaning that it is from a standby task (i.e. it should never end)
+            return false;
+        } else if (currentOffset == null) {
+            // current offset is not initialized meaning there's no checkpointed offset,
+            // we would start restoring from beginning and it does not end yet
+            return false;
+        } else if (currentOffset < endOffset) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    private void initialize(final Set<TopicPartition> registeredChangelogs, final RestoringTasks active) {
+        // once a task has been initialized to restoring, we would update the restore
+        // consumer to add their corresponding partitions; if not all tasks can be initialized
+        // we need to update the
+
+        // if the partition information is empty we first try to refresh it before trying to find which partitions
+        // exist for end offset retrieving; this is a one-time thing.
+        if (partitionInfo.isEmpty())
+            refreshChangelogInfo();
+
+        final Set<TopicPartition> initializableChangelogs = registeredChangelogs.stream()
+            .filter(this::hasPartition).collect(Collectors.toSet());
+
+        // try to fetch end offsets for the initializable changelogs and remove any partitions
         // where we already have all of the data
         final Map<TopicPartition, Long> endOffsets;
         try {
-            endOffsets = restoreConsumer.endOffsets(initializable);
+            endOffsets = restoreConsumer.endOffsets(initializableChangelogs);
         } catch (final TimeoutException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("Could not fetch end offset for {}; will fall back to partition by partition fetching", initializable);
+            log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", initializableChangelogs);
             return;
         }
 
         endOffsets.forEach((partition, endOffset) -> {
             if (endOffset != null) {
-                final StateRestorer restorer = stateRestorers.get(partition);
-                final long offsetLimit = restorer.offsetLimit();
-                restoreToOffsets.put(partition, Math.min(endOffset, offsetLimit));
+                final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+                changelogMetadata.restoreEndOffset = endOffset;
+                changelogMetadata.changelogState = ChangelogState.RESTORING;
             } else {
                 log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
-                initializable.remove(partition);
+                initializableChangelogs.remove(partition);
             }
         });
 
-        final Iterator<TopicPartition> iter = initializable.iterator();
+        final Iterator<TopicPartition> iter = initializableChangelogs.iterator();
         while (iter.hasNext()) {
             final TopicPartition topicPartition = iter.next();
             final Long restoreOffset = restoreToOffsets.get(topicPartition);
@@ -279,7 +338,12 @@ public class StoreChangelogReader implements ChangelogReader {
         if (!initializable.isEmpty()) {
             startRestoration(initializable, active);
         }
+
+        // first refresh the changelog partition information from brokers, since initialize is only called when
+        // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
     }
+
+
 
     private void startRestoration(final Set<TopicPartition> initialized, final RestoringTasks active) {
         log.debug("Start restoring state stores from changelog topics {}", initialized);
@@ -351,6 +415,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void refreshChangelogInfo() {
+        partitionInfo.clear();
         try {
             partitionInfo.putAll(restoreConsumer.listTopics());
         } catch (final TimeoutException e) {
@@ -456,22 +521,6 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.unsubscribe();
             return true;
         }
-        return false;
-    }
-
-    private boolean hasPartition(final TopicPartition topicPartition) {
-        final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());
-
-        if (partitions == null) {
-            return false;
-        }
-
-        for (final PartitionInfo partition : partitions) {
-            if (partition.partition() == topicPartition.partition()) {
-                return true;
-            }
-        }
-
         return false;
     }
 }
