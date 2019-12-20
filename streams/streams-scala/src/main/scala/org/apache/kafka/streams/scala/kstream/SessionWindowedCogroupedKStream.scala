@@ -17,12 +17,8 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{
-  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
-  _
-}
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
-import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.kstream.{SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ, Windowed}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{InitializerFromFunction, MergerFromFunction}
 
 /**
  * Wraps the Java class SessionWindowedCogroupedKStream and delegates method calls to the underlying Java object.
@@ -36,17 +32,17 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedKStreamJ[K, V]) {
 
   /**
-   * Aggregate the values of records in these streams by the grouped key and defined window.
+   * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
    *
-   * @param initializer   an `Initializer` that computes an initial intermediate aggregation result.
-   *                      Cannot be { @code null}.
+   * @param initializer    the initializer function
    * @param materialized  an instance of `Materialized` used to materialize a state store.
-   *                      Cannot be { @code null}.
-   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the latest
-   *         (rolling) aggregate for each key
+   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
+   * the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V, merger: (K, V, V) => V)(implicit materialized: Materialized[K, V, ByteArraySessionStore]):
-    KTable[Windowed[K], V] = inner.aggregate((() => initializer).asInitializer, merger.asMerger, materialized)
+  def aggregate(initializer: => V, merger: (K, V, V) => V)(
+    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  ): KTable[Windowed[K], V] =
+    new KTable(inner.aggregate((() => initializer).asInitializer, merger.asMerger, materialized))
 
 }

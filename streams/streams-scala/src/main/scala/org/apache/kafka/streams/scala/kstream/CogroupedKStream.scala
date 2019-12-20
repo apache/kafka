@@ -17,12 +17,8 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{
-  CogroupedKStream => CogroupedKStreamJ,
-  _
-}
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
+import org.apache.kafka.streams.kstream.{CogroupedKStream => CogroupedKStreamJ, SessionWindows, Window, Windows}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFromFunction, InitializerFromFunction}
 
 /**
  * Wraps the Java class CogroupedKStream and delegates method calls to the underlying Java object.
@@ -35,8 +31,9 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions._
  */
 class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
 
-  def cogroup[VIn](groupedStream: KGroupedStream[KIn, VIn], aggregator: (KIn, VIn, VOut) => VOut):
-    CogroupedKStream[KIn, VOut] = inner.cogroup(groupedStream.inner, aggregator.asAggregator)
+  def cogroup[VIn](groupedStream: KGroupedStream[KIn, VIn],
+                   aggregator: (KIn, VIn, VOut) => VOut): CogroupedKStream[KIn, VOut] =
+    new CogroupedKStream(inner.cogroup(groupedStream.inner, aggregator.asAggregator))
 
   /**
    * Aggregate the values of records in these streams by the grouped key and defined window.
@@ -49,8 +46,9 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => VOut)(implicit materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]):
-    KTable[KIn, VOut] = inner.aggregate((() => initializer).asInitializer, materialized)
+  def aggregate(initializer: => VOut)(
+    implicit materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
+  ): KTable[KIn, VOut] = new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
 
   /**
    * Create a new [[TimeWindowedCogroupedKStream]] instance that can be used to perform windowed aggregations.
@@ -60,7 +58,7 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#windowedBy`
    */
   def windowedBy[W <: Window](windows: Windows[W]): TimeWindowedCogroupedKStream[KIn, VOut] =
-    inner.windowedBy(windows)
+    new TimeWindowedCogroupedKStream(inner.windowedBy(windows))
 
   /**
    * Create a new [[SessionWindowedKStream]] instance that can be used to perform session windowed aggregations.
@@ -70,6 +68,6 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
    */
   def windowedBy(windows: SessionWindows): SessionWindowedCogroupedKStream[KIn, VOut] =
-    inner.windowedBy(windows)
+    new SessionWindowedCogroupedKStream(inner.windowedBy(windows))
 
 }

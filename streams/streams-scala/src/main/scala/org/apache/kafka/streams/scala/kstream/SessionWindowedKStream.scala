@@ -21,10 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
-import org.apache.kafka.streams.kstream.{
-  KTable => KTableJ,
-  SessionWindowedKStream => SessionWindowedKStreamJ,
-}
+import org.apache.kafka.streams.kstream.{KTable => KTableJ, SessionWindowedKStream => SessionWindowedKStreamJ, Windowed}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   AggregatorFromFunction,
   InitializerFromFunction,
@@ -32,7 +29,6 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   ReducerFromFunction,
   ValueMapperFromFunction
 }
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 
 /**
  * Wraps the Java class SessionWindowedKStream and delegates method calls to the underlying Java object.

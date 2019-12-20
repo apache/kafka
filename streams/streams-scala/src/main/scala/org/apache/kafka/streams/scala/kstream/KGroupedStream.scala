@@ -123,7 +123,6 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#cogroup`
    */
   def cogroup[VR](aggregator: (K, V, VR) => VR): CogroupedKStream[K, VR] =
-    //TODO: add new CogroupedKStream
-    inner.cogroup(aggregator.asAggregator)
+    new CogroupedKStream(inner.cogroup(aggregator.asAggregator))
 
 }
