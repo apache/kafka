@@ -16,6 +16,7 @@
 import json
 import os.path
 
+from ducktape.errors import TimeoutError
 from ducktape.services.service import Service
 from ducktape.utils import util
 

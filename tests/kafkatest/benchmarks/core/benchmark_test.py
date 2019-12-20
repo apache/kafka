@@ -276,4 +276,4 @@ class Benchmark(Test):
         return compute_aggregate_throughput(self.consumer)
 
     def validate_versions(self, client_version, broker_version):
-        assert client_version <= broker_version, "Client version %s should be <= than broker version %s" (client_version, broker_version)
+        assert client_version <= broker_version, "Client version %s should be <= than broker version %s" % (client_version, broker_version)

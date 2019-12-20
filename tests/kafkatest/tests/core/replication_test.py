@@ -105,7 +105,7 @@ class ReplicationTest(EndToEndTest):
  
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
-        return super(ReplicationTest, self).min_cluster_size() + self.num_producers + self.num_consumers
+        return super(ReplicationTest, self).min_cluster_size() + 2
 
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],

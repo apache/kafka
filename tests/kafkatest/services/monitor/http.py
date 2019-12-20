@@ -64,6 +64,7 @@ class HttpMetricsCollector(object):
         self._http_metrics_thread.start()
 
         self._forwarders = {}
+        self.logger = None
 
     @property
     def http_metrics_url(self):
@@ -86,16 +87,15 @@ class HttpMetricsCollector(object):
             "metrics.period": self._http_metrics_period,
         }
 
+    def idx(self, node):
+        raise NotImplementedError()
+
     def start_node(self, node):
         local_port = self._httpd.socket.getsockname()[1]
         self.logger.debug('HttpMetricsCollector listening on %s', local_port)
         self._forwarders[self.idx(node)] = _ReverseForwarder(self.logger, node, self.REMOTE_PORT, local_port)
 
-        super(HttpMetricsCollector, self).start_node(node)
-
     def stop(self):
-        super(HttpMetricsCollector, self).stop()
-
         if self._http_metrics_thread:
             self.logger.debug("Shutting down metrics httpd")
             self._httpd.shutdown()
@@ -103,8 +103,6 @@ class HttpMetricsCollector(object):
             self.logger.debug("Finished shutting down metrics httpd")
 
     def stop_node(self, node):
-        super(HttpMetricsCollector, self).stop_node(node)
-
         idx = self.idx(node)
         self._forwarders[idx].stop()
         del self._forwarders[idx]
