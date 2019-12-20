@@ -257,29 +257,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return false;
     }
 
-    private boolean restoredToEnd(final ChangelogMetadata changelogMetadata) {
-        if (changelogMetadata.changelogState != ChangelogState.RESTORING) {
-            throw new IllegalStateException("Should never check a non-restoring changelog if it has restored to end");
-        }
-
-        final Long endOffset = changelogMetadata.restoreEndOffset;
-        final Long currentOffset = changelogMetadata.stateManager.changelogOffsets().get(changelogMetadata.changelogPartition);
-
-        if (endOffset == null) {
-            // end offset is not initialized meaning that it is from a standby task (i.e. it should never end)
-            return false;
-        } else if (currentOffset == null) {
-            // current offset is not initialized meaning there's no checkpointed offset,
-            // we would start restoring from beginning and it does not end yet
-            return false;
-        } else if (currentOffset < endOffset) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-
-    private void initialize(final Set<TopicPartition> registeredChangelogs, final RestoringTasks active) {
+    private void initialize(final Set<TopicPartition> registeredChangelogs) {
         // once a task has been initialized to restoring, we would update the restore
         // consumer to add their corresponding partitions; if not all tasks can be initialized
         // we need to update the
@@ -307,43 +285,44 @@ public class StoreChangelogReader implements ChangelogReader {
             if (endOffset != null) {
                 final ChangelogMetadata changelogMetadata = changelogs.get(partition);
                 changelogMetadata.restoreEndOffset = endOffset;
-                changelogMetadata.changelogState = ChangelogState.RESTORING;
+
+                if (restoredToEnd(changelogMetadata)) {
+                    changelogMetadata.changelogState = ChangelogState.COMPLETED;
+                } else {
+                    changelogMetadata.changelogState = ChangelogState.RESTORING;
+                }
             } else {
                 log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
                 initializableChangelogs.remove(partition);
             }
         });
 
-        final Iterator<TopicPartition> iter = initializableChangelogs.iterator();
-        while (iter.hasNext()) {
-            final TopicPartition topicPartition = iter.next();
-            final Long restoreOffset = restoreToOffsets.get(topicPartition);
-            final StateRestorer restorer = stateRestorers.get(topicPartition);
-
-            if (restorer.checkpoint() >= restoreOffset) {
-                restorer.setRestoredOffset(restorer.checkpoint());
-                iter.remove();
-                completedRestorers.add(topicPartition);
-            } else if (restoreOffset == 0) {
-                restorer.setRestoredOffset(0);
-                iter.remove();
-                completedRestorers.add(topicPartition);
-            } else {
-                restorer.setEndingOffset(restoreOffset);
-            }
-            needsInitializing.remove(topicPartition);
-        }
-
-        // set up restorer for those initializable
-        if (!initializable.isEmpty()) {
-            startRestoration(initializable, active);
-        }
+        for (final ChangelogMetadata : initializableChangelogs)
 
         // first refresh the changelog partition information from brokers, since initialize is only called when
         // the needsInitializing map is not empty, meaning we do not know the metadata for some of them yet
     }
 
+    private boolean restoredToEnd(final ChangelogMetadata changelogMetadata) {
+        if (changelogMetadata.changelogState != ChangelogState.RESTORING) {
+            throw new IllegalStateException("Should never check a non-restoring changelog if it has restored to end");
+        }
 
+        final Long endOffset = changelogMetadata.restoreEndOffset;
+        final Long currentOffset = changelogMetadata.stateManager.changelogOffsets().get(changelogMetadata.changelogPartition);
+
+        if (endOffset == null) {
+            // end offset is not initialized meaning that it is from a standby task (i.e. it should never end)
+            return false;
+        } else if (currentOffset == null) {
+            // current offset is not initialized meaning there's no checkpointed offset,
+            // we would start restoring from beginning and it does not end yet
+            return false;
+        } else {
+            // note the end offset returned of the consumer is actually the last offset + 1
+            return currentOffset + 1 < endOffset;
+        }
+    }
 
     private void startRestoration(final Set<TopicPartition> initialized, final RestoringTasks active) {
         log.debug("Start restoring state stores from changelog topics {}", initialized);
