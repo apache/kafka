@@ -470,7 +470,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testImmigrationWithFailedEmigration(): Unit = {
+  def testSuccessfulReimmigration(): Unit = {
     txnMetadata1.state = PrepareCommit
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
@@ -486,7 +486,7 @@ class TransactionStateManagerTest {
     assertEquals(0, transactionManager.loadingPartitions.size)
     assertEquals(0, transactionManager.leavingPartitions.size)
 
-    // simulate a failed emigration; immigrate partition at epoch 1
+    // Re-immigrate partition at epoch 1. This should be successful even though we didn't get to emigrate the partition.
     prepareTxnLog(topicPartition, 0, records)
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
