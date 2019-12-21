@@ -232,8 +232,6 @@ class TopologyTest {
       streamBuilder.build().describe()
     }
 
-    System.out.println(getTopologyScala.toString)
-    System.out.println(getTopologyJava.toString)
     // should match
     assertEquals(getTopologyScala, getTopologyJava)
   }
