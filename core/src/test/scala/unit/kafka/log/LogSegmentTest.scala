@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Assert, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -136,6 +136,35 @@ class LogSegmentTest {
     }
   }
 
+  /**
+   * This tests the scenario, where the caller attempts to access the offsets of a closed segment.
+   *
+   * Accessing underlying indices of a closed segment would lead to memory leaks due to recreation of the underlying
+   * memory mapped objects.
+   */
+  @Test
+  def testIndexAccessAfterClosingSegment() {
+    val seg = createSegment(0, time = new MockTime)
+    // Accessing the indices while the segment is legal.
+    seg.offsetIndex
+    seg.timeIndex
+
+    // Accessing the indices while the segment is closed is disallowed.
+    seg.close()
+    try {
+      seg.offsetIndex
+      Assert.fail("Expected IllegalStateException due to accessing OffsetIndex of a closed segment.")
+    } catch {
+      case _: IllegalStateException => //expected
+    }
+    try {
+      seg.timeIndex
+      Assert.fail("Expected IllegalStateException due to accessing TimeIndex of a closed segment.")
+    } catch {
+      case _: IllegalStateException => //expected
+    }
+  }
+
   @Test
   def testTruncateEmptySegment(): Unit = {
     // This tests the scenario in which the follower truncates to an empty segment. In this
@@ -145,11 +174,13 @@ class LogSegmentTest {
     val maxSegmentMs = 300000
     val time = new MockTime
     val seg = createSegment(0, time = time)
+    val timeIndexSizeInBytes = seg.timeIndex.sizeInBytes
+    val offsetIndexSizeInBytes = seg.offsetIndex.sizeInBytes
     seg.close()
 
     val reopened = createSegment(0, time = time)
-    assertEquals(0, seg.timeIndex.sizeInBytes)
-    assertEquals(0, seg.offsetIndex.sizeInBytes)
+    assertEquals(0, timeIndexSizeInBytes)
+    assertEquals(0, offsetIndexSizeInBytes)
 
     time.sleep(500)
     reopened.truncateTo(57)
@@ -262,11 +293,24 @@ class LogSegmentTest {
     val seg = createSegment(40)
     val logFile = seg.log.file
     val indexFile = seg.lazyOffsetIndex.file
+    val timeIndexFile = seg.lazyTimeIndex.file
+    // Ensure that files for offset and time indices have not been created redundantly.
+    assertFalse(seg.lazyOffsetIndex.file.exists)
+    assertFalse(seg.lazyTimeIndex.file.exists)
     seg.changeFileSuffixes("", ".deleted")
+    // Ensure that attempt to change suffixes for non-existing offset and time indices do not create new files.
+    assertFalse(seg.lazyOffsetIndex.file.exists)
+    assertFalse(seg.lazyTimeIndex.file.exists)
+    // Ensure that file names are updated accordingly.
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
     assertEquals(indexFile.getAbsolutePath + ".deleted", seg.lazyOffsetIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)
+    // Ensure lazy creation of offset index file upon accessing it.
+    seg.lazyOffsetIndex.get
     assertTrue(seg.lazyOffsetIndex.file.exists)
+    // Ensure lazy creation of time index file upon accessing it.
+    seg.lazyTimeIndex.get
+    assertTrue(seg.lazyTimeIndex.file.exists)
   }
 
   /**

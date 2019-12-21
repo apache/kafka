@@ -17,27 +17,32 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{File, IOException}
+import java.nio.file.Files
 import java.util.concurrent.locks.ReentrantLock
 
 import LazyIndex._
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.threadsafe
+import org.apache.kafka.common.utils.Utils
 
 /**
   * A wrapper over an `AbstractIndex` instance that provides a mechanism to defer loading (i.e. memory mapping) the
   * underlying index until it is accessed for the first time via the `get` method.
   *
-  * This is an important optimization with regards to broker start-up time if it has a large number of segments.
+  * This is an important optimization with regards to broker start-up and shutdown time if it has a large number of segments.
+  * It prevents illegal accesses to the underlying index after closing the index, which might otherwise lead to memory
+  * leaks due to recreation of underlying memory mapped object.
   *
-  * Methods of this class are thread safe. Make sure to check `AbstractIndex` subclasses documentation
-  * to establish their thread safety.
+  * Finally, this wrapper ensures that redundant disk accesses and memory mapped operations are avoided upon attempts to
+  * delete or rename the file that backs this index.
   *
   * @param loadIndex A function that takes a `File` pointing to an index and returns a loaded `AbstractIndex` instance.
   */
 @threadsafe
 class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper: IndexWrapper, loadIndex: File => T) {
-
+  // A closed index does not allow accessing its indices to prevent side effects.
+  @volatile private var isClosed: Boolean = false
   private val lock = new ReentrantLock()
 
   def file: File = indexWrapper.file
@@ -49,6 +54,8 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
   }
 
   def get: T = {
+    if (isClosed)
+      throw new IllegalStateException(s"Attempt to access the closed Index (file=$file).")
     indexWrapper match {
       case indexValue: IndexValue[T] => indexValue.index
       case _: IndexFile =>
@@ -64,6 +71,56 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
     }
   }
 
+  /**
+   * Close this index file.
+   * Note: This will be a no-op if the index has already been closed.
+   */
+  def close(): Unit = {
+    if (!isClosed) {
+      inLock(lock) {
+        indexWrapper match {
+          case indexValue: IndexValue[T] => indexValue.index.close()
+          case _: IndexFile => // no-op
+        }
+      }
+      isClosed = true
+    }
+  }
+
+  /**
+   * Delete the index file that backs this index if exists.
+   * This method ensures that if the index file has already been closed, it will not be recreated as a side effect.
+   *
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
+   */
+  def deleteIfExists(): Boolean = {
+    if (isClosed)
+      Files.deleteIfExists(file.toPath)
+    else
+      get.deleteIfExists()
+  }
+
+  /**
+   * Rename the file that backs this index if the index has ever been initialized or file already exists.
+   *
+   * @throws IOException if rename fails for defined index or existing file.
+   */
+  def renameTo(f: File) {
+    try {
+      if (file.exists)
+        Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+      else {
+        inLock(lock) {
+          indexWrapper match {
+            case indexValue: IndexValue[T] => Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+            case _: IndexFile => // no-op
+          }
+        }
+      }
+    } finally file = f
+  }
 }
 
 object LazyIndex {
