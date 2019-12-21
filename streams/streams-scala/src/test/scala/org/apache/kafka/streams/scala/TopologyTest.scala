@@ -100,11 +100,10 @@ class TopologyTest {
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
 
-      val _: KTable[String, Long] =
-        textLines
-          .flatMapValues(v => pattern.split(v.toLowerCase))
-          .groupBy((_, v) => v)
-          .count()
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((_, v) => v)
+        .count()
 
       streamBuilder.build().describe()
     }
@@ -129,8 +128,117 @@ class TopologyTest {
     assertEquals(getTopologyScala, getTopologyJava)
   }
 
-  @Test
-  def shouldBuildIdenticalTopologyInJavaNScalaJoin(): Unit = {
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroupSimple(): Unit = {
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+
+      import org.apache.kafka.streams.scala.Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines = streamBuilder.stream[String, String](inputTopic)
+
+      textLines
+        .mapValues(v => v.length)
+        .groupByKey
+        .cogroup((_, v1, v2: Long) => v1 + v2)
+        .aggregate(0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+
+      val splits: KStreamJ[String, Int] = textLines.mapValues(
+        new ValueMapper[String, Int] {
+          def apply(s: String): Int = s.length
+        }
+      )
+
+      splits
+        .groupByKey
+        .cogroup(
+          new Aggregator[String, Int, Long] {
+            def apply(k: String, v: Int, a: Long): Long = a + v
+          }
+        ).aggregate(
+          new Initializer[Long] {
+            def apply(): Long = 0L
+          }
+        )
+
+      streamBuilder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroup(): Unit = {
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+
+      import org.apache.kafka.streams.scala.Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines1 = streamBuilder.stream[String, String](inputTopic)
+      val textLines2 = streamBuilder.stream[String, String]("inputTopic2")
+
+      textLines1
+        .mapValues(v => v.length)
+        .groupByKey
+        .cogroup((_, v1, v2: Long) => v1 + v2)
+        .cogroup(textLines2.groupByKey, (_, v: String, a) => v.length + a)
+        .aggregate(0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines1: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+      val textLines2: KStreamJ[String, String] = streamBuilder.stream[String, String]("inputTopic2")
+
+      val splits: KStreamJ[String, Int] = textLines1.mapValues(
+        new ValueMapper[String, Int] {
+          def apply(s: String): Int = s.length
+        }
+      )
+
+      splits
+        .groupByKey
+        .cogroup(
+          new Aggregator[String, Int, Long] {
+            def apply(k: String, v: Int, a: Long): Long = a + v
+          }
+        ).cogroup(
+        textLines2.groupByKey(),
+          new Aggregator[String, String, Long] {
+            def apply(k: String, v: String, a: Long): Long = v.length + a
+          }
+        ).aggregate(
+          new Initializer[Long] {
+            def apply(): Long = 0L
+          }
+        )
+
+      streamBuilder.build().describe()
+    }
+
+    System.out.println(getTopologyScala.toString)
+    System.out.println(getTopologyJava.toString)
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaJoin(): Unit = {
 
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
