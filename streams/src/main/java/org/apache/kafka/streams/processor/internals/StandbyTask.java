@@ -154,6 +154,12 @@ public class StandbyTask extends AbstractTask {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 
+    public void update() {
+        // we use the changelog reader to do the actual restoration work,
+        // and here we only need to update the offset limits when necessary
+
+    }
+
     private long updateOffsetLimits(final TopicPartition partition) {
         if (!offsetLimits.containsKey(partition)) {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);

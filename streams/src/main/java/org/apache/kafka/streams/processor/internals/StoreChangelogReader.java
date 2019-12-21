@@ -19,19 +19,23 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,13 +61,28 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    // NOTE we assume that the changelog read is used only for either 1) restoring active task
+    // or 2) updating standby task at a given time; only after we've completed restoring all
+    // active tasks we'll then move on to update standby tasks
+    enum ChangelogReaderState {
+        ACTIVE_RESTORING("ACTIVE_RESTORING"),
+
+        STANDBY_UPDATING("STANDBY_UPDATING");
+
+        public final String name;
+
+        ChangelogReaderState(final String name) {
+            this.name = name;
+        }
+    }
+
     private class ChangelogMetadata {
 
-        private TopicPartition changelogPartition;
+        private final TopicPartition changelogPartition;
+
+        private final ProcessorStateManager stateManager;
 
         private ChangelogState changelogState;
-
-        private ProcessorStateManager stateManager;
 
         private long totalRestored;
 
@@ -73,23 +92,35 @@ public class StoreChangelogReader implements ChangelogReader {
         // only for standby tasks (for active it is null)
         private Long restoreLimitOffset;
 
-        // only for standby tasks (records polled but exceed limit at the moment)
+        // only for standby tasks to buffer records polled but exceed limit at the moment;
+        // for active it should be null
         private List<ConsumerRecord<byte[], byte[]>> bufferedRecords;
 
         // NOTE we do not book keep the current offset since we leverage state manager as its source of truth
 
         private ChangelogMetadata(final TopicPartition changelogPartition, final ProcessorStateManager stateManager) {
+            final boolean shouldUpdateLimitOffset = stateManager.changelogAsSource(changelogPartition);
+
             this.stateManager = stateManager;
             this.changelogPartition = changelogPartition;
             this.changelogState = ChangelogState.REGISTERED;
-            this.bufferedRecords = new ArrayList<>();
             this.restoreEndOffset = null;
-            this.restoreLimitOffset = null;
             this.totalRestored = 0L;
+
+            if (shouldUpdateLimitOffset) {
+                this.bufferedRecords = new ArrayList<>();
+                this.restoreLimitOffset = 0L;
+            } else {
+                this.bufferedRecords = null;
+                this.restoreLimitOffset = null;
+            }
         }
 
         private void clear() {
-            this.bufferedRecords.clear();
+            if (this.bufferedRecords != null) {
+                this.bufferedRecords.clear();
+                this.bufferedRecords = null;
+            }
         }
 
         @Override
@@ -100,7 +131,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
     private final Duration pollTime;
+    private final ChangelogReaderState state;
     private final ProcessorStateManager stateManager;
+    private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener stateRestoreListener;
 
@@ -119,10 +152,13 @@ public class StoreChangelogReader implements ChangelogReader {
     public StoreChangelogReader(final StreamsConfig config,
                                 final LogContext logContext,
                                 final ProcessorStateManager stateManager,
+                                final Consumer<byte[], byte[]> mainConsumer,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
-        this.log = logContext.logger(getClass());
+        this.log = logContext.logger(StoreChangelogReader.class);
+        this.state = ChangelogReaderState.ACTIVE_RESTORING;
         this.stateManager = stateManager;
+        this.mainConsumer = mainConsumer;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
@@ -205,8 +241,7 @@ public class StoreChangelogReader implements ChangelogReader {
             return;
         }
 
-        final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
-        if (!restoringChangelogs.isEmpty()) {
+        if (!restoringChangelogs().isEmpty()) {
             final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
 
             for (final TopicPartition partition : polledRecords.partitions()) {
@@ -215,30 +250,29 @@ public class StoreChangelogReader implements ChangelogReader {
                     throw new IllegalStateException("The corresponding changelog restorer for " + partition +
                         " does not exist, this should not happen.");
                 }
-
                 if (changelogMetadata.changelogState != ChangelogState.RESTORING) {
                     throw new IllegalStateException("The corresponding changelog restorer for " + partition +
                         " has already transited to completed state, this should not happen.");
                 }
 
                 final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
-                final List<ConsumerRecord<byte[], byte[]>> restorableRecords = records.stream().filter(record -> {
+                final Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
+                while (iterator.hasNext()) {
+                    final ConsumerRecord<byte[], byte[]> record = iterator.next();
                     if (record.key() == null) {
                         log.warn("Read changelog record with null key from changelog {} at offset {}, " +
                             "skipping it for restoration", changelogMetadata.changelogPartition, record.offset());
-                        return false;
-                    } else {
-                        return true;
+                        iterator.remove();
                     }
-                }).collect(Collectors.toList());
+                }
 
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
-                if (!restorableRecords.isEmpty()) {
-                    if (changelogMetadata.bufferedRecords.isEmpty()) {
-                        changelogMetadata.bufferedRecords = restorableRecords;
+                if (!records.isEmpty()) {
+                    if (changelogMetadata.bufferedRecords != null && !changelogMetadata.bufferedRecords.isEmpty()) {
+                        changelogMetadata.bufferedRecords.addAll(records);
                     } else {
-                        changelogMetadata.bufferedRecords.addAll(restorableRecords);
+                        changelogMetadata.bufferedRecords = records;
                     }
 
                     restoreChangelog(changelogMetadata);
@@ -247,18 +281,19 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    /**
+     * returns a flag whether offset limit caused not all records restored
+     */
     private void restoreChangelog(final ChangelogMetadata changelogMetadata) {
         final TopicPartition partition = changelogMetadata.changelogPartition;
-        final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords;
-
-        final int numRecords = IntStream.range(0, records.size())
+        final int numRecords = IntStream.range(0, changelogMetadata.bufferedRecords.size())
             .filter(i -> {
-                final ConsumerRecord<byte[], byte[]> record = records.get(i);
+                final ConsumerRecord<byte[], byte[]> record = changelogMetadata.bufferedRecords.get(i);
                 final long offset = record.offset();
 
                 return changelogMetadata.restoreEndOffset != null && offset >= changelogMetadata.restoreEndOffset ||
                     changelogMetadata.restoreLimitOffset != null && offset >= changelogMetadata.restoreLimitOffset;
-            }).findFirst().orElse(records.size());
+            }).findFirst().orElse(changelogMetadata.bufferedRecords.size());
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> restoreRecords = changelogMetadata.bufferedRecords.subList(0, numRecords);
@@ -270,7 +305,7 @@ public class StoreChangelogReader implements ChangelogReader {
             changelogMetadata.totalRestored += numRecords;
 
             // do not trigger restore listener if end offset is null (i.e. it is for standby tasks)
-            if (changelogMetadata.restoreEndOffset != null)
+            if (state == ChangelogReaderState.ACTIVE_RESTORING)
                 stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
 
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
@@ -285,11 +320,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // NOTE we use removeAll of ArrayList in order to achieve efficiency, otherwise one-at-a-time removal
             // would be very costly as it shifts element each time.
-            if (numRecords < records.size())
+            if (numRecords < changelogMetadata.bufferedRecords.size()) {
                 changelogMetadata.bufferedRecords.removeAll(restoreRecords);
-            else
+            } else {
                 changelogMetadata.bufferedRecords.clear();
-
+                changelogMetadata.bufferedRecords = null;
+            }
         }
     }
 
@@ -318,6 +354,56 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
+        try {
+            // those do not have a committed offset would default to 0
+            return mainConsumer.committed(partitions).entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+        } catch (final TimeoutException e) {
+            // if it timed out we just retry next time.
+            return Collections.emptyMap();
+        } catch (final KafkaException e) {
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        }
+    }
+
+    private Map<TopicPartition, Long> endOffsetForChangelogs(final Set<TopicPartition> partitions) {
+        try {
+            return restoreConsumer.endOffsets(partitions);
+        } catch (final TimeoutException e) {
+            // if timeout exception gets thrown we just give up this time and retry in the next run loop
+            log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);
+            return Collections.emptyMap();
+        } catch (final KafkaException e) {
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        }
+    }
+
+    public void updateLimitOffsets() {
+        final Set<TopicPartition> changelogsWithLimitOffsets = changelogs.entrySet().stream()
+            .filter(entry -> entry.getValue().changelogState == ChangelogState.RESTORING &&
+                             entry.getValue().restoreLimitOffset != null)
+            .map(Map.Entry::getKey).collect(Collectors.toSet());
+
+        final Map<TopicPartition, Long> limitOffsets = committedOffsetForChangelogs(changelogsWithLimitOffsets);
+        for (final Map.Entry<TopicPartition, Long> entry : limitOffsets.entrySet()) {
+            final Long newLimit = entry.getValue();
+            final ChangelogMetadata changelogMetadata = changelogs.get(entry.getKey());
+
+            if (changelogMetadata == null) {
+                throw new IllegalArgumentException("Cannot find the corresponding changelog for partition " + entry.getKey());
+            }
+
+            final Long previousLimit = changelogMetadata.restoreLimitOffset;
+            if (previousLimit != null && previousLimit > newLimit) {
+                throw new IllegalStateException("Offset limit should monotonically increase, but was reduced for partition " +
+                    entry.getKey() + ". New limit: " + newLimit + ". Previous limit: " + previousLimit);
+            }
+
+            changelogMetadata.restoreLimitOffset = newLimit;
+        }
+    }
+
     private void initializeChangelogs(final Set<TopicPartition> registeredChangelogs) {
         // once a task has been initialized to restoring, we would update the restore
         // consumer to add their corresponding partitions; if not all tasks can be initialized
@@ -335,16 +421,9 @@ public class StoreChangelogReader implements ChangelogReader {
         //
         // NOTE we assume that all requested partitions will be included in the returned map,
         // which is the case for the current consumer (2.4)
-        final Map<TopicPartition, Long> endOffsets;
-        try {
-            endOffsets = restoreConsumer.endOffsets(initializableChangelogs);
-        } catch (final TimeoutException e) {
-            // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", initializableChangelogs);
-            return;
-        }
+        final Map<TopicPartition, Long> endOffsets = endOffsetForChangelogs(initializableChangelogs);
 
-        Map<TopicPartition, StateStoreMetadata> newPartitionsToRestore = new HashMap<>();
+        final Map<TopicPartition, StateStoreMetadata> newPartitionsToRestore = new HashMap<>();
         endOffsets.forEach((partition, endOffset) -> {
             if (endOffset != null) {
                 final ChangelogMetadata changelogMetadata = changelogs.get(partition);
@@ -358,8 +437,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     newPartitionsToRestore.put(partition, storeMetadata);
                 }
             } else {
-                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
-                initializableChangelogs.remove(partition);
+                log.info("End offset for changelog {} cannot be found; will retry in the next time.");
             }
         });
 
@@ -395,7 +473,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // we do not trigger restore listener for standby tasks (whose end offset is unknown)
             // TODO: maybe we can lift this restriction but need to go through a KIP since endOffset now would be null
-            if (endOffset != null) {
+            if (state == ChangelogReaderState.ACTIVE_RESTORING) {
                 stateRestoreListener.onRestoreStart(partition, storeMetadata.stateStore.name(), currentOffset == null ? 0L : currentOffset, endOffset);
             }
         }
@@ -403,26 +481,6 @@ public class StoreChangelogReader implements ChangelogReader {
         // optimization: batch all seek-to-beginning offsets in a single request
         if (!newPartitionsWithoutStartOffset.isEmpty()) {
             restoreConsumer.seekToBeginning(newPartitionsWithoutStartOffset.keySet());
-        }
-    }
-
-    @Override
-    public void updateLimitOffset(final Map<TopicPartition, Long> limitOffsets) {
-        for (final Map.Entry<TopicPartition, Long> entry : limitOffsets.entrySet()) {
-            final Long newLimit = entry.getValue();
-            final ChangelogMetadata changelogMetadata = changelogs.get(entry.getKey());
-
-            if (changelogMetadata == null) {
-                throw new IllegalArgumentException("Cannot find the corresponding changelog for partition " + entry.getKey());
-            }
-
-            final Long previousLimit = changelogMetadata.restoreLimitOffset;
-            if (previousLimit != null && previousLimit > newLimit) {
-                throw new IllegalStateException("Offset limit should monotonically increase, but was reduced for partition " +
-                    entry.getKey() + ". New limit: " + newLimit + ". Previous limit: " + previousLimit);
-            }
-
-            changelogMetadata.restoreLimitOffset = newLimit;
         }
     }
 

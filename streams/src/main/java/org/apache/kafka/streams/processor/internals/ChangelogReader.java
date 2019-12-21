@@ -44,7 +44,7 @@ public interface ChangelogReader {
     /**
      * Update offset limit of a given changelog partition
      */
-    void updateLimitOffset(final Map<TopicPartition, Long> limitOffsets);
+    void updateLimitOffsets();
 
     /**
      * @return the changelog partitions that have been completed restoring

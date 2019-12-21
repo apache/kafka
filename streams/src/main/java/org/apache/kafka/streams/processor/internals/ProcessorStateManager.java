@@ -88,6 +88,7 @@ public class ProcessorStateManager implements StateManager {
     private final String logPrefix;
     private final ChangelogReader changelogReader;
     private final Map<String, String> storeToChangelogTopic;
+    private final Collection<TopicPartition> sourcePartitions;
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
@@ -114,12 +115,13 @@ public class ProcessorStateManager implements StateManager {
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
                                  final LogContext logContext) throws ProcessorStateException {
-        this.taskId = taskId;
-        this.changelogReader = changelogReader;
         this.logPrefix = format("task [%s] ", taskId);
         this.log = logContext.logger(ProcessorStateManager.class);
 
-        this.storeToChangelogTopic = new HashMap<>(storeToChangelogTopic);
+        this.taskId = taskId;
+        this.sourcePartitions = sources;
+        this.changelogReader = changelogReader;
+        this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
@@ -182,7 +184,7 @@ public class ProcessorStateManager implements StateManager {
         final StateStoreMetadata storeMetadata = new StateStoreMetadata(store);
 
         // if the store name does not exist in the changelog map, it means the underlying store
-        // is not log enabled OR the store is global (i.e. not logged either), and hence it does not need to be restored
+        // is not log enabled (including global stores), and hence it does not need to be restored
         final String topic = storeToChangelogTopic.get(storeName);
         if (topic != null && stateRestoreCallback != null) {
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
@@ -231,6 +233,11 @@ public class ProcessorStateManager implements StateManager {
             }
         }
         return null;
+    }
+
+    // used by the changelog reader only
+    boolean changelogAsSource(final TopicPartition partition) {
+        return sourcePartitions.contains(partition);
     }
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
