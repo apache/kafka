@@ -155,7 +155,9 @@ class WordCountTest extends WordCountTestData {
       pattern.split(line.toLowerCase).toIterable.asJava
     }
 
-    val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) => v }
+    val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) =>
+      v
+    }
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 

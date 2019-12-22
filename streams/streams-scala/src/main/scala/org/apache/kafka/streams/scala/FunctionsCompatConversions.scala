@@ -91,7 +91,8 @@ private[scala] object FunctionsCompatConversions {
     def asTransformerSupplier: TransformerSupplier[K, V, VO] = () => f()
   }
 
-  implicit class TransformerSupplierAsJava[K, V, VO](val supplier: TransformerSupplier[K, V, Iterable[VO]]) extends AnyVal {
+  implicit class TransformerSupplierAsJava[K, V, VO](val supplier: TransformerSupplier[K, V, Iterable[VO]])
+      extends AnyVal {
     def asJava: TransformerSupplier[K, V, JIterable[VO]] = () => {
       val innerTransformer = supplier.get()
       new Transformer[K, V, JIterable[VO]] {
@@ -101,7 +102,8 @@ private[scala] object FunctionsCompatConversions {
       }
     }
   }
-  implicit class ValueTransformerSupplierAsJava[V, VO](val supplier: ValueTransformerSupplier[V, Iterable[VO]]) extends AnyVal {
+  implicit class ValueTransformerSupplierAsJava[V, VO](val supplier: ValueTransformerSupplier[V, Iterable[VO]])
+      extends AnyVal {
     def asJava: ValueTransformerSupplier[V, JIterable[VO]] = () => {
       val innerTransformer = supplier.get()
       new ValueTransformer[V, JIterable[VO]] {

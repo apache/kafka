@@ -115,7 +115,8 @@ class TopologyTest {
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
-      val splits: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+      val splits: KStreamJ[String, String] =
+        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
 
       val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_, v) => v)
 
@@ -174,8 +175,8 @@ class TopologyTest {
       )
 
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion.map { case (_, (region, clicks)) =>
-        new KeyValue(region, clicks)
+      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion.map {
+        case (_, (region, clicks)) => new KeyValue(region, clicks)
       }
 
       // Compute the total per region by summing the individual click counts per region.
@@ -202,12 +203,15 @@ class TopologyTest {
       val textLines = streamBuilder.stream[String, String](inputTopic)
 
       val _: KTable[String, Long] = textLines
-        .transform(() => new Transformer[String, String, KeyValue[String, String]] {
-          override def init(context: ProcessorContext): Unit = ()
-          override def transform(key: String, value: String): KeyValue[String, String] =
-            new KeyValue(key, value.toLowerCase)
-          override def close(): Unit = ()
-        })
+        .transform(
+          () =>
+            new Transformer[String, String, KeyValue[String, String]] {
+              override def init(context: ProcessorContext): Unit = ()
+              override def transform(key: String, value: String): KeyValue[String, String] =
+                new KeyValue(key, value.toLowerCase)
+              override def close(): Unit = ()
+          }
+        )
         .groupBy((_, v) => v)
         .count()
 
@@ -220,12 +224,15 @@ class TopologyTest {
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
-      val lowered: KStreamJ[String, String] = textLines.transform(() => new Transformer[String, String, KeyValue[String, String]] {
-        override def init(context: ProcessorContext): Unit = ()
-        override def transform(key: String, value: String): KeyValue[String, String] =
-          new KeyValue(key, value.toLowerCase)
-        override def close(): Unit = ()
-      })
+      val lowered: KStreamJ[String, String] = textLines.transform(
+        () =>
+          new Transformer[String, String, KeyValue[String, String]] {
+            override def init(context: ProcessorContext): Unit = ()
+            override def transform(key: String, value: String): KeyValue[String, String] =
+              new KeyValue(key, value.toLowerCase)
+            override def close(): Unit = ()
+        }
+      )
 
       val grouped: KGroupedStreamJ[String, String] = lowered.groupBy((_, v) => v)
 
