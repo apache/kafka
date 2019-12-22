@@ -31,8 +31,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 
 import scala.collection.mutable
 import scala.util.{Failure, Try}

@@ -26,7 +26,7 @@ import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.Test
 import com.yammer.metrics.Metrics

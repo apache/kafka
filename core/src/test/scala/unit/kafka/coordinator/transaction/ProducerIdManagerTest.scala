@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.KafkaException
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.easymock.{Capture, EasyMock}
 import org.junit.{After, Test}
 import org.junit.Assert._
 

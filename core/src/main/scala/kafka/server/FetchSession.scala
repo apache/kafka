@@ -21,7 +21,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -547,19 +546,11 @@ class FetchSessionCache(private val maxEntries: Int,
 
   // Set up metrics.
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS,
-    new Gauge[Int] {
-      def value = FetchSessionCache.this.size
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS, () => FetchSessionCache.this.size)
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED,
-    new Gauge[Long] {
-      def value = FetchSessionCache.this.totalPartitions
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
   removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
-  val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
+  private[server] val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
     FetchSession.EVICTIONS, TimeUnit.SECONDS, Map.empty)
 
   /**

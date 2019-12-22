@@ -386,7 +386,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val validateOnly = new CreatePartitionsOptions().validateOnly(true)
     val actuallyDoIt = new CreatePartitionsOptions().validateOnly(false)
 
-    def partitions(topic: String, expectedNumPartitionsOpt: Option[Int] = None): util.List[TopicPartitionInfo] = {
+    def partitions(topic: String, expectedNumPartitionsOpt: Option[Int]): util.List[TopicPartitionInfo] = {
       getTopicMetadata(client, topic, expectedNumPartitionsOpt = expectedNumPartitionsOpt).partitions
     }
 

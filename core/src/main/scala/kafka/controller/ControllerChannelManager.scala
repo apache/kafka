@@ -58,12 +58,9 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  newGauge(
-    "TotalQueueSize",
-    new Gauge[Int] {
-      def value: Int = brokerLock synchronized {
-        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
-      }
+  newGauge("TotalQueueSize",
+    () => brokerLock synchronized {
+      brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
     }
   )
 
@@ -175,13 +172,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = newGauge(
-      QueueSizeMetricName,
-      new Gauge[Int] {
-        def value: Int = messageQueue.size
-      },
-      brokerMetricTags(broker.id)
-    )
+    val queueSizeGauge = newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))

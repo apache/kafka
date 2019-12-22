@@ -134,39 +134,39 @@ class GroupMetadataManager(brokerId: Int,
   )
 
   recreateGauge("NumGroupsPreparingRebalance",
-    () => groupMetadataCache.values.count(group => {
+    () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(PreparingRebalance)
       }
-    }))
+    })
 
   recreateGauge("NumGroupsCompletingRebalance",
-    () => groupMetadataCache.values.count(group => {
+    () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(CompletingRebalance)
       }
-    }))
+    })
 
   recreateGauge("NumGroupsStable",
-    () => groupMetadataCache.values.count(group => {
+    () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Stable)
       }
-    }))
+    })
 
   recreateGauge("NumGroupsDead",
-    () => groupMetadataCache.values.count(group => {
+    () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Dead)
       }
-    }))
+    })
 
   recreateGauge("NumGroupsEmpty",
-    () => groupMetadataCache.values.count(group => {
+    () => groupMetadataCache.values.count { group =>
       group synchronized {
         group.is(Empty)
       }
-    }))
+    })
 
   def startup(enableMetadataExpiration: Boolean): Unit = {
     scheduler.startup()

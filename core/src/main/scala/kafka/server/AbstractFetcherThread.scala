@@ -35,9 +35,7 @@ import scala.collection.{mutable, Map, Set}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-import java.util.function.BiConsumer
 
-import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -686,12 +684,7 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
     "topic" -> metricId.topicPartition.topic,
     "partition" -> metricId.topicPartition.partition.toString)
 
-  newGauge(FetcherMetrics.ConsumerLag,
-    new Gauge[Long] {
-      def value = lagVal.get
-    },
-    tags
-  )
+  newGauge(FetcherMetrics.ConsumerLag, () => lagVal.get, tags)
 
   def lag_=(newLag: Long): Unit = {
     lagVal.set(newLag)

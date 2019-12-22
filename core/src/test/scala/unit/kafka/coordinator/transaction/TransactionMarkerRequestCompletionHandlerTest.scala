@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.easymock.{EasyMock, IAnswer}
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 

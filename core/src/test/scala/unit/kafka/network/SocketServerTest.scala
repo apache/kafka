@@ -869,7 +869,7 @@ class SocketServerTest {
 
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
-  def testClientDisconnectionUpdatesRequestMetrics: Unit = {
+  def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
     // The way we detect a connection close from the client depends on the response size. If it's small, an
     // IOException ("Connection reset by peer") is thrown when the Selector reads from the socket. If
     // it's large, an IOException ("Broken pipe") is thrown when the Selector writes to the socket. We test

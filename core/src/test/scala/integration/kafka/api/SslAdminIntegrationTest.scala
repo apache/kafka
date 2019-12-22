@@ -16,7 +16,6 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.concurrent._
-import java.util.function.BiConsumer
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge

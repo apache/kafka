@@ -20,7 +20,6 @@ package kafka.server
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -37,52 +36,27 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  newGauge(
-    "MaxLag",
-    new Gauge[Long] {
-      // current max lag across all fetchers/topics/partitions
-      def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-        fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
-          curMaxThread.max(fetcherLagStatsEntry._2.lag)
-        }).max(curMaxAll)
-      })
-    },
-    Map("clientId" -> clientId)
-  )
+  private val tags = Map("clientId" -> clientId)
 
-  newGauge(
-  "MinFetchRate", {
-    new Gauge[Double] {
-      // current min fetch rate across all fetchers/topics/partitions
-      def value: Double = {
-        val headRate: Double =
-          fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.oneMinuteRate).getOrElse(0)
+  newGauge("MaxLag", () => {
+    // current max lag across all fetchers/topics/partitions
+    fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
+      fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
+        curMaxThread.max(fetcherLagStatsEntry._2.lag)
+      }).max(curMaxAll)
+    })
+  }, tags)
 
-        fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
-          fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate.min(curMinAll)
-        })
-      }
-    }
-  },
-  Map("clientId" -> clientId)
-  )
+  newGauge("MinFetchRate", () => {
+    // current min fetch rate across all fetchers/topics/partitions
+    val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
+    fetcherThreadMap.values.foldLeft(headRate)((curMinAll, value) =>
+      math.min(curMinAll, value.fetcherStats.requestRate.oneMinuteRate))
+  }, tags)
 
-  val failedPartitionsCount = newGauge(
-    "FailedPartitionsCount", {
-      new Gauge[Int] {
-        def value: Int = failedPartitions.size
-      }
-    },
-    Map("clientId" -> clientId)
-  )
+  newGauge("FailedPartitionsCount", () => failedPartitions.size, tags)
 
-  newGauge("DeadThreadCount", {
-    new Gauge[Int] {
-      def value: Int = {
-        deadThreadCount
-      }
-    }
-  }, Map("clientId" -> clientId))
+  newGauge("DeadThreadCount", () => deadThreadCount, tags)
 
   private[server] def deadThreadCount: Int = lock synchronized { fetcherThreadMap.values.count(_.isThreadFailed) }
 

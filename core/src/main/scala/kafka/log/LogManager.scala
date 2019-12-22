@@ -21,7 +21,6 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
@@ -118,28 +117,18 @@ class LogManager(logDirs: Seq[File],
 
   loadLogs()
 
-  // public, so we can access this from kafka.admin.DeleteTopicTest
-  val cleaner: LogCleaner =
-    if(cleanerConfig.enableCleaner)
+  private[kafka] val cleaner: LogCleaner =
+    if (cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
     else
       null
 
-  val offlineLogDirectoryCount = newGauge(
-    "OfflineLogDirectoryCount",
-    new Gauge[Int] {
-      def value = offlineLogDirs.size
-    }
-  )
+  newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
 
   for (dir <- logDirs) {
-    newGauge(
-      "LogDirectoryOffline",
-      new Gauge[Int] {
-        def value = if (_liveLogDirs.contains(dir)) 0 else 1
-      },
-      Map("logDirectory" -> dir.getAbsolutePath)
-    )
+    newGauge("LogDirectoryOffline",
+      () => if (_liveLogDirs.contains(dir)) 0 else 1,
+      Map("logDirectory" -> dir.getAbsolutePath))
   }
 
   /**
