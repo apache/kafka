@@ -1569,13 +1569,15 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
       reassignments.foreach { case (tp, targetReplicas) =>
-        if (replicasAreValid(tp, targetReplicas)) {
-          maybeBuildReassignment(tp, targetReplicas) match {
-            case Some(context) => partitionsToReassign.put(tp, context)
-            case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
-          }
-        } else {
-          reassignmentResults.put(tp, new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT))
+        val errorMessage = targetReplicas.flatMap(validateReplicas(tp, _))
+        errorMessage match {
+          case None =>
+            maybeBuildReassignment(tp, targetReplicas) match {
+              case Some(context) => partitionsToReassign.put(tp, context)
+              case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
+            }
+          case Some(err) =>
+            reassignmentResults.put(tp, err)
         }
       }
 
@@ -1588,22 +1590,20 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def replicasAreValid(topicPartition: TopicPartition, replicasOpt: Option[Seq[Int]]): Boolean = {
-    replicasOpt match {
-      case Some(replicas) =>
-        val replicaSet = replicas.toSet
-        if (replicas.isEmpty || replicas.size != replicaSet.size)
-          false
-        else if (replicas.exists(_ < 0))
-          false
-        else {
-          // Ensure that any new replicas are among the live brokers
-          val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-          val newAssignment = currentAssignment.reassignTo(replicas)
-          newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
-        }
-
-      case None => true
+  private def validateReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
+    val replicaSet = replicas.toSet
+    if (replicas.isEmpty || replicas.size != replicaSet.size)
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Invalid replica list in partition reassignment: $replicas"))
+    else if (replicas.exists(_ < 0))
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Invalid broker id in replica list: $replicas"))
+    else {
+      // Ensure that any new replicas are among the live brokers
+      val currentAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+      val newAssignment = currentAssignment.reassignTo(replicas)
+      newAssignment.addingReplicas.toSet.subsetOf(controllerContext.liveBrokerIds)
+      None
     }
   }
 

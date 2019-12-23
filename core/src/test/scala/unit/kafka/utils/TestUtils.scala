@@ -1553,6 +1553,22 @@ object TestUtils extends Logging {
     )
   }
 
+  def waitForReplicasAssigned(client: Admin, partition: TopicPartition, brokerIds: Seq[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
+        val replicas = description
+          .values
+          .flatMap(_.partitions.asScala.flatMap(_.replicas.asScala))
+          .map(_.id)
+          .toSeq
+
+        brokerIds == replicas
+      },
+      s"Expected brokers $brokerIds to be the replicas for $partition"
+    )
+  }
+
   /**
    * Capture the console output during the execution of the provided function.
    */
