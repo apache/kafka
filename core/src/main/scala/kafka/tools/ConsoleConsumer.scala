@@ -33,7 +33,6 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
@@ -47,6 +46,8 @@ object ConsoleConsumer extends Logging {
   var messageCount = 0
 
   private val shutdownLatch = new CountDownLatch(1)
+  private val EARLIEST_STRING = "earliest"
+  private val LATEST_STRING = "latest"
 
   def main(args: Array[String]): Unit = {
     val conf = new ConsumerConfig(args)
@@ -68,7 +69,7 @@ object ConsoleConsumer extends Logging {
 
     val consumerWrapper =
       if (conf.partitionArg.isDefined)
-        new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
+        new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Some(conf.offsetArg), None, consumer, timeoutMs)
       else
         new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
 
@@ -169,7 +170,7 @@ object ConsoleConsumer extends Logging {
     * are conflicting.
     */
   def setAutoOffsetResetValue(config: ConsumerConfig, props: Properties): Unit = {
-    val (earliestConfigValue, latestConfigValue) = ("earliest", "latest")
+    val (earliestConfigValue, latestConfigValue) = (EARLIEST_STRING, LATEST_STRING)
 
     if (props.containsKey(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)) {
       // auto.offset.reset parameter was specified on the command line
@@ -204,11 +205,12 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
-    val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
+    val offsetOpt = parser.accepts("offset", "The offset id to consume from, " +
+      "or 'earliest' which means from beginning, or 'latest' which means from end. A negative offset means starting from the last N messages.")
       .withRequiredArg
       .describedAs("consume offset")
       .ofType(classOf[String])
-      .defaultsTo("latest")
+      .defaultsTo(LATEST_STRING)
     val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
       .withRequiredArg
       .describedAs("consumer_prop")
@@ -328,26 +330,22 @@ object ConsoleConsumer extends Logging {
 
     def invalidOffset(offset: String): Nothing =
       CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
-        "'earliest', 'latest', or a non-negative long.")
+        "'earliest', 'latest', or a long.")
 
-    val offsetArg =
+    val offsetArg: String =
       if (options.has(offsetOpt)) {
         options.valueOf(offsetOpt).toLowerCase(Locale.ROOT) match {
-          case "earliest" => ListOffsetRequest.EARLIEST_TIMESTAMP
-          case "latest" => ListOffsetRequest.LATEST_TIMESTAMP
-          case offsetString =>
+          case offsetString if !offsetString.equalsIgnoreCase(EARLIEST_STRING) && !offsetString.equalsIgnoreCase(LATEST_STRING) =>
             try {
-              val offset = offsetString.toLong
-              if (offset < 0)
-                invalidOffset(offsetString)
-              offset
+              offsetString.toLong
             } catch {
               case _: NumberFormatException => invalidOffset(offsetString)
             }
+            offsetString
+          case offsetString => offsetString.toLowerCase
         }
-      }
-      else if (fromBeginning) ListOffsetRequest.EARLIEST_TIMESTAMP
-      else ListOffsetRequest.LATEST_TIMESTAMP
+      } else if (fromBeginning) EARLIEST_STRING
+      else LATEST_STRING
 
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
@@ -389,18 +387,18 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
+  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offsetOpt: Option[String], whitelist: Option[String],
                                        consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
     def consumerInit(): Unit = {
-      (topic, partitionId, offset, whitelist) match {
+      (topic, partitionId, offsetOpt, whitelist) match {
         case (Some(topic), Some(partitionId), Some(offset), None) =>
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
           // default to latest if no offset is provided
-          seek(topic, partitionId, ListOffsetRequest.LATEST_TIMESTAMP)
+          seek(topic, partitionId, LATEST_STRING)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
         case (None, None, None, Some(whitelist)) =>
@@ -413,13 +411,17 @@ object ConsoleConsumer extends Logging {
       }
     }
 
-    def seek(topic: String, partitionId: Int, offset: Long): Unit = {
+    def seek(topic: String, partitionId: Int, offset: String): Unit = {
       val topicPartition = new TopicPartition(topic, partitionId)
       consumer.assign(Collections.singletonList(topicPartition))
       offset match {
-        case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.seekToBeginning(Collections.singletonList(topicPartition))
-        case ListOffsetRequest.LATEST_TIMESTAMP => consumer.seekToEnd(Collections.singletonList(topicPartition))
-        case _ => consumer.seek(topicPartition, offset)
+        case EARLIEST_STRING => consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        case LATEST_STRING => consumer.seekToEnd(Collections.singletonList(topicPartition))
+        case _ =>
+          // No need to check if `offset` can convert to a long. We have already done that during the config initialization.
+          val targetOffset = if (offset.toLong < 0)
+            consumer.endOffsets(Collections.singleton(topicPartition)).get(topicPartition) + offset.toLong else offset.toLong
+          consumer.seek(topicPartition, targetOffset)
       }
     }
 
