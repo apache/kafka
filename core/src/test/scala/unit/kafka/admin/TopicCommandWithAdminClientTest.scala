@@ -106,7 +106,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    adminClient = AdminClient.create(props)
+    adminClient = Admin.create(props)
     topicService = AdminClientTopicService(adminClient)
     testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }

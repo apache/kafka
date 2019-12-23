@@ -24,7 +24,7 @@ import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthReso
 import kafka.security.authorizer.AuthorizerUtils.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, AlterConfigOp}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
@@ -1734,7 +1734,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createAdminClient(): Admin = {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val adminClient = AdminClient.create(props)
+    val adminClient = Admin.create(props)
     adminClients += adminClient
     adminClient
   }

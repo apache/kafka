@@ -24,7 +24,7 @@ import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipa
 import kafka.security.auth.{Operation, PermissionType}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, CreateAclsResult}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateAclsResult}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
@@ -93,7 +93,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  private val adminClients = mutable.Buffer.empty[AdminClient]
+  private val adminClients = mutable.Buffer.empty[Admin]
 
   override def configureSecurityBeforeServersStart(): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
@@ -244,7 +244,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
     assertFalse(results.values().asScala.exists(_.isDone))
@@ -266,10 +266,10 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.DELETE_ACLS)
   }
 
-  private def createAdminClient: AdminClient = {
+  private def createAdminClient: Admin = {
     val config = createConfig()
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "40000")
-    val client = AdminClient.create(config)
+    val client = Admin.create(config)
     adminClients += client
     client
   }
