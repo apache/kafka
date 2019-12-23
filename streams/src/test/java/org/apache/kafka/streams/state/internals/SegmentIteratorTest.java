@@ -24,7 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -57,7 +57,7 @@ public class SegmentIteratorTest {
                 TestUtils.tempDirectory(),
                 Serdes.String(),
                 Serdes.String(),
-                new NoOpRecordCollector(),
+                new MockRecordCollector(),
                 new ThreadCache(
                     new LogContext("testCache "),
                     0,

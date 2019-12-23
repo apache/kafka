@@ -31,7 +31,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -114,7 +114,7 @@ public class MeteredWindowStoreTest {
             Serdes.Long(),
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
+            MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
         storeLevelGroup =

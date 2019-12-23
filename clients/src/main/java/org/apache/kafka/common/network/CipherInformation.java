@@ -23,8 +23,8 @@ public class CipherInformation {
     private final String protocol;
 
     public CipherInformation(String cipher, String protocol) {
-        this.cipher = cipher;
-        this.protocol = protocol;
+        this.cipher = cipher == null || cipher.isEmpty()  ? "unknown" : cipher;
+        this.protocol = protocol == null || protocol.isEmpty()  ? "unknown" : protocol;
     }
 
     public String cipher() {

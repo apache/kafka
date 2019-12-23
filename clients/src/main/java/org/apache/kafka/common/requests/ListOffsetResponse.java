@@ -170,7 +170,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData(").
-                    append("errorCode: ").append((int) error.code());
+                    append("errorCode: ").append(error.code());
 
             if (offsets == null) {
                 bld.append(", timestamp: ").append(timestamp).

@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.scala.kstream
+
 import java.time.Duration
 
 import org.apache.kafka.streams.kstream.{Windowed, Suppressed => SupressedJ}
@@ -35,9 +36,8 @@ import org.apache.kafka.streams.kstream.internals.suppress.{
  *
  * This is required for compatibility w/ Scala 2.11 + Java 1.8 because the Scala 2.11 compiler doesn't support the use
  * of static methods inside Java interfaces.
- *
- * TODO: Deprecate this class if support for Scala 2.11 + Java 1.8 is dropped.
  */
+// TODO: Deprecate this class if support for Scala 2.11 + Java 1.8 is dropped.
 object Suppressed {
 
   /**

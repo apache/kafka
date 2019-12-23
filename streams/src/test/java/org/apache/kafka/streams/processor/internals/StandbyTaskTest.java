@@ -460,7 +460,7 @@ public class StandbyTaskTest {
         final Map<TopicPartition, Long> offsets = checkpoint.read();
 
         assertEquals(1, offsets.size());
-        assertEquals(new Long(11L), offsets.get(topicPartition));
+        assertEquals(Long.valueOf(11L), offsets.get(topicPartition));
     }
 
     @SuppressWarnings("unchecked")
