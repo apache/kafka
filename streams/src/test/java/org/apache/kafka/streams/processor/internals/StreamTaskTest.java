@@ -65,7 +65,7 @@ import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -1069,8 +1069,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldFlushRecordCollectorOnFlushState() {
-        final AtomicBoolean flushed = new AtomicBoolean(false);
         final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final MockRecordCollector collector = new MockRecordCollector();
         final StreamTask streamTask = new StreamTask(
             taskId00,
             partitions,
@@ -1083,14 +1083,9 @@ public class StreamTaskTest {
             null,
             time,
             () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            new NoOpRecordCollector() {
-                @Override
-                public void flush() {
-                    flushed.set(true);
-                }
-            });
+            collector);
         streamTask.flushState();
-        assertTrue(flushed.get());
+        assertTrue(collector.flushed());
     }
 
     @Test

@@ -1221,6 +1221,7 @@ project(':streams') {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
       include('log4j*jar')
+      include('*hamcrest*')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -1491,6 +1492,18 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testCompile libs.kafkaStreams_23
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-24') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-24"
+
+  dependencies {
+    testCompile libs.kafkaStreams_24
   }
 
   systemTestLibs {

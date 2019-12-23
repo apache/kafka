@@ -42,7 +42,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -102,7 +102,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             Serdes.String(),
             metrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
+            MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 100000, metrics)
         ) {
             @Override
@@ -607,7 +607,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             Serdes.String(),
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
+            MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 100000, streamsMetrics)
         ) {
             @Override

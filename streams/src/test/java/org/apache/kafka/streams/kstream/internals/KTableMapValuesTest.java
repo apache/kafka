@@ -185,7 +185,7 @@ public class KTableMapValuesTest {
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table3 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
-                value -> new Integer(value) * (-1),
+                value -> Integer.valueOf(value) * (-1),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table4 =

@@ -46,13 +46,28 @@ import org.slf4j.Logger;
 
 /*
  * Transport layer for SSL communication
+ *
+ *
+ * TLS v1.3 notes:
+ *   https://tools.ietf.org/html/rfc8446#section-4.6 : Post-Handshake Messages
+ *   "TLS also allows other messages to be sent after the main handshake.
+ *   These messages use a handshake content type and are encrypted under
+ *   the appropriate application traffic key."
  */
 public class SslTransportLayer implements TransportLayer {
     private enum State {
+        // Initial state
         NOT_INITALIZED,
+        // SSLEngine is in handshake mode
         HANDSHAKE,
+        // SSL handshake failed, connection will be terminated
         HANDSHAKE_FAILED,
+        // SSLEngine has completed handshake, post-handshake messages may be pending for TLSv1.3
+        POST_HANDSHAKE,
+        // SSLEngine has completed handshake, any post-handshake messages have been processed for TLSv1.3
+        // For TLSv1.3, we move the channel to READY state when incoming data is processed after handshake
         READY,
+        // Channel is being closed
         CLOSING
     }
 
@@ -60,6 +75,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
+    private final ChannelMetadataRegistry metadataRegistry;
     private final Logger log;
 
     private HandshakeStatus handshakeStatus;
@@ -72,17 +88,20 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
 
-    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-        return new SslTransportLayer(channelId, key, sslEngine);
+    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine,
+                                           ChannelMetadataRegistry metadataRegistry) throws IOException {
+        return new SslTransportLayer(channelId, key, sslEngine, metadataRegistry);
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+                      ChannelMetadataRegistry metadataRegistry) {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
         this.state = State.NOT_INITALIZED;
+        this.metadataRegistry = metadataRegistry;
 
         final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
         this.log = logContext.logger(getClass());
@@ -107,7 +126,7 @@ public class SslTransportLayer implements TransportLayer {
 
     @Override
     public boolean ready() {
-        return state == State.READY;
+        return state == State.POST_HANDSHAKE || state == State.READY;
     }
 
     /**
@@ -148,7 +167,6 @@ public class SslTransportLayer implements TransportLayer {
     public boolean isConnected() {
         return socketChannel.isConnected();
     }
-
 
     /**
     * Sends an SSL close message and closes socketChannel.
@@ -251,7 +269,7 @@ public class SslTransportLayer implements TransportLayer {
     public void handshake() throws IOException {
         if (state == State.NOT_INITALIZED)
             startHandshake();
-        if (state == State.READY)
+        if (ready())
             throw renegotiationException();
         if (state == State.CLOSING)
             throw closingException();
@@ -266,6 +284,8 @@ public class SslTransportLayer implements TransportLayer {
                 read = readFromSocketChannel();
 
             doHandshake();
+            if (ready())
+                updateBytesBuffered(true);
         } catch (SSLException e) {
             maybeProcessHandshakeFailure(e, true, null);
         } catch (IOException e) {
@@ -421,11 +441,13 @@ public class SslTransportLayer implements TransportLayer {
             if (netWriteBuffer.hasRemaining())
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
             else {
-                state = State.READY;
+                state = sslEngine.getSession().getProtocol().equals("TLSv1.3") ? State.POST_HANDSHAKE : State.READY;
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
                         session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                metadataRegistry.registerCipherInformation(
+                    new CipherInformation(session.getCipherSuite(),  session.getProtocol()));
             }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",
@@ -513,7 +535,7 @@ public class SslTransportLayer implements TransportLayer {
     @Override
     public int read(ByteBuffer dst) throws IOException {
         if (state == State.CLOSING) return -1;
-        else if (state != State.READY) return 0;
+        else if (!ready()) return 0;
 
         //if we have unread decrypted data in appReadBuffer read that into dst buffer.
         int read = 0;
@@ -535,13 +557,29 @@ public class SslTransportLayer implements TransportLayer {
 
             while (netReadBuffer.position() > 0) {
                 netReadBuffer.flip();
-                SSLEngineResult unwrapResult = sslEngine.unwrap(netReadBuffer, appReadBuffer);
+                SSLEngineResult unwrapResult;
+                try {
+                    unwrapResult = sslEngine.unwrap(netReadBuffer, appReadBuffer);
+                    if (state == State.POST_HANDSHAKE && appReadBuffer.position() != 0) {
+                        // For TLSv1.3, we have finished processing post-handshake messages since we are now processing data
+                        state = State.READY;
+                    }
+                } catch (SSLException e) {
+                    // For TLSv1.3, handle SSL exceptions while processing post-handshake messages as authentication exceptions
+                    if (state == State.POST_HANDSHAKE) {
+                        state = State.HANDSHAKE_FAILED;
+                        throw new SslAuthenticationException("Failed to process post-handshake messages", e);
+                    } else
+                        throw e;
+                }
                 netReadBuffer.compact();
                 // handle ssl renegotiation.
-                if (unwrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && unwrapResult.getStatus() == Status.OK) {
-                    log.trace("Renegotiation requested, but it is not supported, channelId {}, " +
-                        "appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}", channelId,
-                        appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
+                if (unwrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING &&
+                        unwrapResult.getHandshakeStatus() != HandshakeStatus.FINISHED &&
+                        unwrapResult.getStatus() == Status.OK) {
+                    log.error("Renegotiation requested, but it is not supported, channelId {}, " +
+                        "appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} handshakeStatus {}", channelId,
+                        appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position(), unwrapResult.getHandshakeStatus());
                     throw renegotiationException();
                 }
 
@@ -647,7 +685,7 @@ public class SslTransportLayer implements TransportLayer {
     public int write(ByteBuffer src) throws IOException {
         if (state == State.CLOSING)
             throw closingException();
-        if (state != State.READY)
+        if (!ready())
             return 0;
 
         int written = 0;
@@ -750,7 +788,7 @@ public class SslTransportLayer implements TransportLayer {
     public void addInterestOps(int ops) {
         if (!key.isValid())
             throw new CancelledKeyException();
-        else if (state != State.READY)
+        else if (!ready())
             throw new IllegalStateException("handshake is not completed");
 
         key.interestOps(key.interestOps() | ops);
@@ -764,7 +802,7 @@ public class SslTransportLayer implements TransportLayer {
     public void removeInterestOps(int ops) {
         if (!key.isValid())
             throw new CancelledKeyException();
-        else if (state != State.READY)
+        else if (!ready())
             throw new IllegalStateException("handshake is not completed");
 
         key.interestOps(key.interestOps() & ~ops);
