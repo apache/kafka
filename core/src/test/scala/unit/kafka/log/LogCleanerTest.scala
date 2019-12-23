@@ -29,7 +29,7 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ByteUtils, Utils}
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
@@ -1679,28 +1679,71 @@ class LogCleanerTest {
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
   val map = new java.util.HashMap[String, Record]()
   var lastOffset = -1L
+  var isOffsetStrategy = false
+  var isTimestampStrategy = false
+  var headerKey = ""
 
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
-  override def init(strategy: String) = {
+  override def init(strategy: String = Defaults.CompactionStrategy, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
+    Console.println(s"INIT: Strategy: $strategy; Header key: $headerKey; Cleaner Thread ID: $cleanerThreadId; TopicPartition: $topicPartitionName")
+    this.map.clear()
+    this.lastOffset = -1L
+    this.isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
+    this.isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)
+    this.headerKey = headerKey
+    Console.println(s"INIT: isOffsetStrategy: $isOffsetStrategy; isTimestampStrategy: $isTimestampStrategy")
   }
 
   override def put(record: Record): Boolean = {
     lastOffset = record.offset
+    val key = keyFor(record.key())
+    Console.println(s"PUT: key: $key; offset: $lastOffset")
     map.put(keyFor(record.key), record)
     return true
   }
 
-  override def get(key: ByteBuffer): Long = {
-    val k = keyFor(key)
-    if(map.containsKey(k))
-      map.get(k).offset()
-    else
-      -1L
+  override def shouldRetainRecord(record: Record): Boolean = {
+    val foundOffset = get(record.key)
+    val key = keyFor(record.key())
+    val offset = record.offset()
+    Console.println(s"shouldRetainRecord: record.offset(): $key => $offset; foundOffset: $foundOffset")
+    record.offset() >= foundOffset
   }
 
-  override def clear(): Unit = map.clear()
+  override def get(key: ByteBuffer): Long = {
+    val k = keyFor(key)
+    var r = -1L
+    if(map.containsKey(k))
+      r = map.get(k).offset()
+    else
+      r = -1L
+
+    Console.println(s"GET: key: $k; offset: $r")
+    r
+  }
+
+  override def getVersion(key: ByteBuffer): Long = {
+    if (isOffsetStrategy)
+      return -1L
+
+    val k = keyFor(key)
+    if (map.containsKey(k)) {
+      val record = map.get(k)
+      if (isTimestampStrategy)
+        record.timestamp()
+      else if (record.headers() == null || record.headers().isEmpty) {
+        record.headers()
+          .filter(it => it.value != null && it.value.nonEmpty)
+          .find(it => headerKey.equalsIgnoreCase(it.key.trim))
+          .map(it => ByteBuffer.wrap(it.value))
+          .map(it => ByteUtils.readVarlong(it))
+          .getOrElse(-1L)
+      }
+    }
+    -1L
+  }
 
   override def size: Int = map.size
 

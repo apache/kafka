@@ -1049,10 +1049,6 @@ public class ConfigDef {
 
     public static class NonEmptyString implements Validator {
 
-        public static NonEmptyString nonEmptyString() {
-            return new NonEmptyString();
-        }
-
         @Override
         public void ensureValid(String name, Object o) {
             String s = (String) o;

@@ -80,6 +80,7 @@ class LogConfigTest {
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
       case LogConfig.CompactionStrategyProp => assertPropertyInvalid(name, "")
+      case LogConfig.CompactionStrategyHeaderKeyProp => // ignore optional string
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }

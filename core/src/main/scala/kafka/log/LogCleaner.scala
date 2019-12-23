@@ -33,7 +33,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageExcep
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Iterable, Seq, Set, mutable}
@@ -471,7 +471,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName = classOf[LogCleaner].getName
 
-  this.logIdent = s"Cleaner $id: "
+  this.logIdent = s"[Cleaner $id]: "
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)
@@ -761,22 +761,28 @@ private[log] class Cleaner(val id: Int,
                                  batch: RecordBatch,
                                  record: Record,
                                  stats: CleanerStats): Boolean = {
+    // keep all records that are beyond the latest offset based on OffsetMap
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
 
     if (record.hasKey) {
-      val key = record.key
-      val foundOffset = map.get(key)
-      /* First,the message must have the latest offset for the key
+      val key = new String(Utils.readBytes(record.key().duplicate), "UTF-8")
+      val offset = record.offset()
+      val mapLatestOffset = map.latestOffset
+      info(s"shouldRetainRecord: key: $key; offset: $offset; Map Latest Offset: $mapLatestOffset")
+      /* First,the message must have the latest offset or version for the key
        * then there are two cases in which we can retain a message:
        *   1) The message has value
        *   2) The message doesn't has value but it can't be deleted now.
        */
-      val latestOffsetForKey = record.offset() >= foundOffset
+      val latestOffsetOrVersionForKey = map.shouldRetainRecord(record)
       val isRetainedValue = record.hasValue || retainDeletes
-      latestOffsetForKey && isRetainedValue
+      val hasValue = record.hasValue
+      info(s"shouldRetainRecord: latestOffsetOrVersionForKey: $latestOffsetOrVersionForKey; isRetainedValue: $isRetainedValue; hasValue: $hasValue; retainDeletes: $retainDeletes")
+      latestOffsetOrVersionForKey && isRetainedValue
     } else {
+      info("invalid message")
       stats.invalidMessage()
       false
     }
@@ -876,8 +882,9 @@ private[log] class Cleaner(val id: Int,
                                   end: Long,
                                   map: OffsetMap,
                                   stats: CleanerStats): Unit = {
-    map.clear()
-    map.init(log.config.compactionStrategy)
+    // initialize the map for the topic partition
+    map.init(log.config.compactionStrategy, log.config.compactionStrategyHeaderKey, this.id, log.topicPartition.toString)
+
     val dirty = log.logSegments(start, end).toBuffer
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
 
