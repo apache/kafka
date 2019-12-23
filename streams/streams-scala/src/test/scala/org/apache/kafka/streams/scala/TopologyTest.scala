@@ -175,8 +175,8 @@ class TopologyTest {
       )
 
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion.map {
-        case (_, (region, clicks)) => new KeyValue(region, clicks)
+      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion.map { (_, regionWithClicks) =>
+        new KeyValue(regionWithClicks._1, regionWithClicks._2)
       }
 
       // Compute the total per region by summing the individual click counts per region.
