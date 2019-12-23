@@ -67,6 +67,8 @@ private[group] class MemberMetadata(val memberId: String,
   var isNew: Boolean = false
 
   def protocols = supportedProtocols.map(_._1).toSet
+  def isAwaitingJoin = awaitingJoinCallback != null
+  def isAwaitingSync = awaitingSyncCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
@@ -80,10 +82,16 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
-    if (awaitingJoinCallback != null)
-      !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
-    else awaitingSyncCallback != null ||
+    if (isNew) {
+      // New members are expired after the static join timeout
+      latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+    } else if (isAwaitingJoin || isAwaitingSync) {
+      // Don't remove members as long as they have a request in purgatory
+      true
+    } else {
+      // Otherwise check for session expiration
       latestHeartbeat + sessionTimeoutMs > deadlineMs
+    }
   }
 
   /**
