@@ -720,8 +720,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 	""" Checks for common protocol exceptions due to invalid inter broker protocol handling.
         While such errors can and should be checked in other ways, checking the logs is a worthwhile failsafe.
         """
-        return 1 == node.account.ssh("grep -e 'java.lang.IllegalArgumentException: Invalid version' -e SchemaException %s/*"
-		% KafkaService.OPERATIONAL_LOG_DEBUG_DIR, allow_fail=True)
+        for node in self.nodes:
+            exit_code = node.account.ssh("grep -e 'java.lang.IllegalArgumentException: Invalid version' -e SchemaException %s/*"
+                    % KafkaService.OPERATIONAL_LOG_DEBUG_DIR, allow_fail=True)
+            if exit_code != 1:
+                return False
+        return True
 
     def list_consumer_groups(self, node=None, command_config=None):
         """ Get list of consumer groups.

@@ -156,5 +156,4 @@ class TestUpgrade(ProduceConsumeValidateTest):
         assert cluster_id is not None
         assert len(cluster_id) == 22
 
-        for node in self.kafka.nodes:
-            assert self.kafka.check_protocol_errors(node)
+        assert self.kafka.check_protocol_errors(self)
