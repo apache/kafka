@@ -55,7 +55,7 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
   }
 
   def maybeLoadIndex(tp: TopicPartition): Option[TopicPartitionRemoteIndex] = {
-    Option(remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
+    Some(remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
       override def apply(tp: TopicPartition): TopicPartitionRemoteIndex = {
         val log = logFetcher(tp).getOrElse(
           throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))

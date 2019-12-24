@@ -1653,15 +1653,13 @@ class Log(@volatile var dir: File,
         val remoteOffset = remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset)
 
         if (localOffset.isEmpty)
-          return remoteOffset
-
-        if (remoteOffset.isEmpty)
-          return localOffset
-
-        if (localOffset.get.offset <= remoteOffset.get.offset)
-          return localOffset
-
-        remoteOffset
+          remoteOffset
+        else if (remoteOffset.isEmpty)
+          localOffset
+        else if (localOffset.get.offset <= remoteOffset.get.offset)
+          localOffset
+        else
+          remoteOffset
       } else {
         targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
       }
