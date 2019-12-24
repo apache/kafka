@@ -385,10 +385,8 @@ public class TaskManager {
         standby.initializeNewTasks();
 
         if (active.hasRestoringTasks()) {
-            changelogReader.restore(active);
-            final Collection<TopicPartition> restored = changelogReader.completedChangelogs();
-            active.updateRestored(restored);
-            removeChangelogsFromRestoreConsumer(restored, false);
+            changelogReader.restore();
+            active.updateRestored(changelogReader.completedChangelogs());
         } else {
             active.clearRestoringPartitions();
         }
@@ -400,6 +398,7 @@ public class TaskManager {
             assignStandbyPartitions();
             return standby.allTasksRunning();
         }
+
         return false;
     }
 

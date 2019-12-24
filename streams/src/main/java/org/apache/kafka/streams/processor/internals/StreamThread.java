@@ -1045,48 +1045,6 @@ public class StreamThread extends Thread {
                 processStandbyRecords = false;
             }
 
-            try {
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(Duration.ZERO);
-
-                if (!records.isEmpty()) {
-                    for (final TopicPartition partition : records.partitions()) {
-                        final StandbyTask task = taskManager.standbyTask(partition);
-
-                        if (task == null) {
-                            throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
-                        }
-
-                        if (task.isClosed()) {
-                            log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                            throw new TaskMigratedException(task.id());
-                        }
-
-                        final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                        if (!remaining.isEmpty()) {
-                            restoreConsumer.pause(singleton(partition));
-                            standbyRecords.put(partition, remaining);
-                        }
-                    }
-                }
-            } catch (final InvalidOffsetException recoverableException) {
-                log.warn("Updating StandbyTasks failed. Deleting StandbyTasks stores to recreate from scratch.", recoverableException);
-                final Set<TopicPartition> partitions = recoverableException.partitions();
-                for (final TopicPartition partition : partitions) {
-                    final StandbyTask task = taskManager.standbyTask(partition);
-
-                    if (task.isClosed()) {
-                        log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                            "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                        throw new TaskMigratedException(task.id());
-                    }
-
-                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
-                    task.reinitializeStateStoresForPartitions(recoverableException.partitions());
-                }
-                restoreConsumer.seekToBeginning(partitions);
-            }
-
             // update now if the standby restoration indeed executed
             advanceNowAndComputeLatency();
         }

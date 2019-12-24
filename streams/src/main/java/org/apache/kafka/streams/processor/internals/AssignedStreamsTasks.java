@@ -362,15 +362,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             }
         }
-        if (allTasksRunning()) {
-            restoredPartitions.clear();
-
-            if (!restoringByPartition.isEmpty()) {
-                log.error("Finished restoring all tasks but found leftover partitions in restoringByPartition: {}",
-                    restoringByPartition);
-                throw new IllegalStateException("Restoration is complete but not all partitions were cleared.");
-            }
-        }
     }
 
     @Override
