@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -46,11 +47,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -77,13 +80,13 @@ public class HDFSRemoteStorageManagerTest {
         hdfs = FileSystem.newInstance(new URI(hdfsURI), conf);
 
         LogSegment seg1 = LogUtils.createSegment(0, logDir, 4096, Time.SYSTEM);
-        appendRecords(seg1, 0, 100);
-        appendRecords(seg1, 200, 100);
+        appendRecords(seg1, 0, 100, 0);
+        appendRecords(seg1, 200, 100, 1000);
         seg1.onBecomeInactiveSegment();
         segments.add(seg1);
 
         LogSegment seg2 = LogUtils.createSegment(300, logDir, 4096, Time.SYSTEM);
-        appendRecords(seg2, 400, 100);
+        appendRecords(seg2, 400, 100, 2000);
         seg2.onBecomeInactiveSegment();
         segments.add(seg2);
 
@@ -93,10 +96,14 @@ public class HDFSRemoteStorageManagerTest {
     }
 
     private void appendRecords(LogSegment seg, long offset, int numRecords) {
+        appendRecords(seg, offset, numRecords, 0L);
+    }
+
+    private void appendRecords(LogSegment seg, long offset, int numRecords, long baseTimestamp) {
         SimpleRecord[] records = new SimpleRecord[numRecords];
-        long timestamp = 0;
+        long timestamp = baseTimestamp;
         for (int i = 0; i < numRecords; i++) {
-            timestamp = (offset + i) * 1000;
+            timestamp = baseTimestamp + i;
             records[i] = new SimpleRecord(timestamp, new byte[100]);
         }
         long lastOffset = offset + numRecords - 1;
@@ -130,15 +137,15 @@ public class HDFSRemoteStorageManagerTest {
         assertEquals(0L, indexEntries.get(0).firstOffset());
         assertEquals(0L, indexEntries.get(0).firstTimeStamp());
         assertEquals(299, indexEntries.get(indexEntries.size() - 1).lastOffset());
-        assertEquals(299000, indexEntries.get(indexEntries.size() - 1).lastTimeStamp());
+        assertEquals(1099, indexEntries.get(indexEntries.size() - 1).lastTimeStamp());
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1")));
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000000-00000000000000000299/log")));
 
         indexEntries = rsm.copyLogSegment(tp, segments.get(1), leaderEpoch);
         assertEquals(1, indexEntries.size());
-        assertEquals(400000, indexEntries.get(0).firstTimeStamp());
+        assertEquals(2000, indexEntries.get(0).firstTimeStamp());
         assertEquals(400, indexEntries.get(0).firstOffset());
-        assertEquals(499000, indexEntries.get(0).lastTimeStamp());
+        assertEquals(2099, indexEntries.get(0).lastTimeStamp());
         assertEquals(499, indexEntries.get(0).lastOffset());
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1/00000000000000000300-00000000000000000499/index")));
 
@@ -506,5 +513,36 @@ public class HDFSRemoteStorageManagerTest {
         rsm.cleanupLogUntil(tp, timestamp);
 
         assertEquals(2, rsm.listRemoteSegments(tp, 0).size());
+    }
+
+    @Test
+    public void testFindOffsetByTimestamp() throws Exception {
+        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        config.put(HDFSRemoteStorageManager.HDFS_REMOTE_INDEX_INTERVAL_BYTES, "1"); // one index entry for each record batch
+        rsm.configure(config);
+
+        TopicPartition tp = new TopicPartition("test", 5);
+
+        File logDir = TestUtils.tempDir();
+
+        LogSegment seg = LogUtils.createSegment(1000000, logDir, 2048, Time.SYSTEM);
+
+        for (int j = 0; j < 2; j++) {
+            appendRecords(seg, 1000000 + j * 5, 5, j * 1000);
+        }
+
+        seg.onBecomeInactiveSegment();
+        rsm.copyLogSegment(tp, seg, 2);
+
+        List<RemoteLogIndexEntry> indexEntries = rsm.getRemoteLogIndexEntries(rsm.listRemoteSegments(tp).get(0));
+
+        assertEquals(new FileRecords.TimestampAndOffset(3, 1000003, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 0));
+        assertEquals(new FileRecords.TimestampAndOffset(3, 1000003, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 1000003));
+        assertEquals(new FileRecords.TimestampAndOffset(4, 1000004, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(0), 3, 1000004));
+        assertNull(rsm.findOffsetByTimestamp(indexEntries.get(0), 5, 0));
+
+        assertEquals(new FileRecords.TimestampAndOffset(1000, 1000005, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1000, 0));
+        assertEquals(new FileRecords.TimestampAndOffset(1002, 1000007, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1000, 1000007));
+        assertEquals(new FileRecords.TimestampAndOffset(1004, 1000009, Optional.empty()), rsm.findOffsetByTimestamp(indexEntries.get(1), 1004, 1000000));
     }
 }

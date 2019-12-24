@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.FileLogInputStream;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -307,6 +309,48 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         byte[] buf = new byte[maxBytes];
         is.readFully(pos, buf);
         return MemoryRecords.readableRecords(ByteBuffer.wrap(buf));
+    }
+
+    @Override
+    public FileRecords.TimestampAndOffset findOffsetByTimestamp(RemoteLogIndexEntry remoteLogIndexEntry,
+                                                                        long targetTimestamp,
+                                                                        long startingOffset) throws IOException {
+        if (targetTimestamp < 0)
+            throw new IllegalArgumentException("targetTimestamp cannot be negative");
+
+        String rdi = new String(remoteLogIndexEntry.rdi(), StandardCharsets.UTF_8);
+        Matcher m = RDI_PATTERN.matcher(rdi);
+
+        if (!m.matches()) {
+            throw new IllegalArgumentException(String.format("Can't parse RDI <%s>", rdi));
+        }
+
+        String path = m.group(1);
+        int pos = Integer.parseInt(m.group(2));
+
+        Path logFile = getPath(path, LOG_FILE_NAME);
+        FileSystem fs = getFS();
+
+        try (FSDataInputStream is = fs.open(logFile)) {
+            Records records = read(is, pos, remoteLogIndexEntry.dataLength());
+            for (RecordBatch batch : records.batches()) {
+                if (batch.maxTimestamp() >= targetTimestamp && batch.lastOffset() >= startingOffset) {
+                    for (Record record : batch) {
+                        long timestamp = record.timestamp();
+                        if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
+                            return new FileRecords.TimestampAndOffset(timestamp, record.offset(),
+                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+            Optional.empty() : Optional.of(leaderEpoch);
     }
 
     @Override

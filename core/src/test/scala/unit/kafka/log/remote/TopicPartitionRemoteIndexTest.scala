@@ -52,7 +52,7 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
 
     assertEquals(0L, reopenedPartitionIndex.startOffset.get)
     assertEquals(10000L, reopenedPartitionIndex.lastBatchStartOffset.get)
-    assertEquals(10902L, reopenedPartitionIndex.lastOffset.get)
+    assertEquals(10999L, reopenedPartitionIndex.lastOffset.get)
   }
 
   @Test
@@ -144,5 +144,33 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     assert(rlmIndex.lookupEntryForOffset(700).isDefined)
     assert(rlmIndex.lookupEntryForOffset(950).isDefined)
 
+  }
+
+  @Test
+  def testLookupTimestamp(): Unit = {
+    val dir = TestUtils.tempDir()
+    val rlmIndex = TopicPartitionRemoteIndex.open(partition, dir)
+    List(100, 300, 500, 700, 900).foreach(x =>
+      rlmIndex.appendEntries(generateEntries(100, 2, x), x.toString))
+
+    assertEquals(100, rlmIndex.lookupEntryForTimestamp(0, 0).get.firstOffset)
+    assertEquals(100, rlmIndex.lookupEntryForTimestamp(100000, 100).get.firstOffset)
+    assertEquals(100, rlmIndex.lookupEntryForTimestamp(100000, 101).get.firstOffset)
+    assertEquals(102, rlmIndex.lookupEntryForTimestamp(100000, 102).get.firstOffset)
+    assertEquals(300, rlmIndex.lookupEntryForTimestamp(100000, 300).get.firstOffset)
+    assertEquals(180, rlmIndex.lookupEntryForTimestamp(180000, 0).get.firstOffset)
+    assertEquals(600, rlmIndex.lookupEntryForTimestamp(600000, 0).get.firstOffset)
+    assert(rlmIndex.lookupEntryForTimestamp(1100000, 0).isEmpty)
+    assert(rlmIndex.lookupEntryForTimestamp(0, 1100).isEmpty)
+
+    rlmIndex.appendEntries(generateEntries(100, 2, 1100), 1100.toString)
+    assertEquals(1100, rlmIndex.lookupEntryForTimestamp(1100000, 0).get.firstOffset)
+    assertEquals(1104, rlmIndex.lookupEntryForTimestamp(600000, 1105).get.firstOffset)
+    assert(rlmIndex.lookupEntryForTimestamp(1300000, 0).isEmpty)
+
+    rlmIndex.cleanupIndexesUntil(500)
+    assertEquals(500, rlmIndex.lookupEntryForTimestamp(0, 0).get.firstOffset)
+    assertEquals(600, rlmIndex.lookupEntryForTimestamp(600000, 0).get.firstOffset)
+    assertEquals(1104, rlmIndex.lookupEntryForTimestamp(600000, 1105).get.firstOffset)
   }
 }
