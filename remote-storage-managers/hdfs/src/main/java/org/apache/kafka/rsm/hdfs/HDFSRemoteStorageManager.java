@@ -406,24 +406,25 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         FileLogInputStream.FileChannelRecordBatch firstBatch = null; // the first Batch in the current index entry
         FileLogInputStream.FileChannelRecordBatch lastBatch = null; // the last Batch in the current index entry
 
-        FileRecords messageSet = FileRecords.open(logFile);
-        for (FileLogInputStream.FileChannelRecordBatch batch : messageSet.batches()) {
-            if (firstBatch == null) {
-                firstBatch = batch;
+        try (FileRecords messageSet = FileRecords.open(logFile)) {
+            for (FileLogInputStream.FileChannelRecordBatch batch : messageSet.batches()) {
+                if (firstBatch == null) {
+                    firstBatch = batch;
+                }
+
+                lastBatch = batch;
+
+                long nextPos = lastBatch.position() + lastBatch.sizeInBytes();
+                if (nextPos - firstBatch.position() > indexIntervalBytes) {
+                    index.add(makeRemoteLogIndexEntry(remoteLogFileUri, firstBatch, lastBatch));
+                    // start a new index entry
+                    firstBatch = null;
+                }
             }
 
-            lastBatch = batch;
-
-            long nextPos = lastBatch.position() + lastBatch.sizeInBytes();
-            if (nextPos - firstBatch.position() > indexIntervalBytes) {
+            if (firstBatch != null) {
                 index.add(makeRemoteLogIndexEntry(remoteLogFileUri, firstBatch, lastBatch));
-                // start a new index entry
-                firstBatch = null;
             }
-        }
-
-        if (firstBatch != null) {
-            index.add(makeRemoteLogIndexEntry(remoteLogFileUri, firstBatch, lastBatch));
         }
 
         return index;
