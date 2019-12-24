@@ -27,18 +27,21 @@ import java.util.regex.Pattern
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
 import org.apache.kafka.streams.kstream.{
   Aggregator,
+  ForeachAction,
   Initializer,
   JoinWindows,
   KeyValueMapper,
-  Reducer,
-  Transformer,
-  ValueJoiner,
-  ValueMapper,
-  StreamJoined => StreamJoinedJ,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
   KTable => KTableJ,
-  Materialized => MaterializedJ
+  Materialized => MaterializedJ,
+  Predicate,
+  Reducer,
+  StreamJoined => StreamJoinedJ,
+  Transformer,
+  TransformerSupplier,
+  ValueJoiner,
+  ValueMapper
 }
 import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -159,13 +162,13 @@ class TopologyTest {
         }
       )
 
-      splits
-        .groupByKey
+      splits.groupByKey
         .cogroup(
           new Aggregator[String, Int, Long] {
             def apply(k: String, v: Int, a: Long): Long = a + v
           }
-        ).aggregate(
+        )
+        .aggregate(
           new Initializer[Long] {
             def apply(): Long = 0L
           }
@@ -212,18 +215,19 @@ class TopologyTest {
         }
       )
 
-      splits
-        .groupByKey
+      splits.groupByKey
         .cogroup(
           new Aggregator[String, Int, Long] {
             def apply(k: String, v: Int, a: Long): Long = a + v
           }
-        ).cogroup(
-        textLines2.groupByKey(),
+        )
+        .cogroup(
+          textLines2.groupByKey(),
           new Aggregator[String, String, Long] {
             def apply(k: String, v: String, a: Long): Long = v.length + a
           }
-        ).aggregate(
+        )
+        .aggregate(
           new Initializer[Long] {
             def apply(): Long = 0L
           }
