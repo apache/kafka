@@ -167,7 +167,6 @@ public class StreamsUpgradeTest {
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
-                    LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     activeTasks,
                     standbyTasks,
@@ -306,7 +305,6 @@ public class StreamsUpgradeTest {
 
     private static class FutureSubscriptionInfo {
         private final int version;
-        private final int latestSupportedVersion;
         private final UUID processId;
         private final Set<TaskId> prevTasks;
         private final Set<TaskId> standbyTasks;
@@ -314,13 +312,11 @@ public class StreamsUpgradeTest {
 
         // for testing only; don't apply version checks
         FutureSubscriptionInfo(final int version,
-                               final int latestSupportedVersion,
                                final UUID processId,
                                final Set<TaskId> prevTasks,
                                final Set<TaskId> standbyTasks,
                                final String userEndPoint) {
             this.version = version;
-            this.latestSupportedVersion = latestSupportedVersion;
             this.processId = processId;
             this.prevTasks = prevTasks;
             this.standbyTasks = standbyTasks;

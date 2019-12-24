@@ -560,7 +560,7 @@ public class SaslClientAuthenticator implements Authenticator {
      *     During Kerberos re-login, principal is reset on Subject. An exception is
      *     thrown so that the connection is retried after any configured backoff.
      */
-    static final String firstPrincipal(Subject subject) {
+    public static final String firstPrincipal(Subject subject) {
         Set<Principal> principals = subject.getPrincipals();
         synchronized (principals) {
             Iterator<Principal> iterator = principals.iterator();

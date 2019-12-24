@@ -171,7 +171,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = AdminClient.create(createConfig())
     val topic = "topic"
     val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
-    val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
+    val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.mapValues(_.keys.toSeq)
     val brokers = (0 until brokerCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
@@ -179,7 +179,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
-      val replicaInfos = logDirInfos.asScala.flatMap { case (logDir, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
+      val replicaInfos = logDirInfos.asScala.flatMap { case (_, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
       logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>
@@ -352,7 +352,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(truststorePassword.isSensitive)
     assertFalse(truststorePassword.isReadOnly)
     val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
-    assertEquals(servers(1).config.compressionType.toString, compressionType.value)
+    assertEquals(servers(1).config.compressionType, compressionType.value)
     assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)

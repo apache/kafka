@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashSet;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -27,9 +26,12 @@ import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
 
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
+
 
 public class RocksDBSessionStoreTest extends SessionBytesStoreTest {
 

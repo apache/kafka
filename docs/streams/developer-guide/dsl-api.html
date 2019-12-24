@@ -640,11 +640,39 @@
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key (note: type was modified) */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Integer</span><span class="o">())</span> <span class="cm">/* value (note: type was modified) */</span>
   <span class="o">);</span>
+                            </pre></div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="row-even"><td><p class="first"><strong>Cogroup</strong></p>
+                        <ul class="last simple">
+                            <li>KGroupedStream &rarr; CogroupedKStream</li>
+                            <li>CogroupedKStream &rarr; CogroupedKStream</li>
+                        </ul>
+                    </td>
+                        <td><p class="first">Cogrouping allows to aggregate multiple input streams in a single operation.
+                            The different (already grouped) input streams must have the same key type and may have different values types.
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html#cogroup">KGroupedStream#cogroup()</a> creates a new cogrouped stream with a single input stream, while <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#cogroup">CogroupedKStream#cogroup()</a> adds a grouped stream to an existing cogrouped stream.
+                            A <code>CogroupedKStream</code> may be <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy">windowed</a> before it is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate">aggregated</a>.
+
+                            <p class="first">Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.</p>
+                            <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
+                        <span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream2</span> <span class="o">=</span> <span class="o">...;</span>
+
+<span class="c1">// Group by the existing key, using the application's configured</span>
+<span class="c1">// default serdes for keys and values.</span>
+<span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">groupByKey</span><span class="o">();</span>
+<span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream2</span> <span class="o">=</span> <span class="n">stream2</span><span class="o">.</span><span class="na">groupByKey</span><span class="o">();</span>
+<span class="n">CogroupedKStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">cogroupedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">cogroup</span><span class="o">(aggregator1)</span>.</span><span class="na">cogroup</span><span class="o">(groupedStream2, aggregator2);</span>
+
+<span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="n">cogroupedStream</span><span class="o">.</span><span class="na">aggregate</span><span class="o">(initializer);</span>
+
+<span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table2</span> <span class="o">=</span> <span class="n">cogroupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(TimeWindows.duration(500ms))</span>.</span><span class="na">aggregate</span><span class="o">(initializer);</span>
 </pre></div>
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Map</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Map</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -674,7 +702,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Map (values only)</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Map (values only)</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                             <li>KTable &rarr; KTable</li>
@@ -703,7 +731,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Merge</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Merge</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -726,7 +754,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>Peek</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>Peek</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -757,7 +785,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Print</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Print</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; void</li>
                         </ul>
@@ -777,7 +805,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-odd"><td><p class="first"><strong>SelectKey</strong></p>
+                    <tr class="row-even"><td><p class="first"><strong>SelectKey</strong></p>
                         <ul class="last simple">
                             <li>KStream &rarr; KStream</li>
                         </ul>
@@ -805,7 +833,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="row-even"><td><p class="first"><strong>Table to Stream</strong></p>
+                    <tr class="row-odd"><td><p class="first"><strong>Table to Stream</strong></p>
                         <ul class="last simple">
                             <li>KTable &rarr; KStream</li>
                         </ul>
@@ -912,14 +940,17 @@
                                 <li>KGroupedTable &rarr; KTable</li>
                             </ul>
                         </td>
-                            <td><p class="first"><strong>Rolling aggregation.</strong> Aggregates the values of (non-windowed) records by the grouped key.
+                            <td><p class="first"><strong>Rolling aggregation.</strong> Aggregates the values of (non-windowed) records by the grouped key or cogrouped.
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
                                 (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html">KGroupedTable details</a>)</p>
                                 <p>When aggregating a <em>grouped stream</em>, you must provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>) and an &#8220;adder&#8221;
                                     aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must provide a
                                     &#8220;subtractor&#8221; aggregator (think: <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
+                                <p>When aggregating a <em>cogrouped stream</em>, the actual aggregators are provided for each input stream in the prior <code>cogroup()</code>calls, and thus you only need to provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>)
+
                                 <p>Several variants of <code class="docutils literal"><span class="pre">aggregate</span></code> exist, see Javadocs for details.</p>
                                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KGroupedTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedTable</span> <span class="o">=</span> <span class="o">...;</span>
@@ -1009,7 +1040,7 @@
                                 <p class="last">See the example at the bottom of this section for a visualization of the aggregation semantics.</p>
                             </td>
                         </tr>
-                        <tr class="row-odd"><td><p class="first"><strong>Aggregate (windowed)</strong></p>
+                        <tr class="row-even"><td><p class="first"><strong>Aggregate (windowed)</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                             </ul>
@@ -1106,7 +1137,7 @@
                                 <p class="last">See the example at the bottom of this section for a visualization of the aggregation semantics.</p>
                             </td>
                         </tr>
-                        <tr class="row-even"><td><p class="first"><strong>Count</strong></p>
+                        <tr class="row-odd"><td><p class="first"><strong>Count</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                                 <li>KGroupedTable &rarr; KTable</li>
@@ -1137,7 +1168,7 @@
                                 </ul>
                             </td>
                         </tr>
-                        <tr class="row-odd"><td><p class="first"><strong>Count (windowed)</strong></p>
+                        <tr class="row-even"><td><p class="first"><strong>Count (windowed)</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                             </ul>
@@ -1169,7 +1200,7 @@
                                 </ul>
                             </td>
                         </tr>
-                        <tr class="row-even"><td><p class="first"><strong>Reduce</strong></p>
+                        <tr class="row-odd"><td><p class="first"><strong>Reduce</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                                 <li>KGroupedTable &rarr; KTable</li>
@@ -1252,7 +1283,7 @@
                                 <p class="last">See the example at the bottom of this section for a visualization of the aggregation semantics.</p>
                             </td>
                         </tr>
-                        <tr class="row-odd"><td><p class="first"><strong>Reduce (windowed)</strong></p>
+                        <tr class="row-even"><td><p class="first"><strong>Reduce (windowed)</strong></p>
                             <ul class="last simple">
                                 <li>KGroupedStream &rarr; KTable</li>
                             </ul>

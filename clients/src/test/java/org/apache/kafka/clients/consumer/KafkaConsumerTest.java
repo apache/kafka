@@ -1797,8 +1797,8 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
         Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
-        // a first rebalance to get the assignment
-        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
+        consumer.poll(Duration.ZERO);
         consumer.poll(Duration.ZERO);
 
         assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
@@ -1810,18 +1810,18 @@ public class KafkaConsumerTest {
         fetches1.put(t2p0, new FetchInfo(0, 10));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
+
+        // verify that the fetch occurred as expected
+        assertEquals(11, records.count());
+        assertEquals(1L, consumer.position(tp0));
+        assertEquals(10L, consumer.position(t2p0));
 
         // prepare the next response of the prefetch
         fetches1.clear();
         fetches1.put(tp0, new FetchInfo(1, 1));
         fetches1.put(t2p0, new FetchInfo(10, 20));
         client.respondFrom(fetchResponse(fetches1), node);
-
-        // verify that the fetch occurred as expected
-        assertEquals(11, records.count());
-        assertEquals(1L, consumer.position(tp0));
-        assertEquals(10L, consumer.position(t2p0));
 
         // subscription change
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
@@ -1856,27 +1856,39 @@ public class KafkaConsumerTest {
         client.respondFrom(joinGroupFollowerResponse(assignor, 2, "memberId", "leaderId", Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
 
-        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        // we need to poll 1) for getting the join response, and then send the sync request;
+        //                 2) for getting the sync response
         records = consumer.poll(Duration.ZERO);
 
+        // should not finish the response yet
         assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(Collections.singleton(tp0), consumer.assignment());
         assertEquals(1, records.count());
         assertEquals(3L, consumer.position(tp0));
 
-        // mock a response to the third fetch from the new assignment
         fetches1.clear();
         fetches1.put(tp0, new FetchInfo(3, 1));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        records = consumer.poll(Duration.ZERO);
+
+        // should have t3 but not sent yet the t3 records
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(4L, consumer.position(tp0));
+        assertEquals(0L, consumer.position(t3p0));
+
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(4, 1));
         fetches1.put(t3p0, new FetchInfo(0, 100));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        records = consumer.poll(Duration.ofMillis(1));
+        records = consumer.poll(Duration.ZERO);
 
-        // verify that subscription is still the same, and now assignment has caught up
-        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
-        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        // should have t3 but not sent yet the t3 records
         assertEquals(101, records.count());
-        assertEquals(4L, consumer.position(tp0));
+        assertEquals(5L, consumer.position(tp0));
         assertEquals(100L, consumer.position(t3p0));
 
         client.requests().clear();
@@ -2359,5 +2371,29 @@ public class KafkaConsumerTest {
 
         // Avg of three data points
         assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
+    }
+
+    private static boolean consumerMetricPresent(KafkaConsumer consumer, String name) {
+        MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
+        return consumer.metrics.metrics().containsKey(metricName);
+    }
+
+    @Test
+    public void testClosingConsumerUnregistersConsumerMetrics() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+            new RoundRobinAssignor(), true, groupInstanceId);
+        consumer.subscribe(singletonList(topic));
+        assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
+        assertTrue(consumerMetricPresent(consumer, "time-between-poll-avg"));
+        assertTrue(consumerMetricPresent(consumer, "time-between-poll-max"));
+        consumer.close();
+        assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
+        assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
+        assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
     }
 }

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.KafkaException;
 
-public class RetriableCommitFailedException extends ApiException {
+public class RetriableCommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
 
