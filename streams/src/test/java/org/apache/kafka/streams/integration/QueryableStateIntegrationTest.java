@@ -16,13 +16,45 @@
  */
 package org.apache.kafka.streams.integration;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
+import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
+import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
+import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -38,6 +70,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreamsTest;
+import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -53,7 +86,6 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -68,43 +100,12 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static java.time.Duration.ofMillis;
-import static java.time.Duration.ofSeconds;
-import static java.time.Instant.ofEpochMilli;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
-import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
@@ -113,6 +114,9 @@ public class QueryableStateIntegrationTest {
     private static final long DEFAULT_TIMEOUT_MS = 120 * 1000;
 
     private static final int NUM_BROKERS = 1;
+
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -261,7 +265,8 @@ public class QueryableStateIntegrationTest {
                                  final KafkaStreamsTest.StateListenerStub stateListener,
                                  final Set<String> keys,
                                  final String storeName,
-                                 final long timeout) throws Exception {
+                                 final long timeout,
+                                 final boolean pickInstanceByPort) throws Exception {
         retryOnExceptionWithTimeout(timeout, () -> {
             final List<String> noMetadataKeys = new ArrayList<>();
             final List<String> nullStoreKeys = new ArrayList<>();
@@ -278,7 +283,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                     final int index = metadata.getActiveHost().port();
-                    final KafkaStreams streamsWithKey = streamsList.get(index);
+                    final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyKeyValueStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore());
                     if (store == null) {
@@ -312,7 +317,8 @@ public class QueryableStateIntegrationTest {
                                        final String storeName,
                                        final Long from,
                                        final Long to,
-                                       final long timeout) throws Exception {
+                                       final long timeout,
+                                       final boolean pickInstanceByPort) throws Exception {
         retryOnExceptionWithTimeout(timeout, () -> {
             final List<String> noMetadataKeys = new ArrayList<>();
             final List<String> nullStoreKeys = new ArrayList<>();
@@ -329,7 +335,7 @@ public class QueryableStateIntegrationTest {
                     }
 
                     final int index = metadata.getActiveHost().port();
-                    final KafkaStreams streamsWithKey = streamsList.get(index);
+                    final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyWindowStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.windowStore());
                     if (store == null) {
@@ -432,7 +438,8 @@ public class QueryableStateIntegrationTest {
                     listeners.get(i),
                     inputValuesKeys,
                     storeName + "-" + streamThree,
-                    DEFAULT_TIMEOUT_MS);
+                    DEFAULT_TIMEOUT_MS,
+                    true);
                 verifyAllWindowedKeys(
                     streamsList,
                     streamsList.get(i),
@@ -441,7 +448,8 @@ public class QueryableStateIntegrationTest {
                     windowStoreName + "-" + streamThree,
                     0L,
                     WINDOW_SIZE,
-                    DEFAULT_TIMEOUT_MS);
+                    DEFAULT_TIMEOUT_MS,
+                    true);
             }
 
             // kill N-1 threads
@@ -468,7 +476,8 @@ public class QueryableStateIntegrationTest {
                 listeners.get(0),
                 inputValuesKeys,
                 storeName + "-" + streamThree,
-                DEFAULT_TIMEOUT_MS);
+                DEFAULT_TIMEOUT_MS,
+                true);
             verifyAllWindowedKeys(
                 streamsList,
                 streamsList.get(0),
@@ -477,7 +486,96 @@ public class QueryableStateIntegrationTest {
                 windowStoreName + "-" + streamThree,
                 0L,
                 WINDOW_SIZE,
-                DEFAULT_TIMEOUT_MS);
+                DEFAULT_TIMEOUT_MS,
+                true);
+        } finally {
+            for (final KafkaStreams streams : streamsList) {
+                streams.close();
+            }
+        }
+    }
+
+    @Test
+    public void shouldBeAbleQueryStandbyStateDuringRebalance() throws Exception {
+        final int numThreads = STREAM_TWO_PARTITIONS;
+        final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
+        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
+        producerRunnable.run();
+
+        // create stream threads
+        final String storeName = "word-count-store";
+        final String windowStoreName = "windowed-word-count-store";
+        for (int i = 0; i < numThreads; i++) {
+            final Properties props = (Properties) streamsConfiguration.clone();
+            final File stateDir = folder.newFolder("state-" + i);
+            props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
+            props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
+            props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+            props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getAbsolutePath());
+            final KafkaStreams streams =
+                createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
+            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            streams.setStateListener(listener);
+            listeners.add(listener);
+            streamsList.add(streams);
+        }
+        startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
+
+        try {
+            waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
+
+            // Ensure each thread can serve all keys by itself; i.e standby replication works.
+            for (int i = 0; i < streamsList.size(); i++) {
+                verifyAllKVKeys(
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
+                    inputValuesKeys,
+                    storeName + "-" + streamThree,
+                    DEFAULT_TIMEOUT_MS,
+                    false);
+                verifyAllWindowedKeys(
+                    streamsList,
+                    streamsList.get(i),
+                    listeners.get(i),
+                    inputValuesKeys,
+                    windowStoreName + "-" + streamThree,
+                    0L,
+                    WINDOW_SIZE,
+                    DEFAULT_TIMEOUT_MS,
+                    false);
+            }
+
+            // kill N-1 threads
+            for (int i = 1; i < streamsList.size(); i++) {
+                final Duration closeTimeout = Duration.ofSeconds(60);
+                assertThat(String.format("Streams instance %s did not close in %d ms", i, closeTimeout.toMillis()),
+                    streamsList.get(i).close(closeTimeout));
+            }
+
+            waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+
+            // Now, confirm that all the keys are still queryable on the remaining thread, regardless of the state
+            verifyAllKVKeys(
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
+                inputValuesKeys,
+                storeName + "-" + streamThree,
+                DEFAULT_TIMEOUT_MS,
+                false);
+            verifyAllWindowedKeys(
+                streamsList,
+                streamsList.get(0),
+                listeners.get(0),
+                inputValuesKeys,
+                windowStoreName + "-" + streamThree,
+                0L,
+                WINDOW_SIZE,
+                DEFAULT_TIMEOUT_MS,
+                false);
         } finally {
             for (final KafkaStreams streams : streamsList) {
                 streams.close();

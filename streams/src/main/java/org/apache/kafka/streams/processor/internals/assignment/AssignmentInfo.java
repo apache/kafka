@@ -62,7 +62,7 @@ public class AssignmentInfo {
              Collections.emptyMap(),
              Collections.emptyMap(),
              Collections.emptyMap(),
-            0);
+             0);
     }
 
     public AssignmentInfo(final int version,

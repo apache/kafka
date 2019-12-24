@@ -63,8 +63,8 @@ public class StreamsMetadata {
     public StreamsMetadata(final HostInfo hostInfo,
                            final Set<String> stateStoreNames,
                            final Set<TopicPartition> topicPartitions,
-                           final Set<TopicPartition> standbyTopicPartitions,
-                           final Set<String> standbyStateStoreNames) {
+                           final Set<String> standbyStateStoreNames,
+                           final Set<TopicPartition> standbyTopicPartitions) {
 
         this.hostInfo = hostInfo;
         this.stateStoreNames = stateStoreNames;

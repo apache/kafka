@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -226,7 +225,7 @@ public class StreamsUpgradeTest {
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setHostPartitionMappings(partitionsByHost, Collections.emptyMap());
+            taskManager.setHostPartitionMappings(partitionsByHost, info.standbyPartitionByHost());
             taskManager.setPartitionsToTaskId(partitionsToTaskId);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);

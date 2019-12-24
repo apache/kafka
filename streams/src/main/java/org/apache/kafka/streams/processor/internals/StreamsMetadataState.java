@@ -338,8 +338,8 @@ public class StreamsMetadataState {
                 final StreamsMetadata metadata = new StreamsMetadata(key,
                                                                      activeStoresOnHost,
                                                                      activePartitionsOnHost,
-                                                                     standbyPartitionsOnHost,
-                                                                     standbyStoresOnHost);
+                                                                     standbyStoresOnHost,
+                                                                     standbyPartitionsOnHost);
                 allMetadata.add(metadata);
                 if (key.equals(thisHost)) {
                     myMetadata = metadata;

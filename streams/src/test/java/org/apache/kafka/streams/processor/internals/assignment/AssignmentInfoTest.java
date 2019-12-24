@@ -36,78 +36,99 @@ import static org.junit.Assert.assertEquals;
 public class AssignmentInfoTest {
     private final List<TaskId> activeTasks = Arrays.asList(
         new TaskId(0, 0),
-        new TaskId(0, 0),
-        new TaskId(0, 1), new TaskId(1, 0));
+        new TaskId(0, 1),
+        new TaskId(1, 0),
+        new TaskId(1, 1));
     private final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<TaskId, Set<TopicPartition>>() {
         {
+            put(new TaskId(1, 0),
+                Utils.mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0)));
             put(new TaskId(1, 1),
                 Utils.mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)));
-            put(new TaskId(2, 0),
-                Utils.mkSet(new TopicPartition("t3", 0), new TopicPartition("t3", 0)));
         }
     };
-    private final Map<HostInfo, Set<TopicPartition>> globalAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
+    private final Map<HostInfo, Set<TopicPartition>> activeAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
         {
-            put(new HostInfo("localhost", 80),
-                Utils.mkSet(new TopicPartition("t1", 1), new TopicPartition("t3", 3)));
+            put(new HostInfo("localhost", 8088), Utils.mkSet(
+                new TopicPartition("t0", 0),
+                new TopicPartition("t1", 0),
+                new TopicPartition("t2", 0)));
+            put(new HostInfo("localhost", 8089), Utils.mkSet(
+                new TopicPartition("t0", 1),
+                new TopicPartition("t1", 1),
+                new TopicPartition("t2", 1)));
+        }
+    };
+    private final Map<HostInfo, Set<TopicPartition>> standbyAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
+        {
+            put(new HostInfo("localhost", 8088), Utils.mkSet(
+                new TopicPartition("t1", 0),
+                new TopicPartition("t2", 0)));
+            put(new HostInfo("localhost", 8089), Utils.mkSet(
+                new TopicPartition("t1", 1),
+                new TopicPartition("t2", 1)));
         }
     };
 
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {
-        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
         assertEquals(LATEST_SUPPORTED_VERSION, info.version());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowForUnknownVersion1() {
-        new AssignmentInfo(0, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        new AssignmentInfo(0, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowForUnknownVersion2() {
-        new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        new AssignmentInfo(LATEST_SUPPORTED_VERSION + 1, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion1() {
-        final AssignmentInfo info = new AssignmentInfo(1, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        final AssignmentInfo info = new AssignmentInfo(1, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
         final AssignmentInfo expectedInfo = new AssignmentInfo(1, UNKNOWN, activeTasks, standbyTasks, Collections.emptyMap(), Collections.emptyMap(), 0);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion2() {
-        final AssignmentInfo info = new AssignmentInfo(2, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(2, UNKNOWN, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        final AssignmentInfo info = new AssignmentInfo(2, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(2, UNKNOWN, activeTasks, standbyTasks, activeAssignment, Collections.emptyMap(), 0);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion3() {
-        final AssignmentInfo info = new AssignmentInfo(3, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(3, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 0);
+        final AssignmentInfo info = new AssignmentInfo(3, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(3, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 0);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion4() {
-        final AssignmentInfo info = new AssignmentInfo(4, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(4, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
+        final AssignmentInfo info = new AssignmentInfo(4, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(4, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion5() {
-        final AssignmentInfo info = new AssignmentInfo(5, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(5, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
+        final AssignmentInfo info = new AssignmentInfo(5, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(5, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
     @Test
     public void shouldEncodeAndDecodeVersion6() {
-        final AssignmentInfo info = new AssignmentInfo(6, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(6, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
+        final AssignmentInfo info = new AssignmentInfo(6, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(6, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks,
+            activeAssignment, standbyAssignment, 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
@@ -115,8 +136,10 @@ public class AssignmentInfoTest {
     public void shouldEncodeAndDecodeSmallerCommonlySupportedVersion() {
         final int usedVersion = LATEST_SUPPORTED_VERSION - 1;
         final int commonlySupportedVersion = LATEST_SUPPORTED_VERSION - 1;
-        final AssignmentInfo info = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks, globalAssignment, Collections.emptyMap(), 2);
+        final AssignmentInfo info = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,
+            activeAssignment, standbyAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion, activeTasks, standbyTasks,
+            activeAssignment, Collections.emptyMap(), 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 }
