@@ -20,12 +20,14 @@ package kafka.zookeeper
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
+import java.util.{List => JList}
 
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
@@ -181,26 +183,30 @@ class ZooKeeperClient(connectString: String,
     val sendTimeMs = time.hiResClockMs()
     request match {
       case ExistsRequest(path, ctx) =>
-        zooKeeper.exists(path, shouldWatch(request),
-          (rc, path, ctx, stat) => callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
-          ctx.orNull)
+        zooKeeper.exists(path, shouldWatch(request), new StatCallback {
+          def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
+            callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
       case GetDataRequest(path, ctx) =>
-        zooKeeper.getData(path, shouldWatch(request),
-          (rc, path, ctx, data, stat) => callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat,
-            responseMetadata(sendTimeMs))),
-          ctx.orNull)
+        zooKeeper.getData(path, shouldWatch(request), new DataCallback {
+          def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat): Unit =
+            callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat, responseMetadata(sendTimeMs))),
+        }, ctx.orNull)
       case GetChildrenRequest(path, ctx) =>
-        zooKeeper.getChildren(path, shouldWatch(request),
-          (rc, path, ctx, children, stat) => callback(GetChildrenResponse(Code.get(rc), path, Option(ctx),
-            Option(children).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs))),
-          ctx.orNull)
+        zooKeeper.getChildren(path, shouldWatch(request), new Children2Callback {
+          def processResult(rc: Int, path: String, ctx: Any, children: JList[String], stat: Stat): Unit =
+            callback(GetChildrenResponse(Code.get(rc), path, Option(ctx), Option(children).map(_.asScala).getOrElse(Seq.empty),
+              stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
       case CreateRequest(path, data, acl, createMode, ctx) =>
         zooKeeper.create(path, data, acl.asJava, createMode,
-          (rc, path, ctx, name) => callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs))),
+          (rc, path, ctx, name) =>
+            callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs))),
           ctx.orNull)
       case SetDataRequest(path, data, version, ctx) =>
         zooKeeper.setData(path, data, version,
-          (rc, path, ctx, stat) => callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
+          (rc, path, ctx, stat) =>
+            callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
           ctx.orNull)
       case DeleteRequest(path, version, ctx) =>
         zooKeeper.delete(path, version,
@@ -208,18 +214,23 @@ class ZooKeeperClient(connectString: String,
           ctx.orNull)
       case GetAclRequest(path, ctx) =>
         zooKeeper.getACL(path, null,
-          (rc, path, ctx, acl, stat) => callback(GetAclResponse(Code.get(rc), path, Option(ctx),
-            Option(acl).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs))),
+          (rc, path, ctx, acl, stat) =>
+            callback(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
+              stat, responseMetadata(sendTimeMs))),
           ctx.orNull)
       case SetAclRequest(path, acl, version, ctx) =>
         zooKeeper.setACL(path, acl.asJava, version,
-          (rc, path, ctx, stat) => callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
+          (rc, path, ctx, stat) =>
+            callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
           ctx.orNull)
       case MultiRequest(zkOps, ctx) =>
+        def toZkOpResult(opResults: JList[OpResult]): Seq[ZkOpResult] =
+          Option(opResults).map(results => zkOps.zip(results.asScala).map { case (zkOp, result) =>
+            ZkOpResult(zkOp, result)
+          }).orNull
         zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava,
-          (rc, path, ctx, opResults) => callback(MultiResponse(Code.get(rc), path, Option(ctx),
-            Option(opResults).map(results => zkOps.zip(results.asScala).map { case (zkOp, result) => ZkOpResult(zkOp, result) }).orNull,
-            responseMetadata(sendTimeMs))),
+          (rc, path, ctx, opResults) =>
+            callback(MultiResponse(Code.get(rc), path, Option(ctx), toZkOpResult(opResults), responseMetadata(sendTimeMs))),
           ctx.orNull)
     }
   }
