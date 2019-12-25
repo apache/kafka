@@ -23,6 +23,9 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+
 public class MaterializedTest {
 
     @Test
@@ -50,5 +53,22 @@ public class MaterializedTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfSessionBytesStoreSupplierIsNull() {
         Materialized.as((SessionBytesStoreSupplier) null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionIfRetentionIsNegative() {
+        Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS));
+    }
+
+    @Test(expected = TopologyException.class)
+    public void shouldThrowTopologyExceptionIfStoreNameExceedsMaxAllowedLength() {
+        final StringBuffer invalidStoreNameBuffer = new StringBuffer();
+        final int maxNameLength = Named.MAX_NAME_LENGTH;
+
+        for (int i = 0; i < maxNameLength + 1; i++) {
+            invalidStoreNameBuffer.append('a');
+        }
+
+        Materialized.as(invalidStoreNameBuffer.toString());
     }
 }
