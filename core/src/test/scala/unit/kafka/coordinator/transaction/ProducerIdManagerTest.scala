@@ -43,7 +43,8 @@ class ProducerIdManagerTest {
     EasyMock.expect(zkClient.conditionalUpdatePath(EasyMock.anyString(),
       EasyMock.capture(capturedData),
       EasyMock.capture(capturedVersion),
-      EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])).andAnswer(() => {
+      EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])
+    ).andAnswer(() => {
       val newZkVersion = capturedVersion.getValue + 1
       zkVersion = Some(newZkVersion)
       data = capturedData.getValue
