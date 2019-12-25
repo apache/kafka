@@ -17,7 +17,6 @@
 
 package kafka.zookeeper
 
-import java.util
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
@@ -27,7 +26,6 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
-import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
@@ -183,46 +181,46 @@ class ZooKeeperClient(connectString: String,
     val sendTimeMs = time.hiResClockMs()
     request match {
       case ExistsRequest(path, ctx) =>
-        zooKeeper.exists(path, shouldWatch(request), new StatCallback {
-          override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
-            callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.exists(path, shouldWatch(request),
+          (rc, path, ctx, stat) => callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case GetDataRequest(path, ctx) =>
-        zooKeeper.getData(path, shouldWatch(request), new DataCallback {
-          override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat): Unit =
-            callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat, responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.getData(path, shouldWatch(request),
+          (rc, path, ctx, data, stat) => callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat,
+            responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case GetChildrenRequest(path, ctx) =>
-        zooKeeper.getChildren(path, shouldWatch(request), new Children2Callback {
-          override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat): Unit =
-            callback(GetChildrenResponse(Code.get(rc), path, Option(ctx),
-              Option(children).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.getChildren(path, shouldWatch(request),
+          (rc, path, ctx, children, stat) => callback(GetChildrenResponse(Code.get(rc), path, Option(ctx),
+            Option(children).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case CreateRequest(path, data, acl, createMode, ctx) =>
-        zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
-          override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
-            callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.create(path, data, acl.asJava, createMode,
+          (rc, path, ctx, name) => callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case SetDataRequest(path, data, version, ctx) =>
-        zooKeeper.setData(path, data, version, (rc: Int, path: String, ctx: Any, stat: Stat) => callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))), ctx.orNull)
+        zooKeeper.setData(path, data, version,
+          (rc, path, ctx, stat) => callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case DeleteRequest(path, version, ctx) =>
-        zooKeeper.delete(path, version, (rc: Int, path: String, ctx: Any) => callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs))), ctx.orNull)
+        zooKeeper.delete(path, version,
+          (rc, path, ctx) => callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case GetAclRequest(path, ctx) =>
-        zooKeeper.getACL(path, null, (rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat) => {
-          callback(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
-            stat, responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.getACL(path, null,
+          (rc, path, ctx, acl, stat) => callback(GetAclResponse(Code.get(rc), path, Option(ctx),
+            Option(acl).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case SetAclRequest(path, acl, version, ctx) =>
-        zooKeeper.setACL(path, acl.asJava, version, (rc: Int, path: String, ctx: Any, stat: Stat) => callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))), ctx.orNull)
+        zooKeeper.setACL(path, acl.asJava, version,
+          (rc, path, ctx, stat) => callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs))),
+          ctx.orNull)
       case MultiRequest(zkOps, ctx) =>
-        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, (rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]) => {
-          callback(MultiResponse(Code.get(rc), path, Option(ctx),
-            if (opResults == null)
-              null
-            else
-              zkOps.zip(opResults.asScala) map { case (zkOp, result) => ZkOpResult(zkOp, result) },
-            responseMetadata(sendTimeMs)))
-        }, ctx.orNull)
+        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava,
+          (rc, path, ctx, opResults) => callback(MultiResponse(Code.get(rc), path, Option(ctx),
+            Option(opResults).map(results => zkOps.zip(results.asScala).map { case (zkOp, result) => ZkOpResult(zkOp, result) }).orNull,
+            responseMetadata(sendTimeMs))),
+          ctx.orNull)
     }
   }
 
