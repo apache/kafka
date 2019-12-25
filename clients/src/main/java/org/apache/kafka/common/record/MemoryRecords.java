@@ -160,6 +160,10 @@ public class MemoryRecords extends AbstractRecords {
             long maxOffset = -1L;
             BatchRetention batchRetention = filter.checkBatchRetention(batch);
             long deleteHorizonMs = batch.deleteHorizonMs();
+            if (!batch.deleteHorizonSet()) {
+                deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+            }
+
             filterResult.bytesRead += batch.sizeInBytes();
 
             if (batchRetention == BatchRetention.DELETE)
@@ -182,16 +186,6 @@ public class MemoryRecords extends AbstractRecords {
             containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
-
-            if (!containsTombstonesOrMarker && !batch.deleteHorizonSet()) {
-                batchRetention = filter.checkBatchRetention(batch, false);
-                if (batchRetention == BatchRetention.DELETE)
-                    continue;
-            }
-
-            if (containsTombstonesOrMarker && !batch.deleteHorizonSet()) {
-                deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
-            }
 
             if (!retainedRecords.isEmpty()) {
                 // we check if the delete horizon should be set to a new value

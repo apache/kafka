@@ -590,7 +590,7 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-            transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs)
+            transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs, deleteHorizonMs = deleteHorizonMs)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -645,7 +645,8 @@ private[log] class Cleaner(val id: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
-                             tombstoneRetentionMs: Long): Unit = {
+                             tombstoneRetentionMs: Long,
+                             deleteHorizonMs: Long = RecordBatch.NO_TIMESTAMP): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
       var isControlBatchEmpty: Boolean = _
@@ -658,11 +659,11 @@ private[log] class Cleaner(val id: Int,
         System.out.println("Current batch time: " + time.milliseconds());
 
         if (batch.isControlBatch) {
-          System.out.println("Should discard values: " + (!retainDeletesAndTxnMarkers));
-          System.out.println("Display current time: " + time.milliseconds() + " and batch.deleteHorizonMs " + batch.deleteHorizonMs());
+          System.out.println("Control batch is empty? " + isControlBatchEmpty);
+          System.out.println("Display current time: " + deleteHorizonMs + " and batch.deleteHorizonMs " + batch.deleteHorizonMs());
           System.out.println("Discard values based upon deleteHorizonMs: " + 
-              (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < time.milliseconds())));
-          discardBatchRecords = canDiscardBatch && (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < time.milliseconds()))
+              (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < deleteHorizonMs)));
+          discardBatchRecords = canDiscardBatch && (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < deleteHorizonMs))
         } else {
           discardBatchRecords = canDiscardBatch
         }
@@ -702,6 +703,7 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
+        System.out.println("This has been called and " + batch.isControlBatch() + " is empty? " + isControlBatchEmpty);
         if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
