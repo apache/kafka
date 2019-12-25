@@ -103,7 +103,7 @@ class ZooKeeperClient(connectString: String,
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  newGauge("SessionState", () => Option(connectionState.toString).getOrElse("DISCONNECTED"))
+  newGauge("SessionState", () => connectionState.toString)
 
   metricNames += "SessionState"
 
