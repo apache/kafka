@@ -40,18 +40,18 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   newGauge("MaxLag", () => {
     // current max lag across all fetchers/topics/partitions
-    fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
-      fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
-        curMaxThread.max(fetcherLagStatsEntry._2.lag)
-      }).max(curMaxAll)
-    })
+    fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
+      val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
+        math.max(curMaxLagThread, lagMetrics.lag))
+      math.max(curMaxLagAll, maxLagThread)
+    }
   }, tags)
 
   newGauge("MinFetchRate", () => {
     // current min fetch rate across all fetchers/topics/partitions
     val headRate = fetcherThreadMap.values.headOption.map(_.fetcherStats.requestRate.oneMinuteRate).getOrElse(0.0)
-    fetcherThreadMap.values.foldLeft(headRate)((curMinAll, value) =>
-      math.min(curMinAll, value.fetcherStats.requestRate.oneMinuteRate))
+    fetcherThreadMap.values.foldLeft(headRate)((curMinAll, fetcherThread) =>
+      math.min(curMinAll, fetcherThread.fetcherStats.requestRate.oneMinuteRate))
   }, tags)
 
   newGauge("FailedPartitionsCount", () => failedPartitions.size, tags)
