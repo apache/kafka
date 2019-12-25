@@ -41,7 +41,7 @@ class CustomDeserializerTest {
     val formatter = new DefaultMessageFormatter()
     formatter.keyDeserializer = Some(new CustomDeserializer)
 
-    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes),
+    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1L, "key".getBytes, "value".getBytes),
       mock(classOf[PrintStream]))
 
     formatter.close()

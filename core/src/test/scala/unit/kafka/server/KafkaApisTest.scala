@@ -825,7 +825,7 @@ class KafkaApisTest {
     assertReassignmentAndReplicationBytesOutPerSec(false)
   }
 
-  private def assertReassignmentAndReplicationBytesOutPerSec(isReassigning: Boolean) {
+  private def assertReassignmentAndReplicationBytesOutPerSec(isReassigning: Boolean): Unit = {
     val leaderEpoch = 0
     val tp0 = new TopicPartition("tp", 0)
 

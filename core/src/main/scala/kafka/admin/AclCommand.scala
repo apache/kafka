@@ -291,7 +291,7 @@ object AclCommand extends Logging {
 
   class JAuthorizerService(val authorizerClass: Class[_ <: JAuthorizer], val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    private def withAuthorizer()(f: JAuthorizer => Unit) {
+    private def withAuthorizer()(f: JAuthorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
       val authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
