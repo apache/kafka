@@ -505,6 +505,43 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
+  def testRetainTopicOverriddenConfigAfterConsecutiveConfigChange(): Unit = {
+    val topic2 = "testtopic2"
+    val topicProps = new Properties
+    topicProps.put(KafkaConfig.MinInSyncReplicasProp, "2")
+    TestUtils.createTopic(zkClient, topic2, 1, replicationFactor = numServers, servers, topicProps)
+    var log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertEquals(log.config.overriddenConfigs.size, 1)
+
+    val props = new Properties
+    props.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.toString)
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.toString))
+    // Verify that all broker defaults have been updated
+    servers.foreach { server =>
+      props.asScala.foreach { case (k, v) =>
+        assertEquals(s"Not reconfigured $k", server.config.originals.get(k).toString, v)
+      }
+    }
+
+    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertEquals(log.config.overriddenConfigs.size, 1) // Verify topic-level config survives
+
+    // Make a second broker-default change
+    props.clear()
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "604800000")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogRetentionTimeMillisProp, "604800000"))
+    // Verify that all broker defaults have been updated again
+    servers.foreach { server =>
+      props.asScala.foreach { case (k, v) =>
+        assertEquals(s"Not reconfigured $k", server.config.originals.get(k).toString, v)
+      }
+    }
+
+    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertEquals(log.config.overriddenConfigs.size, 1) // Verify topic-level config still survives
+  }
+
+  @Test
   def testDefaultTopicConfig(): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
 
@@ -774,7 +811,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val partitions = (0 until numPartitions).map(i => new TopicPartition(topic, i)).filter { tp =>
       zkClient.getLeaderForPartition(tp).contains(leaderId)
     }
-    assertTrue(s"Partitons not found with leader $leaderId", partitions.nonEmpty)
+    assertTrue(s"Partitions not found with leader $leaderId", partitions.nonEmpty)
     partitions.foreach { tp =>
       (1 to 2).foreach { i =>
         val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
