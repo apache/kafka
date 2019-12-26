@@ -161,9 +161,24 @@ class LogCleanerTest {
 
   @Test
   def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
+    var logProps = new Properties()
+    testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
+
+    // timestamp compact strategy
+    logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
+
+    // header compact strategy
+    logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
+  }
+
+  def testSizeTrimmedForPreallocatedAndCompactedTopic(logProps: Properties): Unit = {
     val originalMaxFileSize = 1024;
     val cleaner = makeCleaner(2)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, "compact": java.lang.String)
     logProps.put(LogConfig.PreAllocateEnableProp, "true": java.lang.String)
@@ -1679,7 +1694,7 @@ class LogCleanerTest {
 class FakeOffsetMap(val slots: Int) extends OffsetMap {
   val map = new java.util.HashMap[String, Record]()
   var lastOffset = -1L
-  var isOffsetStrategy = false
+  var isOffsetStrategy = true
   var isTimestampStrategy = false
   var headerKey = ""
 
@@ -1689,7 +1704,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   override def init(strategy: String = Defaults.CompactionStrategy, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
     Console.println(s"INIT: Strategy: $strategy; Header key: $headerKey; Cleaner Thread ID: $cleanerThreadId; TopicPartition: $topicPartitionName")
     this.map.clear()
-    this.lastOffset = -1L
+
     this.isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
     this.isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)
     this.headerKey = headerKey
@@ -1698,9 +1713,17 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
 
   override def put(record: Record): Boolean = {
     lastOffset = record.offset
-    val key = keyFor(record.key())
+
+    val key = keyFor(record.key)
     Console.println(s"PUT: key: $key; offset: $lastOffset")
-    map.put(keyFor(record.key), record)
+    if (!isOffsetStrategy && map.containsKey(key)) {
+      val foundVersion = extractVersion(map.get(key))
+      val currVersion = extractVersion(record)
+      if (foundVersion > currVersion)
+        return false
+    }
+    
+    map.put(key, record)
     return true
   }
 
@@ -1709,19 +1732,21 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
     val key = keyFor(record.key())
     val offset = record.offset()
     Console.println(s"shouldRetainRecord: record.offset(): $key => $offset; foundOffset: $foundOffset")
-    record.offset() >= foundOffset
+    if (isOffsetStrategy) {
+      record.offset() >= foundOffset
+    } else {
+      val foundVersion = getVersion(record.key)
+      val currentVersion = extractVersion(record)
+      currentVersion >= foundVersion
+    }
   }
 
   override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
-    var r = -1L
     if(map.containsKey(k))
-      r = map.get(k).offset()
+      map.get(k).offset()
     else
-      r = -1L
-
-    Console.println(s"GET: key: $k; offset: $r")
-    r
+      -1L
   }
 
   override def getVersion(key: ByteBuffer): Long = {
@@ -1754,4 +1779,30 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   }
 
   override def toString: String = map.toString
+
+  private def extractVersion(record: Record): Long = {
+    if (isOffsetStrategy) {
+      // offset strategy
+      return -1L
+    }
+
+    if (isTimestampStrategy) {
+      // record timestamp strategy
+      return record.timestamp
+    }
+
+    // header strategy
+    if (record == null || record.headers() == null || record.headers().isEmpty) {
+      return -1L
+    }
+
+    val headerValue = record.headers()
+      .filter(it => it.value != null && it.value.nonEmpty)
+      .find(it => headerKey.equalsIgnoreCase(it.key.trim))
+      .map(it => ByteBuffer.wrap(it.value))
+      .map(it => ByteUtils.readVarlong(it))
+      .getOrElse(-1L)
+
+    headerValue
+  }
 }
