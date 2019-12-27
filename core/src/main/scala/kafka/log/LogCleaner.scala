@@ -561,7 +561,7 @@ private[log] class Cleaner(val id: Int,
   private[log] def cleanSegments(log: Log,
                                  segments: Seq[LogSegment],
                                  map: OffsetMap,
-                                 deleteHorizonMs: Long,
+                                 currentTime: Long,
                                  stats: CleanerStats,
                                  transactionMetadata: CleanedTransactionMetadata): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
@@ -583,14 +583,14 @@ private[log] class Cleaner(val id: Int,
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
-        val retainDeletesAndTxnMarkers = currentSegment.lastModified > deleteHorizonMs
+        val retainDeletesAndTxnMarkers = currentSegment.lastModified > currentTime
         info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
-          s"with deletion horizon $deleteHorizonMs, " +
+          s"with deletion horizon $currentTime, " +
           s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-            transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs, deleteHorizonMs = deleteHorizonMs)
+            transactionMetadata, lastOffsetOfActiveProducers, stats, log.config.deleteRetentionMs, currentTime = currentTime)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -646,7 +646,7 @@ private[log] class Cleaner(val id: Int,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats,
                              tombstoneRetentionMs: Long,
-                             deleteHorizonMs: Long = RecordBatch.NO_TIMESTAMP): Unit = {
+                             currentTime: Long = RecordBatch.NO_TIMESTAMP): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
       var isControlBatchEmpty: Boolean = _
@@ -657,10 +657,13 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
         isControlBatchEmpty = canDiscardBatch
 
+	if (!batch.deleteHorizonSet())
+	  info("Batch's delete horizon will be set to " + newBatchDeleteHorizonMs + " since it has not been assigned a value yet.")
+
         if (batch.isControlBatch) {
           discardBatchRecords = canDiscardBatch && 
-              ((batch.deleteHorizonSet() && batch.deleteHorizonMs() < deleteHorizonMs) ||
-               newBatchDeleteHorizonMs != RecordBatch.NO_TIMESTAMP && newBatchDeleteHorizonMs < deleteHorizonMs)
+              ((batch.deleteHorizonSet() && batch.deleteHorizonMs() < currentTime) ||
+               newBatchDeleteHorizonMs != RecordBatch.NO_TIMESTAMP && newBatchDeleteHorizonMs < currentTime)
         } else {
           discardBatchRecords = canDiscardBatch
         }
@@ -695,7 +698,7 @@ private[log] class Cleaner(val id: Int,
           // The batch is only retained to preserve producer sequence information; the records can be removed
           false
         else
-          Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, newDeleteHorizonMs, computedDeleteHorizonMs = deleteHorizonMs)
+          Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, newDeleteHorizonMs, currentTime = currentTime)
       }
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
@@ -703,7 +706,8 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
-        if (batch.deleteHorizonSet())
+        info("Retreiving delete horizon for batch " + batch)
+	if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
         // check that the control batch has been emptied of records
@@ -800,7 +804,7 @@ private[log] class Cleaner(val id: Int,
                                  record: Record,
                                  stats: CleanerStats,
                                  newBatchDeleteHorizonMs: Long,
-                                 computedDeleteHorizonMs: Long = -1L): Boolean = {
+                                 currentTime: Long = -1L): Boolean = {
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
@@ -817,10 +821,14 @@ private[log] class Cleaner(val id: Int,
       val isLatestVersion = batch.magic() < RecordBatch.MAGIC_VALUE_V2
       var shouldRetainDeletes = true
       if (isLatestVersion)
-        shouldRetainDeletes = (batch.deleteHorizonSet() && time.milliseconds() < batch.deleteHorizonMs) || 
-                              (computedDeleteHorizonMs < newBatchDeleteHorizonMs)
+        shouldRetainDeletes = (batch.deleteHorizonSet() && currentTime < batch.deleteHorizonMs) || 
+                              (!batch.deleteHorizonSet() && currentTime < newBatchDeleteHorizonMs)
       else
         shouldRetainDeletes = retainDeletes
+
+      if (!record.hasValue && !batch.deleteHorizonSet() && !shouldRetainDeletes)
+        info("Deleting tombstone " + record + " since it has exceeeded its configured lifetime.")
+
       val isRetainedValue = record.hasValue || shouldRetainDeletes
 
       latestOffsetForKey && isRetainedValue
