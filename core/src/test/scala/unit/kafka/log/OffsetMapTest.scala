@@ -52,8 +52,8 @@ class OffsetMapTest {
     for (i <- 0 until 10) {
       assertEquals(i.toLong, map.get(key(i)))
       assertEquals(-1L, map.getVersion(key(i)))
-      assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i), false))
-      assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1), false))
+      assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i)))
+      assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1)))
     }
 
     map.init(Defaults.CompactionStrategy)
@@ -78,7 +78,7 @@ class OffsetMapTest {
     assertEquals(map.get(key(i-1L)), i-1L)
     assertEquals(map.getVersion(key(i-1L)), -1L)
     assertNotEquals(map.latestOffset, i)
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i-1L), i-1L), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i-1L), i-1L)))
   }
   
   @Test
@@ -107,8 +107,8 @@ class OffsetMapTest {
     // map should hold offset 10 for key 0
     assertEquals(10, map.get(key(0)))
     assertEquals(fr1.timestamp, map.getVersion(key(0)))
-    assertEquals(true, map.shouldRetainRecord(fr1, false))
-    assertEquals(false, map.shouldRetainRecord(fr2, false))
+    assertEquals(true, map.shouldRetainRecord(fr1))
+    assertEquals(false, map.shouldRetainRecord(fr2))
 
     // latest offset in map should be 11
     assertEquals(11, map.latestOffset)
@@ -139,7 +139,7 @@ class OffsetMapTest {
     // map should hold offset 10 for key 0
     assertEquals(10, map.get(key(0)))
     assertEquals(111, map.getVersion(key(0)))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111)))
     // latest offset in map should be 11
     assertEquals(11, map.latestOffset)
     // size should 10
@@ -156,8 +156,8 @@ class OffsetMapTest {
     // map should hold offset 16 for key 1
     assertEquals(16, map.get(key(1)))
     assertEquals(120, map.getVersion(key(1)))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 16, 120), false))
-    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 17, 119), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 16, 120)))
+    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 17, 119)))
     // latest offset in map should be 17
     assertEquals(17, map.latestOffset)
     // size should 10
@@ -171,8 +171,8 @@ class OffsetMapTest {
     // map should hold offset 19 for key 1
     assertEquals(19, map.get(key(1)))
     assertEquals(121, map.getVersion(key(1)))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 19, 121), false))
-    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 21, 117), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(1), 19, 121)))
+    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(1), 21, 117)))
     // latest offset in map should be 21
     assertEquals(21, map.latestOffset)
     // size should 10
@@ -201,7 +201,7 @@ class OffsetMapTest {
     // map should hold offset 0 for key 0
     assertEquals(0, map.get(key(0)))
     assertEquals(-1L, map.getVersion(key(0)))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 0), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 0)))
     // latest offset in map should be 9
     assertEquals(9, map.latestOffset)
     // size should 10
@@ -214,8 +214,8 @@ class OffsetMapTest {
     // map should hold offset 11 for key 0
     assertEquals(11, map.get(key(0)))
     assertEquals(-1L, map.getVersion(key(0)))
-    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 10), false))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 11), false))
+    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 10)))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 11)))
     // latest offset in map should be 11
     assertEquals(11, map.latestOffset)
     // size should 10
@@ -247,8 +247,8 @@ class OffsetMapTest {
     // map should hold offset 10 for key 0
     assertEquals(10, map.get(key(0)))
     assertEquals(fr1.timestamp, map.getVersion(key(0)))
-    assertEquals(true, map.shouldRetainRecord(fr1, false))
-    assertEquals(false, map.shouldRetainRecord(fr2, false))
+    assertEquals(true, map.shouldRetainRecord(fr1))
+    assertEquals(false, map.shouldRetainRecord(fr2))
     // latest offset in map should be 11
     assertEquals(11, map.latestOffset)
     // size should 10
@@ -270,8 +270,8 @@ class OffsetMapTest {
     // map should hold offset 10 for key 0
     assertEquals(10, map.get(key(0)))
     assertEquals(111, map.getVersion(key(0)))
-    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111), false))
-    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 11, 110), false))
+    assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(0), 10, 111)))
+    assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(0), 11, 110)))
     // latest offset in map should be 11
     assertEquals(11, map.latestOffset)
     // size should 10
@@ -300,16 +300,16 @@ class OffsetMapTest {
       assertEquals(i.toLong, map.get(key(i)))
       if (isOffsetStrategy) {
         assertEquals(-1L, map.getVersion(key(i)))
-        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i), false))
-        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1), false))
+        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i)))
+        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i-1)))
       } else if (isTimestampStrategy) {
         assertEquals(currentTimeMillis + i, map.getVersion(key(i)))
-        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i, fakeTimestamp = currentTimeMillis + i), false))
-        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i, fakeTimestamp = currentTimeMillis), false))
+        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i, fakeTimestamp = currentTimeMillis + i)))
+        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i, fakeTimestamp = currentTimeMillis)))
       } else {
         assertEquals(items + i, map.getVersion(key(i)))
-        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i, items + i), false))
-        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i, items), false))
+        assertEquals(true, map.shouldRetainRecord(new FakeRecord(key(i), i, items + i)))
+        assertEquals(false, map.shouldRetainRecord(new FakeRecord(key(i), i, items)))
       }
     }
 

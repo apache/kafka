@@ -1987,15 +1987,62 @@ class LogCleanerTest {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logProps = new Properties()
-    testCleanTombstone(logProps)
+    val logConfig = LogConfig(new Properties())
+
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(10)
+
+    // Append a message with a large timestamp.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    // Append a tombstone with a small timestamp and roll out a new log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = null,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message and roll out another log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "1".getBytes,
+                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
   @Test
   def testCleanTombstoneWithTimestampCompaction(): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
-    testCleanTombstone(logProps)
+    val logConfig = LogConfig(logProps)
+
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(10)
+
+    // Append a message with a large timestamp.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    // Append a tombstone with a small timestamp and roll out a new log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = null,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message and roll out another log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "1".getBytes,
+                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
   @Test
@@ -2003,10 +2050,6 @@ class LogCleanerTest {
     val logProps = new Properties()
     logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
     logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
-    testCleanTombstone(logProps)
-  }
-
-  def testCleanTombstone(logProps: Properties): Unit = {
     val logConfig = LogConfig(logProps)
 
     val log = makeLog(config = logConfig)
@@ -2190,20 +2233,18 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
     true
   }
 
-  override def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean = {
+  override def shouldRetainRecord(record: Record): Boolean = {
     if (!isOffsetStrategy) {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
       // use version if available & different otherwise fallback to offset
       if (foundVersion != currentVersion) {
-        return (record.hasValue && retainDeletes) || (currentVersion >= foundVersion)
+        return currentVersion >= foundVersion
       }
     }
 
     val foundOffset = get(record.key)
-    val latestOffsetForKey = record.offset() >= foundOffset
-    val isRetainedValue = record.hasValue || retainDeletes
-    latestOffsetForKey && isRetainedValue
+    record.offset() >= foundOffset
   }
 
   override def get(key: ByteBuffer): Long = {
