@@ -22,7 +22,7 @@ import java.util.Objects;
 
 public class Named implements NamedOperation<Named> {
 
-    public static final int MAX_NAME_LENGTH = 249;
+    private static final int MAX_NAME_LENGTH = 249;
 
     protected String name;
 
