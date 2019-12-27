@@ -510,10 +510,10 @@ private[log] class Cleaner(val id: Int,
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
     }
 
-    doClean(cleanable, time.milliseconds())
+    doClean(cleanable, time.milliseconds(), trackedHorizon = deleteHorizonMs)
   }
 
-  private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long): (Long, CleanerStats) = {
+  private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long, trackedHorizon: Long = -1L): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
     val log = cleanable.log
@@ -537,7 +537,7 @@ private[log] class Cleaner(val id: Int,
     val groupedSegments = groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
     for (group <- groupedSegments)
-      cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata)
+      cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata, trackedHorizon = trackedHorizon)
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
@@ -563,7 +563,8 @@ private[log] class Cleaner(val id: Int,
                                  map: OffsetMap,
                                  currentTime: Long,
                                  stats: CleanerStats,
-                                 transactionMetadata: CleanedTransactionMetadata): Unit = {
+                                 transactionMetadata: CleanedTransactionMetadata,
+                                 trackedHorizon: Long = -1L): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
     val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
@@ -583,9 +584,9 @@ private[log] class Cleaner(val id: Int,
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
-        val retainDeletesAndTxnMarkers = currentSegment.lastModified > currentTime
+        val retainDeletesAndTxnMarkers = currentSegment.lastModified > trackedHorizon
         info(s"Cleaning $currentSegment in log ${log.name} into ${cleaned.baseOffset} " +
-          s"with deletion horizon $currentTime, " +
+          s"with deletion horizon $trackedHorizon, " +
           s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
