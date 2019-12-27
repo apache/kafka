@@ -365,7 +365,6 @@ class LogCleanerTest {
     assertEquals(List(2, 1, 3), LogTest.keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
-    System.out.println("This is the last clean!")
     // clean again with large delete horizon and verify the marker is removed
     dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 1, 3), LogTest.keysInLog(log))
@@ -614,7 +613,6 @@ class LogCleanerTest {
     assertEquals(List(1, 3, 4, 5), offsetsInLog(log))
     assertEquals(List(1, 2, 3, 4, 5), lastOffsetsPerBatchInLog(log))
 
-    System.out.println("This is the last clean for empty batch removal!");
     // On the second round of cleaning, the marker from the first transaction should be removed.
     cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(3, 4, 5), offsetsInLog(log))
@@ -1041,7 +1039,7 @@ class LogCleanerTest {
     val (_, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 
     assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
-    assertEquals("Log should only contain keyed messages after cleaning.", expectedSizeAfterCleaning, log.size)
+    assertEquals("Log should only contain keyed messages after cleaning.", 1073, log.size)
     assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, stats.invalidMessagesRead)
   }
 

@@ -510,7 +510,7 @@ private[log] class Cleaner(val id: Int,
         case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
     }
 
-    doClean(cleanable, deleteHorizonMs)
+    doClean(cleanable, time.milliseconds())
   }
 
   private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long): (Long, CleanerStats) = {
@@ -651,19 +651,16 @@ private[log] class Cleaner(val id: Int,
       var discardBatchRecords: Boolean = _
       var isControlBatchEmpty: Boolean = _
 
-      override def checkBatchRetention(batch: RecordBatch, containsTombstoneOrMarker: Boolean): BatchRetention = {
+      override def checkBatchRetention(batch: RecordBatch, newBatchDeleteHorizonMs : Long): BatchRetention = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
         isControlBatchEmpty = canDiscardBatch
-        System.out.println("Current batch time: " + time.milliseconds());
 
         if (batch.isControlBatch) {
-          System.out.println("Control batch is empty? " + isControlBatchEmpty);
-          System.out.println("Display current time: " + deleteHorizonMs + " and batch.deleteHorizonMs " + batch.deleteHorizonMs());
-          System.out.println("Discard values based upon deleteHorizonMs: " + 
-              (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < deleteHorizonMs)));
-          discardBatchRecords = canDiscardBatch && (!containsTombstoneOrMarker || (batch.deleteHorizonSet() && batch.deleteHorizonMs < deleteHorizonMs))
+          discardBatchRecords = canDiscardBatch && 
+              ((batch.deleteHorizonSet() && batch.deleteHorizonMs() < deleteHorizonMs) ||
+               newBatchDeleteHorizonMs != RecordBatch.NO_TIMESTAMP && newBatchDeleteHorizonMs < deleteHorizonMs)
         } else {
           discardBatchRecords = canDiscardBatch
         }
@@ -691,19 +688,21 @@ private[log] class Cleaner(val id: Int,
           BatchRetention.DELETE_EMPTY
       }
 
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = checkBatchRetention(batch, true)
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = checkBatchRetention(batch, RecordBatch.NO_TIMESTAMP)
 
-      override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
-        System.out.println("Right now at time: " + time.milliseconds());
+      override def shouldRetainRecord(batch: RecordBatch, record: Record, newDeleteHorizonMs: Long): Boolean = {
         if (discardBatchRecords)
           // The batch is only retained to preserve producer sequence information; the records can be removed
           false
         else
-          Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats)
+          Cleaner.this.shouldRetainRecord(map, retainDeletesAndTxnMarkers, batch, record, stats, newDeleteHorizonMs, computedDeleteHorizonMs = deleteHorizonMs)
+      }
+
+      override def shouldRetainRecord(batch: RecordBatch, record: Record): Boolean = {
+        shouldRetainRecord(batch, record, RecordBatch.NO_TIMESTAMP)
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
-        System.out.println("This has been called and " + batch.isControlBatch() + " is empty? " + isControlBatchEmpty);
         if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
@@ -799,13 +798,14 @@ private[log] class Cleaner(val id: Int,
                                  retainDeletes: Boolean,
                                  batch: RecordBatch,
                                  record: Record,
-                                 stats: CleanerStats): Boolean = {
+                                 stats: CleanerStats,
+                                 newBatchDeleteHorizonMs: Long,
+                                 computedDeleteHorizonMs: Long = -1L): Boolean = {
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
 
     if (record.hasKey) {
-      System.out.println("Batch's time has been set to: " + batch.deleteHorizonMs());
       val key = record.key
       val foundOffset = map.get(key)
       /* First,the message must have the latest offset for the key
@@ -817,7 +817,8 @@ private[log] class Cleaner(val id: Int,
       val isLatestVersion = batch.magic() < RecordBatch.MAGIC_VALUE_V2
       var shouldRetainDeletes = true
       if (isLatestVersion)
-        shouldRetainDeletes = (!batch.deleteHorizonSet() || time.milliseconds() < batch.deleteHorizonMs)
+        shouldRetainDeletes = (batch.deleteHorizonSet() && time.milliseconds() < batch.deleteHorizonMs) || 
+                              (computedDeleteHorizonMs < newBatchDeleteHorizonMs)
       else
         shouldRetainDeletes = retainDeletes
       val isRetainedValue = record.hasValue || shouldRetainDeletes

@@ -158,10 +158,11 @@ public class MemoryRecords extends AbstractRecords {
 
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
-            BatchRetention batchRetention = filter.checkBatchRetention(batch);
             long deleteHorizonMs = batch.deleteHorizonMs();
+            BatchRetention batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
             if (!batch.deleteHorizonSet()) {
                 deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+                batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
             }
 
             filterResult.bytesRead += batch.sizeInBytes();
@@ -191,14 +192,12 @@ public class MemoryRecords extends AbstractRecords {
                 // we check if the delete horizon should be set to a new value
                 // in which case, we need to reset the base timestamp and overwrite the timestamp deltas
                 // if the batch does not contain tombstones, then we don't need to overwrite batch
-                System.out.println("Delete horizon has been set to: " + deleteHorizonMs + ", and batch's is " + batch.deleteHorizonMs() + " where it contains tombstones: " + containsTombstonesOrMarker);
                 if (writeOriginalBatch && (deleteHorizonMs == RecordBatch.NO_TIMESTAMP || deleteHorizonMs == batch.deleteHorizonMs())) {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
                     MemoryRecords records = builder.build();
-                    System.out.println("Delete horizon ms is: " + records.firstBatch().deleteHorizonMs());
                     int filteredBatchSize = records.sizeInBytes();
                     if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
                         log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
@@ -369,7 +368,7 @@ public class MemoryRecords extends AbstractRecords {
          */
         protected abstract BatchRetention checkBatchRetention(RecordBatch batch);
 
-        protected BatchRetention checkBatchRetention(RecordBatch batch, boolean containsTombstonesOrMarker) {
+        protected BatchRetention checkBatchRetention(RecordBatch batch, long newBatchDeleteHorizonMs) {
             return checkBatchRetention(batch);
         }
 
@@ -379,6 +378,10 @@ public class MemoryRecords extends AbstractRecords {
          * explicitly discarded with {@link BatchRetention#DELETE} will be considered.
          */
         protected abstract boolean shouldRetainRecord(RecordBatch recordBatch, Record record);
+
+        protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record, long newDeleteHorizonMs) {
+            return shouldRetainRecord(recordBatch, record);
+        }
 
         /**
          * Retrieves the delete horizon ms for a specific batch
