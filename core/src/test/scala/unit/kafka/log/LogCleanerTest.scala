@@ -161,16 +161,20 @@ class LogCleanerTest {
 
   @Test
   def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
-    var logProps = new Properties()
+    val logProps = new Properties()
     testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
+  }
 
-    // timestamp compact strategy
-    logProps = new Properties()
+  @Test
+  def testSizeTrimmedForPreallocatedAndCompactedTopicWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
     logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
     testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
+  }
 
-    // header compact strategy
-    logProps = new Properties()
+  @Test
+  def testSizeTrimmedForPreallocatedAndCompactedTopicWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
     logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
     logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
     testSizeTrimmedForPreallocatedAndCompactedTopic(logProps)
@@ -201,8 +205,27 @@ class LogCleanerTest {
 
   @Test
   def testDuplicateCheckAfterCleaning(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
+    testDuplicateCheckAfterCleaning(logProps)
+  }
+
+  @Test
+  def testDuplicateCheckAfterCleaningWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testDuplicateCheckAfterCleaning(logProps)
+  }
+
+  @Test
+  def testDuplicateCheckAfterCleaningWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testDuplicateCheckAfterCleaning(logProps)
+  }
+
+  def testDuplicateCheckAfterCleaning(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
     var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -265,8 +288,27 @@ class LogCleanerTest {
 
   @Test
   def testBasicTransactionAwareCleaning(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
+    testBasicTransactionAwareCleaning(logProps)
+  }
+
+  @Test
+  def testBasicTransactionAwareCleaningWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testBasicTransactionAwareCleaning(logProps)
+  }
+
+  @Test
+  def testBasicTransactionAwareCleaningWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testBasicTransactionAwareCleaning(logProps)
+  }
+
+  def testBasicTransactionAwareCleaning(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -298,8 +340,27 @@ class LogCleanerTest {
 
   @Test
   def testCleanWithTransactionsSpanningSegments(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
+    testCleanWithTransactionsSpanningSegments(logProps)
+  }
+
+  @Test
+  def testCleanWithTransactionsSpanningSegmentsWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleanWithTransactionsSpanningSegments(logProps)
+  }
+
+  @Test
+  def testCleanWithTransactionsSpanningSegmentsWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleanWithTransactionsSpanningSegments(logProps)
+  }
+
+  def testCleanWithTransactionsSpanningSegments(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -344,9 +405,28 @@ class LogCleanerTest {
 
   @Test
   def testCommitMarkerRemoval(): Unit = {
+    val logProps = new Properties()
+    testCommitMarkerRemoval(logProps)
+  }
+
+  @Test
+  def testCommitMarkerRemovalWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCommitMarkerRemoval(logProps)
+  }
+
+  @Test
+  def testCommitMarkerRemovalWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCommitMarkerRemoval(logProps)
+  }
+
+  def testCommitMarkerRemoval(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -386,15 +466,34 @@ class LogCleanerTest {
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
   }
 
+  @Test
+  def testDeletedBatchesWithNoMessagesRead(): Unit = {
+    val logProps = new Properties()
+    testDeletedBatchesWithNoMessagesRead(logProps)
+  }
+
+  @Test
+  def testDeletedBatchesWithNoMessagesReadWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testDeletedBatchesWithNoMessagesRead(logProps)
+  }
+
+  @Test
+  def testDeletedBatchesWithNoMessagesReadWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testDeletedBatchesWithNoMessagesRead(logProps)
+  }
+
   /**
    * Tests log cleaning with batches that are deleted where no additional messages
    * are available to read in the buffer. Cleaning should continue from the next offset.
    */
-  @Test
-  def testDeletedBatchesWithNoMessagesRead(): Unit = {
+  def testDeletedBatchesWithNoMessagesRead(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(capacity = Int.MaxValue, maxMessageSize = 100)
-    val logProps = new Properties()
     logProps.put(LogConfig.MaxMessageBytesProp, 100: java.lang.Integer)
     logProps.put(LogConfig.SegmentBytesProp, 1000: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -421,9 +520,28 @@ class LogCleanerTest {
 
   @Test
   def testCommitMarkerRetentionWithEmptyBatch(): Unit = {
+    val logProps = new Properties()
+    testCommitMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  @Test
+  def testCommitMarkerRetentionWithEmptyBatchWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCommitMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  @Test
+  def testCommitMarkerRetentionWithEmptyBatchWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCommitMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  def testCommitMarkerRetentionWithEmptyBatch(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -483,9 +601,28 @@ class LogCleanerTest {
 
   @Test
   def testCleanEmptyControlBatch(): Unit = {
+    val logProps = new Properties()
+    testCleanEmptyControlBatch(logProps)
+  }
+
+  @Test
+  def testCleanEmptyControlBatchWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleanEmptyControlBatch(logProps)
+  }
+
+  @Test
+  def testCleanEmptyControlBatchWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleanEmptyControlBatch(logProps)
+  }
+
+  def testCleanEmptyControlBatch(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -514,9 +651,28 @@ class LogCleanerTest {
 
   @Test
   def testCommittedTransactionSpanningSegments(): Unit = {
+    val logProps = new Properties()
+    testCommittedTransactionSpanningSegments(logProps)
+  }
+
+  @Test
+  def testCommittedTransactionSpanningSegmentsWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCommittedTransactionSpanningSegments(logProps)
+  }
+
+  @Test
+  def testCommittedTransactionSpanningSegmentsWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCommittedTransactionSpanningSegments(logProps)
+  }
+
+  def testCommittedTransactionSpanningSegments(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 128: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     val producerEpoch = 0.toShort
@@ -537,9 +693,28 @@ class LogCleanerTest {
 
   @Test
   def testAbortedTransactionSpanningSegments(): Unit = {
+    val logProps = new Properties()
+    testAbortedTransactionSpanningSegments(logProps)
+  }
+
+  @Test
+  def testAbortedTransactionSpanningSegmentsWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testAbortedTransactionSpanningSegments(logProps)
+  }
+
+  @Test
+  def testAbortedTransactionSpanningSegmentsWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testAbortedTransactionSpanningSegments(logProps)
+  }
+
+  def testAbortedTransactionSpanningSegments(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 128: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     val producerEpoch = 0.toShort
@@ -567,9 +742,28 @@ class LogCleanerTest {
 
   @Test
   def testAbortMarkerRemoval(): Unit = {
+    val logProps = new Properties()
+    testAbortMarkerRemoval(logProps)
+  }
+
+  @Test
+  def testAbortMarkerRemovalWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testAbortMarkerRemoval(logProps)
+  }
+
+  @Test
+  def testAbortMarkerRemovalWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testAbortMarkerRemoval(logProps)
+  }
+
+  def testAbortMarkerRemoval(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -636,9 +830,28 @@ class LogCleanerTest {
 
   @Test
   def testAbortMarkerRetentionWithEmptyBatch(): Unit = {
+    val logProps = new Properties()
+    testAbortMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  @Test
+  def testAbortMarkerRetentionWithEmptyBatchWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testAbortMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  @Test
+  def testAbortMarkerRetentionWithEmptyBatchWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testAbortMarkerRetentionWithEmptyBatch(logProps)
+  }
+
+  def testAbortMarkerRetentionWithEmptyBatch(logProps: Properties): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -698,6 +911,26 @@ class LogCleanerTest {
    */
   @Test
   def testLargeMessage(): Unit = {
+    val logProps = new Properties()
+    testLargeMessage(logProps)
+  }
+
+  @Test
+  def testLargeMessageWithEmptyBatchWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testLargeMessage(logProps)
+  }
+
+  @Test
+  def testLargeMessageWithEmptyBatchWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testLargeMessage(logProps)
+  }
+
+  def testLargeMessage(logProps: Properties): Unit = {
     val largeMessageSize = 1024 * 1024
     // Create cleaner with very small default max message size
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
@@ -729,7 +962,27 @@ class LogCleanerTest {
    */
   @Test
   def testMessageLargerThanMaxMessageSize(): Unit = {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+    val logProps = new Properties()
+    testMessageLargerThanMaxMessageSize(logProps)
+  }
+
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testMessageLargerThanMaxMessageSize(logProps)
+  }
+
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testMessageLargerThanMaxMessageSize(logProps)
+  }
+
+  def testMessageLargerThanMaxMessageSize(logProps:Properties): Unit = {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(logProps, largeMessageSize = 1024 * 1024)
 
     val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
     cleaner.cleanSegments(log, Seq(log.logSegments.head), offsetMap, 0L, new CleanerStats, new CleanedTransactionMetadata)
@@ -737,13 +990,33 @@ class LogCleanerTest {
     assertEquals(shouldRemain, LogTest.keysInLog(log))
   }
 
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeader(): Unit = {
+    val logProps = new Properties()
+    testMessageLargerThanMaxMessageSizeWithCorruptHeader(logProps)
+  }
+
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeaderWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testMessageLargerThanMaxMessageSizeWithCorruptHeader(logProps)
+  }
+
+  @Test
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeaderWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testMessageLargerThanMaxMessageSizeWithCorruptHeader(logProps)
+  }
+
   /**
    * Test log cleaning with logs containing messages larger than topic's max message size
    * where header is corrupt
    */
-  @Test
-  def testMessageLargerThanMaxMessageSizeWithCorruptHeader(): Unit = {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+  def testMessageLargerThanMaxMessageSizeWithCorruptHeader(logProps:Properties): Unit = {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(logProps, largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
     file.seek(Records.MAGIC_OFFSET)
     file.write(0xff)
@@ -755,13 +1028,33 @@ class LogCleanerTest {
     }
   }
 
+  @Test
+  def testCorruptMessageSizeLargerThanBytesAvailable(): Unit = {
+    val logProps = new Properties()
+    testCorruptMessageSizeLargerThanBytesAvailable(logProps)
+  }
+
+  @Test
+  def testCorruptMessageSizeLargerThanBytesAvailableWithCorruptHeaderWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCorruptMessageSizeLargerThanBytesAvailable(logProps)
+  }
+
+  @Test
+  def testCorruptMessageSizeLargerThanBytesAvailableWithCorruptHeaderWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCorruptMessageSizeLargerThanBytesAvailable(logProps)
+  }
+
   /**
    * Test log cleaning with logs containing messages larger than topic's max message size
    * where message size is corrupt and larger than bytes available in log segment.
    */
-  @Test
-  def testCorruptMessageSizeLargerThanBytesAvailable(): Unit = {
-    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(largeMessageSize = 1024 * 1024)
+  def testCorruptMessageSizeLargerThanBytesAvailable(logProps:Properties): Unit = {
+    val (log, offsetMap) = createLogWithMessagesLargerThanMaxSize(logProps, largeMessageSize = 1024 * 1024)
     val file = new RandomAccessFile(log.logSegments.head.log.file, "rw")
     file.setLength(1024)
     file.close()
@@ -772,8 +1065,7 @@ class LogCleanerTest {
     }
   }
 
-  def createLogWithMessagesLargerThanMaxSize(largeMessageSize: Int): (Log, FakeOffsetMap) = {
-    val logProps = new Properties()
+  def createLogWithMessagesLargerThanMaxSize(logProps:Properties, largeMessageSize: Int): (Log, FakeOffsetMap) = {
     logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
     logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
 
@@ -798,8 +1090,27 @@ class LogCleanerTest {
 
   @Test
   def testCleaningWithDeletes(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
+    testCleaningWithDeletes(logProps)
+  }
+
+  @Test
+  def testCleaningWithDeletesWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleaningWithDeletes(logProps)
+  }
+
+  @Test
+  def testCleaningWithDeletesWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleaningWithDeletes(logProps)
+  }
+
+  def testCleaningWithDeletes(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -853,8 +1164,27 @@ class LogCleanerTest {
 
   @Test
   def testLogCleanerRetainsProducerLastSequence(): Unit = {
-    val cleaner = makeCleaner(10)
     val logProps = new Properties()
+    testLogCleanerRetainsProducerLastSequence(logProps)
+  }
+
+  @Test
+  def testLogCleanerRetainsProducerLastSequenceWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testLogCleanerRetainsProducerLastSequence(logProps)
+  }
+
+  @Test
+  def testLogCleanerRetainsProducerLastSequenceWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testLogCleanerRetainsProducerLastSequence(logProps)
+  }
+
+  def testLogCleanerRetainsProducerLastSequence(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(10)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -876,8 +1206,27 @@ class LogCleanerTest {
 
   @Test
   def testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(): Unit = {
-    val cleaner = makeCleaner(10)
     val logProps = new Properties()
+    testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(logProps)
+  }
+
+  @Test
+  def testLogCleanerRetainsLastSequenceEvenIfTransactionAbortedWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(logProps)
+  }
+
+  @Test
+  def testLogCleanerRetainsLastSequenceEvenIfTransactionAbortedWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(logProps)
+  }
+
+  def testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(10)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -909,9 +1258,28 @@ class LogCleanerTest {
 
   @Test
   def testPartialSegmentClean(): Unit = {
+    val logProps = new Properties()
+    testPartialSegmentClean(logProps)
+  }
+
+  @Test
+  def testPartialSegmentCleanWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testPartialSegmentClean(logProps)
+  }
+
+  @Test
+  def testPartialSegmentCleanWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testPartialSegmentClean(logProps)
+  }
+
+  def testPartialSegmentClean(logProps: Properties): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
     val cleaner = makeCleaner(2)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -941,8 +1309,27 @@ class LogCleanerTest {
 
   @Test
   def testCleaningWithUncleanableSection(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
+    testCleaningWithUncleanableSection(logProps)
+  }
+
+  @Test
+  def testCleaningWithUncleanableSectionWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleaningWithUncleanableSection(logProps)
+  }
+
+  @Test
+  def testCleaningWithUncleanableSectionWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleaningWithUncleanableSection(logProps)
+  }
+
+  def testCleaningWithUncleanableSection(logProps: Properties): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -1001,8 +1388,27 @@ class LogCleanerTest {
 
   @Test
   def testLogToCleanWithUncleanableSection(): Unit = {
-    // create a log with small segment size
     val logProps = new Properties()
+    testLogToCleanWithUncleanableSection(logProps)
+  }
+
+  @Test
+  def testLogToCleanWithUncleanableSectionWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testLogToCleanWithUncleanableSection(logProps)
+  }
+
+  @Test
+  def testLogToCleanWithUncleanableSectionWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testLogToCleanWithUncleanableSection(logProps)
+  }
+
+  def testLogToCleanWithUncleanableSection(logProps: Properties): Unit = {
+    // create a log with small segment size
     logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -1030,10 +1436,29 @@ class LogCleanerTest {
 
   @Test
   def testCleaningWithUnkeyedMessages(): Unit = {
+    val logProps = new Properties()
+    testCleaningWithUnkeyedMessages(logProps)
+  }
+
+  @Test
+  def testCleaningWithUnkeyedMessagesWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleaningWithUnkeyedMessages(logProps)
+  }
+
+  @Test
+  def testCleaningWithUnkeyedMessagesWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleaningWithUnkeyedMessages(logProps)
+  }
+
+  def testCleaningWithUnkeyedMessages(logProps: Properties): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
 
     // create a log with compaction turned off so we can append unkeyed messages
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
 
@@ -1478,14 +1903,33 @@ class LogCleanerTest {
     assertEquals(4, stats.mapMessagesRead)
   }
 
+  @Test
+  def testCleanCorruptMessageSet(): Unit = {
+    val logProps = new Properties()
+    testCleanCorruptMessageSet(logProps)
+  }
+
+  @Test
+  def testCleanCorruptMessageSetWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleanCorruptMessageSet(logProps)
+  }
+
+  @Test
+  def testCleanCorruptMessageSetWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleanCorruptMessageSet(logProps)
+  }
+
   /**
    * This test verifies that messages corrupted by KAFKA-4298 are fixed by the cleaner
    */
-  @Test
-  def testCleanCorruptMessageSet(): Unit = {
+  def testCleanCorruptMessageSet(logProps: Properties): Unit = {
     val codec = CompressionType.GZIP
 
-    val logProps = new Properties()
     logProps.put(LogConfig.CompressionTypeProp, codec.name)
     val logConfig = LogConfig(logProps)
 
@@ -1543,7 +1987,27 @@ class LogCleanerTest {
 
   @Test
   def testCleanTombstone(): Unit = {
-    val logConfig = LogConfig(new Properties())
+    val logProps = new Properties()
+    testCleanTombstone(logProps)
+  }
+
+  @Test
+  def testCleanTombstoneWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testCleanTombstone(logProps)
+  }
+
+  @Test
+  def testCleanTombstoneWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testCleanTombstone(logProps)
+  }
+
+  def testCleanTombstone(logProps: Properties): Unit = {
+    val logConfig = LogConfig(logProps)
 
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
@@ -1633,7 +2097,7 @@ class LogCleanerTest {
              sequence: Int = RecordBatch.NO_SEQUENCE,
              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
     MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
-      partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+      partitionLeaderEpoch, new SimpleRecord(time.milliseconds(), key.toString.getBytes, value.toString.getBytes))
   }
 
   private def appendTransactionalAsLeader(log: Log,
@@ -1679,10 +2143,10 @@ class LogCleanerTest {
   }
 
   private def record(key: Int, value: Array[Byte]): MemoryRecords =
-    TestUtils.singletonRecords(key = key.toString.getBytes, value = value)
+    TestUtils.singletonRecords(timestamp = time.milliseconds(), key = key.toString.getBytes, value = value)
 
   private def unkeyedRecord(value: Int): MemoryRecords =
-    TestUtils.singletonRecords(value = value.toString.getBytes)
+    TestUtils.singletonRecords(timestamp = time.milliseconds(), value = value.toString.getBytes)
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
@@ -1713,32 +2177,33 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
 
   override def put(record: Record): Boolean = {
     lastOffset = record.offset
-
     val key = keyFor(record.key)
     Console.println(s"PUT: key: $key; offset: $lastOffset")
     if (!isOffsetStrategy && map.containsKey(key)) {
       val foundVersion = extractVersion(map.get(key))
       val currVersion = extractVersion(record)
+      Console.println(s"PUT: foundVersion: $foundVersion; currentVersion: $currVersion")
       if (foundVersion > currVersion)
         return false
     }
-    
     map.put(key, record)
-    return true
+    true
   }
 
-  override def shouldRetainRecord(record: Record): Boolean = {
-    val foundOffset = get(record.key)
-    val key = keyFor(record.key())
-    val offset = record.offset()
-    Console.println(s"shouldRetainRecord: record.offset(): $key => $offset; foundOffset: $foundOffset")
-    if (isOffsetStrategy) {
-      record.offset() >= foundOffset
-    } else {
+  override def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean = {
+    if (!isOffsetStrategy) {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
-      currentVersion >= foundVersion
+      // use version if available & different otherwise fallback to offset
+      if (foundVersion != currentVersion) {
+        return (record.hasValue && retainDeletes) || (currentVersion >= foundVersion)
+      }
     }
+
+    val foundOffset = get(record.key)
+    val latestOffsetForKey = record.offset() >= foundOffset
+    val isRetainedValue = record.hasValue || retainDeletes
+    latestOffsetForKey && isRetainedValue
   }
 
   override def get(key: ByteBuffer): Long = {
@@ -1750,24 +2215,11 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   }
 
   override def getVersion(key: ByteBuffer): Long = {
-    if (isOffsetStrategy)
-      return -1L
-
     val k = keyFor(key)
-    if (map.containsKey(k)) {
-      val record = map.get(k)
-      if (isTimestampStrategy)
-        record.timestamp()
-      else if (record.headers() == null || record.headers().isEmpty) {
-        record.headers()
-          .filter(it => it.value != null && it.value.nonEmpty)
-          .find(it => headerKey.equalsIgnoreCase(it.key.trim))
-          .map(it => ByteBuffer.wrap(it.value))
-          .map(it => ByteUtils.readVarlong(it))
-          .getOrElse(-1L)
-      }
-    }
-    -1L
+    if (map.containsKey(k))
+      extractVersion(map.get(k))
+    else
+      -1L
   }
 
   override def size: Int = map.size

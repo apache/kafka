@@ -42,9 +42,10 @@ trait OffsetMap {
   /**
    * Checks to see whether to retain the record or not
    * @param record The record
+   * @param retainDeletes The flag to indicate whether to retain tombstone record or not
    * @return true to retain; false not to
    */
-  def shouldRetainRecord(record: Record): Boolean
+  def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean
 
   /**
    * Get the offset associated with this key.
@@ -200,6 +201,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     val offset = record.offset
     val currVersion = extractVersion(record)
 
+    lastOffset = offset
     lookups += 1
     hashInto(key, hash1)
 
@@ -225,7 +227,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
           if (foundVersion > currVersion) {
             info(s"map already holding latest value for the key $keyStr; offset: $offset; found version: $foundVersion; current version: $currVersion")
             // map already holding latest record
-            lastOffset = offset
             return false
           }
 
@@ -240,7 +241,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
           bytes.putLong(currVersion)
         }
 
-        lastOffset = offset
         return true
       }
 
@@ -257,7 +257,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
       bytes.putLong(currVersion)
     }
 
-    lastOffset = offset
     entries += 1
     true
   }
@@ -271,18 +270,23 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /**
    * Checks to see whether to retain the record or not
    * @param record The record
+   * @param retainDeletes The flag to indicate whether to retain tombstone record or not
    * @return true to retain; false not to
    */
-  override def shouldRetainRecord(record: Record): Boolean = {
-    val key = record.key
-    val foundOffset = get(key)
-    if (isOffsetStrategy) {
-      record.offset() >= foundOffset
-    } else {
+  override def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean = {
+    if (!isOffsetStrategy) {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
-      currentVersion >= foundVersion
+      // use version if available & different otherwise fallback to offset
+      if (foundVersion != currentVersion) {
+        return (record.hasValue && retainDeletes) || (currentVersion >= foundVersion)
+      }
     }
+
+    val foundOffset = get(record.key)
+    val latestOffsetForKey = record.offset() >= foundOffset
+    val isRetainedValue = record.hasValue || retainDeletes
+    latestOffsetForKey && isRetainedValue
   }
 
   /**
