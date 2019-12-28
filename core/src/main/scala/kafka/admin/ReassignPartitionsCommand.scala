@@ -48,6 +48,7 @@ object ReassignPartitionsCommand extends Logging {
 
   val helpText = "This tool helps to moves topic partitions between replicas."
 
+  // Two distinct public "constructors" one for ZK clients and one for AdminClient forms
   def apply(zkClient: KafkaZkClient,
             adminClientOpt: Option[Admin],
             proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
@@ -55,6 +56,12 @@ object ReassignPartitionsCommand extends Logging {
             adminZkClient: AdminZkClient) : ReassignPartitionsCommand = {
     new ReassignPartitionsCommand(zkClient, adminClientOpt, proposedPartitionAssignment, proposedReplicaAssignment, adminZkClient)
   }
+
+  // Package-private constructor for testing
+  def apply(serviceClient: ReassignCommandService,
+            proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
+            proposedReplicaAssignment: Map[TopicPartitionReplica, String]) : ReassignPartitionsCommand =
+    new ReassignPartitionsCommand(serviceClient, proposedPartitionAssignment, proposedReplicaAssignment)
 
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
