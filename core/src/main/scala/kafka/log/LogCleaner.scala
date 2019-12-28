@@ -652,11 +652,16 @@ private[log] class Cleaner(val id: Int,
       var discardBatchRecords: Boolean = _
       var isControlBatchEmpty: Boolean = _
 
-      override def checkBatchRetention(batch: RecordBatch, newBatchDeleteHorizonMs : Long): BatchRetention = {
+      override def isControlBatchEmpty(batch: RecordBatch) : Boolean = {
         // we piggy-back on the tombstone retention logic to delay deletion of transaction markers.
         // note that we will never delete a marker until all the records from that transaction are removed.
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
         isControlBatchEmpty = canDiscardBatch
+        isControlBatchEmpty
+      }
+
+      override def checkBatchRetention(batch: RecordBatch, newBatchDeleteHorizonMs : Long): BatchRetention = {
+        val canDiscardBatch = isControlBatchEmpty 
 
         if (batch.isControlBatch) {
           discardBatchRecords = canDiscardBatch && 
@@ -689,7 +694,7 @@ private[log] class Cleaner(val id: Int,
           BatchRetention.DELETE_EMPTY
       }
 
-      override def checkBatchRetention(batch: RecordBatch): BatchRetention = checkBatchRetention(batch, RecordBatch.NO_TIMESTAMP)
+      override def checkBatchRetention(batch: RecordBatch): BatchRetention = checkBatchRetention(batch, batch.deleteHorizonMs())
 
       override def shouldRetainRecord(batch: RecordBatch, record: Record, newDeleteHorizonMs: Long): Boolean = {
         if (discardBatchRecords)

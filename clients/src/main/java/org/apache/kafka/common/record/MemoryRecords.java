@@ -158,12 +158,13 @@ public class MemoryRecords extends AbstractRecords {
 
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
-            long deleteHorizonMs = batch.deleteHorizonMs();
-            BatchRetention batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
-            if (!batch.deleteHorizonSet()) {
-                deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
-                batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
-            }
+            filter.isControlBatchEmpty(batch);
+            long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
+            final BatchRetention batchRetention;
+            if (!batch.deleteHorizonSet())
+              batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
+            else
+              batchRetention = filter.checkBatchRetention(batch);
 
             filterResult.bytesRead += batch.sizeInBytes();
 
@@ -388,6 +389,13 @@ public class MemoryRecords extends AbstractRecords {
          */
         protected long retrieveDeleteHorizon(RecordBatch recordBatch) {
             return -1L;
+        }
+
+        /**
+         * Checks if the control batch (if it is one) can be removed (making sure that it is empty)
+         */
+        protected boolean isControlBatchEmpty(RecordBatch recordBatch) {
+            return true;
         }
     }
 
