@@ -22,6 +22,8 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import java.time.Duration;
@@ -42,7 +44,7 @@ public class MaterializedTest {
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidName));
 
-        assert e.getMessage().equals("Invalid topology: Name \"" + invalidName +
+        assertEquals(e.getMessage(), "Invalid topology: Name \"" + invalidName +
             "\" is illegal, it contains a character other than " + "ASCII alphanumerics, '.', '_' and '-'");
     }
 
@@ -51,7 +53,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((WindowBytesStoreSupplier) null));
 
-        assert e.getMessage().equals("supplier can't be null");
+        assertEquals(e.getMessage(), "supplier can't be null");
     }
 
     @Test
@@ -59,7 +61,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((KeyValueBytesStoreSupplier) null));
 
-        assert e.getMessage().equals("supplier can't be null");
+        assertEquals(e.getMessage(), "supplier can't be null");
     }
 
     @Test
@@ -67,15 +69,15 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((SessionBytesStoreSupplier) null));
 
-        assert e.getMessage().equals("supplier can't be null");
+        assertEquals(e.getMessage(), "supplier can't be null");
     }
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfRetentionIsNegative() {
         final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
             () -> Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS)));
-        
-        assert e.getMessage().equals("Retention must not be negative.");
+
+        assertEquals(e.getMessage(), "Retention must not be negative.");
     }
 
     @Test
@@ -91,7 +93,7 @@ public class MaterializedTest {
 
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidStoreName));
-        assert e.getMessage().equals("Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
+        assertEquals(e.getMessage(), "Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
                 " characters, name: " + invalidStoreName);
     }
 }
