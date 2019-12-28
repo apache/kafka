@@ -136,6 +136,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
+    private static final long UNKNOWN_POSITION = -1;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -1167,7 +1168,6 @@ public class KafkaStreams implements AutoCloseable {
         final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
         final Map<TopicPartition, Long> standbyChangelogPositions = new HashMap<>();
         final Map<TopicPartition, Long> activeChangelogPositions = new HashMap<>();
-        final long unknownPosition = 0;
 
         // Obtain the current positions, of all the active-restoring and standby tasks
         for (final StreamThread streamThread : this.threads) {
@@ -1175,7 +1175,7 @@ public class KafkaStreams implements AutoCloseable {
                 final Map<TopicPartition, Long> changelogPartitionLimits = standbyTask.checkpointedOffsets();
                 standbyTask.changelogPartitions().forEach(topicPartition ->
                     standbyChangelogPositions.put(topicPartition,
-                        changelogPartitionLimits.getOrDefault(topicPartition, unknownPosition)));
+                        changelogPartitionLimits.getOrDefault(topicPartition, UNKNOWN_POSITION)));
             }
 
             final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
@@ -1184,9 +1184,9 @@ public class KafkaStreams implements AutoCloseable {
                 final Map<TopicPartition, Long> restoredOffsets = activeTask.restoredOffsets();
                 activeTask.changelogPartitions().forEach(topicPartition -> {
                     if (isRestoring) {
-                        activeChangelogPositions.put(topicPartition, restoredOffsets.getOrDefault(topicPartition, unknownPosition));
+                        activeChangelogPositions.put(topicPartition, restoredOffsets.getOrDefault(topicPartition, UNKNOWN_POSITION));
                     } else {
-                        activeChangelogPositions.put(topicPartition, unknownPosition);
+                        activeChangelogPositions.put(topicPartition, UNKNOWN_POSITION);
                     }
                 });
             }
@@ -1196,19 +1196,23 @@ public class KafkaStreams implements AutoCloseable {
         final Map<TopicPartition, OffsetSpec> offsetSpecMap = new HashMap<>();
         Stream.concat(activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
             .forEach(topicPartition ->  offsetSpecMap.put(topicPartition, OffsetSpec.latest()));
-        try {
-            final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = adminClient.listOffsets(offsetSpecMap).all().get();
+            final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = new HashMap<>();
+            try {
+                allEndOffsets.putAll(adminClient.listOffsets(offsetSpecMap).all().get());
+            } catch (final Exception e) {
+                throw new StreamsException("Unable to obtain end offsets from kafka", e);
+            }
             log.info("Current end offsets :" + allEndOffsets);
             allEndOffsets.forEach((topicPartition, offsetsResultInfo) -> {
                 final String storeName = streamsMetadataState.getStoreForChangelogTopic(topicPartition.topic());
                 final long offsetPosition;
                 if (activeChangelogPositions.containsKey(topicPartition)) {
                     // if unknown, assume it's positioned at the tail of changelog partition
-                    offsetPosition = activeChangelogPositions.get(topicPartition) == unknownPosition ?
+                    offsetPosition = activeChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
                         offsetsResultInfo.offset() : activeChangelogPositions.get(topicPartition);
                 } else if (standbyChangelogPositions.containsKey(topicPartition)) {
                     // if unknown, assume it's positioned at the head of changelog partition
-                    offsetPosition = standbyChangelogPositions.get(topicPartition) == unknownPosition ?
+                    offsetPosition = standbyChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
                         0 : standbyChangelogPositions.get(topicPartition);
                 } else {
                     throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
@@ -1225,9 +1229,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 localOffsetLags.put(storeName, partitionToOffsetLag);
             });
-        } catch (final Exception e) {
-            throw new StreamsException("Unable to obtain end offsets from kafka", e);
-        }
 
         return localOffsetLags;
     }
