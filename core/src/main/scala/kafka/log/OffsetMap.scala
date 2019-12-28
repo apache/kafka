@@ -42,10 +42,9 @@ trait OffsetMap {
   /**
    * Checks to see whether to retain the record or not
    * @param record The record
-   * @param retainDeletes The flag to indicate whether to retain tombstone record or not
    * @return true to retain; false not to
    */
-  def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean
+  def shouldRetainRecord(record: Record): Boolean
 
   /**
    * Get the offset associated with this key.
@@ -208,7 +207,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     val b = new Array[Byte](key.limit())
     key.get(b)
     val keyStr = new String(b, "UTF-8")
-    info(s"Processing key: $keyStr with offset: $offset and curr value: $currVersion")
 
     // probe until we find the first empty slot
     var attempt = 0
@@ -216,16 +214,14 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     while (!isEmpty(pos)) {
       bytes.position(pos)
       bytes.get(hash2)
-      info(s"bytes attempt: $attempt; pos: $pos; hash1: [" + hash1.mkString(" ") + "]; hash2: [" + hash2.mkString(" ") + "]")
       if (Arrays.equals(hash1, hash2)) {
-        info("keys are same...")
         // we found an existing entry, overwrite it and return (size does not change)
         if (!isOffsetStrategy) {
           // read previous value by skipping offset
           bytes.position(bytes.position() + 8)
           val foundVersion = bytes.getLong()
           if (foundVersion > currVersion) {
-            info(s"map already holding latest value for the key $keyStr; offset: $offset; found version: $foundVersion; current version: $currVersion")
+            debug(s"map already holding latest value for the key $keyStr; offset: $offset; found version: $foundVersion; current version: $currVersion")
             // map already holding latest record
             return false
           }
@@ -235,7 +231,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
         }
 
         // we found an existing entry, overwrite it and return (size does not change)
-        info(s"overriding existing key $keyStr; offset: $offset; curr value: $currVersion")
         bytes.putLong(offset)
         if (!isOffsetStrategy) {
           bytes.putLong(currVersion)
@@ -249,7 +244,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     }
 
     // found an empty slot, update it--size grows by 1
-    info(s"Adding new key $keyStr; offset: $offset; curr value: $currVersion")
     bytes.position(pos)
     bytes.put(hash1)
     bytes.putLong(offset)
@@ -270,23 +264,18 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /**
    * Checks to see whether to retain the record or not
    * @param record The record
-   * @param retainDeletes The flag to indicate whether to retain tombstone record or not
    * @return true to retain; false not to
    */
-  override def shouldRetainRecord(record: Record, retainDeletes: Boolean): Boolean = {
+  override def shouldRetainRecord(record: Record): Boolean = {
     if (!isOffsetStrategy) {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
       // use version if available & different otherwise fallback to offset
-      if (foundVersion != currentVersion) {
-        return (record.hasValue && retainDeletes) || (currentVersion >= foundVersion)
-      }
+      if (foundVersion != currentVersion)
+        return currentVersion >= foundVersion
     }
-
     val foundOffset = get(record.key)
-    val latestOffsetForKey = record.offset() >= foundOffset
-    val isRetainedValue = record.hasValue || retainDeletes
-    latestOffsetForKey && isRetainedValue
+    record.offset() >= foundOffset
   }
 
   /**
@@ -297,9 +286,9 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   override def get(key: ByteBuffer): Long = {
     // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
     if (!search(key))
-      return -1L
-
-    bytes.getLong()
+      -1L
+    else
+      bytes.getLong()
   }
 
   /**
@@ -309,15 +298,14 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    */
   override def getVersion(key: ByteBuffer): Long = {
     if (isOffsetStrategy)
-      return -1L
-
-    // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
-    if (!search(key))
-      return -1L
-
-    // for non-offset based strategy skipping offset
-    bytes.position(bytes.position() + 8)
-    bytes.getLong()
+      -1L
+    else if (!search(key))
+      -1L
+    else {
+      // for non-offset based strategy skipping offset
+      bytes.position(bytes.position() + 8)
+      bytes.getLong()
+    }
   }
 
   /**
@@ -348,25 +336,21 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   private def search(key: ByteBuffer): Boolean = {
     lookups += 1
     hashInto(key, hash1)
-
     var attempt = 0
     var pos = 0
     //we need to guard against attempt integer overflow if the map is full
     //limit attempt to number of slots once positionOf(..) enters linear search mode
     val maxAttempts = slots + hashSize - 4
     do {
-      if(attempt >= maxAttempts)
+      if (attempt >= maxAttempts)
         return false
-
       pos = positionOf(hash1, attempt)
       bytes.position(pos)
-      if(isEmpty(pos))
+      if (isEmpty(pos))
         return false
-
       bytes.get(hash2)
       attempt += 1
     } while(!Arrays.equals(hash1, hash2))
-
     // found
     true
   }
@@ -403,34 +387,19 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @return The version extracted from the record if the strategy is not offset, or -1
    */
   private def extractVersion(record: Record): Long = {
-    if (isOffsetStrategy) {
-      // offset strategy
-      return -1L
+    if (isOffsetStrategy) // offset strategy
+      -1L
+    else if (isTimestampStrategy) // record timestamp strategy
+      record.timestamp
+    else if (record == null || record.headers() == null || record.headers().isEmpty) // record header empty
+      -1L
+    else { // header strategy
+      record.headers()
+        .filter(it => it.value != null && it.value.nonEmpty)
+        .find(it => headerKey.equalsIgnoreCase(it.key.trim))
+        .map(it => ByteBuffer.wrap(it.value))
+        .map(it => ByteUtils.readVarlong(it))
+        .getOrElse(-1L)
     }
-
-    if (isTimestampStrategy) {
-      // record timestamp strategy
-      return record.timestamp
-    }
-
-    // header strategy
-    if (record == null || record.headers() == null || record.headers().isEmpty) {
-      // record header empty
-      info("Empty Headers, returning -1L for the record offset: %d".format(record.offset()))
-      return -1L
-    }
-
-    val headerValue = record.headers()
-      .filter(it => it.value != null && it.value.nonEmpty)
-      .find(it => headerKey.equalsIgnoreCase(it.key.trim))
-      .map(it => ByteBuffer.wrap(it.value))
-      .map(it => ByteUtils.readVarlong(it))
-      .getOrElse(-1L)
-
-    if (headerValue == -1L) {
-      info(s"Either header key '%s' missing or set to -1L for the record offset: %d".format(headerValue, record.offset()))
-    }
-
-    headerValue
   }
 }

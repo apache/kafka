@@ -767,16 +767,14 @@ private[log] class Cleaner(val id: Int,
       return true
 
     if (record.hasKey) {
-      val key = new String(Utils.readBytes(record.key().duplicate), "UTF-8")
-      val offset = record.offset()
-      val mapLatestOffset = map.latestOffset
-      Console.println(s"shouldRetainRecord: key: $key; offset: $offset; Map Latest Offset: $mapLatestOffset")
       /* First,the message must have the latest offset or version for the key
        * then there are two cases in which we can retain a message:
        *   1) The message has value
        *   2) The message doesn't has value but it can't be deleted now.
        */
-      map.shouldRetainRecord(record, retainDeletes)
+      val isLatestRecordForKey = map.shouldRetainRecord(record)
+      val isRetainedValue = record.hasValue || retainDeletes
+      isLatestRecordForKey && isRetainedValue
     } else {
       info("invalid message")
       stats.invalidMessage()

@@ -20,10 +20,10 @@ package kafka.log
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 
+import kafka.utils.TestUtils
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.record.{Record, TimestampType}
-import org.apache.kafka.common.utils.ByteUtils
 
 class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeSequence: Long = -1L, fakeTimestamp: Long = -1L) extends Record {
   private var fakeHeaders: Array[Header] = _
@@ -34,14 +34,7 @@ class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeSequence: Long = -
     if (Option(fakeSequence).isEmpty || fakeSequence <= 0)
       fakeHeaders = new Array[Header](0)
     else
-      fakeHeaders = Array[Header](new RecordHeader("sequence", longToByte(fakeSequence)))
-  }
-
-  private def longToByte(value: Long): Array[Byte] = {
-    val buffer = ByteBuffer.allocate(16)
-    ByteUtils.writeVarlong(value, buffer)
-    buffer.flip
-    buffer.array
+      fakeHeaders = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(fakeSequence)))
   }
 
   override def offset: Long = if (fakeOffset != null) fakeOffset.longValue else -1

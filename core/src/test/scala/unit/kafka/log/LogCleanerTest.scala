@@ -28,6 +28,8 @@ import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.header.Header
+import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{ByteUtils, Utils}
 import org.junit.Assert._
@@ -528,7 +530,7 @@ class LogCleanerTest {
   def testCommitMarkerRetentionWithEmptyBatchWithTimestampCompaction(): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
-    testCommitMarkerRetentionWithEmptyBatch(logProps)
+    testCommitMarkerRetentionWithEmptyBatch(logProps, time.milliseconds())
   }
 
   @Test
@@ -539,7 +541,7 @@ class LogCleanerTest {
     testCommitMarkerRetentionWithEmptyBatch(logProps)
   }
 
-  def testCommitMarkerRetentionWithEmptyBatch(logProps: Properties): Unit = {
+  def testCommitMarkerRetentionWithEmptyBatch(logProps: Properties, timestamp: Long = RecordBatch.NO_TIMESTAMP): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
@@ -560,8 +562,8 @@ class LogCleanerTest {
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}], [{2}, {3}, {Producer1: Commit}]
     //  {0, 1},              {2, 3},            {4},                   {5}, {6}, {7} ==> Offsets
-    log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 5
-    log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 6
+    log.appendAsLeader(record(2, 2, timestamp = timestamp), leaderEpoch = 0) // offset 5
+    log.appendAsLeader(record(3, 3, timestamp = timestamp), leaderEpoch = 0) // offset 6
     log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0, isFromClient = false) // offset 7
     log.roll()
 
@@ -791,6 +793,26 @@ class LogCleanerTest {
 
   @Test
   def testEmptyBatchRemovalWithSequenceReuse(): Unit = {
+    val logProps = new Properties()
+    testEmptyBatchRemovalWithSequenceReuse(logProps)
+  }
+
+  @Test
+  def testEmptyBatchRemovalWithSequenceReuseWithTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    testEmptyBatchRemovalWithSequenceReuse(logProps, time.milliseconds())
+  }
+
+  @Test
+  def testEmptyBatchRemovalWithSequenceReuseWithHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    testEmptyBatchRemovalWithSequenceReuse(logProps)
+  }
+
+  def testEmptyBatchRemovalWithSequenceReuse(logProps: Properties, timestamp: Long = RecordBatch.NO_TIMESTAMP): Unit = {
     // The group coordinator always writes batches beginning with sequence number 0. This test
     // ensures that we still remove old empty batches and transaction markers under this expectation.
 
@@ -798,7 +820,6 @@ class LogCleanerTest {
     val producerId = 1L
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -810,8 +831,8 @@ class LogCleanerTest {
     appendSecondTransaction(Seq(2))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
 
-    log.appendAsLeader(record(1, 1), leaderEpoch = 0)
-    log.appendAsLeader(record(2, 1), leaderEpoch = 0)
+    log.appendAsLeader(record(1, 1, timestamp = timestamp), leaderEpoch = 0)
+    log.appendAsLeader(record(2, 1, timestamp = timestamp), leaderEpoch = 0)
 
     // Roll the log to ensure that the data is cleanable.
     log.roll()
@@ -2023,26 +2044,26 @@ class LogCleanerTest {
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
 
-    // Append a message with a large timestamp.
-    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
+    // Append a tombstone with a large timestamp.
+    log.appendAsLeader(TestUtils.singletonRecords(value = null,
                                           key = "0".getBytes,
                                           timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
-    // Append a tombstone with a small timestamp and roll out a new log segment.
-    log.appendAsLeader(TestUtils.singletonRecords(value = null,
+    // Append a message with a small timestamp and roll out a new log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
                                           key = "0".getBytes,
                                           timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    assertEquals("The tombstone should be retained.", 0, log.logSegments.head.log.batches.iterator.next().lastOffset)
     // Append a message and roll out another log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
                                           key = "1".getBytes,
                                           timestamp = time.milliseconds()), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    assertEquals("The tombstone should be retained.", 0, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
   @Test
@@ -2056,25 +2077,116 @@ class LogCleanerTest {
     val cleaner = makeCleaner(10)
 
     // Append a message with a large timestamp.
+    var headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(1L)))
     log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
                                           key = "0".getBytes,
+                                          headers = headers,
                                           timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     // Append a tombstone with a small timestamp and roll out a new log segment.
+    headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(2L)))
     log.appendAsLeader(TestUtils.singletonRecords(value = null,
                                           key = "0".getBytes,
+                                          headers = headers,
                                           timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
     // Append a message and roll out another log segment.
+    headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(3L)))
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "1".getBytes,
+                                          headers = headers,
+                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+  }
+
+  @Test
+  def testTimestampCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyTimestamp)
+    val logConfig = LogConfig(logProps)
+
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(10)
+
+    // Append a message with a large timestamp.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    // Append another message with a small timestamp and roll out a new log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
+    assertEquals(0, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message to new key and roll out another log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
                                           key = "1".getBytes,
                                           timestamp = time.milliseconds()), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
-    assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    assertEquals(0, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message to key = 0 with lager timestamp and roll out another log segment.
+    log.appendAsLeader(TestUtils.singletonRecords(value = "2".getBytes,
+                                          key = "0".getBytes,
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 20000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals(2, log.logSegments.head.log.batches.iterator.next().lastOffset)
+  }
+
+  @Test
+  def testHeaderCompaction(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompactionStrategyProp, Defaults.CompactionStrategyHeader)
+    logProps.put(LogConfig.CompactionStrategyHeaderKeyProp, "sequence")
+    val logConfig = LogConfig(logProps)
+
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(10)
+
+    // Append a message with a large timestamp.
+    var headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(2L)))
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "0".getBytes,
+                                          headers = headers,
+                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    // Append another message with a small timestamp and roll out a new log segment.
+    headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(1L)))
+    log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
+                                          key = "0".getBytes,
+                                          headers = headers,
+                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
+    assertEquals(0, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message and roll out another log segment.
+    headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(3L)))
+    log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
+                                          key = "1".getBytes,
+                                          headers = headers,
+                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals(0, log.logSegments.head.log.batches.iterator.next().lastOffset)
+    // Append a message to key = 0 and roll out another log segment.
+    headers = Array[Header](new RecordHeader("sequence", TestUtils.longToByte(3L)))
+    log.appendAsLeader(TestUtils.singletonRecords(value = "2".getBytes,
+                                          key = "0".getBytes,
+                                          headers = headers,
+                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals(2, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
@@ -2138,9 +2250,10 @@ class LogCleanerTest {
              producerId: Long = RecordBatch.NO_PRODUCER_ID,
              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
              sequence: Int = RecordBatch.NO_SEQUENCE,
-             partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
+             partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+             timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {
     MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
-      partitionLeaderEpoch, new SimpleRecord(time.milliseconds(), key.toString.getBytes, value.toString.getBytes))
+      partitionLeaderEpoch, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
   }
 
   private def appendTransactionalAsLeader(log: Log,
@@ -2186,10 +2299,10 @@ class LogCleanerTest {
   }
 
   private def record(key: Int, value: Array[Byte]): MemoryRecords =
-    TestUtils.singletonRecords(timestamp = time.milliseconds(), key = key.toString.getBytes, value = value)
+    TestUtils.singletonRecords(key = key.toString.getBytes, value = value)
 
   private def unkeyedRecord(value: Int): MemoryRecords =
-    TestUtils.singletonRecords(timestamp = time.milliseconds(), value = value.toString.getBytes)
+    TestUtils.singletonRecords(value = value.toString.getBytes)
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
@@ -2209,23 +2322,20 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
   override def init(strategy: String = Defaults.CompactionStrategy, headerKey: String = "", cleanerThreadId: Int = -1, topicPartitionName: String = "") = {
-    Console.println(s"INIT: Strategy: $strategy; Header key: $headerKey; Cleaner Thread ID: $cleanerThreadId; TopicPartition: $topicPartitionName")
     this.map.clear()
 
     this.isOffsetStrategy = Defaults.CompactionStrategy.equalsIgnoreCase(strategy)
     this.isTimestampStrategy = Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)
     this.headerKey = headerKey
-    Console.println(s"INIT: isOffsetStrategy: $isOffsetStrategy; isTimestampStrategy: $isTimestampStrategy")
   }
 
   override def put(record: Record): Boolean = {
     lastOffset = record.offset
+    extractVersion(record)
     val key = keyFor(record.key)
-    Console.println(s"PUT: key: $key; offset: $lastOffset")
     if (!isOffsetStrategy && map.containsKey(key)) {
       val foundVersion = extractVersion(map.get(key))
       val currVersion = extractVersion(record)
-      Console.println(s"PUT: foundVersion: $foundVersion; currentVersion: $currVersion")
       if (foundVersion > currVersion)
         return false
     }
@@ -2238,11 +2348,9 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
       // use version if available & different otherwise fallback to offset
-      if (foundVersion != currentVersion) {
+      if (foundVersion != currentVersion)
         return currentVersion >= foundVersion
-      }
     }
-
     val foundOffset = get(record.key)
     record.offset() >= foundOffset
   }
@@ -2274,28 +2382,19 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   override def toString: String = map.toString
 
   private def extractVersion(record: Record): Long = {
-    if (isOffsetStrategy) {
-      // offset strategy
-      return -1L
+    if (isOffsetStrategy) // offset strategy
+      -1L
+    else if (isTimestampStrategy) // record timestamp strategy
+      record.timestamp
+    else if (record == null || record.headers() == null || record.headers().isEmpty) // record header empty
+      -1L
+    else { // header strategy
+      record.headers()
+        .filter(it => it.value != null && it.value.nonEmpty)
+        .find(it => headerKey.equalsIgnoreCase(it.key.trim))
+        .map(it => ByteBuffer.wrap(it.value))
+        .map(it => ByteUtils.readVarlong(it))
+        .getOrElse(-1L)
     }
-
-    if (isTimestampStrategy) {
-      // record timestamp strategy
-      return record.timestamp
-    }
-
-    // header strategy
-    if (record == null || record.headers() == null || record.headers().isEmpty) {
-      return -1L
-    }
-
-    val headerValue = record.headers()
-      .filter(it => it.value != null && it.value.nonEmpty)
-      .find(it => headerKey.equalsIgnoreCase(it.key.trim))
-      .map(it => ByteBuffer.wrap(it.value))
-      .map(it => ByteUtils.readVarlong(it))
-      .getOrElse(-1L)
-
-    headerValue
   }
 }
