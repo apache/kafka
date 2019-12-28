@@ -162,9 +162,9 @@ public class MemoryRecords extends AbstractRecords {
             long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
             final BatchRetention batchRetention;
             if (!batch.deleteHorizonSet())
-              batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
+                batchRetention = filter.checkBatchRetention(batch, deleteHorizonMs);
             else
-              batchRetention = filter.checkBatchRetention(batch);
+                batchRetention = filter.checkBatchRetention(batch);
 
             filterResult.bytesRead += batch.sizeInBytes();
 
