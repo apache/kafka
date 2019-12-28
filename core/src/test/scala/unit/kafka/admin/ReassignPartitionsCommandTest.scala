@@ -27,6 +27,10 @@ import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{AdminClient, DescribeReplicaLogDirsResult}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
 import org.junit.{After, Before, Test}
@@ -34,19 +38,65 @@ import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
+import org.apache.zookeeper.KeeperException.UnimplementedException
 
 import scala.collection.mutable
 import scala.collection.Seq
+import scala.util.Try
 
+// Even though we test with a mock ServiceClient where possible, use the ZooKeeperTestHarness
+// for use by the TestUtils below.
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
   var calls = 0
+
+  @Before
+  def setup(): Unit = {
+    calls = 0
+  }
 
   @After
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
+  }
+
+  // Base Test Service Client with minimal functionality, just enough for our tests to
+  // override
+  class TestServiceClientBase extends ReassignCommandService {
+    override def getBrokerIdsInCluster: Seq[Int] = throw new UnimplementedException()
+
+    override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] =
+      throw new UnimplementedException()
+
+    override def UpdateBrokerConfigs(broker: Int, configs: collection.Map[String, String]): Boolean =
+      throw new UnimplementedException()
+
+    override def UpdateTopicConfigs(topic: String, configs: collection.Map[String, String]): Boolean =
+      throw new UnimplementedException()
+
+    override def getPartitionsForTopics(topics: Set[String]): collection.Map[String, Seq[Int]] =
+      throw new UnimplementedException()
+
+    override def getReplicaLogDirsForTopics(topics: collection.Set[TopicPartitionReplica]): collection.Map[TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo] =
+      throw new UnimplementedException()
+
+    override def alterPartitionAssignment(topics: collection.Map[TopicPartition, Seq[Int]], timeoutMs: Long): Unit =
+      throw new UnimplementedException()
+
+    override def alterReplicaLogDirs(topics: collection.Map[TopicPartitionReplica, String], timeoutMs: Long): collection.Set[TopicPartitionReplica] =
+      throw new UnimplementedException()
+
+    override def getReplicaAssignmentForTopics(topics: Set[String]): collection.Map[TopicPartition, Seq[Int]] =
+      throw new UnimplementedException()
+
+    override def reassignInProgress: Boolean = throw new UnimplementedException()
+
+    override def getOngoingReassignments: collection.Map[TopicPartition, Seq[Int]] =
+      throw new UnimplementedException()
+
+    override def close(): Unit = Unit
   }
 
   @Test
@@ -57,17 +107,19 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val existing = Map(new TopicPartition("topic1", 0) -> Seq(100, 101), control)
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), control)
 
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
-        assertEquals(Set("0:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp))) //Should only be follower-throttle the moving replica
-        assertEquals(Set("0:100","0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp))) //Should leader-throttle all existing (pre move) replicas
+    class TestServiceClient() extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+        assertEquals("topic1", topic)
+        assertEquals(Set("0:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
+        assertEquals(Set("0:100","0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
+
         calls += 1
+        true
       }
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, adminZkClientOpt = Some(admin))
+    val service = new TestServiceClient()
+    val assigner = ReassignPartitionsCommand(service, null, null)
 
     assigner.assignThrottledReplicas(existing, proposed)
     assertEquals(1, calls)
@@ -90,19 +142,19 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
       new TopicPartition("topic1", 2) -> Seq(100, 101, 102)
     )
 
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
-        assertEquals(Set("0:102","2:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp)))
-        assertEquals(Set("0:100","0:101","2:100","2:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp)))
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         assertEquals("topic1", topic)
-        calls += 1
-      }
+        assertEquals(Set("0:102","2:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
+        assertEquals(Set("0:100","0:101","2:100","2:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
 
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
+        calls += 1
+        true
+      }
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, adminZkClientOpt = Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
     //Then replicas should assign correctly (based on the proposed map)
     assigner.assignThrottledReplicas(existingSuperset, proposedSubset)
     assertEquals(1, calls)
@@ -116,18 +168,19 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val existing = Map(new TopicPartition("topic1", 0) -> Seq(100, 101), new TopicPartition("topic1", 1) -> Seq(100, 101), control)
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), new TopicPartition("topic1", 1) -> Seq(101, 102), control)
 
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
-        assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp))) //Should only be follower-throttle the moving replica
-        assertEquals(Set("0:100","0:101","1:100","1:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp))) //Should leader-throttle all existing (pre move) replicas
-        calls += 1
-      }
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+        assertEquals("topic1", topic)
+        assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replica
+        assertEquals(Set("0:100","0:101","1:100","1:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
 
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
+        calls += 1
+        true
+      }
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
     //When
     assigner.assignThrottledReplicas(existing, proposed)
     assertEquals(1, calls)
@@ -142,28 +195,29 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(101, 102), new TopicPartition("topic2", 0) -> Seq(100, 102), control)
 
     //Then
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         topic match {
           case "topic1" =>
-            assertEquals(Set("0:100","0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp)))
-            assertEquals(Set("0:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp)))
+            assertEquals(Set("0:100", "0:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get))
+            assertEquals(Set("0:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get))
           case "topic2" =>
-            assertEquals(Set("0:101","0:102"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp)))
-            assertEquals(Set("0:100"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp)))
+            assertEquals(Set("0:101", "0:102"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get))
+            assertEquals(Set("0:100"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get))
           case _ => fail(s"Unexpected topic $topic")
         }
         calls += 1
+        true
       }
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
     //When
     assigner.assignThrottledReplicas(existing, proposed)
     assertEquals(2, calls)
   }
+
 
   @Test
   def shouldFindMovingReplicasMultipleTopicsAndPartitions(): Unit = {
@@ -182,25 +236,24 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     )
 
     //Then
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
         topic match {
           case "topic1" =>
-            assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp)))
-            assertEquals(Set("0:100","0:101","1:100","1:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp)))
+            assertEquals(Set("0:102","1:102"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get))
+            assertEquals(Set("0:100","0:101","1:100","1:101"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get))
           case "topic2" =>
-            assertEquals(Set("0:100","1:100"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp)))
-            assertEquals(Set("0:101","0:102","1:101","1:102"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp)))
+            assertEquals(Set("0:100","1:100"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get))
+            assertEquals(Set("0:101","0:102","1:101","1:102"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get))
           case _ => fail(s"Unexpected topic $topic")
         }
         calls += 1
+        true
       }
-
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
     //When
     assigner.assignThrottledReplicas(existing, proposed)
     assertEquals(2, calls)
@@ -215,18 +268,19 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val proposed = Map(new TopicPartition("topic1", 0) -> Seq(100, 101, 104, 105), control)
 
     // Then
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties) = {
-        assertEquals(Set("0:104","0:105"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp))) //Should only be follower-throttle the moving replicas
-        assertEquals(Set("0:100","0:101","0:102","0:103"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp))) //Should leader-throttle all existing (pre move) replicas
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+        assertEquals("topic1", topic)
+        assertEquals(Set("0:104","0:105"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp).get)) //Should only be follower-throttle the moving replicas
+        assertEquals(Set("0:100","0:101","0:102","0:103"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp).get)) //Should leader-throttle all existing (pre move) replicas
         calls += 1
-      }
 
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
+        true
+      }
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
 
     //When
     assigner.assignThrottledReplicas(existing, proposed)
@@ -243,19 +297,20 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val existingProperties = propsWith("some-key", "some-value")
 
     //Then the dummy property should still be there
-    class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
-        assertEquals("some-value", configChange.getProperty("some-key"))
+    class TestServiceClient extends TestServiceClientBase {
+      override def UpdateTopicConfigs(topic: String, configChange: collection.Map[String, String]): Boolean = {
+        assertEquals("topic1", topic)
+        assertFalse(configChange.contains("some-key"))
+        assert(configChange.contains(FollowerReplicationThrottledReplicasProp)) //Should only be follower-throttle the moving replicas
+        assert(configChange.contains(LeaderReplicationThrottledReplicasProp)) //Should leader-throttle all existing (pre move) replicas
         calls += 1
-      }
 
-      override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
-        existingProperties
+        true
       }
     }
 
-    val admin = new TestAdminZkClient(zkClient)
-    val assigner = ReassignPartitionsCommand(null, null, null, Some(admin))
+    val service = new TestServiceClient
+    val assigner = ReassignPartitionsCommand(service, null, null)
 
     //When
     assigner.assignThrottledReplicas(existing, proposed)
@@ -269,98 +324,23 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val proposed = mutable.Map(new TopicPartition("topic1", 0) -> Seq(101, 102))
 
     //Setup
-    val zk = stubZKClient(existing)
-    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
-    val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = ReassignPartitionsCommand(zk,  proposed, Map.empty, Some(admin))
-    // Return a fresh set of Properties for each broker
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andStubReturn(new Properties)
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andStubReturn(new Properties)
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andStubReturn(new Properties)
-    expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
+    val service: ReassignCommandService = createMock(classOf[ReassignCommandService])
+    val propsCapture: Capture[mutable.Map[String, String]] = newCapture(CaptureType.ALL)
+    val assigner = ReassignPartitionsCommand(service,  proposed, Map.empty[TopicPartitionReplica, String])
+    expect(service.getReplicaAssignmentForTopics(anyObject.asInstanceOf[Set[String]])).andStubReturn(existing)
+    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(propsCapture))).andReturn(true).anyTimes()
 
-    expect(admin.fetchEntityConfig(is(ConfigType.Topic), anyString())).andStubReturn(new Properties)
-
-    replay(admin)
+    replay(service)
 
     //When
     assigner.maybeLimit(Throttle(1000))
 
     //Then
     for (actual <- propsCapture.getValues.asScala) {
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
-    }
-    assertEquals(3, propsCapture.getValues.size) //3 brokers
-  }
-
-  @Test
-  def shouldUpdateQuotaLimit(): Unit = {
-    //Given
-    val existing = Map(new TopicPartition("topic1", 0) -> Seq(100, 101))
-    val proposed = mutable.Map(new TopicPartition("topic1", 0) -> Seq(101, 102))
-
-    //Setup
-    val zk = stubZKClient(existing)
-    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
-    val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = ReassignPartitionsCommand(zk,  proposed, Map.empty, Some(admin))
-    expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
-
-    //Expect the existing broker config to be changed from 10/100 to 1000
-    val existingConfigs = CoreUtils.propsWith(
-      (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10"),
-      (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "100")
-    )
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andReturn(copyOf(existingConfigs))
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andReturn(copyOf(existingConfigs))
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andReturn(copyOf(existingConfigs))
-    replay(admin)
-
-    //When
-    assigner.maybeLimit(Throttle(1000))
-
-    //Then
-    for (actual <- propsCapture.getValues.asScala) {
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
-    }
-    assertEquals(3, propsCapture.getValues.size) //three brokers
-  }
-
-  @Test
-  def shouldNotOverwriteExistingPropertiesWhenLimitIsAdded(): Unit = {
-    //Given
-    val existing = Map(new TopicPartition("topic1", 0) -> Seq(100, 101))
-    val proposed = mutable.Map(new TopicPartition("topic1", 0) -> Seq(101, 102))
-
-    //Setup
-    val zk = stubZKClient(existing)
-    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
-    val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    val assigner = ReassignPartitionsCommand(zk, proposed, Map.empty, Some(admin))
-    expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
-
-    //Given there is some existing config
-    val baseProps = propsWith("useful.key", "useful.value")
-    // Make sure we return a fresh set of Properties for each broker
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andReturn(
-      copyOf(baseProps)).atLeastOnce()
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andReturn(
-      copyOf(baseProps)).atLeastOnce()
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andReturn(
-      copyOf(baseProps)).atLeastOnce()
-
-    replay(admin)
-
-    //When
-    assigner.maybeLimit(Throttle(1000))
-
-    //Then other property remains
-    for (actual <- propsCapture.getValues.asScala) {
-      assertEquals("useful.value", actual.getProperty("useful.key"))
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
-      assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
+      assertEquals("1000", actual(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
+      assertEquals("1000", actual(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
+      // No extra properties should be updated
+      assertEquals(2, actual.size)
     }
     assertEquals(3, propsCapture.getValues.size) //3 brokers
   }
@@ -370,71 +350,77 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     //Given 3 brokers, but with assignment only covering 2 of them
     val brokers = Seq(100, 101, 102)
     val status = mutable.Map(new TopicPartition("topic1", 0) -> ReassignmentCompleted)
-    val existingBrokerConfigs = propsWith(
-      (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10"),
-      (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "100"),
-      ("useful.key", "value")
-    )
 
     //Setup
-    val zk = stubZKClient(brokers = brokers)
-    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
-    val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    expect(admin.fetchEntityConfig(is(ConfigType.Topic), anyString())).andStubReturn(new Properties)
-    expect(admin.changeBrokerConfig(anyObject().asInstanceOf[Seq[Int]], capture(propsCapture))).anyTimes()
-    //Stub each invocation as EasyMock caches the return value which can be mutated
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("100"))).andReturn(copyOf(existingBrokerConfigs))
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("101"))).andReturn(copyOf(existingBrokerConfigs))
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), is("102"))).andReturn(copyOf(existingBrokerConfigs))
-    replay(admin)
+    val service: ReassignCommandService = createMock(classOf[ReassignCommandService])
+    val brokerPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
+    val topicPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
+    expect(service.getBrokerIdsInCluster).andStubReturn(brokers)
+    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
+    expect(service.UpdateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
+    replay(service)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
+    ReassignPartitionsCommand.removeThrottle(service, status, Map.empty[TopicPartitionReplica, ReassignmentStatus])
 
-    //Then props should have gone (dummy remains)
-    for (capture <- propsCapture.getValues.asScala) {
-      assertEquals("value", capture.get("useful.key"))
-      assertNull(capture.get(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
-      assertNull(capture.get(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
+    //The throttle props ONLY should have been set to "" for the brokers
+    for (capture <- brokerPropsCapture.getValues.asScala) {
+      assertEquals("", capture(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
+      assertEquals("", capture(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
+      assertEquals("", capture(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp))
+      assertEquals(3, capture.size) // Only these three properties
     }
-    assertEquals(3, propsCapture.getValues.size) //3 brokers
+    assertEquals(3, brokerPropsCapture.getValues.size) //3 brokers
+
+    // The throttle props should ALSO be cleared for the topic
+    for (capture <- topicPropsCapture.getValues.asScala) {
+      assertEquals("", capture(LogConfig.FollowerReplicationThrottledReplicasProp))
+      assertEquals("", capture(LogConfig.LeaderReplicationThrottledReplicasProp))
+      assertEquals(2, capture.size)
+    }
+    assertEquals(1, topicPropsCapture.getValues.size) // 1 topic
+
   }
 
   @Test
   def shouldRemoveThrottleReplicaListBasedOnProposedAssignment(): Unit = {
-    //Given two topics with existing config
+    val brokers = Seq(100, 101)
+
+    //Given two topics being reassigned
     val status = mutable.Map(new TopicPartition("topic1", 0) -> ReassignmentCompleted,
                              new TopicPartition("topic2", 0) -> ReassignmentCompleted)
-    val existingConfigs = CoreUtils.propsWith(
-      (LogConfig.LeaderReplicationThrottledReplicasProp, "1:100:2:100"),
-      (LogConfig.FollowerReplicationThrottledReplicasProp, "1:101,2:101"),
-      ("useful.key", "value")
-    )
 
     //Setup
-    val zk = stubZKClient(brokers = Seq(100, 101))
-    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
-    val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
-    expect(admin.fetchEntityConfig(is(ConfigType.Broker), anyString())).andStubReturn(new Properties)
-    expect(admin.fetchEntityConfig(is(ConfigType.Topic), is("topic1"))).andStubReturn(copyOf(existingConfigs))
-    expect(admin.fetchEntityConfig(is(ConfigType.Topic), is("topic2"))).andStubReturn(copyOf(existingConfigs))
+    val service: ReassignCommandService = createMock(classOf[ReassignCommandService])
+    val brokerPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
+    val topicPropsCapture: Capture[Map[String, String]] = newCapture(CaptureType.ALL)
+    expect(service.getBrokerIdsInCluster).andStubReturn(brokers)
+    expect(service.UpdateBrokerConfigs(anyObject().asInstanceOf[Int], capture(brokerPropsCapture))).andReturn(true).anyTimes()
 
-    //Should change both topics
-    expect(admin.changeTopicConfig(is("topic1"), capture(propsCapture)))
-    expect(admin.changeTopicConfig(is("topic2"), capture(propsCapture)))
+    // Should change configs of both topics
+    expect(service.UpdateTopicConfigs(is("topic1"), capture(topicPropsCapture))).andReturn(true).anyTimes()
+    expect(service.UpdateTopicConfigs(is("topic2"), capture(topicPropsCapture))).andReturn(true).anyTimes()
 
-    replay(admin)
+    replay(service)
 
     //When
-    ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
+    ReassignPartitionsCommand.removeThrottle(service, status, Map.empty[TopicPartitionReplica, ReassignmentStatus])
 
-    //Then props should have gone (dummy remains)
-    for (actual <- propsCapture.getValues.asScala) {
-      assertEquals("value", actual.getProperty("useful.key"))
-      assertNull(actual.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp))
-      assertNull(actual.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp))
+    //The throttle props ONLY should have been set to "" for the brokers
+    for (capture <- brokerPropsCapture.getValues.asScala) {
+      assertEquals("", capture(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
+      assertEquals("", capture(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
+      assertEquals("", capture(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp))
+      assertEquals(3, capture.size) // Only these three properties
     }
-    assertEquals(2, propsCapture.getValues.size) //2 topics
+    assertEquals(2, brokerPropsCapture.getValues.size) //2 brokers
+
+    //Then topic props should have gone (dummy remains)
+    for (actual <- topicPropsCapture.getValues.asScala) {
+      assertEquals("", actual(LogConfig.LeaderReplicationThrottledReplicasProp))
+      assertEquals("", actual(LogConfig.FollowerReplicationThrottledReplicasProp))
+    }
+    assertEquals(2, topicPropsCapture.getValues.size) //2 topics
   }
 
   @Test
@@ -443,27 +429,36 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val topic = "test"
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // Admin client
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+    val adminClient = AdminClient.create(props)
+    // Create serviceClient here for test uses below
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
+
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(0, 2, 3)
     val partitionToBeReassigned = 0
     val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient,  Map(topicAndPartition -> newReplicas), adminZkClientOpt = Some(adminZkClient))
+    val reassignPartitionsCommand = ReassignPartitionsCommand(serviceClient, Map(topicAndPartition -> newReplicas), Map.empty[TopicPartitionReplica, String])
     assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
-          .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
-      },
+      ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(serviceClient, Map(topicAndPartition -> newReplicas))
+        .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
+    },
       "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    val assignedReplicas = serviceClient.getReplicaAssignmentForTopics(Set(topic)).get(new TopicPartition(topic, partitionToBeReassigned)).get
     // in sync replicas should not have any replica that is not in the new assigned replicas
     checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
-                            "New replicas should exist on brokers")
+      "New replicas should exist on brokers")
+
+    serviceClient.close()
   }
 
   @Test
@@ -472,27 +467,36 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val topic = "test"
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // Admin client
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+    val adminClient = AdminClient.create(props)
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
+
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(1, 2, 3)
     val partitionToBeReassigned = 0
     val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient,  Map(topicAndPartition -> newReplicas), adminZkClientOpt = Some(adminZkClient))
+    val reassignPartitionsCommand = ReassignPartitionsCommand(serviceClient,  Map(topicAndPartition -> newReplicas), Map.empty[TopicPartitionReplica, String])
     assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(serviceClient, Map(topicAndPartition -> newReplicas))
           .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    val assignedReplicas = serviceClient.getReplicaAssignmentForTopics(Set(topic)).get(new TopicPartition(topic, partitionToBeReassigned)).get
+    // val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
     ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
+    serviceClient.close()
   }
+
 
   @Test
   def testPartitionReassignmentNonOverlappingReplicas(): Unit = {
@@ -500,26 +504,33 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val topic = "test"
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // Admin client
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+    val adminClient = AdminClient.create(props)
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
     val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient,  Map(topicAndPartition -> newReplicas),  adminZkClientOpt = Some(adminZkClient))
+    val reassignPartitionsCommand = ReassignPartitionsCommand(serviceClient,  Map(topicAndPartition -> newReplicas), Map.empty[TopicPartitionReplica, String])
     assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, Map(topicAndPartition -> newReplicas))
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(serviceClient, Map(topicAndPartition -> newReplicas))
           .getOrElse(topicAndPartition, fail(s"Failed to get reassignment status for $topicAndPartition")) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
-    val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
+    val assignedReplicas = serviceClient.getReplicaAssignmentForTopics(Set(topic)).get(new TopicPartition(topic, partitionToBeReassigned)).get
+    //zkClient.getReplicasForPartition(new TopicPartition(topic, partitionToBeReassigned))
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
     ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
+    serviceClient.close()
   }
 
   @Test
@@ -527,18 +538,27 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val topic = "test"
     // create brokers
     servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    // Admin client
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+    val adminClient = AdminClient.create(props)
+    val serviceClient = new AdminClientReassignCommandService(adminClient)
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
     val topicAndPartition = new TopicPartition(topic, partitionToBeReassigned)
-    val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient,  Map(topicAndPartition -> newReplicas), adminZkClientOpt = Some(adminZkClient))
-    assertFalse("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
+    val reassignPartitionsCommand = ReassignPartitionsCommand(serviceClient,  Map(topicAndPartition -> newReplicas), Map.empty[TopicPartitionReplica, String])
+    assertFalse("Partition reassignment failed for test, 0", Try(reassignPartitionsCommand.reassignPartitions()).isSuccess)
     val reassignedPartitions = zkClient.getPartitionReassignment
     assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
+    serviceClient.close()
   }
+
 
   @Test
   def testResumePartitionReassignmentThatWasCompleted(): Unit = {
+    // XXX: This test only works with the ZK client because Admin clients require the cluster to be up when issuing
+    // a reassignment.
     val initialAssignment = Map(0  -> List(0, 2))
     val topic = "test"
     // create the topic
@@ -574,11 +594,6 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   //Override eq as is for brevity
   def is[T](v: T): T = EasyMock.eq(v)
 
-  @Before
-  def setup(): Unit = {
-    calls = 0
-  }
-
   def stubZKClient(existingAssignment: Map[TopicPartition, Seq[Int]] = Map[TopicPartition, Seq[Int]](),
                    brokers: Seq[Int] = Seq[Int]()): KafkaZkClient = {
     val zkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
@@ -591,4 +606,5 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   def toReplicaSet(throttledReplicasString: Any): Set[String] = {
     throttledReplicasString.toString.split(",").toSet
   }
+
 }
