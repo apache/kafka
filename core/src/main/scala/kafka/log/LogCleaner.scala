@@ -658,9 +658,6 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletesAndTxnMarkers)
         isControlBatchEmpty = canDiscardBatch
 
-	if (!batch.deleteHorizonSet())
-	  info("Batch's delete horizon will be set to " + newBatchDeleteHorizonMs + " since it has not been assigned a value yet.")
-
         if (batch.isControlBatch) {
           discardBatchRecords = canDiscardBatch && 
               ((batch.deleteHorizonSet() && batch.deleteHorizonMs() < currentTime) ||
@@ -707,8 +704,7 @@ private[log] class Cleaner(val id: Int,
       }
 
       override def retrieveDeleteHorizon(batch: RecordBatch) : Long = {
-        info("Retreiving delete horizon for batch " + batch)
-	if (batch.deleteHorizonSet())
+        if (batch.deleteHorizonSet())
           return batch.deleteHorizonMs() // means that we keep the old timestamp stored
 
         // check that the control batch has been emptied of records
@@ -826,9 +822,6 @@ private[log] class Cleaner(val id: Int,
                               (!batch.deleteHorizonSet() && currentTime < newBatchDeleteHorizonMs)
       else
         shouldRetainDeletes = retainDeletes
-
-      if (!record.hasValue && !batch.deleteHorizonSet() && !shouldRetainDeletes)
-        info("Deleting tombstone " + record + " since it has exceeeded its configured lifetime.")
 
       val isRetainedValue = record.hasValue || shouldRetainDeletes
 
