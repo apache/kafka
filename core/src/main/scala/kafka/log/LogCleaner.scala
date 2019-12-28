@@ -513,7 +513,7 @@ private[log] class Cleaner(val id: Int,
     doClean(cleanable, time.milliseconds(), trackedHorizon = deleteHorizonMs)
   }
 
-  private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long, trackedHorizon: Long = -1L): (Long, CleanerStats) = {
+  private[log] def doClean(cleanable: LogToClean, currentTime: Long, trackedHorizon: Long = -1L): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
     val log = cleanable.log
@@ -531,13 +531,13 @@ private[log] class Cleaner(val id: Int,
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
 
     // group the segments and clean the groups
-    info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
+    info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(trackedHorizon)))
     val transactionMetadata = new CleanedTransactionMetadata
 
     val groupedSegments = groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
     for (group <- groupedSegments)
-      cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata, trackedHorizon = trackedHorizon)
+      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, trackedHorizon = trackedHorizon)
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
