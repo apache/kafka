@@ -1196,39 +1196,39 @@ public class KafkaStreams implements AutoCloseable {
         final Map<TopicPartition, OffsetSpec> offsetSpecMap = new HashMap<>();
         Stream.concat(activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
             .forEach(topicPartition ->  offsetSpecMap.put(topicPartition, OffsetSpec.latest()));
-            final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = new HashMap<>();
-            try {
-                allEndOffsets.putAll(adminClient.listOffsets(offsetSpecMap).all().get());
-            } catch (final Exception e) {
-                throw new StreamsException("Unable to obtain end offsets from kafka", e);
-            }
-            log.info("Current end offsets :" + allEndOffsets);
-            allEndOffsets.forEach((topicPartition, offsetsResultInfo) -> {
-                final String storeName = streamsMetadataState.getStoreForChangelogTopic(topicPartition.topic());
-                final long offsetPosition;
-                if (activeChangelogPositions.containsKey(topicPartition)) {
-                    // if unknown, assume it's positioned at the tail of changelog partition
-                    offsetPosition = activeChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
+        final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = new HashMap<>();
+        try {
+            allEndOffsets.putAll(adminClient.listOffsets(offsetSpecMap).all().get());
+        } catch (final Exception e) {
+            throw new StreamsException("Unable to obtain end offsets from kafka", e);
+        }
+        log.info("Current end offsets :" + allEndOffsets);
+        allEndOffsets.forEach((topicPartition, offsetsResultInfo) -> {
+            final String storeName = streamsMetadataState.getStoreForChangelogTopic(topicPartition.topic());
+            final long offsetPosition;
+            if (activeChangelogPositions.containsKey(topicPartition)) {
+                // if unknown, assume it's positioned at the tail of changelog partition
+                offsetPosition = activeChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
                         offsetsResultInfo.offset() : activeChangelogPositions.get(topicPartition);
-                } else if (standbyChangelogPositions.containsKey(topicPartition)) {
-                    // if unknown, assume it's positioned at the head of changelog partition
-                    offsetPosition = standbyChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
+            } else if (standbyChangelogPositions.containsKey(topicPartition)) {
+                // if unknown, assume it's positioned at the head of changelog partition
+                offsetPosition = standbyChangelogPositions.get(topicPartition) == UNKNOWN_POSITION ?
                         0 : standbyChangelogPositions.get(topicPartition);
-                } else {
-                    throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
-                }
+            } else {
+                throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
+            }
 
-                final long offsetLag = offsetsResultInfo.offset() - offsetPosition;
-                final Map<Integer, Long> partitionToOffsetLag = localOffsetLags
+            final long offsetLag = offsetsResultInfo.offset() - offsetPosition;
+            final Map<Integer, Long> partitionToOffsetLag = localOffsetLags
                     .getOrDefault(storeName, new HashMap<>());
-                if (!partitionToOffsetLag.containsKey(topicPartition.partition())) {
-                    partitionToOffsetLag.put(topicPartition.partition(), offsetLag);
-                } else {
-                    throw new IllegalStateException("Encountered the same store partition" + storeName + ","
+            if (!partitionToOffsetLag.containsKey(topicPartition.partition())) {
+                partitionToOffsetLag.put(topicPartition.partition(), offsetLag);
+            } else {
+                throw new IllegalStateException("Encountered the same store partition" + storeName + ","
                         + topicPartition.partition() + " more than once");
-                }
-                localOffsetLags.put(storeName, partitionToOffsetLag);
-            });
+            }
+            localOffsetLags.put(storeName, partitionToOffsetLag);
+        });
 
         return localOffsetLags;
     }
