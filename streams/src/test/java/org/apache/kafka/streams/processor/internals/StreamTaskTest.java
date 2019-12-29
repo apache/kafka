@@ -86,6 +86,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+// TODO K9113: should improve test coverage
 @RunWith(EasyMockRunner.class)
 public class StreamTaskTest {
 

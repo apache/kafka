@@ -46,6 +46,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.AppInfoParser
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.kafka.test.TestSslUtils
 import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
@@ -748,7 +749,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
     try {
       overrideServer.startup()
-      val sslContext = SSLContext.getInstance("TLSv1.2")
+      val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
       val sslSocket = socketFactory.createSocket("localhost",

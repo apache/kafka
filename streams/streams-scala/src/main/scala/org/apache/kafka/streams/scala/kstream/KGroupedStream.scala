@@ -28,8 +28,12 @@ import org.apache.kafka.streams.kstream.{
   KGroupedStream => KGroupedStreamJ,
   KTable => KTableJ
 }
-import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionsCompatConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
+  AggregatorFromFunction,
+  InitializerFromFunction,
+  ReducerFromFunction,
+  ValueMapperFromFunction
+}
 
 /**
  * Wraps the Java class KGroupedStream and delegates method calls to the underlying Java object.
@@ -56,9 +60,11 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
     val javaCountTable: KTableJ[K, java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]])
     val tableImpl = javaCountTable.asInstanceOf[KTableImpl[K, ByteArrayKeyValueStore, java.lang.Long]]
-    javaCountTable.mapValues[Long](
-      ((l: java.lang.Long) => Long2long(l)).asValueMapper,
-      Materialized.`with`[K, Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.Long)
+    new KTable(
+      javaCountTable.mapValues[Long](
+        ((l: java.lang.Long) => Long2long(l)).asValueMapper,
+        Materialized.`with`[K, Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.Long)
+      )
     )
   }
 
@@ -74,7 +80,7 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   def reduce(reducer: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
     // works perfectly with Scala 2.12 though
-    inner.reduce(reducer.asReducer, materialized)
+    new KTable(inner.reduce(reducer.asReducer, materialized))
 
   /**
    * Aggregate the values of records in this stream by the grouped key.
@@ -89,17 +95,7 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
-    inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized)
-
-  /**
-   * Create a new [[SessionWindowedKStream]] instance that can be used to perform session windowed aggregations.
-   *
-   * @param windows the specification of the aggregation `SessionWindows`
-   * @return an instance of [[SessionWindowedKStream]]
-   * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
-   */
-  def windowedBy(windows: SessionWindows): SessionWindowedKStream[K, V] =
-    inner.windowedBy(windows)
+    new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized))
 
   /**
    * Create a new [[TimeWindowedKStream]] instance that can be used to perform windowed aggregations.
@@ -109,5 +105,16 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
    */
   def windowedBy[W <: Window](windows: Windows[W]): TimeWindowedKStream[K, V] =
-    inner.windowedBy(windows)
+    new TimeWindowedKStream(inner.windowedBy(windows))
+
+  /**
+   * Create a new [[SessionWindowedKStream]] instance that can be used to perform session windowed aggregations.
+   *
+   * @param windows the specification of the aggregation `SessionWindows`
+   * @return an instance of [[SessionWindowedKStream]]
+   * @see `org.apache.kafka.streams.kstream.KGroupedStream#windowedBy`
+   */
+  def windowedBy(windows: SessionWindows): SessionWindowedKStream[K, V] =
+    new SessionWindowedKStream(inner.windowedBy(windows))
+
 }

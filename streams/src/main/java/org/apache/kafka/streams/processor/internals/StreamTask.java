@@ -67,6 +67,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private final Time time;
     private final String threadId;
+    // we want to abstract eos logic out of StreamTask, however
+    // there's still an optimization that requires this info to be
+    // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
+    private final boolean eosEnabled;
     private final StreamsConfig config;
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
@@ -105,6 +109,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.recordCollector = recordCollector;
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         this.threadId = Thread.currentThread().getName();
         this.closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
@@ -159,7 +164,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     public boolean isEosEnabled() {
-        return StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        return eosEnabled;
     }
 
     @Override
@@ -416,7 +421,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         commitState();
 
         // this is an optimization for non-EOS only
-        if (!isEosEnabled()) {
+        if (!eosEnabled) {
             stateMgr.checkpoint(checkpointableOffsets());
         }
     }
@@ -457,9 +462,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     /**
-     * Checkpointable offsets are: written offsets + consumed offsets, among those only the offsets
-     * on the changelog topics need to be checkpointed. This is left to the state manager to select
-     * which checkpointable offsets really need to be checkpointed.
+     * Return all the checkpointable offsets(written + consumed) to the state manager.
+     * Currently only changelog topic offsets need to be checkpointed.
      */
     private Map<TopicPartition, Long> checkpointableOffsets() {
         final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
@@ -544,6 +548,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         }
 
+        // we should also clear any buffered records of a task when suspending it
         partitionGroup.clear();
     }
 
@@ -571,8 +576,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    // TODO: we should let the task itself to decide, based on the state, whether to close as suspended or as running
-    // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
+    // TODO K9113: we should let the task itself to decide, based on the state, whether to close as suspended or as running
     void closeSuspended(final boolean clean) {
 
         try {
@@ -758,11 +762,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     boolean commitRequested() {
         return commitRequested;
-    }
-
-    // visible for testing
-    long streamTime() {
-        return partitionGroup.streamTime();
     }
 
     // visible for testing

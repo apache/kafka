@@ -61,6 +61,7 @@ public class TaskMigratedException extends StreamsException {
     }
 
     // this is for unit test only
+    // TODO K9113: remove this after we've refactored AssignedTasksTests
     public TaskMigratedException() {
         this(null, "A task has been migrated unexpectedly", null);
     }

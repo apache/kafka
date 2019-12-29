@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
-
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -36,9 +34,10 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -52,6 +51,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +66,6 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Sensor droppedRecordsSensor;
     private final Map<TopicPartition, Long> offsets;
     private final Consumer<byte[], byte[]> consumer;
-    private final StreamThread.ProducerSupplier producerSupplier;
     private final ProductionExceptionHandler productionExceptionHandler;
 
     // used when eosEnabled is true only
@@ -85,7 +84,6 @@ public class RecordCollectorImpl implements RecordCollector {
         this.offsets = new HashMap<>();
         this.log = logContext.logger(getClass());
 
-        this.producerSupplier = producerSupplier;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.productionExceptionHandler = config.defaultProductionExceptionHandler();
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
@@ -116,7 +114,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 producer.initTransactions();
             } catch (final TimeoutException exception) {
                 final String errorMessage = "Timeout exception caught when initializing transactions for task " + taskId + ". " +
-                    "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
+                    "\nThe broker is either slow or in bad state (like not having enough replicas) in responding to the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\n Consider overwriting `max.block.ms` to a larger value to avoid timeout errors";
 
@@ -159,9 +157,9 @@ public class RecordCollectorImpl implements RecordCollector {
 
     public void commit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (eosEnabled) {
-            maybeBeginTxn();
-
             try {
+                maybeBeginTxn();
+
                 producer.sendOffsetsToTransaction(offsets, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
@@ -247,7 +245,7 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
-        Integer partition = null;
+        final Integer partition;
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions = producer.partitionsFor(topic);
@@ -257,6 +255,8 @@ public class RecordCollectorImpl implements RecordCollector {
                 throw new StreamsException("Could not get partition information for topic '" + topic + "'  for task " + taskId +
                     ". This can happen if the topic does not exist.");
             }
+        } else {
+            partition = null;
         }
 
         send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
@@ -298,17 +298,21 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             });
         } catch (final RuntimeException uncaughtException) {
-            if (uncaughtException instanceof KafkaException &&
-                uncaughtException.getCause() instanceof ProducerFencedException) {
-                final KafkaException kafkaException = (KafkaException) uncaughtException;
+            if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", kafkaException);
+                throw new TaskMigratedException(taskId, "Producer cannot send records anymore since it got fenced", uncaughtException);
             } else {
                 final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, uncaughtException.toString());
                 throw new StreamsException(errorMessage, uncaughtException);
             }
         }
+    }
+
+    private static boolean isRecoverable(final RuntimeException uncaughtException) {
+        return uncaughtException instanceof KafkaException && (
+            uncaughtException.getCause() instanceof ProducerFencedException ||
+                uncaughtException.getCause() instanceof UnknownProducerIdException);
     }
 
     private void checkForException() {
@@ -343,7 +347,6 @@ public class RecordCollectorImpl implements RecordCollector {
             } catch (final KafkaException e) {
                 throw new StreamsException("Caught a recoverable exception while closing", e);
             }
-            producer = null;
         }
 
         checkForException();
