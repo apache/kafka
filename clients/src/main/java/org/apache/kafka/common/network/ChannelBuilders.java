@@ -49,6 +49,8 @@ public class ChannelBuilders {
      * @param time the time instance
      * @param saslHandshakeRequestEnable flag to enable Sasl handshake requests; disabled only for SASL
      *             inter-broker connections with inter-broker protocol version < 0.10
+     * @param logContext the log context instance
+     *
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
@@ -74,9 +76,14 @@ public class ChannelBuilders {
 
     /**
      * @param listenerName the listenerName
+     * @param isInterBrokerListener whether or not this listener is used for inter-broker requests
      * @param securityProtocol the securityProtocol
      * @param config server config
      * @param credentialCache Credential cache for SASL/SCRAM if SCRAM is enabled
+     * @param tokenCache Delegation token cache
+     * @param time the time instance
+     * @param logContext the log context instance
+     *
      * @return the configured `ChannelBuilder`
      */
     public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
