@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
 
 public class ConsumerConfigTest {
@@ -35,6 +36,16 @@ public class ConsumerConfigTest {
     private final String valueDeserializerClassName = valueDeserializer.getClass().getName();
     private final Object keyDeserializerClass = keyDeserializer.getClass();
     private final Object valueDeserializerClass = valueDeserializer.getClass();
+
+    @Test
+    public void testOverrideClientId() {
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        ConsumerConfig config = new ConsumerConfig(properties);
+        assertTrue(!config.getString(ConsumerConfig.CLIENT_ID_CONFIG).isEmpty());
+    }
 
     @Test
     public void testDeserializerToPropertyConfig() {

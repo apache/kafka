@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
@@ -33,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -285,6 +287,8 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -519,7 +523,23 @@ public class ConsumerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        maybeOverrideClientId(refinedConfigs);
+        return refinedConfigs;
+    }
+
+    private void maybeOverrideClientId(Map<String, Object> configs) {
+        final String clientId = this.getString(CLIENT_ID_CONFIG);
+        if (clientId == null || clientId.isEmpty()) {
+            final String groupId = this.getString(GROUP_ID_CONFIG);
+            String groupInstanceId = this.getString(GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null)
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
+
+            String groupInstanceIdPart = groupInstanceId != null ? groupInstanceId : CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "";
+            String generatedClientId = String.format("consumer-%s-%s", groupId, groupInstanceIdPart);
+            configs.put(CLIENT_ID_CONFIG, generatedClientId);
+        }
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
