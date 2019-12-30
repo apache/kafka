@@ -44,6 +44,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import org.mockito.internal.verification.VerificationModeFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -415,7 +418,7 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testAwaitFlushComplete() throws Exception {
+    public void testAwaitFlushCompleteShouldThrowInterruptException() throws Exception {
         RecordAccumulator accum = createTestRecordAccumulator(
             4 * 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 64 * 1024, CompressionType.NONE, Integer.MAX_VALUE);
         accum.append(new TopicPartition(topic, 0), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds());
@@ -429,6 +432,31 @@ public class RecordAccumulatorTest {
         } catch (InterruptedException e) {
             assertFalse("flushInProgress count should be decremented even if thread is interrupted", accum.flushInProgress());
         }
+    }
+
+    @Test
+    public void testAwaitFlushCompleteShouldWaitForSplittedBatch() throws Exception {
+        int expectedSplittedBatches = 2;
+        int batchSize = 1025;
+        boolean isSplittedBatch = true;
+        boolean isNonSplittedBatch = false;
+        TopicPartition topicPartition = new TopicPartition("test", 0);
+        MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128),
+                CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+        ProduceRequestResult splittedBatchResult = mock(ProduceRequestResult.class);
+        ProduceRequestResult batchResult = mock(ProduceRequestResult.class);
+        ProducerBatch splittedBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, isSplittedBatch, splittedBatchResult);
+        ProducerBatch batch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, isNonSplittedBatch, batchResult);
+        IncompleteBatches incompleteBatches = new IncompleteBatches();
+        incompleteBatches.add(splittedBatch);
+        incompleteBatches.add(batch);
+        RecordAccumulator accumulator = createTestRecordAccumulator(3200, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                10L * batchSize, CompressionType.NONE, 10, incompleteBatches);
+
+        accumulator.awaitFlushCompletion();
+
+        verify(batchResult).await();
+        verify(splittedBatchResult, VerificationModeFactory.times(expectedSplittedBatches)).await();
     }
 
     @Test
@@ -1079,15 +1107,22 @@ public class RecordAccumulatorTest {
     }
 
 
-    private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, CompressionType type, int lingerMs) {
+    private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, CompressionType type, int lingerMs)
+            throws InterruptedException {
         int deliveryTimeoutMs = 3200;
-        return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, type, lingerMs);
+        return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, type, lingerMs, new IncompleteBatches());
+    }
+
+    private RecordAccumulator createTestRecordAccumulator(int deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type, int lingerMs) {
+        return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, type, lingerMs, new IncompleteBatches());
     }
 
     /**
      * Return a test RecordAccumulator instance
      */
-    private RecordAccumulator createTestRecordAccumulator(int deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type, int lingerMs) {
+    private RecordAccumulator createTestRecordAccumulator(int deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type,
+                                                          int lingerMs, IncompleteBatches incompleteBatches) {
+
         long retryBackoffMs = 100L;
         String metricGrpName = "producer-metrics";
 
@@ -1103,6 +1138,7 @@ public class RecordAccumulatorTest {
             time,
             new ApiVersions(),
             null,
-            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName),
+            incompleteBatches);
     }
 }

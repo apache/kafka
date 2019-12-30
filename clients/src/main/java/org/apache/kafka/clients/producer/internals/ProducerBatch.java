@@ -82,12 +82,17 @@ public final class ProducerBatch {
     }
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+        this(tp, recordsBuilder, createdMs, isSplitBatch, new ProduceRequestResult(tp));
+    }
+
+    ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch,
+                  ProduceRequestResult produceFuture) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
-        this.produceFuture = new ProduceRequestResult(topicPartition);
+        this.produceFuture = produceFuture;
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
