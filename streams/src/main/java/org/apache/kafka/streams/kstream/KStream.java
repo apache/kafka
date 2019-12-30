@@ -677,6 +677,7 @@ public interface KStream<K, V> {
      */
     <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> mapper,
                                       final Named named);
+
     /**
      * Print the records of this KStream using the options provided by {@link Printed}
      * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
@@ -872,1195 +873,6 @@ public interface KStream<K, V> {
      */
     void to(final TopicNameExtractor<K, V> topicExtractor,
             final Produced<K, V> produced);
-
-    /**
-     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * returns zero or one output record.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
-     * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform()}.
-     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
-     * in which case no record is emitted.
-     * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             KeyValue transform(K key, V value) {
-     *                 // can access this.state
-     *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transform()}.
-     * <p>
-     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
-     * <p>
-     * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
-     * {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
-     * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
-     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
-     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()}.
-     *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <K1>                the key type of the new stream
-     * @param <V1>                the value type of the new stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #map(KeyValueMapper)
-     * @see #flatTransform(TransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
-     */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
-                                       final String... stateStoreNames);
-
-    /**
-     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * returns zero or one output record.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
-     * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform()}.
-     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
-     * in which case no record is emitted.
-     * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             KeyValue transform(K key, V value) {
-     *                 // can access this.state
-     *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transform()}.
-     * <p>
-     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
-     * <p>
-     * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
-     * {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
-     * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
-     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
-     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()}.
-     *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <K1>                the key type of the new stream
-     * @param <V1>                the value type of the new stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #map(KeyValueMapper)
-     * @see #flatTransform(TransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
-     */
-    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
-                                       final Named named,
-                                       final String... stateStoreNames);
-
-    /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * returns zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
-     * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
-     * punctuate()}, a schedule must be registered.
-     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
-     * type) in {@link Transformer#transform(Object, Object) transform()}.
-     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
-     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
-     * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<KeyValue> transform(K key, V value) {
-     *                 // can access this.state
-     *                 List<KeyValue> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new KeyValue(key, value));
-     *                 }
-     *                 return result; // emits a list of key-value pairs via return
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransform()}.
-     * <p>
-     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
-     * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
-     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
-     * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
-     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <K1>                the key type of the new stream
-     * @param <V1>                the value type of the new stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #flatMap(KeyValueMapper)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
-     */
-    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
-                                           final String... stateStoreNames);
-
-    /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * returns zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
-     * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
-     * punctuate()}, a schedule must be registered.
-     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
-     * type) in {@link Transformer#transform(Object, Object) transform()}.
-     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
-     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
-     * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<KeyValue> transform(K key, V value) {
-     *                 // can access this.state
-     *                 List<KeyValue> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new KeyValue(key, value));
-     *                 }
-     *                 return result; // emits a list of key-value pairs via return
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransform()}.
-     * <p>
-     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
-     * <p>
-     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
-     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
-     * detected at runtime.
-     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
-     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
-     *
-     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param named               a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames     the names of the state stores used by the processor
-     * @param <K1>                the key type of the new stream
-     * @param <V1>                the value type of the new stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #flatMap(KeyValueMapper)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerSupplier, String...)
-     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
-     * @see #process(ProcessorSupplier, String...)
-     */
-    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
-                                           final Named named,
-                                           final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
-     * record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
-     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is {@code null},
-     * no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
-     * emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             NewValueType transform(V value) {
-     *                 // can access this.state
-     *                 return new NewValueType(); // or null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transformValues()}.
-     * <p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
-                                        final String... stateStoreNames);
-    /**
-     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
-     * record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
-     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is {@code null}, no
-     * records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
-     * emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             NewValueType transform(V value) {
-     *                 // can access this.state
-     *                 return new NewValueType(); // or null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transformValues()}.
-     * <p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
-     * @param named                    a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
-                                        final Named named,
-                                        final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
-     * each input record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformerWithKey} must return the new value in
-     * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
-     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
-     * is {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
-     * to emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             NewValueType transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 return new NewValueType(readOnlyKey); // or null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transformValues()}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
-                                        final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
-     * each input record value and computes a new value for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformerWithKey} must return the new value in
-     * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
-     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
-     * is {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
-     * to emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             NewValueType transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 return new NewValueType(readOnlyKey); // or null
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code transformValues()}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param named                    a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
-                                        final Named named,
-                                        final String... stateStoreNames);
-    /**
-     * Transform the value of each input record into zero or more new values (with possibly a new
-     * type) and emit for each new value a record with the same key of the input record and the value.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
-     * record value and computes zero or more new values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
-     * {@link java.util.Collection} type) in {@link ValueTransformer#transform(Object)
-     * transform()}.
-     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
-     * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
-     * emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<NewValueType> transform(V value) {
-     *                 // can access this.state
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(value));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransformValues()}.
-     * <p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()})
-     *
-     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
-     * different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #flatTransform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
-                                            final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into zero or more new values (with possibly a new
-     * type) and emit for each new value a record with the same key of the input record and the value.
-     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
-     * record value and computes zero or more new values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
-     * the processing progress can be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
-     * {@link java.util.Collection} type) in {@link ValueTransformer#transform(Object)
-     * transform()}.
-     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
-     * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
-     * emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<NewValueType> transform(V value) {
-     *                 // can access this.state
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(value));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransformValues()}.
-     * <p>
-     * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()})
-     *
-     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
-     *                                 {@link ValueTransformer}
-     * @param named                    a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
-     * different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #flatTransform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
-                                            final Named named,
-                                            final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into zero or more new values (with possibly a new
-     * type) and emit for each new value a record with the same key of the input record and the value.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
-     * each input record value and computes zero or more new values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
-     * be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformerWithKey} must return an {@link java.lang.Iterable} type (e.g., any
-     * {@link java.util.Collection} type) in {@link ValueTransformerWithKey#transform(Object, Object)
-     * transform()}.
-     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
-     * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
-     * to emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(readOnlyKey));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransformValues()}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
-     * different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #flatTransform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
-                                            final String... stateStoreNames);
-
-    /**
-     * Transform the value of each input record into zero or more new values (with possibly a new
-     * type) and emit for each new value a record with the same key of the input record and the value.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
-     * each input record value and computes zero or more new values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
-     * be observed and additional periodic actions can be performed.
-     * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
-     * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * The {@link ValueTransformerWithKey} must return an {@link java.lang.Iterable} type (e.g., any
-     * {@link java.util.Collection} type) in {@link ValueTransformerWithKey#transform(Object, Object)
-     * transform()}.
-     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
-     * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
-     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
-     * to emit a {@link KeyValue} pair.
-     * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(readOnlyKey));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
-     * {@code flatTransformValues()}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
-     * flatTransform()})
-     *
-     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
-     *                                 {@link ValueTransformerWithKey}
-     * @param named                    a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames          the names of the state stores used by the processor
-     * @param <VR>                     the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
-     * different type)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
-     * @see #flatTransform(TransformerSupplier, String...)
-     */
-    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
-                                            final Named named,
-                                            final String... stateStoreNames);
-
-    /**
-     * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
-     * {@link ProcessorSupplier}).
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * Note that this is a terminal operation that returns void.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
-     * }</pre>
-     * Within the {@link Processor}, the state is obtained via the
-     * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * <pre>{@code
-     * new ProcessorSupplier() {
-     *     Processor get() {
-     *         return new Processor() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myProcessorState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
-     *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
-     * @param stateStoreNames   the names of the state store used by the processor
-     * @see #foreach(ForeachAction)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
-                 final String... stateStoreNames);
-
-    /**
-     * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
-     * {@link ProcessorSupplier}).
-     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
-     * but allows access to the {@code ProcessorContext} and record metadata.
-     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
-     * Note that this is a terminal operation that returns void.
-     * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
-     * // create store
-     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
-     *                 Serdes.String(),
-     *                 Serdes.String());
-     * // register store
-     * builder.addStateStore(keyValueStoreBuilder);
-     *
-     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
-     * }</pre>
-     * Within the {@link Processor}, the state is obtained via the
-     * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
-     * <pre>{@code
-     * new ProcessorSupplier() {
-     *     Processor get() {
-     *         return new Processor() {
-     *             private StateStore state;
-     *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myProcessorState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
-     *
-     *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
-     *     }
-     * }
-     * }</pre>
-     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
-     *
-     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
-     * @param named             a {@link Named} config used to name the processor in the topology
-     * @param stateStoreNames   the names of the state store used by the processor
-     * @see #foreach(ForeachAction)
-     * @see #transform(TransformerSupplier, String...)
-     */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
-                 final Named named,
-                 final String... stateStoreNames);
 
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values
@@ -3446,4 +2258,1193 @@ public interface KStream<K, V> {
                                          final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
                                          final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner,
                                          final Named named);
+
+    /**
+     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or one output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
+     * transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * in which case no record is emitted.
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each second; can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             KeyValue transform(K key, V value) {
+     *                 // can access this.state
+     *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transform()}.
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
+     * <p>
+     * Note that it is possible to emit multiple records for each input record by using
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
+     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()}.
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #map(KeyValueMapper)
+     * @see #flatTransform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
+                                       final String... stateStoreNames);
+
+    /**
+     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or one output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #map(KeyValueMapper) map()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
+     * transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * in which case no record is emitted.
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each second; can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             KeyValue transform(K key, V value) {
+     *                 // can access this.state
+     *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transform()}.
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
+     * <p>
+     * Note that it is possible to emit multiple records for each input record by using
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
+     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()}.
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #map(KeyValueMapper)
+     * @see #flatTransform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
+                                       final Named named,
+                                       final String... stateStoreNames);
+
+    /**
+     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or more output records.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
+     * punctuate()}, a schedule must be registered.
+     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
+     * type) in {@link Transformer#transform(Object, Object) transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each second; can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<KeyValue> transform(K key, V value) {
+     *                 // can access this.state
+     *                 List<KeyValue> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new KeyValue(key, value));
+     *                 }
+     *                 return result; // emits a list of key-value pairs via return
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransform()}.
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
+     * <p>
+     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #flatMap(KeyValueMapper)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+                                           final String... stateStoreNames);
+
+    /**
+     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or more output records.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMap(KeyValueMapper) flatMap()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
+     * punctuate()}, a schedule must be registered.
+     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
+     * type) in {@link Transformer#transform(Object, Object) transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each second; can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<KeyValue> transform(K key, V value) {
+     *                 // can access this.state
+     *                 List<KeyValue> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new KeyValue(key, value));
+     *                 }
+     *                 return result; // emits a list of key-value pairs via return
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransform()}.
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
+     * <p>
+     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #flatMap(KeyValueMapper)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+                                           final Named named,
+                                           final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
+     * record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is {@code null},
+     * no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
+     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
+     * emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerSupplier() {
+     *     ValueTransformer get() {
+     *         return new ValueTransformer() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             NewValueType transform(V value) {
+     *                 // can access this.state
+     *                 return new NewValueType(); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transformValues()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
+     *                                 {@link ValueTransformer}
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
+                                        final String... stateStoreNames);
+    /**
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
+     * record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is {@code null}, no
+     * records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
+     * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
+     * emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerSupplier() {
+     *     ValueTransformer get() {
+     *         return new ValueTransformer() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             NewValueType transform(V value) {
+     *                 // can access this.state
+     *                 return new NewValueType(); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transformValues()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
+     *                                 {@link ValueTransformer}
+     * @param named                    a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
+                                        final Named named,
+                                        final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
+     * each input record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformerWithKey} must return the new value in
+     * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
+     * to emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transformValues()}.
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * So, setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                                 {@link ValueTransformerWithKey}
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                        final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
+     * each input record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapperWithKey) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformerWithKey} must return the new value in
+     * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
+     * to emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transformValues()}.
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * So, setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                                 {@link ValueTransformerWithKey}
+     * @param named                    a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                        final Named named,
+                                        final String... stateStoreNames);
+    /**
+     * Transform the value of each input record into zero or more new values (with possibly a new
+     * type) and emit for each new value a record with the same key of the input record and the value.
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
+     * record value and computes zero or more new values.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformer#transform(Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
+     * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
+     * emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerSupplier() {
+     *     ValueTransformer get() {
+     *         return new ValueTransformer() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<NewValueType> transform(V value) {
+     *                 // can access this.state
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(value));
+     *                 }
+     *                 return result; // values
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransformValues()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()})
+     *
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
+     *                                 {@link ValueTransformer}
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
+     * different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
+                                            final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into zero or more new values (with possibly a new
+     * type) and emit for each new value a record with the same key of the input record and the value.
+     * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
+     * record value and computes zero or more new values.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper) mapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #mapValues(ValueMapper) mapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformer#transform(Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
+     * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
+     * emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerSupplier() {
+     *     ValueTransformer get() {
+     *         return new ValueTransformer() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<NewValueType> transform(V value) {
+     *                 // can access this.state
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(value));
+     *                 }
+     *                 return result; // values
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransformValues()}.
+     * <p>
+     * Setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()})
+     *
+     * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
+     *                                 {@link ValueTransformer}
+     * @param named                    a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
+     * different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
+                                            final Named named,
+                                            final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into zero or more new values (with possibly a new
+     * type) and emit for each new value a record with the same key of the input record and the value.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
+     * each input record value and computes zero or more new values.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
+     * be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformerWithKey} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformerWithKey#transform(Object, Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
+     * to emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(readOnlyKey));
+     *                 }
+     *                 return result; // values
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransformValues()}.
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * So, setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                                 {@link ValueTransformerWithKey}
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
+     * different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
+                                            final String... stateStoreNames);
+
+    /**
+     * Transform the value of each input record into zero or more new values (with possibly a new
+     * type) and emit for each new value a record with the same key of the input record and the value.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
+     * each input record value and computes zero or more new values.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #flatMapValues(ValueMapperWithKey) flatMapValues()}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can
+     * be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state store, the state store must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * The {@link ValueTransformerWithKey} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformerWithKey#transform(Object, Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
+     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
+     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
+     * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
+     * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
+     * to emit a {@link KeyValue} pair.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myValueTransformState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(readOnlyKey));
+     *                 }
+     *                 return result; // values
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransformValues()}.
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * So, setting a new value preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * is applied to the result {@code KStream}. (cf. {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()})
+     *
+     * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                                 {@link ValueTransformerWithKey}
+     * @param named                    a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param <VR>                     the value type of the result stream
+     * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
+     * different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
+     */
+    <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
+                                            final Named named,
+                                            final String... stateStoreNames);
+
+    /**
+     * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
+     * {@link ProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * Note that this is a terminal operation that returns void.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
+     * }</pre>
+     * Within the {@link Processor}, the state is obtained via the
+     * {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new ProcessorSupplier() {
+     *     Processor get() {
+     *         return new Processor() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myProcessorState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             void process(K key, V value) {
+     *                 // can access this.state
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     *
+     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param stateStoreNames   the names of the state store used by the processor
+     * @see #foreach(ForeachAction)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final String... stateStoreNames);
+
+    /**
+     * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
+     * {@link ProcessorSupplier}).
+     * Attaching a state store makes this a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
+     * If you choose not to attach one, this operation is similar to the stateless {@link #foreach(ForeachAction)}
+     * but allows access to the {@code ProcessorContext} and record metadata.
+     * This is essentially mixing the Processor API into the DSL, and provides all the functionality of the PAPI.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * Note that this is a terminal operation that returns void.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
+     * }</pre>
+     * Within the {@link Processor}, the state is obtained via the
+     * {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new ProcessorSupplier() {
+     *     Processor get() {
+     *         return new Processor() {
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = context.getStateStore("myProcessorState");
+     *                 // punctuate each second, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             void process(K key, V value) {
+     *                 // can access this.state
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     *
+     * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
+     * @param named             a {@link Named} config used to name the processor in the topology
+     * @param stateStoreNames   the names of the state store used by the processor
+     * @see #foreach(ForeachAction)
+     * @see #transform(TransformerSupplier, String...)
+     */
+    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final Named named,
+                 final String... stateStoreNames);
 }
