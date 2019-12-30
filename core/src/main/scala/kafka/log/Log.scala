@@ -1767,7 +1767,7 @@ class Log(@volatile var dir: File,
     if (config.retentionSize < 0 || size < config.retentionSize) return 0
     var diff = size - config.retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
-      if (diff - segment.size >= 0) {
+      if (diff >= 0) {
         diff -= segment.size
         true
       } else {
