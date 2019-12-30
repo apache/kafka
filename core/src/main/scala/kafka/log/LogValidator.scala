@@ -45,7 +45,7 @@ private[kafka] object AppendOrigin {
    * The log append came through replication from the leader. This typically implies minimal validation.
    * Particularly, we do not decompress record batches in order to validate records individually.
    */
-  case object Leader extends AppendOrigin
+  case object Replication extends AppendOrigin
 
   /**
    * The log append came from either the group coordinator or the transaction coordinator. We validate

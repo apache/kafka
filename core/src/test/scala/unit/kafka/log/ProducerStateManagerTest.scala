@@ -117,7 +117,7 @@ class ProducerStateManagerTest {
     val epoch = 15.toShort
     val sequence = Int.MaxValue
     val offset = 735L
-    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Leader)
+    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Replication)
 
     append(stateManager, producerId, epoch, 0, offset + 500)
 
@@ -135,9 +135,9 @@ class ProducerStateManagerTest {
   def testProducerSequenceWithWrapAroundBatchRecord(): Unit = {
     val epoch = 15.toShort
 
-    val appendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Leader)
+    val appendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Replication)
     // Sequence number wrap around
-    appendInfo.append(epoch, Int.MaxValue - 10, 9, time.milliseconds(),
+    appendInfo.appendDataBatch(epoch, Int.MaxValue - 10, 9, time.milliseconds(),
       LogOffsetMetadata(2000L), 2020L, isTransactional = false)
     assertEquals(None, stateManager.lastEntry(producerId))
     stateManager.update(appendInfo)
@@ -155,7 +155,7 @@ class ProducerStateManagerTest {
     val epoch = 15.toShort
     val sequence = Int.MaxValue
     val offset = 735L
-    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Leader)
+    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Replication)
     append(stateManager, producerId, epoch, 1, offset + 500)
   }
 
@@ -164,7 +164,7 @@ class ProducerStateManagerTest {
     val epoch = 5.toShort
     val sequence = 16
     val offset = 735L
-    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Leader)
+    append(stateManager, producerId, epoch, sequence, offset, origin = AppendOrigin.Replication)
 
     val maybeLastEntry = stateManager.lastEntry(producerId)
     assertTrue(maybeLastEntry.isDefined)
@@ -213,7 +213,7 @@ class ProducerStateManagerTest {
 
     val firstOffsetMetadata = LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
       relativePositionInSegment = 234224)
-    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(),
+    producerAppendInfo.appendDataBatch(producerEpoch, seq, seq, time.milliseconds(),
       firstOffsetMetadata, offset, isTransactional = true)
     stateManager.update(producerAppendInfo)
 
@@ -235,7 +235,7 @@ class ProducerStateManagerTest {
       )
       val firstOffsetMetadata = LogOffsetMetadata(messageOffset = startOffset, segmentBaseOffset = segmentBaseOffset,
         relativePositionInSegment = 50 * relativeOffset)
-      producerAppendInfo.append(producerEpoch, 0, 0, time.milliseconds(),
+      producerAppendInfo.appendDataBatch(producerEpoch, 0, 0, time.milliseconds(),
         firstOffsetMetadata, startOffset, isTransactional = true)
       stateManager.update(producerAppendInfo)
     }
@@ -279,14 +279,14 @@ class ProducerStateManagerTest {
     val producerEpoch = 0.toShort
 
     val appendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
-    appendInfo.append(producerEpoch, 0, 5, time.milliseconds(),
+    appendInfo.appendDataBatch(producerEpoch, 0, 5, time.milliseconds(),
       LogOffsetMetadata(15L), 20L, isTransactional = false)
     assertEquals(None, stateManager.lastEntry(producerId))
     stateManager.update(appendInfo)
     assertTrue(stateManager.lastEntry(producerId).isDefined)
 
     val nextAppendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
-    nextAppendInfo.append(producerEpoch, 6, 10, time.milliseconds(),
+    nextAppendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
       LogOffsetMetadata(26L), 30L, isTransactional = false)
     assertTrue(stateManager.lastEntry(producerId).isDefined)
 
@@ -310,7 +310,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, producerEpoch, 0, offset)
 
     val appendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
-    appendInfo.append(producerEpoch, 1, 5, time.milliseconds(),
+    appendInfo.appendDataBatch(producerEpoch, 1, 5, time.milliseconds(),
       LogOffsetMetadata(16L), 20L, isTransactional = true)
     var lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
@@ -321,7 +321,7 @@ class ProducerStateManagerTest {
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
-    appendInfo.append(producerEpoch, 6, 10, time.milliseconds(),
+    appendInfo.appendDataBatch(producerEpoch, 6, 10, time.milliseconds(),
       LogOffsetMetadata(26L), 30L, isTransactional = true)
     lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
@@ -524,7 +524,7 @@ class ProducerStateManagerTest {
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Nonetheless
     // the append on a replica should be accepted with the local producer state updated to the appended value.
     assertFalse(recoveredMapping.activeProducers.contains(producerId))
-    append(recoveredMapping, producerId, epoch, sequence, 2L, 70001, origin = AppendOrigin.Leader)
+    append(recoveredMapping, producerId, epoch, sequence, 2L, 70001, origin = AppendOrigin.Replication)
     assertTrue(recoveredMapping.activeProducers.contains(producerId))
     val producerStateEntry = recoveredMapping.activeProducers.get(producerId).head
     assertEquals(epoch, producerStateEntry.producerEpoch)
@@ -550,7 +550,7 @@ class ProducerStateManagerTest {
     }
 
     assertEquals(0L, stateManager.activeProducers(producerId).lastSeq)
-    append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.Leader)
+    append(stateManager, producerId, epoch, outOfOrderSequence, 1L, 1, origin = AppendOrigin.Replication)
     assertEquals(outOfOrderSequence, stateManager.activeProducers(producerId).lastSeq)
   }
 
@@ -890,7 +890,7 @@ class ProducerStateManagerTest {
                      isTransactional: Boolean = false,
                      origin : AppendOrigin = AppendOrigin.Client): Unit = {
     val producerAppendInfo = stateManager.prepareUpdate(producerId, origin)
-    producerAppendInfo.append(producerEpoch, seq, seq, timestamp,
+    producerAppendInfo.appendDataBatch(producerEpoch, seq, seq, timestamp,
       LogOffsetMetadata(offset), offset, isTransactional)
     stateManager.update(producerAppendInfo)
     stateManager.updateMapEndOffset(offset + 1)

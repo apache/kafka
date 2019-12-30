@@ -171,8 +171,8 @@ private[log] class ProducerStateEntry(val producerId: Long,
  *                      in the current entry so that the space overhead is constant.
  * @param origin Indicates the origin of the append which implies the extent of validation. For example, offset
  *               commits, which originate from the group coordinator, do not have sequence numbers and therefore
- *               only producer epoch validation is done. Appends from leaders are not validated (we assume the
- *               validation has already been done) and appends from clients require full validation.
+ *               only producer epoch validation is done. Appends which come through replciation are not validated
+ *               (we assume the validation has already been done) and appends from clients require full validation.
  */
 private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
                                       val producerId: Long,
@@ -199,7 +199,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       val message = s"Producer's epoch at offset $offset in $topicPartition is $producerEpoch, which is " +
         s"smaller than the last seen epoch ${updatedEntry.producerEpoch}"
 
-      if (origin == AppendOrigin.Leader) {
+      if (origin == AppendOrigin.Replication) {
         warn(message)
       } else {
         throw new ProducerFencedException(message)
@@ -251,19 +251,19 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       }
     } else {
       val firstOffsetMetadata = firstOffsetMetadataOpt.getOrElse(LogOffsetMetadata(batch.baseOffset))
-      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp,
+      appendDataBatch(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp,
         firstOffsetMetadata, batch.lastOffset, batch.isTransactional)
       None
     }
   }
 
-  def append(epoch: Short,
-             firstSeq: Int,
-             lastSeq: Int,
-             lastTimestamp: Long,
-             firstOffsetMetadata: LogOffsetMetadata,
-             lastOffset: Long,
-             isTransactional: Boolean): Unit = {
+  def appendDataBatch(epoch: Short,
+                      firstSeq: Int,
+                      lastSeq: Int,
+                      lastTimestamp: Long,
+                      firstOffsetMetadata: LogOffsetMetadata,
+                      lastOffset: Long,
+                      isTransactional: Boolean): Unit = {
     val firstOffset = firstOffsetMetadata.messageOffset
     maybeValidateDataBatch(epoch, firstSeq, firstOffset)
     updatedEntry.addBatch(epoch, lastSeq, lastOffset, (lastOffset - firstOffset).toInt, lastTimestamp)
@@ -285,8 +285,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkCoordinatorEpoch(endTxnMarker: EndTransactionMarker, offset: Long): Unit = {
     if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch) {
-      if (origin == AppendOrigin.Leader) {
-        warn(s"Detected invalid coordinator epoch for producerId $producerId at " +
+      if (origin == AppendOrigin.Replication) {
+        info(s"Detected invalid coordinator epoch for producerId $producerId at " +
           s"offset $offset in partition $topicPartition: ${endTxnMarker.coordinatorEpoch} " +
           s"is older than previously known coordinator epoch ${updatedEntry.coordinatorEpoch}")
       } else {

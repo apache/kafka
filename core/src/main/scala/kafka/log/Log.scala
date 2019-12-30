@@ -882,7 +882,7 @@ class Log(@volatile var dir: File,
         val maybeCompletedTxn = updateProducers(batch,
           loadedProducers,
           firstOffsetMetadata = None,
-          origin = AppendOrigin.Leader)
+          origin = AppendOrigin.Replication)
         maybeCompletedTxn.foreach(completedTxns += _)
       }
     }
@@ -992,7 +992,7 @@ class Log(@volatile var dir: File,
    */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records,
-      origin = AppendOrigin.Leader,
+      origin = AppendOrigin.Replication,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       assignOffsets = false,
       leaderEpoch = -1)
