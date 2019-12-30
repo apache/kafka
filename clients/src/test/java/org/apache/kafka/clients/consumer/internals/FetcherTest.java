@@ -2519,11 +2519,11 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersDisconnectException(){
+    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersDisconnectException() {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
-        subscriptions.assignFromUser(Utils.mkSet(tp0,t2p0));
+        subscriptions.assignFromUser(Utils.mkSet(tp0, t2p0));
 
         client.reset();
 
