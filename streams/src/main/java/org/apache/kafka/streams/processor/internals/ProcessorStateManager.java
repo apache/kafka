@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
@@ -73,7 +74,7 @@ public class ProcessorStateManager implements StateManager {
     private final boolean eosEnabled;
     private final File baseDir;
     private OffsetCheckpoint checkpointFile;
-    private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
+    private final Map<TopicPartition, Long> checkpointFileCache = new ConcurrentHashMap<>();
     private final Map<TopicPartition, Long> initialLoadedCheckpoints;
 
     /**
@@ -102,7 +103,7 @@ public class ProcessorStateManager implements StateManager {
         offsetLimits = new HashMap<>();
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
-        restoreCallbacks = isStandby ? new HashMap<>() : null;
+        restoreCallbacks = isStandby ? new ConcurrentHashMap<>() : null;
         recordConverters = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = new HashMap<>(storeToChangelogTopic);
 

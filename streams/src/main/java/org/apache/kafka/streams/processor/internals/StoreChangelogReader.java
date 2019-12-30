@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -46,7 +47,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final StateRestoreListener userStateRestoreListener;
     private final Map<TopicPartition, Long> restoreToOffsets = new HashMap<>();
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
-    private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
+    private final Map<TopicPartition, StateRestorer> stateRestorers = new ConcurrentHashMap<>();
     private final Set<TopicPartition> needsRestoring = new HashSet<>();
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
