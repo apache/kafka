@@ -1185,7 +1185,7 @@ class ReplicaManagerTest {
       timeout = 10,
       requiredAcks = -1,
       internalTopicsAllowed = false,
-      isFromClient = true,
+      origin = AppendOrigin.Client,
       entriesPerPartition = Map(topicPartition -> records),
       responseCallback = callback
     )
