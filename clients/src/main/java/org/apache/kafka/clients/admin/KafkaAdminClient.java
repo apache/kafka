@@ -264,7 +264,7 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The default timeout to use for an operation.
      */
-    private int defaultTimeoutMs;
+    private int defaultApiTimeoutMs;
 
     /**
      * The timeout to use for a single request.
@@ -397,7 +397,7 @@ public class KafkaAdminClient extends AdminClient {
     private long calcDeadlineMs(long now, Integer optionTimeoutMs) {
         if (optionTimeoutMs != null)
             return now + Math.max(0, optionTimeoutMs);
-        return now + defaultTimeoutMs;
+        return now + defaultApiTimeoutMs;
     }
 
     /**
@@ -535,31 +535,19 @@ public class KafkaAdminClient extends AdminClient {
      */
     private void configureDefaultApiTimeoutMsAndRequestTimeoutMs(AdminClientConfig config) {
         this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        this.defaultTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        this.defaultApiTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-        if (this.defaultTimeoutMs < this.requestTimeoutMs) {
+        if (this.defaultApiTimeoutMs < this.requestTimeoutMs) {
             if (config.originals().containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
                 throw new ConfigException("The specified value of " + AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG +
                         " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {
-                log.warn("Overriding the default value for {} to {}.", AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.requestTimeoutMs);
-                this.defaultTimeoutMs = Math.max(this.defaultTimeoutMs, this.requestTimeoutMs);
+                log.warn("Overriding the default value for {} ({}) with the explicitly configured request timeout {}",
+                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.defaultApiTimeoutMs,
+                        this.requestTimeoutMs);
+                this.defaultApiTimeoutMs = this.requestTimeoutMs;
             }
         }
-    }
-
-    Time time() {
-        return time;
-    }
-
-    // package level visibility for testing only
-    int defaultTimeoutMs() {
-        return this.defaultTimeoutMs;
-    }
-
-    // package level visibility for testing only
-    int requestTimeoutMs() {
-        return this.requestTimeoutMs;
     }
 
     @Override
@@ -1031,17 +1019,18 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 Call call = calls.remove(0);
-                int timeoutMs = Math.min(requestTimeoutMs, calcTimeoutMsRemainingAsInt(now, call.deadlineMs));
+                int requestTimeoutMs = Math.min(KafkaAdminClient.this.requestTimeoutMs,
+                        calcTimeoutMsRemainingAsInt(now, call.deadlineMs));
                 AbstractRequest.Builder<?> requestBuilder;
                 try {
-                    requestBuilder = call.createRequest(timeoutMs);
+                    requestBuilder = call.createRequest(requestTimeoutMs);
                 } catch (Throwable throwable) {
                     call.fail(now, new KafkaException(String.format(
                         "Internal error sending %s to %s.", call.callName, node)));
                     continue;
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
-                        true, timeoutMs, null);
+                        true, requestTimeoutMs, null);
                 log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
@@ -1339,7 +1328,7 @@ public class KafkaAdminClient extends AdminClient {
          * Create a new metadata call.
          */
         private Call makeMetadataCall(long now) {
-            return new Call(true, "fetchMetadata", calcDeadlineMs(now, defaultTimeoutMs),
+            return new Call(true, "fetchMetadata", calcDeadlineMs(now, requestTimeoutMs),
                     new MetadataUpdateNodeIdProvider()) {
                 @Override
                 public MetadataRequest.Builder createRequest(int timeoutMs) {
