@@ -1108,8 +1108,6 @@ class KafkaController(val config: KafkaConfig,
         (tp, controllerContext.partitionReplicaAssignment(tp) )
       }.toMap.groupBy { case (_, assignedReplicas) => assignedReplicas.head }
 
-    debug(s"Preferred replicas by broker $preferredReplicasForTopicsByBrokers")
-
     // for each broker, check if a preferred replica election needs to be triggered
     preferredReplicasForTopicsByBrokers.foreach { case (leaderBroker, topicPartitionsForBroker) =>
       val topicsNotInPreferredReplica = topicPartitionsForBroker.filter { case (topicPartition, _) =>
