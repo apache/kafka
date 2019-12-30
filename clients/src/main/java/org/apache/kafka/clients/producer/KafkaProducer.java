@@ -504,23 +504,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         TransactionManager transactionManager = null;
 
-        boolean userConfiguredIdempotence = false;
-        if (config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG))
-            userConfiguredIdempotence = true;
+        boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        if (userConfiguredTransactions && !userConfiguredIdempotence)
+            log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
-        boolean userConfiguredTransactions = false;
-        if (config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
-            userConfiguredTransactions = true;
-
-        boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-
-        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
-
-        if (userConfiguredTransactions)
-            idempotenceEnabled = true;
-
-        if (idempotenceEnabled) {
+        if (config.idempotenceEnabled()) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -530,7 +520,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             else
                 log.info("Instantiated an idempotent producer.");
         }
-
         return transactionManager;
     }
 
@@ -553,15 +542,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static short configureAcks(ProducerConfig config, Logger log) {
         boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
-        short acks = (short) ProducerConfig.parseAcks(config.getString(ProducerConfig.ACKS_CONFIG));
+        short acks = Short.valueOf(config.getString(ProducerConfig.ACKS_CONFIG));
 
-        if (config.idempotenceEnabled() && !userConfiguredAcks) {
-            log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-        }
-
-        if (config.idempotenceEnabled() && acks != -1) {
-            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence.");
+        if (config.idempotenceEnabled()) {
+            if (!userConfiguredAcks)
+                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
+            else if (acks != -1)
+                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
         }
         return acks;
     }
