@@ -677,9 +677,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def activeProducers = pendingTransactionalOffsetCommits.keySet
+  def activeProducers: collection.Set[Long] = pendingTransactionalOffsetCommits.keySet
 
-  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+  def hasPendingOffsetCommitsFromProducer(producerId: Long): Boolean =
     pendingTransactionalOffsetCommits.contains(producerId)
 
   def hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt: Option[Seq[TopicPartition]]) : Boolean = {

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Exception thrown when there is pending transactional offset commit.
+ */
 public class PendingTransactionException extends ApiException {
 
     private static final long serialVersionUID = 1L;

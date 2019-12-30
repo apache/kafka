@@ -319,7 +319,7 @@ public enum Errors {
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
         GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
-    PENDING_TRANSACTION(88, "There are pending transactions for the offset topic that needs to be cleared",
+    PENDING_TRANSACTION(88, "There are pending transactions for the offset topic that need to be cleared",
         PendingTransactionException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

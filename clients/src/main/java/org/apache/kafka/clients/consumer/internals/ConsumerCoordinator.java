@@ -1221,8 +1221,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId,
-                                                                                   false, new ArrayList<>(partitions));
+        OffsetFetchRequest.Builder requestBuilder =
+            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, false, new ArrayList<>(partitions));
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)

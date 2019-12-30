@@ -67,10 +67,6 @@ public class OffsetFetchRequest extends AbstractRequest {
                             .setTopics(topics);
         }
 
-        public static Builder allTopicPartitions(String groupId) {
-            return new Builder(groupId, false, null);
-        }
-
         public boolean isAllTopicPartitions() {
             return this.data.topics() == ALL_TOPIC_PARTITIONS;
         }
