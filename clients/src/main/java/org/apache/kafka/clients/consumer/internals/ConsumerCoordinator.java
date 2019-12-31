@@ -1255,9 +1255,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
-                OffsetFetchResponse.PartitionData data = entry.getValue();
-                if (data.hasError()) {
-                    Errors error = data.error;
+                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                if (partitionData.hasError()) {
+                    Errors error = partitionData.error;
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -1273,10 +1273,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             tp + ": " + error.message()));
                         return;
                     }
-                } else if (data.offset >= 0) {
+                } else if (partitionData.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch);
                     // if there's no committed offset, record as null
-                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
+                    offsets.put(tp, new OffsetAndMetadata(partitionData.offset, partitionData.leaderEpoch, partitionData.metadata));
                 } else {
                     log.info("Found no committed offset for partition {}", tp);
                     offsets.put(tp, null);
