@@ -102,7 +102,8 @@ public class SslSelectorTest extends SelectorTest {
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
-                TestTrustManagerFactory.ALGORITHM
+                TestTrustManagerFactory.ALGORITHM,
+                TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS
         );
         sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
@@ -276,8 +277,12 @@ public class SslSelectorTest extends SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         //the initial channel builder is for clients, we need a server one
+        String tlsProtocol = "TLSv1.2";
         File trustStoreFile = File.createTempFile("truststore", ".jks");
-        Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(Mode.SERVER)
+                .tlsProtocol(tlsProtocol)
+                .createNewTrustStore(trustStoreFile)
+                .build();
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
@@ -288,8 +293,8 @@ public class SslSelectorTest extends SelectorTest {
 
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
-            SslSender sender1 = createSender(serverAddress, randomPayload(900));
-            SslSender sender2 = createSender(serverAddress, randomPayload(900));
+            SslSender sender1 = createSender(tlsProtocol, serverAddress, randomPayload(900));
+            SslSender sender2 = createSender(tlsProtocol, serverAddress, randomPayload(900));
             sender1.start();
             sender2.start();
 
@@ -358,8 +363,8 @@ public class SslSelectorTest extends SelectorTest {
         blockingConnect(node, serverAddr);
     }
 
-    private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {
-        return new SslSender(serverAddress, payload);
+    private SslSender createSender(String tlsProtocol, InetSocketAddress serverAddress, byte[] payload) {
+        return new SslSender(tlsProtocol, serverAddress, payload);
     }
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {

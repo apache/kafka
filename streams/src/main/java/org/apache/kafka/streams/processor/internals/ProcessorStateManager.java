@@ -286,9 +286,10 @@ public class ProcessorStateManager implements StateManager {
     }
 
     /**
-     * @throws ProcessorStateException error when flushing the state store; for example IO exception
-     * @throws StreamsException fatal error sending changelog records that should cause the thread to die
+     * @throws ProcessorStateException error when flushing the state store, for example IO exception,
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error other than processor state and task migrated exception, e.g. sending
+     *                          changelog records failed; that should cause the thread to die
      */
     @Override
     public void flush() {

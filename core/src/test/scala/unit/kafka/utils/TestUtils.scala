@@ -563,10 +563,11 @@ object TestUtils extends Logging {
                       trustStoreFile: Option[File],
                       certAlias: String,
                       certCn: String,
-                      saslProperties: Option[Properties]): Properties = {
+                      saslProperties: Option[Properties],
+                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn)
+      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn, tlsProtocol)
 
     if (usesSaslAuthentication(securityProtocol))
       props ++= JaasTestUtils.saslConfigs(saslProperties)
@@ -1158,12 +1159,19 @@ object TestUtils extends Logging {
   }
 
   def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
-                 certCn: String = SslCertificateCn): Properties = {
+                 certCn: String = SslCertificateCn,
+                 tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
     val trustStore = trustStoreFile.getOrElse {
       throw new Exception("SSL enabled but no trustStoreFile provided")
     }
 
-    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias, certCn)
+    val sslConfigs = new TestSslUtils.SslConfigsBuilder(mode)
+      .useClientCert(clientCert)
+      .createNewTrustStore(trustStore)
+      .certAlias(certAlias)
+      .cn(certCn)
+      .tlsProtocol(tlsProtocol)
+      .build()
 
     val sslProps = new Properties()
     sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
