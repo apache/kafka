@@ -150,6 +150,10 @@ public class MemoryRecords extends AbstractRecords {
         return filterTo(partition, batches(), filter, destinationBuffer, maxRecordBatchSize, decompressionBufferSupplier);
     }
 
+    /**
+     * Note: This method is also used to convert the first timestamp of the batch (which is usually the timestamp of the first record)
+     * to the delete horizon of the tombstones which are present in the batch. 
+     */
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
                                          BufferSupplier decompressionBufferSupplier) {
@@ -158,6 +162,10 @@ public class MemoryRecords extends AbstractRecords {
 
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
+            // we first call this method here so that the flag in LogCleaner has been set
+            // which indicates if the control batch is empty or not
+            // we do this to avoid calling CleanedTransactionMetadata#onControlBatchRead
+            // more than once since each call is relatively expensive
             filter.isControlBatchEmpty(batch);
             long deleteHorizonMs = filter.retrieveDeleteHorizon(batch);
             final BatchRetention batchRetention;

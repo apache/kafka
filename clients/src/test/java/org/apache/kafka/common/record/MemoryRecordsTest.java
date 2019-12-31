@@ -247,6 +247,10 @@ public class MemoryRecordsTest {
         }
     }
 
+    /**
+     * This test is used to see if the first timestamp of the batch has been successfully 
+     * converted to a delete horizon for the tombstones / transaction markers of the batch.
+     */
     @Test
     public void testFirstTimestampToDeleteHorizonConversion() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
