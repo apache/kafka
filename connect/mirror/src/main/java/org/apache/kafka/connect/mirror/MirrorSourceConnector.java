@@ -44,6 +44,7 @@ import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Collection;
@@ -81,6 +82,12 @@ public class MirrorSourceConnector extends SourceConnector {
 
     public MirrorSourceConnector() {
         // nop
+    }
+
+    // visible for testing
+    MirrorSourceConnector(List<TopicPartition> knownTopicPartitions, MirrorConnectorConfig config) {
+        this.knownTopicPartitions = knownTopicPartitions;
+        this.config = config;
     }
 
     // visible for testing
@@ -141,14 +148,32 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // divide topic-partitions among tasks
+    // since each mirrored topic has different traffic and number of partitions, to balance the load
+    // across all mirrormaker instances (workers), 'roundrobin' helps to evenly assign all
+    // topic-partition to the tasks, then the tasks are further distributed to workers.
+    // For example, 3 tasks to mirror 3 topics with 8, 2 and 2 partitions respectively.
+    // 't1' denotes 'task 1', 't0p5' denotes 'topic 0, partition 5'
+    // t1 -> [t0p0, t0p3, t0p6, t1p1]
+    // t2 -> [t0p1, t0p4, t0p7, t2p0]
+    // t3 -> [t0p2, t0p5, t1p0, t2p1]
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         if (!config.enabled() || knownTopicPartitions.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownTopicPartitions.size());
-        return ConnectorUtils.groupPartitions(knownTopicPartitions, numTasks).stream()
-            .map(config::taskConfigForTopicPartitions)
+        List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
+        for (int i = 0; i < numTasks; i++) {
+            roundRobinByTask.add(new ArrayList<>());
+        }
+        int count = 0;
+        for (TopicPartition partition : knownTopicPartitions) {
+            int index = count % numTasks;
+            roundRobinByTask.get(index).add(partition);
+            count++;
+        }
+
+        return roundRobinByTask.stream().map(config::taskConfigForTopicPartitions)
             .collect(Collectors.toList());
     }
 
