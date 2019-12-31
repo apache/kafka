@@ -489,36 +489,27 @@ class GroupMetadataManager(brokerId: Int,
               Optional.empty(), "", Errors.NONE)
             topicPartition -> partitionData
           }.toMap
-        } else if (waitTransaction && group.hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt)) {
-          // Some pending transactions have not been cleaned up yet.
-          topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-            val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-              Optional.empty(), "", Errors.PENDING_TRANSACTION)
+        }  else {
+          // Return offsets for all partitions owned by this consumer group if passed in partition opt is null.
+          // (this only applies to consumers that commit offsets to Kafka.)
+          val topicPartitions = topicPartitionsOpt.getOrElse(group.allOffsets.keySet)
+
+          topicPartitions.map { topicPartition =>
+            val partitionData = group.offset(topicPartition) match {
+              case None =>
+                new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                  Optional.empty(), "", Errors.NONE)
+              case Some(offsetAndMetadata) =>
+                if (group.hasPendingOffsetCommitsForTopicPartition(topicPartition)) {
+                  new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                    Optional.empty(), "", Errors.PENDING_TRANSACTION)
+                } else {
+                  new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
+                    offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
+                }
+            }
             topicPartition -> partitionData
           }.toMap
-        } else {
-          topicPartitionsOpt match {
-            case None =>
-              // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
-              // that commit offsets to Kafka.)
-              group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                  offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
-              }
-
-            case Some(topicPartitions) =>
-              topicPartitions.map { topicPartition =>
-                val partitionData = group.offset(topicPartition) match {
-                  case None =>
-                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                      Optional.empty(), "", Errors.NONE)
-                  case Some(offsetAndMetadata) =>
-                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                      offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
-                }
-                topicPartition -> partitionData
-              }.toMap
-          }
         }
       }
     }

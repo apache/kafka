@@ -16,15 +16,23 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Set;
+
 /**
  * Exception thrown when there is pending transactional offset commit.
  */
-public class PendingTransactionException extends ApiException {
+public class PendingTransactionException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
     public PendingTransactionException(String message) {
         super(message);
+    }
+
+    public PendingTransactionException(Set<TopicPartition> pendingTopicPartitions) {
+        this("The following partitions still have pending offsets: " + pendingTopicPartitions);
     }
 
     public PendingTransactionException(String message, Throwable cause) {

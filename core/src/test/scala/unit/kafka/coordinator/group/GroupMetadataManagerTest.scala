@@ -261,9 +261,9 @@ class GroupMetadataManagerTest {
     assertEquals(0, group.allOffsets.size)
     assertTrue(group.hasOffsets)
     assertTrue(group.hasPendingOffsetCommitsFromProducer(producerId))
-    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(Option(Seq(foo0))))
-    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(Option(Seq(foo1))))
-    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(Option(Seq(bar0))))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(foo0))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(foo1))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(bar0))
   }
 
   @Test

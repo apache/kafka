@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.PendingTransactionException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -810,7 +811,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 future = sendOffsetFetchRequest(partitions);
                 pendingCommittedOffsetRequest = new PendingCommittedOffsetRequest(partitions, generationForOffsetRequest, future);
-
             }
             client.poll(future, timer);
 
@@ -1236,7 +1236,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Errors error = response.error();
                 log.debug("Offset fetch failed: {}", error.message());
 
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.PENDING_TRANSACTION) {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
                     future.raise(error);
                 } else if (error == Errors.NOT_COORDINATOR) {
@@ -1253,6 +1253,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
+            Set<TopicPartition> pendingTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
@@ -1268,6 +1269,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             unauthorizedTopics = new HashSet<>();
                         }
                         unauthorizedTopics.add(tp.topic());
+                    } else if (error == Errors.PENDING_TRANSACTION) {
+                        pendingTxnOffsetTopicPartitions.add(tp);
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
                             tp + ": " + error.message()));
@@ -1285,6 +1288,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             if (unauthorizedTopics != null) {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            } else if (!pendingTxnOffsetTopicPartitions.isEmpty()) {
+                // just retry
+                future.raise(new PendingTransactionException(pendingTxnOffsetTopicPartitions));
             } else {
                 future.complete(offsets);
             }
