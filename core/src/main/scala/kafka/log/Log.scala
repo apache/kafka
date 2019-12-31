@@ -221,7 +221,8 @@ class Log(@volatile var dir: File,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
-          logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+          logDirFailureChannel: LogDirFailureChannel,
+          @volatile var containsTombstones: Boolean = false) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 

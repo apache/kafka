@@ -191,10 +191,9 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val log = cleaner.logs.get(topicPartitions(0))
 
     val T0 = time.milliseconds
-    writeKeyDups(numKeys = 3, numDups = 1, log, CompressionType.NONE, timestamp = T0, 
+    writeKeyDups(numKeys = 1, numDups = 10, log, CompressionType.NONE, timestamp = T0, startValue = 0, step = 0)
+    writeKeyDups(numKeys = 1, numDups = 1, log, CompressionType.NONE, timestamp = T0, 
                  startValue = 0, step = 1, isRecordTombstone = true)
-
-    val startSizeBlock0 = log.size
 
     val activeSegAtT0 = log.activeSegment
 
@@ -202,6 +201,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     log.roll()
 
     cleaner.startup()
+    Thread.sleep(100)
+
+    // log contains tombstones, therefore this should've been set to true
+    time.sleep(tombstoneRetentionMs + 1)
+    System.out.println("Time after sleep: " + time.milliseconds())
 
     val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset
 
@@ -209,8 +213,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
                          firstBlockCleanableSegmentOffset, maxWaitMs = tombstoneRetentionMs * 3)
 
-    val afterSizeBlock0 = log.size
-    assertTrue(afterSizeBlock0 < startSizeBlock0)
+    import JavaConverters._
+    for (segment <- log.logSegments; record <- segment.log.records.asScala) {
+      fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
+    }
+    assertFalse(log.containsTombstones)
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {

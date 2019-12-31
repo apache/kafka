@@ -180,6 +180,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case (_, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
         case (topicPartition, log) =>
+          
           // skip any logs already in-progress and uncleanable partitions
           inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
@@ -202,6 +203,28 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio
       }
       if(cleanableLogs.isEmpty) {
+        // in this case, we are probably in a low thorougput situation
+        // therefore, we should take advantage of this fact and remove tombstones if we can
+        val logsContainingTombstones = logs.filter {
+          case (_, log) => log.containsTombstones
+        }.map {
+          case (topicPartition, log) => // create a LogToClean instance for each
+            try {
+              val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, topicPartition, lastClean, now)
+              val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
+              preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
+
+              LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
+            } catch {
+              case e: Throwable => throw new LogCleaningException(log,
+                s"Failed to calculate log cleaning stats for partition $topicPartition", e)
+            }
+        }
+        if (!logsContainingTombstones.isEmpty) {
+          val filthiest = logsContainingTombstones.max
+          inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
+          Some(filthiest)
+        }
         None
       } else {
         preCleanStats.recordCleanablePartitions(cleanableLogs.size)

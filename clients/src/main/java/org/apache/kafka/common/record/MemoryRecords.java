@@ -159,7 +159,6 @@ public class MemoryRecords extends AbstractRecords {
                                          BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
-
         for (MutableRecordBatch batch : batches) {
             long maxOffset = -1L;
             // we first call this method here so that the flag in LogCleaner has been set
