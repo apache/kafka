@@ -82,6 +82,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
                     "v" + version + ", but we need v7 or newer to request wait transactions.");
             }
+
             return new OffsetFetchRequest(data, version);
         }
 

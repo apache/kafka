@@ -43,6 +43,6 @@
         "about": "The partition indexes we would like to fetch offsets for." }
     ]},
     {"name": "WaitTransaction", "type": "bool", "versions": "7+", "default": "false",
-      "about": "The flag indicating whether we should wait for a pending transaction commit"}
+     "about": "The flag indicating whether we should wait for a pending transaction commit"}
   ]
 }

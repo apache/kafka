@@ -38,8 +38,8 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.PendingTransactionException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -2632,7 +2632,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
-       return offsetFetchResponse(tp, partitionLevelError, metadata, offset, Optional.empty());
+        return offsetFetchResponse(tp, partitionLevelError, metadata, offset, Optional.empty());
     }
 
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, Optional<Integer> epoch) {
