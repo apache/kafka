@@ -1411,10 +1411,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
       sendResponseCallback(JoinGroupResult(
         List.empty,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
         JoinGroupResponse.UNKNOWN_GENERATION_ID,
         JoinGroupResponse.UNKNOWN_PROTOCOL,
-        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID,
         Errors.UNSUPPORTED_VERSION
       ))
     } else if (!authorize(request, READ, GROUP, joinGroupRequest.data.groupId)) {
@@ -1425,8 +1425,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
             .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
             .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
             .setMembers(util.Collections.emptyList())
         )
       )
@@ -2183,6 +2183,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           txnOffsetCommitRequest.data.groupId,
           txnOffsetCommitRequest.data.producerId,
           txnOffsetCommitRequest.data.producerEpoch,
+          txnOffsetCommitRequest.data.memberId,
+          Option(txnOffsetCommitRequest.data.groupInstanceId),
+          txnOffsetCommitRequest.data.generationId,
           offsetMetadata,
           sendResponseCallback)
       }

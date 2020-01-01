@@ -29,7 +29,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse}
 import org.apache.kafka.common.utils.Time
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -240,8 +240,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
         responseCallback(errors)
       }
-      groupCoordinator.handleTxnCommitOffsets(member.group.groupId,
-          producerId, producerEpoch, offsets, callbackWithTxnCompletion)
+      groupCoordinator.handleTxnCommitOffsets(member.group.groupId, producerId, producerEpoch,
+        JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupResponse.UNKNOWN_GENERATION_ID,
+        offsets, callbackWithTxnCompletion)
     }
   }
 

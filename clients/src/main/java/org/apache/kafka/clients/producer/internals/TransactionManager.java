@@ -1470,15 +1470,14 @@ public class TransactionManager {
                         lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
                     }
                 } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION
-                        || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // If the topic is unknown or the coordinator is loading, retry with the current coordinator
+                        || error == Errors.COORDINATOR_LOAD_IN_PROGRESS
+                        || error == Errors.UNKNOWN_MEMBER_ID) {
+                    // retry with the current coordinator
                     continue;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                        || error == Errors.INVALID_PRODUCER_EPOCH
-                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
+                } else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
                 } else {
@@ -1496,5 +1495,13 @@ public class TransactionManager {
                 reenqueue();
             }
         }
+    }
+
+    private boolean isFatalException(Errors error) {
+        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                || error == Errors.INVALID_PRODUCER_EPOCH
+                || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT
+                || error == Errors.FENCED_INSTANCE_ID
+                || error == Errors.ILLEGAL_GENERATION;
     }
 }

@@ -381,6 +381,9 @@ public final class MessageTest {
         String txnId = "transactionalId";
         int producerId = 25;
         short producerEpoch = 10;
+        String instanceId = "instance";
+        String memberId = "member";
+        int generationId = 1;
 
         int partition = 2;
         int offset = 100;
@@ -406,6 +409,9 @@ public final class MessageTest {
                       .setTransactionalId(txnId)
                       .setProducerId(producerId)
                       .setProducerEpoch(producerEpoch)
+                      .setGroupInstanceId(instanceId)
+                      .setMemberId(memberId)
+                      .setGenerationId(generationId)
                       .setTopics(Collections.singletonList(
                           new TxnOffsetCommitRequestTopic()
                               .setName(topicName)
@@ -419,8 +425,14 @@ public final class MessageTest {
 
         for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
             TxnOffsetCommitRequestData requestData = request.get();
-            if (version < 6) {
+            if (version < 2) {
                 requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+            }
+
+            if (version < 3) {
+                requestData.setGroupInstanceId(null);
+                requestData.setMemberId("");
+                requestData.setGenerationId(-1);
             }
 
             testAllMessageRoundTripsFromVersion(version, requestData);
@@ -657,7 +669,7 @@ public final class MessageTest {
      * schemas accessible through the ApiKey class.
      */
     @Test
-    public void testMessageVersions() throws Exception {
+    public void testMessageVersions() {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Message message = null;
             try {

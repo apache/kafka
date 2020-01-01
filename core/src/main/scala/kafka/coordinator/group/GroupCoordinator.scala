@@ -658,6 +658,9 @@ class GroupCoordinator(val brokerId: Int,
   def handleTxnCommitOffsets(groupId: String,
                              producerId: Long,
                              producerEpoch: Short,
+                             memberId: String,
+                             groupInstanceId: Option[String],
+                             generationId: Int,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
@@ -666,7 +669,7 @@ class GroupCoordinator(val brokerId: Int,
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doCommitOffsets(group, NoMemberId, None, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
+        doCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
     }
   }
 
@@ -723,14 +726,14 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
-      } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
-        // The group is only using Kafka to store offsets.
-        // Also, for transactional offset commits we don't need to validate group membership and the generation.
-        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
-      } else if (!group.has(memberId)) {
-        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID })
-      } else if (generationId != group.generationId) {
+      } else if (generationId >= 0 && generationId != group.generationId) {
+        // Validate non-zero generation id for both transactional and non-transactional commits.
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
+      } else if (group.isUnknownCommit(memberId, producerId)) {
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID })
+      } else if (generationId < 0 && group.is(Empty) || producerId != NO_PRODUCER_ID) {
+        // The group is only using Kafka to store offsets.
+        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
       } else {
         group.currentState match {
           case Stable | PreparingRebalance =>
@@ -1007,7 +1010,7 @@ class GroupCoordinator(val brokerId: Int,
     // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
     // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
     // will retry the JoinGroup request if is still active.
-    group.maybeInvokeJoinCallback(member, joinError(NoMemberId, Errors.UNKNOWN_MEMBER_ID))
+    group.maybeInvokeJoinCallback(member, joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
 
     group.remove(member.memberId)
     group.removeStaticMember(member.groupInstanceId)
@@ -1169,7 +1172,6 @@ object GroupCoordinator {
   val NoProtocol = ""
   val NoLeader = ""
   val NoGeneration = -1
-  val NoMemberId = ""
   val NoMembers = List[MemberSummary]()
   val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
@@ -52,6 +53,18 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
+            if (data.groupInstanceId() != null && version < 3) {
+                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
+                                                          version + " does not support usage of config group.instance.id.");
+            }
+            if (!data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && version < 3) {
+                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
+                                                          version + " does not support usage of member.id.");
+            }
+            if (data.generationId() != JoinGroupResponse.UNKNOWN_GENERATION_ID && version < 3) {
+                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
+                                                          version + " does not support usage of generation.id.");
+            }
             return new TxnOffsetCommitRequest(data, version);
         }
 
