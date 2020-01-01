@@ -27,7 +27,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -54,19 +53,6 @@ public class IncompleteBatchesTest {
         final boolean isNotSplitBatch = false;
         splittedBatch = new ProducerBatch(topicPartition, recordsBuilder, createdMs, isSplitBatch);
         nonSplittedBatch = new ProducerBatch(topicPartition, recordsBuilder, createdMs, isNotSplitBatch);
-    }
-
-    @Test
-    public void testCopyAllSplitted() {
-        final int expectedSplittedBatches = 1;
-        final IncompleteBatches incompleteBatches = new IncompleteBatches();
-        incompleteBatches.add(splittedBatch);
-        incompleteBatches.add(nonSplittedBatch);
-
-        final List<ProducerBatch> batches = incompleteBatches.copyAllSplitted();
-
-        assertThat(batches, hasItem(splittedBatch));
-        assertThat(expectedSplittedBatches, is(batches.size()));
     }
 
     @Test

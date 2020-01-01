@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /*
  * A thread-safe helper class to hold batches that haven't been acknowledged yet (including those
@@ -50,15 +49,6 @@ class IncompleteBatches {
     public List<ProducerBatch> copyAll() {
         synchronized (incomplete) {
             return new ArrayList<>(this.incomplete);
-        }
-    }
-
-    public List<ProducerBatch> copyAllSplitted() {
-        synchronized (incomplete) {
-            return this.incomplete
-                    .stream()
-                    .filter(ProducerBatch::isSplitBatch)
-                    .collect(Collectors.toList());
         }
     }
 

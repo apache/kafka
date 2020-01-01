@@ -68,6 +68,7 @@ public final class ProducerBatch {
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
+    private final List<ProducerBatch> childrenProducerBatch;
 
     int recordCount;
     int maxRecordSize;
@@ -77,16 +78,17 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+    public ProducerBatch(final TopicPartition tp, final MemoryRecordsBuilder recordsBuilder, final long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
-        this(tp, recordsBuilder, createdMs, isSplitBatch, new ProduceRequestResult(tp));
+    public ProducerBatch(final TopicPartition tp, final MemoryRecordsBuilder recordsBuilder,
+                         final long createdMs, final boolean isSplitBatch) {
+        this(tp, recordsBuilder, createdMs, isSplitBatch, new ProduceRequestResult(tp), new ArrayList<>());
     }
 
-    ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch,
-                  ProduceRequestResult produceFuture) {
+    ProducerBatch(final TopicPartition tp, final MemoryRecordsBuilder recordsBuilder, final long createdMs,
+                  final boolean isSplitBatch, final ProduceRequestResult produceFuture, final List<ProducerBatch> childrenProducerBatch) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
@@ -95,6 +97,7 @@ public final class ProducerBatch {
         this.produceFuture = produceFuture;
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
+        this.childrenProducerBatch = childrenProducerBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
@@ -243,6 +246,14 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
+    public List<ProducerBatch> getChildrenProducerBatch() {
+        return childrenProducerBatch;
+    }
+
+    public void clearChildrenProducerBatch() {
+        childrenProducerBatch.clear();
+    }
+
     public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
         MemoryRecords memoryRecords = recordsBuilder.build();
@@ -273,14 +284,17 @@ public final class ProducerBatch {
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batches.add(batch);
+                childrenProducerBatch.add(batch);
                 batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
 
         // Close the last batch and add it to the batch list after split.
-        if (batch != null)
+        if (batch != null) {
             batches.add(batch);
+            childrenProducerBatch.add(batch);
+        }
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
