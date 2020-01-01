@@ -693,7 +693,7 @@ public class QueryableStateIntegrationTest {
             myMapStore = kafkaStreams.store("queryMapValues",
             QueryableStoreTypes.keyValueStore());
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertEquals(myMapStore.get(expectedEntry.key), expectedEntry.value);
+            assertEquals(expectedEntry.value, myMapStore.get(expectedEntry.key));
         }
         for (final KeyValue<String, String> batchEntry : batch1) {
             final KeyValue<String, Long> batchEntryMapValue =
@@ -796,7 +796,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
-            () -> new Long(8).equals(store.get("hello")),
+            () -> Long.valueOf(8).equals(store.get("hello")),
             maxWaitMs,
             "wait for count to be 8");
 

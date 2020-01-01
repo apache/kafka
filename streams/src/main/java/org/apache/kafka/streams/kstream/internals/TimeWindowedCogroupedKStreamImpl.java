@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
         implements TimeWindowedCogroupedKStream<K, V> {
 
-    private static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
@@ -64,7 +63,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer) {
-        return aggregate(initializer, Materialized.with(keySerde, null));
+        return aggregate(initializer, Materialized.with(null, null));
     }
 
     @Override
@@ -76,7 +75,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
                                             final Named named) {
-        return aggregate(initializer, named, Materialized.with(keySerde, null));
+        return aggregate(initializer, named, Materialized.with(null, null));
     }
 
     @Override
@@ -89,11 +88,11 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(
             materialized,
             builder,
-            AGGREGATE_NAME);
+            CogroupedKStreamImpl.AGGREGATE_NAME);
         return aggregateBuilder.build(
             groupPatterns,
             initializer,
-            NamedInternal.empty(),
+            new NamedInternal(named),
             materialize(materializedInternal),
             materializedInternal.keySerde() != null ?
                     new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())

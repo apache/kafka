@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -35,8 +34,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -45,6 +44,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,12 +231,10 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             });
         } catch (final RuntimeException uncaughtException) {
-            if (uncaughtException instanceof KafkaException &&
-                uncaughtException.getCause() instanceof ProducerFencedException) {
-                final KafkaException kafkaException = (KafkaException) uncaughtException;
+            if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw new RecoverableClientException("Caught a wrapped ProducerFencedException", kafkaException);
+                throw new RecoverableClientException("Caught a recoverable exception", uncaughtException);
             } else {
                 throw new StreamsException(
                     String.format(
@@ -250,6 +248,12 @@ public class RecordCollectorImpl implements RecordCollector {
                     uncaughtException);
             }
         }
+    }
+
+    public static boolean isRecoverable(final RuntimeException uncaughtException) {
+        return uncaughtException instanceof KafkaException && (
+            uncaughtException.getCause() instanceof ProducerFencedException ||
+                uncaughtException.getCause() instanceof UnknownProducerIdException);
     }
 
     private void checkForException() {
