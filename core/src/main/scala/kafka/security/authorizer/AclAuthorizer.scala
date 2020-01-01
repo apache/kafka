@@ -490,8 +490,8 @@ class AclAuthorizer extends Authorizer with Logging {
 
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {
     override def processNotification(resource: Resource): Unit = {
+      val versionedAcls = getAclsFromZk(resource)
       inWriteLock(lock) {
-        val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)
       }
     }
