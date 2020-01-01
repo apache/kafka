@@ -94,14 +94,15 @@ public class InternalProcessorContextMock {
             final Capture<PunctuationType> type = Capture.newInstance();
             final Capture<Punctuator> punctuator = Capture.newInstance();
             expect(mock.schedule(capture(interval), capture(type), capture(punctuator)))
-                .andAnswer(() -> processorContext.schedule(interval.getValue(), type.getValue(), punctuator.getValue()))
-                .anyTimes();
+                    .andAnswer(() -> processorContext.schedule(interval.getValue(), type.getValue(), punctuator.getValue()))
+                    .anyTimes();
         }
 
         private void getStateStore() {
             final Capture<String> stateStoreNameCapture = Capture.newInstance();
             expect(mock.getStateStore(capture(stateStoreNameCapture)))
-                    .andAnswer(() -> stateStoreMap.get(stateStoreNameCapture.getValue())).anyTimes();
+                    .andAnswer(() -> stateStoreMap.get(stateStoreNameCapture.getValue()))
+                    .anyTimes();
         }
 
         private void register() {
@@ -115,7 +116,8 @@ public class InternalProcessorContextMock {
                         stateStoreMap.put(storeCapture.getValue().name(), storeCapture.getValue());
                         stateRestoreCallbackMap.put(storeCapture.getValue().name(), restoreCallbackCapture.getValue());
                         return null;
-                    }).anyTimes();
+                    })
+                    .anyTimes();
         }
 
         private void metrics() {
