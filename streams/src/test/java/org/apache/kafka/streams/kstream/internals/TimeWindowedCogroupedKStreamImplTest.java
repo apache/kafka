@@ -46,18 +46,17 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 public class TimeWindowedCogroupedKStreamImplTest {
 
-    private final MockProcessorSupplier<Windowed<String>, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
     private static final String TOPIC2 = "topic2";
     private static final String OUTPUT = "output";
     private final StreamsBuilder builder = new StreamsBuilder();
+
     private KGroupedStream<String, String> groupedStream;
 
     private KGroupedStream<String, String> groupedStream2;
@@ -117,6 +116,29 @@ public class TimeWindowedCogroupedKStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullNamedOnAggregate() {
         windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test"));
+    }
+
+    @Test
+    public void namedParamShouldSetName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream = builder.stream(TOPIC, Consumed
+                .with(Serdes.String(), Serdes.String()));
+        groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
+                .windowedBy(TimeWindows.of(ofMillis(500L)))
+                .aggregate(MockInitializer.STRING_INIT, Named.as("foo"));
+
+        assertThat(builder.build().describe().toString(), equalTo(
+                "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+                "      --> foo-cogroup-agg-0\n" +
+                "    Processor: foo-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> foo-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: foo-cogroup-merge (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- foo-cogroup-agg-0\n\n"));
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -443,7 +444,15 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private long receive(NetworkReceive receive) throws IOException {
-        return receive.readFrom(transportLayer);
+        try {
+            return receive.readFrom(transportLayer);
+        } catch (SslAuthenticationException e) {
+            // With TLSv1.3, post-handshake messages may throw SSLExceptions, which are
+            // handled as authentication failures
+            String remoteDesc = remoteAddress != null ? remoteAddress.toString() : null;
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e, remoteDesc);
+            throw e;
+        }
     }
 
     /**
