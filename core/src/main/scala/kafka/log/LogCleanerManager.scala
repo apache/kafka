@@ -216,7 +216,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         }.map {
           case (topicPartition, log) => // create a LogToClean instance for each
             try {
-              val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, topicPartition, lastClean, now)
+              val lastCleanOffset = lastClean.get(topicPartition)
+              val (firstDirtyOffset, firstUncleanableDirtyOffset) = cleanableOffsets(log, lastCleanOffset, now)
               val compactionDelayMs = maxCompactionDelay(log, firstDirtyOffset, now)
               preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 

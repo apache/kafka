@@ -334,7 +334,8 @@ class LogCleaner(initialConfig: CleanerConfig,
     @throws(classOf[LogCleaningException])
     private def cleanFilthiestLog(): Boolean = {
       val preCleanStats = new PreCleanStats()
-      val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
+      val ltc =cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
+      val cleaned = ltc match {
         case None =>
           false
         case Some(cleanable) =>
@@ -824,7 +825,6 @@ private[log] class Cleaner(val id: Int,
       else
         shouldRetainDeletes = retainDeletes
       val isRetainedValue = record.hasValue || shouldRetainDeletes
-
       latestOffsetForKey && isRetainedValue
     } else {
       stats.invalidMessage()
