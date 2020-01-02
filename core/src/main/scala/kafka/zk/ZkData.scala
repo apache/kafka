@@ -275,7 +275,6 @@ object TopicZNode {
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
       val addingReplicasJsonOpt = assignmentJson.get("addingReplicas").map(_.asJsonObject)
-      val removingReplicasJsonOpt = assignmentJson.get("removingReplicas").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
           new TopicPartition(topic, partition.toInt) -> PartitionReplicaAssignment(
