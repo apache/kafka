@@ -1709,8 +1709,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val createPartitionsResults = results.map {
           case (topic, error) => new CreatePartitionsTopicResult()
             .setName(topic)
-            .setErrorCode(error.error().code())
-            .setErrorMessage(error.message())
+            .setErrorCode(error.error.code)
+            .setErrorMessage(error.message)
         }.toSeq
         val responseBody = new CreatePartitionsResponse(new CreatePartitionsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
@@ -1723,31 +1723,31 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!controller.isActive) {
-      val result = createPartitionsRequest.data.topics().asScala.map { topic =>
+      val result = createPartitionsRequest.data.topics.asScala.map { topic =>
         (topic.name(), new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
       sendResponseCallback(result)
     } else {
       // Special handling to add duplicate topics to the response
-      val topics = createPartitionsRequest.data().topics().asScala
-      val dupes = topics.groupBy(_.name())
+      val topics = createPartitionsRequest.data.topics.asScala
+      val dupes = topics.groupBy(_.name)
         .filter { _._2.size > 1 }
         .keySet
-      val notDuped = topics.filterNot(topic => dupes.contains(topic.name()))
-      val authorizedTopics = filterAuthorized(request, ALTER, TOPIC, notDuped.map(_.name()))
-      val (authorized, unauthorized) = notDuped.partition { topic => authorizedTopics.contains(topic.name()) }
+      val notDuped = topics.filterNot(topic => dupes.contains(topic.name))
+      val authorizedTopics = filterAuthorized(request, ALTER, TOPIC, notDuped.map(_.name))
+      val (authorized, unauthorized) = notDuped.partition { topic => authorizedTopics.contains(topic.name) }
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
-        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name())
+        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
         unauthorized.map(_.name() -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
         queuedForDeletion.map(_.name() -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
-      adminManager.createPartitions(createPartitionsRequest.data().timeoutMs(),
+      adminManager.createPartitions(createPartitionsRequest.data.timeoutMs,
         valid,
-        createPartitionsRequest.data().validateOnly(),
+        createPartitionsRequest.data.validateOnly,
         request.context.listenerName, result => sendResponseCallback(result ++ errors))
     }
   }
@@ -2514,8 +2514,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a create token response
     def sendResponseCallback(createResult: CreateTokenResult): Unit = {
-      trace("Sending create token response for correlation id %d to client %s."
-        .format(request.header.correlationId, request.header.clientId))
+      trace(s"Sending create token response for correlation id ${request.header.correlationId} " +
+        s"to client ${request.header.clientId}.")
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, request.context.principal, createResult.issueTimestamp,
           createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))

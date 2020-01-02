@@ -22,51 +22,13 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-
 public class CreatePartitionsRequest extends AbstractRequest {
 
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
-    private static final String NEW_PARTITIONS_KEY_NAME = "new_partitions";
-    private static final String COUNT_KEY_NAME = "count";
-    private static final String ASSIGNMENT_KEY_NAME = "assignment";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
-    private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
-
-    private static final Schema CREATE_PARTITIONS_REQUEST_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(
-                    new Schema(
-                            TOPIC_NAME,
-                            new Field(NEW_PARTITIONS_KEY_NAME, new Schema(
-                                    new Field(COUNT_KEY_NAME, INT32, "The new partition count."),
-                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)),
-                                            "The assigned brokers.")
-                            )))),
-                    "List of topic and the corresponding new partitions."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for the partitions to be created."),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN,
-                    "If true then validate the request, but don't actually increase the number of partitions."));
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema CREATE_PARTITIONS_REQUEST_V1 = CREATE_PARTITIONS_REQUEST_V0;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_PARTITIONS_REQUEST_V0, CREATE_PARTITIONS_REQUEST_V1};
-    }
-
     private final CreatePartitionsRequestData data;
-    private final short version;
 
     public static class Builder extends AbstractRequest.Builder<CreatePartitionsRequest> {
 
@@ -91,19 +53,15 @@ public class CreatePartitionsRequest extends AbstractRequest {
     CreatePartitionsRequest(CreatePartitionsRequestData data, short apiVersion) {
         super(ApiKeys.CREATE_PARTITIONS, apiVersion);
         this.data = data;
-        this.version = apiVersion;
     }
 
     public CreatePartitionsRequest(Struct struct, short apiVersion) {
-        super(ApiKeys.CREATE_PARTITIONS, apiVersion);
-
-        this.data = new CreatePartitionsRequestData(struct, apiVersion);
-        this.version = apiVersion;
+        this(new CreatePartitionsRequestData(struct, apiVersion), apiVersion);
     }
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     public CreatePartitionsRequestData data() {

@@ -267,7 +267,7 @@ class AdminManager(val config: KafkaConfig,
 
     // 1. map over topics creating assignment and calling AdminUtils
     val metadata = newPartitions.map { newPartition =>
-      val topic = newPartition.name()
+      val topic = newPartition.name
       try {
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
           case (topicPartition, assignment) =>
@@ -282,7 +282,7 @@ class AdminManager(val config: KafkaConfig,
           throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
         val oldNumPartitions = existingAssignment.size
-        val newNumPartitions = newPartition.count()
+        val newNumPartitions = newPartition.count
         val numPartitionsIncrement = newNumPartitions - oldNumPartitions
         if (numPartitionsIncrement < 0) {
           throw new InvalidPartitionsException(
@@ -291,29 +291,29 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val newPartitionsAssignment = Option(newPartition.assignments()).map(_.asScala)
-          .map { createPartitionAssignments => createPartitionAssignments.map {
+        val newPartitionsAssignment = Option(newPartition.assignments())
+          .map { createPartitionAssignments => createPartitionAssignments.asScala.map {
               createPartitionAssignment => createPartitionAssignment.brokerIds().asScala.map(_.toInt)
             }
           }
           .map { assignments =>
             val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
-          if (unknownBrokers.nonEmpty)
-            throw new InvalidReplicaAssignmentException(
-              s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
+            if (unknownBrokers.nonEmpty)
+              throw new InvalidReplicaAssignmentException(
+                s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
 
-          if (assignments.size != numPartitionsIncrement)
-            throw new InvalidReplicaAssignmentException(
-              s"Increasing the number of partitions by $numPartitionsIncrement " +
-                s"but ${assignments.size} assignments provided.")
+            if (assignments.size != numPartitionsIncrement)
+              throw new InvalidReplicaAssignmentException(
+                s"Increasing the number of partitions by $numPartitionsIncrement " +
+                  s"but ${assignments.size} assignments provided.")
 
-          assignments.zipWithIndex.map { case (replicas, index) =>
-            existingAssignment.size + index -> replicas
+            assignments.zipWithIndex.map { case (replicas, index) =>
+              existingAssignment.size + index -> replicas
           }.toMap
         }
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.count(), newPartitionsAssignment, validateOnly = validateOnly)
+          newPartition.count, newPartitionsAssignment, validateOnly = validateOnly)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
@@ -327,7 +327,7 @@ class AdminManager(val config: KafkaConfig,
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createPartitionMetadata =>
         // ignore topics that already have errors
-        if (createPartitionMetadata.error.isSuccess() && !validateOnly) {
+        if (createPartitionMetadata.error.isSuccess && !validateOnly) {
           (createPartitionMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createPartitionMetadata.topic, createPartitionMetadata.error)
@@ -337,7 +337,7 @@ class AdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, callback)
-      val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name()))
+      val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name))
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
@@ -479,7 +479,8 @@ class AdminManager(val config: KafkaConfig,
       alterConfigOp.opType() match {
         case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
         case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
-        case _ =>
+        case _ => throw new IllegalArgumentException(
+          s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
       }
     }
   }
