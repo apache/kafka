@@ -204,9 +204,9 @@ object TransactionLog {
     *
     * @return a transaction metadata object from the message
     */
-  def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): TransactionMetadata = {
+  def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): Option[TransactionMetadata] = {
     if (buffer == null) { // tombstone
-      null
+      None
     } else {
       import ValueSchema._
       val version = buffer.getShort
@@ -243,7 +243,7 @@ object TransactionLog {
           }
         }
 
-        transactionMetadata
+        Some(transactionMetadata)
       } else {
         throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
       }
@@ -256,12 +256,13 @@ object TransactionLog {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach { txnKey =>
         val transactionalId = txnKey.transactionalId
         val value = consumerRecord.value
-        val producerIdMetadata =
-          if (value == null) "NULL"
-          else readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
+        val producerIdMetadata = if (value == null)
+          None
+        else
+          readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
         output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
         output.write("::".getBytes(StandardCharsets.UTF_8))
-        output.write(producerIdMetadata.toString.getBytes(StandardCharsets.UTF_8))
+        output.write(producerIdMetadata.getOrElse("NULL").toString.getBytes(StandardCharsets.UTF_8))
         output.write("\n".getBytes(StandardCharsets.UTF_8))
       }
     }
@@ -274,11 +275,10 @@ object TransactionLog {
     val txnKey = TransactionLog.readTxnRecordKey(record.key)
     val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
 
-    val txnMetadata = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value)
-    val valueString = if (txnMetadata == null) {
-      "<DELETE>"
-    } else {
-      s"producerId:${txnMetadata.producerId}," +
+    val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
+      case None => "<DELETE>"
+
+      case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
         s"producerEpoch:${txnMetadata.producerEpoch}," +
         s"state=${txnMetadata.state}," +
         s"partitions=${txnMetadata.topicPartitions}," +

@@ -86,7 +86,7 @@ class TransactionLogTest {
     for (record <- records.records.asScala) {
       val txnKey = TransactionLog.readTxnRecordKey(record.key)
       val transactionalId = txnKey.transactionalId
-      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
 
       assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
       assertEquals(producerEpoch, txnMetadata.producerEpoch)

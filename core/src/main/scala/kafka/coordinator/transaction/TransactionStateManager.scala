@@ -347,11 +347,11 @@ class TransactionStateManager(brokerId: Int,
                 val txnKey = TransactionLog.readTxnRecordKey(record.key)
                 // load transaction metadata along with transaction state
                 val transactionalId = txnKey.transactionalId
-                if (!record.hasValue) {
-                  loadedTransactions.remove(transactionalId)
-                } else {
-                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
-                  loadedTransactions.put(transactionalId, txnMetadata)
+                TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
+                  case None =>
+                    loadedTransactions.remove(transactionalId)
+                  case Some(txnMetadata) =>
+                    loadedTransactions.put(transactionalId, txnMetadata)
                 }
                 currOffset = batch.nextOffset
               }
