@@ -1084,9 +1084,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
 
+        private final Generation generation;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation) {
+            this.generation = generation;
             this.offsets = offsets;
         }
 
@@ -1151,10 +1153,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                 "consumer group is executing a rebalance at the moment. You can try completing the rebalance " +
                                 "by calling poll() and then retry commit again"));
                             return;
-                        } else if (error == Errors.UNKNOWN_MEMBER_ID ||
-                                   error == Errors.ILLEGAL_GENERATION) {
+                        } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                             // need to reset generation and re-join group
                             resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                            future.raise(new CommitFailedException());
+                            return;
+                        } else if (error == Errors.ILLEGAL_GENERATION) {
+                            if (this.generation.equals(ConsumerCoordinator.this.generation())) {
+                                // need to reset generation and re-join group if the generation has not changed, meaning
+                                // this is indeed a illegal generation; otherwise if the generation has changed the current
+                                // generation may actually be valid so we do not reset it -- if it is not, the next request
+                                // would still fail and then we would reset generation and re-join at that time.
+                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                            }
                             future.raise(new CommitFailedException());
                             return;
                         } else {
