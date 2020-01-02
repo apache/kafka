@@ -36,4 +36,15 @@ public final class MessageTestUtil {
     public static void messageFromByteBuffer(ByteBuffer bytes, Message message, short version) {
         message.read(new ByteBufferAccessor(bytes.duplicate()), version);
     }
+
+    public static String byteBufferToString(ByteBuffer buf) {
+        ByteBuffer buf2 = buf.duplicate();
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        while (buf2.hasRemaining()) {
+            bld.append(String.format("%s%02x", prefix, (int) buf2.get()));
+            prefix = " ";
+        }
+        return bld.toString();
+    }
 }

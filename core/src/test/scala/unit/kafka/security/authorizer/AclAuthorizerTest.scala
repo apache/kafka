@@ -32,6 +32,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
@@ -832,7 +833,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
+      securityProtocol, ClientInformation.EMPTY)
   }
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {

@@ -25,7 +25,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 
-import integration.kafka.api.BaseAdminIntegrationTest
 import kafka.log.LogConfig
 import kafka.security.auth.Group
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
@@ -172,7 +171,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = AdminClient.create(createConfig())
     val topic = "topic"
     val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
-    val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
+    val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.mapValues(_.keys.toSeq)
     val brokers = (0 until brokerCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
@@ -180,7 +179,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
-      val replicaInfos = logDirInfos.asScala.flatMap { case (logDir, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
+      val replicaInfos = logDirInfos.asScala.flatMap { case (_, logDirInfo) => logDirInfo.replicaInfos.asScala }.filterKeys(_.topic == topic)
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
       logDirInfos.asScala.foreach { case (logDir, logDirInfo) =>
@@ -353,7 +352,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(truststorePassword.isSensitive)
     assertFalse(truststorePassword.isReadOnly)
     val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
-    assertEquals(servers(1).config.compressionType.toString, compressionType.value)
+    assertEquals(servers(1).config.compressionType, compressionType.value)
     assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
@@ -391,7 +390,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       getTopicMetadata(client, topic, expectedNumPartitionsOpt = expectedNumPartitionsOpt).partitions
     }
 
-    def numPartitions(topic: String): Int = partitions(topic).size
+    def numPartitions(topic: String, expectedNumPartitionsOpt: Option[Int] = None): Int = partitions(topic, expectedNumPartitionsOpt).size
 
     // validateOnly: try creating a new partition (no assignments), to bring the total to 3 partitions
     var alterResult = client.createPartitions(Map(topic1 ->
@@ -448,7 +447,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a newCount which would be a noop (where the assignment matches current state)
@@ -460,7 +459,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a newCount which would be a noop (where the assignment doesn't match current state)
@@ -472,7 +471,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case e: ExecutionException =>
           assertTrue(desc, e.getCause.isInstanceOf[InvalidPartitionsException])
           assertEquals(desc, "Topic already has 3 partitions.", e.getCause.getMessage)
-          assertEquals(desc, 3, numPartitions(topic2))
+          assertEquals(desc, 3, numPartitions(topic2, Some(3)))
       }
 
       // try a bad topic name

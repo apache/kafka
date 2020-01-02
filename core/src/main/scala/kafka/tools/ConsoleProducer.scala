@@ -201,7 +201,10 @@ object ConsoleProducer {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1024*100)
     val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
-      "This allows custom configuration for a user-defined message reader.")
+      "This allows custom configuration for a user-defined message reader. Default properties include:\n" +
+      "\tparse.key=true|false\n" +
+      "\tkey.separator=<key.separator>\n" +
+      "\tignore.error=true|false")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])

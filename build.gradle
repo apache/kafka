@@ -130,13 +130,15 @@ if (file('.git').exists()) {
         'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
+        'gradle/wrapper/gradle-wrapper.properties',
         'TROGDOR.md',
         '**/README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
-        'streams/streams-scala/logs/*'
+        'streams/streams-scala/logs/*',
+        '**/generated/**'
     ])
   }
 }
@@ -518,6 +520,25 @@ subprojects {
 
   def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
   task reportCoverage(dependsOn: [coverageGen])
+
+  task determineCommitId {
+    def takeFromHash = 16
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("$rootDir/.git/$headRef").exists()) {
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+        }
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId = "unknown"
+    }
+  }
 
 }
 
@@ -994,25 +1015,6 @@ project(':clients') {
     testCompile libs.jacksonJaxrsJsonProvider
   }
 
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
-  }
-
   task createVersionFile(dependsOn: determineCommitId) {
     ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
     outputs.file receiptFile
@@ -1219,31 +1221,13 @@ project(':streams') {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
       include('log4j*jar')
+      include('*hamcrest*')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
-  }
-
-  task determineCommitId {
-    def takeFromHash = 16
-    if (commitId) {
-      commitId = commitId.take(takeFromHash)
-    } else if (file("$rootDir/.git/HEAD").exists()) {
-      def headRef = file("$rootDir/.git/HEAD").text
-      if (headRef.contains('ref: ')) {
-        headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("$rootDir/.git/$headRef").exists()) {
-          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
-        }
-      } else {
-        commitId = headRef.trim().take(takeFromHash)
-      }
-    } else {
-      commitId = "unknown"
-    }
   }
 
   task createStreamsVersionFile(dependsOn: determineCommitId) {
@@ -1508,6 +1492,18 @@ project(':streams:upgrade-system-tests-23') {
 
   dependencies {
     testCompile libs.kafkaStreams_23
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-24') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-24"
+
+  dependencies {
+    testCompile libs.kafkaStreams_24
   }
 
   systemTestLibs {

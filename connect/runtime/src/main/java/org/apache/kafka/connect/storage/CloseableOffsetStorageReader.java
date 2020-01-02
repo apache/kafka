@@ -14,31 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.connect.storage;
 
-package org.apache.kafka.trogdor.agent;
+import java.io.Closeable;
+import java.util.Collection;
+import java.util.Map;
+import java.util.concurrent.Future;
 
-import org.glassfish.jersey.internal.inject.AbstractBinder;
+public interface CloseableOffsetStorageReader extends Closeable, OffsetStorageReader {
 
-/**
- * This class implements a workaround for the Jersey bug which leads to
- * warning messages when registering a Resource object.
- * See https://github.com/eclipse-ee4j/jersey/issues/3700
- *
- * Unfortunately, this can't be common code shared with the Coordinator, because hk2/jersey
- * doesn't add new bindings for the same class.
- */
-public class AgentResourceBinder extends AbstractBinder {
-    private Object object;
-    private Class clazz;
-
-    public AgentResourceBinder(Object object, Class clazz) {
-        this.object = object;
-        this.clazz = clazz;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void configure() {
-        bind(object).to(clazz);
-    }
+    /**
+     * {@link Future#cancel(boolean) Cancel} all outstanding offset read requests, and throw an
+     * exception in all current and future calls to {@link #offsets(Collection)} and
+     * {@link #offset(Map)}. This is useful for unblocking task threads which need to shut down but
+     * are blocked on offset reads.
+     */
+    void close();
 }

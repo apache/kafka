@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -34,30 +34,33 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
-import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
@@ -68,15 +71,11 @@ import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -87,6 +86,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
@@ -279,6 +280,19 @@ public class RequestResponseTest {
         checkRequest(createCreateTopicRequest(1), true);
         checkErrorResponse(createCreateTopicRequest(1), new UnknownServerException(), true);
         checkResponse(createCreateTopicResponse(), 1, true);
+        checkRequest(createCreateTopicRequest(2), true);
+        checkErrorResponse(createCreateTopicRequest(2), new UnknownServerException(), true);
+        checkResponse(createCreateTopicResponse(), 2, true);
+        checkRequest(createCreateTopicRequest(3), true);
+        checkErrorResponse(createCreateTopicRequest(3), new UnknownServerException(), true);
+        checkResponse(createCreateTopicResponse(), 3, true);
+        checkRequest(createCreateTopicRequest(4), true);
+        checkErrorResponse(createCreateTopicRequest(4), new UnknownServerException(), true);
+        checkResponse(createCreateTopicResponse(), 4, true);
+        checkRequest(createCreateTopicRequest(5), true);
+        checkErrorResponse(createCreateTopicRequest(5), new UnknownServerException(), true);
+        checkResponse(createCreateTopicResponse(), 5, true);
+
         checkRequest(createDeleteTopicsRequest(), true);
         checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException(), true);
         checkResponse(createDeleteTopicsResponse(), 0, true);
@@ -871,6 +885,20 @@ public class RequestResponseTest {
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
+    @Test
+    public void testInitProducerIdRequestVersions() {
+        InitProducerIdRequest.Builder bld = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000).
+                setTransactionalId("abracadabra").
+                setProducerId(123));
+        final UnsupportedVersionException exception = assertThrows(
+            UnsupportedVersionException.class, () -> {
+                bld.build((short) 2).toStruct();
+            });
+        assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
+        bld.build((short) 3);
+    }
+
     private ResponseHeader createResponseHeader(short headerVersion) {
         return new ResponseHeader(10, headerVersion);
     }
@@ -1039,12 +1067,12 @@ public class RequestResponseTest {
         DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId", null,
                 clientId, clientHost, new byte[0], new byte[0]);
         DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group",
-                                                                       Errors.NONE,
-                                                                       "STABLE",
-                                                                       "consumer",
-                                                                       "roundrobin",
-                                                                       Collections.singletonList(member),
-                                                                       Collections.emptySet());
+                Errors.NONE,
+                "STABLE",
+                "consumer",
+                "roundrobin",
+                Collections.singletonList(member),
+                DescribeGroupsResponse.AUTHORIZED_OPERATIONS_OMITTED);
         describeGroupsResponseData.groups().add(metadata);
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
@@ -1483,14 +1511,22 @@ public class RequestResponseTest {
 
     private CreateTopicsResponse createCreateTopicResponse() {
         CreateTopicsResponseData data = new CreateTopicsResponseData();
-        data.topics().add(new CreatableTopicResult().
-            setName("t1").
-            setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code()).
-            setErrorMessage(null));
-        data.topics().add(new CreatableTopicResult().
-            setName("t2").
-            setErrorCode(Errors.LEADER_NOT_AVAILABLE.code()).
-            setErrorMessage("Leader with id 5 is not available."));
+        data.topics().add(new CreatableTopicResult()
+            .setName("t1")
+            .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
+            .setErrorMessage(null));
+        data.topics().add(new CreatableTopicResult()
+            .setName("t2")
+            .setErrorCode(Errors.LEADER_NOT_AVAILABLE.code())
+            .setErrorMessage("Leader with id 5 is not available."));
+        data.topics().add(new CreatableTopicResult()
+            .setName("t3")
+            .setErrorCode(Errors.NONE.code())
+            .setNumPartitions(1)
+            .setReplicationFactor((short) 2)
+            .setConfigs(Collections.singletonList(new CreatableTopicConfigs()
+                .setName("min.insync.replicas")
+                .setValue("2"))));
         return new CreateTopicsResponse(data);
     }
 

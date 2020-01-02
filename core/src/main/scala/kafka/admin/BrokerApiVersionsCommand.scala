@@ -162,8 +162,8 @@ object BrokerApiVersionsCommand {
 
     private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
       val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
-      Errors.forCode(response.data.errorCode()).maybeThrow()
-      response.data.apiKeys()
+      Errors.forCode(response.data.errorCode).maybeThrow()
+      response.data.apiKeys
     }
 
     /**
@@ -278,7 +278,7 @@ object BrokerApiVersionsCommand {
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
       val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
       val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
-      metadata.bootstrap(brokerAddresses, time.milliseconds())
+      metadata.bootstrap(brokerAddresses)
 
       val selector = new Selector(
         DefaultConnectionMaxIdleMs,

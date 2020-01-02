@@ -734,7 +734,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
-            this.metadata.bootstrap(addresses, time.milliseconds());
+            this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "consumer";
 
             FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
@@ -2301,6 +2301,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
         Utils.closeQuietly(fetcher, "fetcher", firstException);
         Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
+        Utils.closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         Utils.closeQuietly(metrics, "consumer metrics", firstException);
         Utils.closeQuietly(client, "consumer network client", firstException);
         Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);

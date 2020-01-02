@@ -113,7 +113,7 @@ public class KStreamImplTest {
         final KStream<String, Integer> stream2 = stream1.mapValues(Integer::new);
 
         final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
-            value -> Collections.singletonList(new Integer(value)));
+            value -> Collections.singletonList(Integer.valueOf(value)));
 
         final KStream<String, Integer>[] streams2 = stream2.branch(
             (key, value) -> (value % 2) == 0,

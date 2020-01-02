@@ -41,9 +41,11 @@ import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
@@ -902,20 +904,32 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
+            if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
               trace(s"Begin re-authentication: $channel")
             else {
               val nowNanos = time.nanoseconds()
               if (channel.serverAuthenticationSessionExpired(nowNanos)) {
-                channel.disconnect()
-                debug(s"Disconnected expired channel: $channel : $header")
+                // be sure to decrease connection count and drop any in-flight responses
+                debug(s"Disconnecting expired channel: $channel : $header")
+                close(channel.id)
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol)
+                  channel.principal, listenerName, securityProtocol,
+                  channel.channelMetadataRegistry.clientInformation)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
+                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                // and version. It is done here to avoid wiring things up to the api layer.
+                if (header.apiKey == ApiKeys.API_VERSIONS) {
+                  val apiVersionsRequest = req.body[ApiVersionsRequest]
+                  if (apiVersionsRequest.isValid) {
+                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                      apiVersionsRequest.data.clientSoftwareName,
+                      apiVersionsRequest.data.clientSoftwareVersion))
+                  }
+                }
                 requestChannel.sendRequest(req)
                 selector.mute(connectionId)
                 handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)

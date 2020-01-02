@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -33,9 +32,10 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,13 +56,18 @@ public class RecordCollectorImpl implements RecordCollector {
     private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
-
     private final static String LOG_MESSAGE = "Error sending record to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task. " +
         "Enable TRACE logging to view failed record key and value.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (timestamp %d) to topic %s due to %s";
     private final static String PARAMETER_HINT = "\nYou can increase the producer configs `delivery.timeout.ms` and/or " +
         "`retries` to avoid this error. Note that `retries` is set to infinite by default.";
+    private final static String TIMEOUT_HINT_TEMPLATE = "%nTimeout exception caught when sending record to topic %s. " +
+            "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
+            "its internal buffer fills up. " +
+            "This can also happen if the broker is slow to respond, if the network connection to " +
+            "the broker was interrupted, or if similar circumstances arise. " +
+            "You can increase producer parameter `max.block.ms` to increase this timeout.";
 
     private volatile KafkaException sendException;
 
@@ -128,9 +134,14 @@ public class RecordCollectorImpl implements RecordCollector {
     ) {
         String errorLogMessage = LOG_MESSAGE;
         String errorMessage = EXCEPTION_MESSAGE;
-        // There is no documented API for detecting retriable errors, so we rely on `RetriableException`
-        // even though it's an implementation detail (i.e. we do the best we can given what's available)
-        if (exception instanceof RetriableException) {
+
+        if (exception instanceof TimeoutException) {
+            final String topicTimeoutHint = String.format(TIMEOUT_HINT_TEMPLATE, topic);
+            errorLogMessage += topicTimeoutHint;
+            errorMessage += topicTimeoutHint;
+        } else if (exception instanceof RetriableException) {
+            // There is no documented API for detecting retriable errors, so we rely on `RetriableException`
+            // even though it's an implementation detail (i.e. we do the best we can given what's available)
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
         }
@@ -179,13 +190,13 @@ public class RecordCollectorImpl implements RecordCollector {
                         offsets.put(tp, metadata.offset());
                     } else {
                         if (sendException == null) {
-                            if (exception instanceof ProducerFencedException) {
+                            if (exception instanceof ProducerFencedException || exception instanceof UnknownProducerIdException) {
                                 log.warn(LOG_MESSAGE, topic, exception.getMessage(), exception);
 
                                 // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
                                 log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
 
-                                sendException = new ProducerFencedException(
+                                sendException = new RecoverableClientException(
                                     String.format(
                                         EXCEPTION_MESSAGE,
                                         logPrefix,
@@ -193,7 +204,8 @@ public class RecordCollectorImpl implements RecordCollector {
                                         timestamp,
                                         topic,
                                         exception.toString()
-                                    )
+                                    ),
+                                    exception
                                 );
                             } else {
                                 if (productionExceptionIsFatal(exception)) {
@@ -218,28 +230,11 @@ public class RecordCollectorImpl implements RecordCollector {
                     }
                 }
             });
-        } catch (final TimeoutException e) {
-            log.error(
-                "Timeout exception caught when sending record to topic {}. " +
-                    "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
-                    "its internal buffer fills up. " +
-                    "This can also happen if the broker is slow to respond, if the network connection to " +
-                    "the broker was interrupted, or if similar circumstances arise. " +
-                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
-                topic,
-                e
-            );
-            throw new StreamsException(
-                String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic),
-                e
-            );
-        } catch (final Exception uncaughtException) {
-            if (uncaughtException instanceof KafkaException &&
-                uncaughtException.getCause() instanceof ProducerFencedException) {
-                final KafkaException kafkaException = (KafkaException) uncaughtException;
+        } catch (final RuntimeException uncaughtException) {
+            if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be captured and re-wrapped as TaskMigrationException
-                throw (ProducerFencedException) kafkaException.getCause();
+                throw new RecoverableClientException("Caught a recoverable exception", uncaughtException);
             } else {
                 throw new StreamsException(
                     String.format(
@@ -255,6 +250,12 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
+    public static boolean isRecoverable(final RuntimeException uncaughtException) {
+        return uncaughtException instanceof KafkaException && (
+            uncaughtException.getCause() instanceof ProducerFencedException ||
+                uncaughtException.getCause() instanceof UnknownProducerIdException);
+    }
+
     private void checkForException() {
         if (sendException != null) {
             throw sendException;
@@ -264,7 +265,11 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void flush() {
         log.debug("Flushing producer");
-        producer.flush();
+        try {
+            producer.flush();
+        } catch (final ProducerFencedException | UnknownProducerIdException e) {
+            throw new RecoverableClientException("Caught a recoverable exception while flushing", e);
+        }
         checkForException();
     }
 
@@ -272,7 +277,11 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         if (producer != null) {
-            producer.close();
+            try {
+                producer.close();
+            } catch (final ProducerFencedException | UnknownProducerIdException e) {
+                throw new RecoverableClientException("Caught a recoverable exception while closing", e);
+            }
             producer = null;
         }
         checkForException();
