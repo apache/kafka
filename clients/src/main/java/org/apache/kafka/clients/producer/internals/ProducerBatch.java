@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -61,14 +62,14 @@ public final class ProducerBatch {
 
     final long createdMs;
     final TopicPartition topicPartition;
-    final ProduceRequestResult produceFuture;
 
+    private final ProduceRequestResult produceFuture;
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
-    private final List<ProducerBatch> childrenProducerBatch;
+    private List<ProducerBatch> childrenProducerBatch;
 
     int recordCount;
     int maxRecordSize;
@@ -84,7 +85,7 @@ public final class ProducerBatch {
 
     public ProducerBatch(final TopicPartition tp, final MemoryRecordsBuilder recordsBuilder,
                          final long createdMs, final boolean isSplitBatch) {
-        this(tp, recordsBuilder, createdMs, isSplitBatch, new ProduceRequestResult(tp), new ArrayList<>());
+        this(tp, recordsBuilder, createdMs, isSplitBatch, new ProduceRequestResult(tp), null);
     }
 
     ProducerBatch(final TopicPartition tp, final MemoryRecordsBuilder recordsBuilder, final long createdMs,
@@ -246,14 +247,6 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
-    public List<ProducerBatch> getChildrenProducerBatch() {
-        return childrenProducerBatch;
-    }
-
-    public synchronized void clearChildrenProducerBatch() {
-        childrenProducerBatch.clear();
-    }
-
     public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
         MemoryRecords memoryRecords = recordsBuilder.build();
@@ -284,7 +277,7 @@ public final class ProducerBatch {
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batches.add(batch);
-                childrenProducerBatch.add(batch);
+                addChildrenProducerBatch(batch);
                 batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
@@ -293,7 +286,7 @@ public final class ProducerBatch {
         // Close the last batch and add it to the batch list after split.
         if (batch != null) {
             batches.add(batch);
-            childrenProducerBatch.add(batch);
+            addChildrenProducerBatch(batch);
         }
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
@@ -308,6 +301,45 @@ public final class ProducerBatch {
             }
         }
         return batches;
+    }
+
+    public boolean completed() {
+        return produceFuture.completed();
+    }
+
+    public void await() throws InterruptedException {
+        produceFuture.await();
+        waitForPossibleSplittedBatches();
+        clearChildrenProducerBatch();
+    }
+
+    private void waitForPossibleSplittedBatches() throws InterruptedException {
+        for (ProducerBatch child : getChildrenProducerBatch()) {
+            child.produceFuture.await();
+            child.waitForPossibleSplittedBatches();
+            child.clearChildrenProducerBatch();
+        }
+    }
+
+    private void addChildrenProducerBatch(final ProducerBatch batch) {
+        if (childrenProducerBatch == null) {
+            childrenProducerBatch = new ArrayList<>();
+        }
+
+        childrenProducerBatch.add(batch);
+    }
+
+    private List<ProducerBatch> getChildrenProducerBatch() {
+        if (childrenProducerBatch == null) {
+            return Collections.emptyList();
+        }
+        return childrenProducerBatch;
+    }
+
+    private synchronized void clearChildrenProducerBatch() {
+        if (childrenProducerBatch != null) {
+            childrenProducerBatch.clear();
+        }
     }
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {

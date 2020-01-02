@@ -491,7 +491,7 @@ public class RecordAccumulatorTest {
         for (Map.Entry<Integer, List<ProducerBatch>> drainedEntry : drained.entrySet()) {
             for (ProducerBatch batch : drainedEntry.getValue()) {
                 assertTrue(batch.isClosed());
-                assertFalse(batch.produceFuture.completed());
+                assertFalse(batch.completed());
                 numDrainedRecords += batch.recordCount;
             }
         }
@@ -534,7 +534,7 @@ public class RecordAccumulatorTest {
         for (Map.Entry<Integer, List<ProducerBatch>> drainedEntry : drained.entrySet()) {
             for (ProducerBatch batch : drainedEntry.getValue()) {
                 assertTrue(batch.isClosed());
-                assertFalse(batch.produceFuture.completed());
+                assertFalse(batch.completed());
                 numDrainedRecords += batch.recordCount;
             }
         }

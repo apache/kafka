@@ -749,20 +749,10 @@ public final class RecordAccumulator {
     public void awaitFlushCompletion() throws InterruptedException {
         try {
             for (ProducerBatch batch : this.incomplete.copyAll()) {
-                batch.produceFuture.await();
-                waitForPossibleSplittedBatches(batch);
-                batch.clearChildrenProducerBatch();
+                batch.await();
             }
         } finally {
             this.flushesInProgress.decrementAndGet();
-        }
-    }
-
-    private void waitForPossibleSplittedBatches(final ProducerBatch batch) throws InterruptedException {
-        for (ProducerBatch child : batch.getChildrenProducerBatch()) {
-            child.produceFuture.await();
-            waitForPossibleSplittedBatches(child);
-            child.clearChildrenProducerBatch();
         }
     }
 
