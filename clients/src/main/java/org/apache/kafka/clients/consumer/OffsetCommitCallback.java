@@ -38,7 +38,7 @@ public interface OffsetCommitCallback {
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link KafkaConsumer#subscribe(Collection)},
      *             or if there is an active group with the same groupId which is using group management.
-     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retriable.
+     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retried.
      *            This can occur if, e.g. consumer instance is in the middle of a rebalance. In such cases
      *            commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link KafkaConsumer#wakeup()} is called before or while this
