@@ -250,7 +250,7 @@ public final class ProducerBatch {
         return childrenProducerBatch;
     }
 
-    public void clearChildrenProducerBatch() {
+    public synchronized void clearChildrenProducerBatch() {
         childrenProducerBatch.clear();
     }
 
