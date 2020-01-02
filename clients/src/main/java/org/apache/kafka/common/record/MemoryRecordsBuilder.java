@@ -75,6 +75,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+    private long deleteHorizonMs;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
     private Long firstTimestamp = null;
@@ -94,7 +95,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                                 boolean isTransactional,
                                 boolean isControlBatch,
                                 int partitionLeaderEpoch,
-                                int writeLimit) {
+                                int writeLimit,
+                                long deleteHorizonMs) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
@@ -120,6 +122,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
         this.isControlBatch = isControlBatch;
+        this.deleteHorizonMs = deleteHorizonMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialPosition = bufferStream.position();
@@ -128,6 +131,24 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         bufferStream.position(initialPosition + batchHeaderSizeInBytes);
         this.bufferStream = bufferStream;
         this.appendStream = new DataOutputStream(compressionType.wrapForOutput(this.bufferStream, magic));
+    }
+
+    public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
+                                byte magic,
+                                CompressionType compressionType,
+                                TimestampType timestampType,
+                                long baseOffset,
+                                long logAppendTime,
+                                long producerId,
+                                short producerEpoch,
+                                int baseSequence,
+                                boolean isTransactional,
+                                boolean isControlBatch,
+                                int partitionLeaderEpoch,
+                                int writeLimit) {
+        this(bufferStream, magic, compressionType, timestampType, baseOffset, logAppendTime, producerId,
+             producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit,
+             RecordBatch.NO_TIMESTAMP);
     }
 
     /**
@@ -190,6 +211,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     public boolean isTransactional() {
         return isTransactional;
+    }
+
+    public boolean deleteHorizonSet() {
+        return deleteHorizonMs >= 0L;
     }
 
     /**
@@ -364,7 +389,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             maxTimestamp = this.maxTimestamp;
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
+                firstTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, deleteHorizonSet(),
                 partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
@@ -411,8 +436,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
                 throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
-            if (firstTimestamp == null)
-                firstTimestamp = timestamp;
+            if (firstTimestamp == null) {
+                if (deleteHorizonSet())
+                    firstTimestamp = deleteHorizonMs;
+                else
+                    firstTimestamp = timestamp;
+            }
 
             if (magic > RecordBatch.MAGIC_VALUE_V1) {
                 appendDefaultRecord(offset, timestamp, key, value, headers);

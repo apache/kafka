@@ -432,6 +432,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
+        public long deleteHorizonMs() {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+
+        @Override
+        public boolean deleteHorizonSet() {
+            return false;
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o)
                 return true;
@@ -466,6 +476,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public long offset() {
             return buffer.getLong(OFFSET_OFFSET);
+        }
+
+        @Override
+        public long deleteHorizonMs() {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+
+        @Override
+        public boolean deleteHorizonSet() {
+            return false;
         }
 
         @Override
@@ -555,6 +575,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public long baseOffset() {
             return loadFullBatch().baseOffset();
+        }
+
+        @Override
+        public long deleteHorizonMs() {
+            return RecordBatch.NO_TIMESTAMP;
+        }
+
+        @Override
+        public boolean deleteHorizonSet() {
+            return false;
         }
 
         @Override

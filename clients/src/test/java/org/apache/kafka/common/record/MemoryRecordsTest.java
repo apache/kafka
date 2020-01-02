@@ -247,6 +247,45 @@ public class MemoryRecordsTest {
         }
     }
 
+    /**
+     * This test is used to see if the first timestamp of the batch has been successfully 
+     * converted to a delete horizon for the tombstones / transaction markers of the batch.
+     */
+    @Test
+    public void testFirstTimestampToDeleteHorizonConversion() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            ByteBuffer buffer = ByteBuffer.allocate(2048);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                    0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
+            builder.append(10L, "1".getBytes(), null);
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            final long deleteHorizon = Integer.MAX_VALUE / 2;
+            builder.build().filterTo(new TopicPartition("random", 0), new MemoryRecords.RecordFilter() {
+                @Override
+                protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                    return true;
+                }
+
+                @Override
+                protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                    return BatchRetention.RETAIN_EMPTY;
+                }
+
+                @Override
+                protected long retrieveDeleteHorizon(RecordBatch batch) {
+                    return deleteHorizon; // arbitrary value > 1
+                }
+            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+            assertEquals(1, batches.size());
+            assertEquals(deleteHorizon, batches.get(0).deleteHorizonMs());
+        }
+    }
+
     @Test
     public void testFilterToEmptyBatchRetention() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {

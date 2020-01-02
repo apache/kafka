@@ -89,11 +89,15 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * by the broker and is preserved after compaction. Additionally, the MaxTimestamp of an empty batch always retains
  * the previous value prior to becoming empty.
  *
+ * The delete horizon flag for the sixth bit is used to determine if the first timestamp of the batch had been set to
+ * the time for which tombstones / transaction markers needs to be removed. If it is true, then the first timestamp is
+ * the delete horizon, otherwise, it is merely the first timestamp of the record batch.
+ *
  * The current attributes are given below:
  *
- *  -------------------------------------------------------------------------------------------------
- *  | Unused (6-15) | Control (5) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
- *  -------------------------------------------------------------------------------------------------
+ *  ---------------------------------------------------------------------------------------------------------------------------
+ *  | Unused (7-15) | Delete Horizon Flag (6) | Control (5) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  ---------------------------------------------------------------------------------------------------------------------------
  */
 public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
@@ -128,6 +132,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
     private static final int CONTROL_FLAG_MASK = 0x20;
+    private static final byte DELETE_HORIZON_FLAG_MASK = 0x40;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     private static final int MAX_SKIP_BUFFER_SIZE = 2048;
@@ -155,10 +160,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     /**
-     * Get the timestamp of the first record in this batch. It is always the create time of the record even if the
+     * Get the timestamp of the first record in this batch. It is usually the create time of the record even if the
      * timestamp type of the batch is log append time.
      *
-     * @return The first timestamp or {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
+     * There is the possibility that the first timestamp had been set to the delete horizon of the batch, 
+     * in which case, the delete horizon will be returned instead.
+     * 
+     * @return The first timestamp if the batch's delete horizon has not been set
+     *         The delete horizon if the batch's delete horizon has been set
+     *         {@link RecordBatch#NO_TIMESTAMP} if the batch is empty
      */
     public long firstTimestamp() {
         return buffer.getLong(FIRST_TIMESTAMP_OFFSET);
@@ -243,6 +253,18 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public boolean isTransactional() {
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
+    }
+
+    @Override
+    public boolean deleteHorizonSet() {
+        return (attributes() & DELETE_HORIZON_FLAG_MASK) > 0;
+    }
+
+    @Override
+    public long deleteHorizonMs() {
+        if (deleteHorizonSet())
+            return firstTimestamp();
+        return RecordBatch.NO_TIMESTAMP;
     }
 
     @Override
@@ -360,7 +382,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch());
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch(), deleteHorizonSet());
         buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
@@ -407,7 +429,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     private static byte computeAttributes(CompressionType type, TimestampType timestampType,
-                                          boolean isTransactional, boolean isControl) {
+                                          boolean isTransactional, boolean isControl, boolean isDeleteHorizonSet) {
         if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for message " +
                     "format v2 and above");
@@ -419,6 +441,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             attributes |= COMPRESSION_CODEC_MASK & type.id;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             attributes |= TIMESTAMP_TYPE_MASK;
+        if (isDeleteHorizonSet)
+            attributes |= DELETE_HORIZON_FLAG_MASK;
         return attributes;
     }
 
@@ -436,8 +460,27 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                                         boolean isControlRecord) {
         int offsetDelta = (int) (lastOffset - baseOffset);
         writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
+                    CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
+                    producerEpoch, baseSequence, isTransactional, isControlRecord, false, partitionLeaderEpoch, 0);
+    }
+
+    public static void writeEmptyHeader(ByteBuffer buffer,
+                                        byte magic,
+                                        long producerId,
+                                        short producerEpoch,
+                                        int baseSequence,
+                                        long baseOffset,
+                                        long lastOffset,
+                                        int partitionLeaderEpoch,
+                                        TimestampType timestampType,
+                                        long timestamp,
+                                        boolean isTransactional,
+                                        boolean isControlRecord,
+                                        boolean isDeleteHorizonSet) {
+        int offsetDelta = (int) (lastOffset - baseOffset);
+        writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
                 CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
-                producerEpoch, baseSequence, isTransactional, isControlRecord, partitionLeaderEpoch, 0);
+                producerEpoch, baseSequence, isTransactional, isControlRecord, isDeleteHorizonSet, partitionLeaderEpoch, 0);
     }
 
     static void writeHeader(ByteBuffer buffer,
@@ -456,12 +499,34 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             boolean isControlBatch,
                             int partitionLeaderEpoch,
                             int numRecords) {
+        writeHeader(buffer, baseOffset, lastOffsetDelta, sizeInBytes, magic, compressionType,
+                    timestampType, firstTimestamp, maxTimestamp, producerId, epoch, sequence,
+                    isTransactional, isControlBatch, false, partitionLeaderEpoch, numRecords);
+    }
+
+    static void writeHeader(ByteBuffer buffer,
+                            long baseOffset,
+                            int lastOffsetDelta,
+                            int sizeInBytes,
+                            byte magic,
+                            CompressionType compressionType,
+                            TimestampType timestampType,
+                            long firstTimestamp,
+                            long maxTimestamp,
+                            long producerId,
+                            short epoch,
+                            int sequence,
+                            boolean isTransactional,
+                            boolean isControlBatch,
+                            boolean isDeleteHorizonSet,
+                            int partitionLeaderEpoch,
+                            int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (firstTimestamp < 0 && firstTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + firstTimestamp);
 
-        short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch);
+        short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch, isDeleteHorizonSet);
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
@@ -697,6 +762,18 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         @Override
         public boolean isTransactional() {
             return loadBatchHeader().isTransactional();
+        }
+
+        @Override
+        public boolean deleteHorizonSet() {
+            return loadBatchHeader().deleteHorizonSet();
+        }
+
+        @Override
+        public long deleteHorizonMs() {
+            if (deleteHorizonSet())
+                return super.loadBatchHeader().deleteHorizonMs();
+            return RecordBatch.NO_TIMESTAMP;
         }
 
         @Override
