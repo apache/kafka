@@ -203,13 +203,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     Thread.sleep(100)
 
     import JavaConverters._
-    var containsTombstone = false
+    var containsTombstones: Boolean = false
     for (segment <- log.logSegments; record <- segment.log.records.asScala) {
-        containsTombstone = true
+      containsTombstones = true
     }
-    assertTrue(containsTombstone)
-
-    // log contains tombstones, therefore this should've been set to true
+    assertTrue(containsTombstones)
     time.sleep(tombstoneRetentionMs + 1)
 
     val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset

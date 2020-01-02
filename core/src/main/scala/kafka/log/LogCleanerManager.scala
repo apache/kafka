@@ -203,10 +203,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio
       }
       if(cleanableLogs.isEmpty) {
-        // in this case, we are probably in a low thorougput situation
+        // in this case, we are probably in a low throughput situation
         // therefore, we should take advantage of this fact and remove tombstones if we can
         val logsContainingTombstones = logs.filter {
           case (_, log) => log.containsTombstones
+        }.filterNot {
+          case (topicPartition, log) =>
+            // skip any logs already in-progress and uncleanable partitions
+            inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
         }.map {
           case (topicPartition, log) => // create a LogToClean instance for each
             try {
@@ -224,8 +228,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           val filthiest = logsContainingTombstones.max
           inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
           Some(filthiest)
+        } else {
+          None
         }
-        None
       } else {
         preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max

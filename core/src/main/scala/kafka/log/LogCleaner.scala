@@ -834,7 +834,6 @@ private[log] class Cleaner(val id: Int,
                               (!batch.deleteHorizonSet() && currentTime < newBatchDeleteHorizonMs)
       else
         shouldRetainDeletes = retainDeletes
-
       val isRetainedValue = record.hasValue || shouldRetainDeletes
 
       latestOffsetForKey && isRetainedValue

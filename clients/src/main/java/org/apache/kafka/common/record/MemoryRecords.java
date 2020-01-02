@@ -191,7 +191,7 @@ public class MemoryRecords extends AbstractRecords {
 
             final BatchIterationResult iterationResult = iterateOverBatch(batch, decompressionBufferSupplier, filterResult, filter,
                                                                           batchMagic, writeOriginalBatch, maxOffset, retainedRecords,
-                                                                          containsTombstonesOrMarker);
+                                                                          containsTombstonesOrMarker, deleteHorizonMs);
             containsTombstonesOrMarker = iterationResult.containsTombstonesOrMarker();
             writeOriginalBatch = iterationResult.shouldWriteOriginalBatch();
             maxOffset = iterationResult.maxOffset();
@@ -249,13 +249,14 @@ public class MemoryRecords extends AbstractRecords {
                                                          boolean writeOriginalBatch,
                                                          long maxOffset,
                                                          List<Record> retainedRecords,
-                                                         boolean containsTombstonesOrMarker) {
+                                                         boolean containsTombstonesOrMarker,
+                                                         long newBatchDeleteHorizonMs) {
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             while (iterator.hasNext()) {
                 Record record = iterator.next();
                 filterResult.messagesRead += 1;
 
-                if (filter.shouldRetainRecord(batch, record)) {
+                if (filter.shouldRetainRecord(batch, record, newBatchDeleteHorizonMs)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
@@ -265,12 +266,12 @@ public class MemoryRecords extends AbstractRecords {
                         maxOffset = record.offset();
 
                     retainedRecords.add(record);
+
+                    if (!record.hasValue()) {
+                        containsTombstonesOrMarker = true;
+                    }
                 } else {
                     writeOriginalBatch = false;
-                }
-
-                if (!record.hasValue()) {
-                    containsTombstonesOrMarker = true;
                 }
             }
             return new BatchIterationResult(writeOriginalBatch, containsTombstonesOrMarker, maxOffset);
