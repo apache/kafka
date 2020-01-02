@@ -81,7 +81,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -230,7 +229,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private final Logger log;
-    private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
@@ -333,7 +331,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String transactionalId = userProvidedConfigs.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG) ?
                     (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG) : null;
 
-            this.clientId = buildClientId(config.getString(ProducerConfig.CLIENT_ID_CONFIG), transactionalId);
+            this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 
             LogContext logContext;
             if (transactionalId == null)
@@ -433,19 +431,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private static String buildClientId(String configuredClientId, String transactionalId) {
-        if (!configuredClientId.isEmpty())
-            return configuredClientId;
-
-        if (transactionalId != null)
-            return "producer-" + transactionalId;
-
-        return "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
-    }
-
     // visible for testing
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = configureInflightRequests(producerConfig, transactionManager != null);
+        int maxInflightRequests = configureInflightRequests(producerConfig);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time);
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
@@ -467,8 +455,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        int retries = configureRetries(producerConfig, transactionManager != null, log);
-        short acks = configureAcks(producerConfig, transactionManager != null, log);
+        int retries = configureRetries(producerConfig, log);
+        short acks = configureAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
                 metadata,
@@ -516,23 +504,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         TransactionManager transactionManager = null;
 
-        boolean userConfiguredIdempotence = false;
-        if (config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG))
-            userConfiguredIdempotence = true;
+        boolean userConfiguredIdempotence = config.originals().containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+        if (userConfiguredTransactions && !userConfiguredIdempotence)
+            log.info("Overriding the default {} to true since {} is specified.", ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
+                    ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
-        boolean userConfiguredTransactions = false;
-        if (config.originals().containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
-            userConfiguredTransactions = true;
-
-        boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-
-        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
-
-        if (userConfiguredTransactions)
-            idempotenceEnabled = true;
-
-        if (idempotenceEnabled) {
+        if (config.idempotenceEnabled()) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -542,61 +520,38 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             else
                 log.info("Instantiated an idempotent producer.");
         }
-
         return transactionManager;
     }
 
-    private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
-        boolean userConfiguredRetries = false;
-        if (config.originals().containsKey(ProducerConfig.RETRIES_CONFIG)) {
-            userConfiguredRetries = true;
-        }
-        if (idempotenceEnabled && !userConfiguredRetries) {
-            // We recommend setting infinite retries when the idempotent producer is enabled, so it makes sense to make
-            // this the default.
+    private static int configureRetries(ProducerConfig config, Logger log) {
+        boolean userConfiguredRetries = config.originals().containsKey(ProducerConfig.RETRIES_CONFIG);
+        if (config.idempotenceEnabled() && !userConfiguredRetries) {
             log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
                     "producer is enabled.", Integer.MAX_VALUE);
-            return Integer.MAX_VALUE;
-        }
-        if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
-            throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
         }
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
-    private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
-        if (idempotenceEnabled && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+    private static int configureInflightRequests(ProducerConfig config) {
+        if (config.idempotenceEnabled() && 5 < config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
             throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to at most 5" +
                     " to use the idempotent producer.");
         }
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
 
-    private static short configureAcks(ProducerConfig config, boolean idempotenceEnabled, Logger log) {
-        boolean userConfiguredAcks = false;
-        short acks = (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG));
-        if (config.originals().containsKey(ProducerConfig.ACKS_CONFIG)) {
-            userConfiguredAcks = true;
-        }
+    private static short configureAcks(ProducerConfig config, Logger log) {
+        boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
+        short acks = Short.valueOf(config.getString(ProducerConfig.ACKS_CONFIG));
 
-        if (idempotenceEnabled && !userConfiguredAcks) {
-            log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
-            return -1;
-        }
-
-        if (idempotenceEnabled && acks != -1) {
-            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence.");
+        if (config.idempotenceEnabled()) {
+            if (!userConfiguredAcks)
+                log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
+            else if (acks != -1)
+                throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
         }
         return acks;
-    }
-
-    private static int parseAcks(String acksString) {
-        try {
-            return acksString.trim().equalsIgnoreCase("all") ? -1 : Integer.parseInt(acksString.trim());
-        } catch (NumberFormatException e) {
-            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
-        }
     }
 
     /**
