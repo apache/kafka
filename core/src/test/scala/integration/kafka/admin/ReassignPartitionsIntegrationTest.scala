@@ -26,11 +26,12 @@ import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAwareTest {
   import ReassignPartitionsIntegrationTest._
 
-  var servers = Seq.empty[KafkaServer]
+  var servers: Seq[KafkaServer] = Seq()
   val broker1 = 0
   val broker2 = 1
   val broker3 = 2
