@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -219,7 +220,7 @@ public class TransactionManager {
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
                 case INITIALIZING:
-                    return source == UNINITIALIZED;
+                    return source == UNINITIALIZED || source == ABORTING_TRANSACTION;
                 case READY:
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
@@ -242,12 +243,14 @@ public class TransactionManager {
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
     // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
-    // The endTxn request must always go last.
+    // The endTxn request must always go last, unless we are bumping the epoch (a special case of InitProducerId)as
+    // part of ending the transaction.
     private enum Priority {
         FIND_COORDINATOR(0),
         INIT_PRODUCER_ID(1),
         ADD_PARTITIONS_OR_OFFSETS(2),
-        END_TXN(3);
+        END_TXN(3),
+        EPOCH_BUMP(4);
 
         final int priority;
 
@@ -283,22 +286,27 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE, State.INITIALIZING);
+        return initializeTransactions(ProducerIdAndEpoch.NONE);
     }
 
-    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch currentProducerIdAndEpoch, State targetState) {
+    synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch currentProducerIdAndEpoch) {
         return handleCachedTransactionRequestResult(() -> {
-            transitionTo(targetState);
+            boolean isEpochBump = currentProducerIdAndEpoch != ProducerIdAndEpoch.NONE;
+            // If this is an epoch bump, we will transition the state as part of handling the EndTxnRequest
+            if (!isEpochBump) {
+                transitionTo(State.INITIALIZING);
+            }
             setProducerIdAndEpoch(currentProducerIdAndEpoch);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
                     .setProducerId(currentProducerIdAndEpoch.producerId)
                     .setProducerEpoch(currentProducerIdAndEpoch.epoch);
-            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData));
+            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
+                    isEpochBump);
             enqueueRequest(handler);
             return handler.result;
-        }, targetState);
+        }, State.INITIALIZING);
     }
 
     public synchronized void beginTransaction() {
@@ -330,11 +338,15 @@ public class TransactionManager {
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
-        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
+        EndTxnRequest.Builder endTxnRequestBuilder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
                 producerIdAndEpoch.epoch, transactionResult);
-        EndTxnHandler handler = new EndTxnHandler(builder);
+        EndTxnHandler handler = new EndTxnHandler(endTxnRequestBuilder);
         enqueueRequest(handler);
-        return handler.result;
+        if (!shouldBumpEpoch()) {
+            return handler.result;
+        }
+
+        return initializeTransactions(this.producerIdAndEpoch);
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -501,15 +513,10 @@ public class TransactionManager {
         return epochBumpRequired;
     }
 
-    synchronized void bumpEpochIfNeeded() {
-        if (shouldBumpEpoch()) {
-            bumpEpoch();
-        }
-    }
-
     synchronized void bumpEpoch() {
         if (isTransactional()) {
-            initializeTransactions(this.producerIdAndEpoch, State.ABORTABLE_ERROR);
+            log.warn("Skipping epoch bump for transactional producer. The epoch will be bumped after the ongoing" +
+                    "transaction is aborted");
         } else {
             if (this.producerIdAndEpoch.epoch == Short.MAX_VALUE) {
                 resetProducerId();
@@ -630,7 +637,7 @@ public class TransactionManager {
                 || exception instanceof UnsupportedVersionException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
-            if (canBumpEpoch()) {
+            if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
             transitionToAbortableError(exception);
@@ -655,6 +662,8 @@ public class TransactionManager {
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
             resetProducerId();
+        } else if (exception instanceof UnknownProducerIdException) {
+            resetSequenceNumbers();
         } else {
             removeInFlightBatch(batch);
             if (adjustSequenceNumbers) {
@@ -706,7 +715,7 @@ public class TransactionManager {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
                     inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.value);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
-                    (short) (inFlightBatch.producerEpoch() + 1)), sequence.value, inFlightBatch.isTransactional());
+                    this.producerIdAndEpoch.epoch), sequence.value, inFlightBatch.isTransactional());
             sequence.value += inFlightBatch.recordCount;
         });
         setNextSequence(topicPartition, sequence.value);
@@ -755,6 +764,7 @@ public class TransactionManager {
                         } else {
                             transitionToFatalError(exception);
                         }
+                        this.partitionsWithUnresolvedSequences.clear();
                     } else {
                         // For the idempotent producer, reset producer state
                         log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
@@ -947,7 +957,6 @@ public class TransactionManager {
             lastError = error;
         } else {
             lastError = null;
-            epochBumpRequired = false;
         }
 
         if (lastError != null)
@@ -1013,7 +1022,8 @@ public class TransactionManager {
     }
 
     private void completeTransaction() {
-        transitionTo(State.READY);
+        // Don't transition to READY if we are waiting for an InitProducerId request to complete
+        transitionTo(epochBumpRequired ? State.INITIALIZING : State.READY);
         lastError = null;
         epochBumpRequired = false;
         transactionStarted = false;
@@ -1178,10 +1188,12 @@ public class TransactionManager {
 
     private class InitProducerIdHandler extends TxnRequestHandler {
         private final InitProducerIdRequest.Builder builder;
+        private final boolean isEpochBump;
 
-        private InitProducerIdHandler(InitProducerIdRequest.Builder builder) {
+        private InitProducerIdHandler(InitProducerIdRequest.Builder builder, boolean isEpochBump) {
             super("InitProducerId");
             this.builder = builder;
+            this.isEpochBump = isEpochBump;
         }
 
         @Override
@@ -1191,7 +1203,7 @@ public class TransactionManager {
 
         @Override
         Priority priority() {
-            return Priority.INIT_PRODUCER_ID;
+            return this.isEpochBump ? Priority.EPOCH_BUMP : Priority.INIT_PRODUCER_ID;
         }
 
         @Override
@@ -1203,6 +1215,9 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data.producerId(),
                         initProducerIdResponse.data.producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
+                if (this.isEpochBump) {
+                    resetSequenceNumbers();
+                }
                 transitionTo(State.READY);
                 lastError = null;
                 result.done();
@@ -1470,14 +1485,14 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
+            } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
+                recoverableError(error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fatalError(error.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.consumerGroupId()));
-            } else if (error == Errors.UNKNOWN_PRODUCER_ID || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                recoverableError(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }

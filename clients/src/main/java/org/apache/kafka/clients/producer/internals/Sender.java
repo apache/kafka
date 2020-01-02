@@ -301,7 +301,6 @@ public class Sender implements Runnable {
         if (transactionManager != null) {
             try {
                 transactionManager.checkUnresolvedSequences();
-                transactionManager.bumpEpochIfNeeded();
 
                 if (!transactionManager.isTransactional()) {
                     // this is an idempotent producer, so make sure we have a producer id

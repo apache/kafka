@@ -135,7 +135,7 @@ public class TransactionManagerTest {
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
-                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3),
                 new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
                 DEFAULT_RETRY_BACKOFF_MS, apiVersions);
@@ -638,7 +638,7 @@ public class TransactionManagerTest {
         b1.done(500L, b1AppendTime, null);
         transactionManager.handleCompletedBatch(b1, b1Response);
 
-        // Retention caused log start offset to jump forward. We bump the epoch set sequence numbers back to 0
+        // Retention caused log start offset to jump forward. We bump the epoch and set sequence numbers back to 0
         ProduceResponse.PartitionResponse b2Response = new ProduceResponse.PartitionResponse(
                 Errors.UNKNOWN_PRODUCER_ID, -1, -1, 600L);
         assertTrue(transactionManager.canRetry(b2Response, b2));
@@ -1603,6 +1603,8 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
         sender.runOnce();  // Send abort request. It is valid to transition from ERROR to ABORT
 
+        prepareInitPidResponse(Errors.NONE, false, pid, (short) (epoch + 1));
+        sender.runOnce();
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
@@ -1632,6 +1634,8 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
         sender.runOnce();  // try to abort
+        prepareInitPidResponse(Errors.NONE, false, pid, (short) (epoch + 1));
+        sender.runOnce();
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
@@ -2388,6 +2392,8 @@ public class TransactionManagerTest {
 
         sender.runOnce();  // send the abort.
 
+        prepareInitPidResponse(Errors.NONE, false, pid, (short) (epoch + 1));
+        sender.runOnce();
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
         assertFalse(transactionManager.hasOngoingTransaction());
@@ -2398,6 +2404,10 @@ public class TransactionManagerTest {
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
+                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
 
         doInitTransactions(pid, epoch);
 
@@ -2570,6 +2580,434 @@ public class TransactionManagerTest {
         assertEquals(6, manager.producerIdAndEpoch().epoch);
         assertFalse(manager.hasUnresolvedSequences());
         assertEquals(0, manager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
+                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        Future<RecordMetadata> responseFuture0 = accumulator.append(tp0, time.milliseconds(), "key0".getBytes(),
+                "value0".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture0.isDone());
+
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "key1".getBytes(),
+                "value1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture1.isDone());
+
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "key2".getBytes(),
+                "value2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.TOPIC_AUTHORIZATION_FAILED, pid, epoch);
+        sender.runOnce(); // Send Produce Response and transition to abortable error
+        assertTrue(responseFuture2.isDone());
+
+        assertTrue(transactionManager.hasAbortableError());
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.runOnce();  // handle the abort
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        assertEquals(2, transactionManager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testAbortTransactionAndResetSequenceNumberOnUnknownProducerId() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+                new ApiVersion(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 1),
+                new ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 7))));
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        Future<RecordMetadata> responseFuture0 = accumulator.append(tp0, time.milliseconds(), "key0".getBytes(),
+                "value0".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture0.isDone());
+
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "key1".getBytes(),
+                "value1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, epoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture1.isDone());
+
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "key2".getBytes(),
+                "value2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.UNKNOWN_PRODUCER_ID, pid, epoch);
+        sender.runOnce(); // Send Produce Response and transition to abortable error
+        assertTrue(responseFuture2.isDone());
+
+        assertTrue(transactionManager.hasAbortableError());
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.runOnce();  // handle the abort
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnError() throws InterruptedException {
+        final long pid = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+
+        doInitTransactions(pid, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        Future<RecordMetadata> responseFuture0 = accumulator.append(tp0, time.milliseconds(), "key0".getBytes(),
+                "value0".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture0.isDone());
+
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "key1".getBytes(),
+                "value1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture1.isDone());
+
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "key2".getBytes(),
+                "value2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.TOPIC_AUTHORIZATION_FAILED, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response and transition to abortable error
+        assertTrue(responseFuture2.isDone());
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
+        sender.runOnce();  // handle the abort
+
+        prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnUnknownProducerIdError() throws InterruptedException {
+        final long pid = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+
+        doInitTransactions(pid, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        Future<RecordMetadata> responseFuture0 = accumulator.append(tp0, time.milliseconds(), "key0".getBytes(),
+                "value0".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture0.isDone());
+
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "key1".getBytes(),
+                "value1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture1.isDone());
+
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "key2".getBytes(),
+                "value2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.UNKNOWN_PRODUCER_ID, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response and transition to abortable error
+        assertTrue(responseFuture2.isDone());
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
+        sender.runOnce();  // handle the abort
+
+        prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnTimeout() throws InterruptedException {
+        final long pid = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+
+        doInitTransactions(pid, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        Future<RecordMetadata> responseFuture0 = accumulator.append(tp0, time.milliseconds(), "key0".getBytes(),
+                "value0".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture0.isDone());
+
+        Future<RecordMetadata> responseFuture1 = accumulator.append(tp0, time.milliseconds(), "key1".getBytes(),
+                "value1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+        sendProduceResponse(Errors.NONE, pid, initialEpoch);
+        sender.runOnce(); // Send Produce Response
+        assertTrue(responseFuture1.isDone());
+
+        Future<RecordMetadata> responseFuture2 = accumulator.append(tp0, time.milliseconds(), "key2".getBytes(),
+                "value2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+        sender.runOnce(); // Send Produce Request
+
+        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
+        time.sleep(10000);
+        // Disconnect the target node for the pending produce request. This will ensure that sender will try to
+        // expire the batch.
+        Node clusterNode = metadata.fetch().nodes().get(0);
+        client.disconnect(clusterNode.idString());
+        client.blackout(clusterNode, 100);
+
+        sender.runOnce();  // We should try to flush the produce, but expire it instead without sending anything.
+        assertTrue(responseFuture2.isDone());
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+
+        sender.runOnce();  // handle the abort
+        time.sleep(110);  // Sleep to make sure the node blackout period has passed
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, initialEpoch);
+        sender.runOnce();  // Receive FindCoordinator request
+        sender.runOnce();  // Receive abort request
+
+        prepareInitPidResponse(Errors.NONE, false, pid, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, pid);
+        sender.runOnce();  // Send AddPartitionsRequest
+
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnRecoverableAddPartitionRequestError() {
+        final long producerId = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+
+        doInitTransactions(producerId, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, tp0, initialEpoch, producerId);
+        sender.runOnce();
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
+        sender.runOnce();  // handle the abort
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnRecoverableAddOffsetsRequestError() throws InterruptedException {
+        final long producerId = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+        final String consumerGroupId = "myconsumergroup";
+
+        doInitTransactions(producerId, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
+        prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
+        sender.runOnce();
+        sender.runOnce();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        assertFalse(transactionManager.hasPendingOffsetCommits());
+        prepareAddOffsetsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, consumerGroupId, producerId, initialEpoch);
+        sender.runOnce();  // Send AddOffsetsRequest
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
+        sender.runOnce();  // handle the abort
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnRecoverableCommitOffsetRequestError() throws InterruptedException {
+        final long producerId = 13131L;
+        final short initialEpoch = 1;
+        final short bumpedEpoch = 2;
+        final String consumerGroupId = "myconsumergroup";
+
+        doInitTransactions(producerId, initialEpoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false).future;
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
+        prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
+        sender.runOnce();
+        sender.runOnce();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        assertFalse(transactionManager.hasPendingOffsetCommits());
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, initialEpoch);
+        sender.runOnce();  // Send AddOffsetsRequest
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp1, Errors.INVALID_PRODUCER_ID_MAPPING);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, initialEpoch, txnOffsetCommitResponse);
+
+        sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
+        sender.runOnce();  // send find coordinator for group request
+        sender.runOnce();  // send TxnOffsetCommitRequest commit.
+
+        assertTrue(transactionManager.hasAbortableError());
+        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
+        sender.runOnce();  // handle the abort
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
+        sender.runOnce();  // Receive InitProducerId response
+        assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
     }
 
     @Test
