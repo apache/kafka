@@ -72,7 +72,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // there's still an optimization that requires this info to be
     // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
     private final boolean eosEnabled;
-    private final StreamsConfig config;
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
     private final StreamsMetricsImpl streamsMetrics;
@@ -107,7 +106,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         super(id, partitions, topology, consumer, false, stateMgr, stateDirectory, config);
 
         this.time = time;
-        this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.recordCollector = recordCollector;
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
@@ -176,7 +174,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = consumer.committed(partitions).entrySet().stream()
                 .filter(e -> e.getValue() != null)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            initializeCommittedOffsets(offsetsAndMetadata);
             initializeTaskTime(offsetsAndMetadata);
         } catch (final AuthorizationException e) {
             throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
@@ -185,28 +182,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final KafkaException e) {
             throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }
-    }
-
-    private void initializeCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {
-        // Currently there is no easy way to tell the ProcessorStateManager to only restore up to
-        // a specific offset. In most cases this is fine. However, in optimized topologies we can
-        // have a source topic that also serves as a changelog, and in this case we want our active
-        // stream task to only play records up to the last consumer committed offset. Here we find
-        // partitions of topics that are both sources and changelogs and set the consumer committed
-        // offset via stateMgr as there is not a more direct route.
-        final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
-        final Map<TopicPartition, Long> committedOffsetsForChangelogs = offsetsAndMetadata
-            .entrySet()
-            .stream()
-            .filter(e -> changelogTopicNames.contains(e.getKey().topic()))
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-
-        // those do not have a committed offset would default to 0
-        for (final TopicPartition tp : partitions) {
-            committedOffsetsForChangelogs.putIfAbsent(tp, 0L);
-        }
-
-        stateMgr.putOffsetLimits(committedOffsetsForChangelogs);
     }
 
     private void initializeTaskTime(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata) {

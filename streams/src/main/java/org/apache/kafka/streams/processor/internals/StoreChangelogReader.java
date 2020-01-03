@@ -139,8 +139,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Logger log;
     private final Duration pollTime;
-    private final ProcessorStateManager stateManager;
-    private final Consumer<byte[], byte[]> mainConsumer;
 
     // 1) we keep adding partitions to restore consumer whenever new tasks are registered with the state manager;
     // 2) we do not unassign partitions when we switch between standbys and actives, we just pause / resume them;
@@ -159,17 +157,20 @@ public class StoreChangelogReader implements ChangelogReader {
     // partition already exists from the broker-side metadata: this is an optimization.
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
 
+    // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
+    // to update offset limit for standby tasks;
+    private Consumer<byte[], byte[]> mainConsumer;
+
+    void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
+        this.mainConsumer = consumer;
+    }
 
     public StoreChangelogReader(final StreamsConfig config,
                                 final LogContext logContext,
-                                final ProcessorStateManager stateManager,
-                                final Consumer<byte[], byte[]> mainConsumer,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
-        this.stateManager = stateManager;
-        this.mainConsumer = mainConsumer;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
@@ -338,6 +339,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }).findFirst().orElse(changelogMetadata.bufferedRecords.size());
 
         if (numRecords != 0) {
+            final ProcessorStateManager stateManager = changelogMetadata.stateManager;
             final List<ConsumerRecord<byte[], byte[]>> restoreRecords = changelogMetadata.bufferedRecords.subList(0, numRecords);
             stateManager.restore(partition, restoreRecords);
 

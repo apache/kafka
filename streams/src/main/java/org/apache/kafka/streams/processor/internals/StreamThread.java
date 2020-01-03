@@ -552,8 +552,8 @@ public class StreamThread extends Thread {
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
-        final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
+
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, restoreConsumer, userStateRestoreListener);
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
@@ -602,6 +602,7 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
+        changelogReader.setMainConsumer(consumer);
         taskManager.setConsumer(consumer);
 
         return new StreamThread(
@@ -610,6 +611,7 @@ public class StreamThread extends Thread {
             activeTaskCreator.threadProducer,
             restoreConsumer,
             consumer,
+            changelogReader,
             originalReset,
             taskManager,
             streamsMetrics,
@@ -625,6 +627,7 @@ public class StreamThread extends Thread {
                         final Producer<byte[], byte[]> producer,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
+                        final StoreChangelogReader changelogReader,
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
@@ -664,6 +667,7 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.producer = producer;
+        this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
 
@@ -1090,6 +1094,11 @@ public class StreamThread extends Thread {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
+        }
+        try {
+            changelogReader.clear();
+        } catch (final Throwable e) {
+            log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
             consumer.close();
