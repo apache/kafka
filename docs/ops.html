@@ -964,6 +964,21 @@
         <td>See above</td>
       </tr>
       <tr>
+        <td>Consumer Group Offset Count</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
+        <td>Total number of committed offsets for Consumer Groups</td>
+      </tr>
+      <tr>
+        <td>Consumer Group Count</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
+        <td>Total number of Consumer Groups</td>
+      </tr>
+      <tr>
+        <td>Consumer Group Count, per State</td>
+        <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
+        <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+      </tr>
+      <tr>
         <td>Max lag in messages btw follower and leader replicas</td>
         <td>kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica</td>
         <td>lag should be proportional to the maximum batch size of a produce request.</td>
