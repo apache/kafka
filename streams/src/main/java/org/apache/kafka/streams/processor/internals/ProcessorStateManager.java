@@ -44,7 +44,18 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-
+/**
+ * ProcessorStateManager is the source of truth for the current offset for each state store,
+ * which is either the read offset during restoring, or the written offset during normal processing.
+ *
+ * The offset is initialized as null when the state store is registered, and then it can be updated by
+ * loading checkpoint file, restore state stores, or passing from the record collector's written offsets.
+ *
+ * When checkpointing, if the offset is not null it would be written to the file.
+ *
+ * The manager is also responsible for restoring state stores via their registered restore callback,
+ * which is used for both updating standby tasks as well as restoring active tasks.
+ */
 public class ProcessorStateManager implements StateManager {
 
     public class StateStoreMetadata {
@@ -54,10 +65,12 @@ public class ProcessorStateManager implements StateManager {
         // restoration (active and standby tasks restored offset) and
         // running (written offset); could be null (when initialized)
         //
-        // the offset is updated in two ways:
-        //   1. when updating with restore records (by both restoring active and standby),
+        // the offset is updated in three ways:
+        //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
+        //      directory lock and have registered all the state store; it is only one-time
+        //   2. when updating with restore records (by both restoring active and standby),
         //      update to the last restore record's offset
-        //   2. when checkpointing with the given written offsets from record collector,
+        //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
         //
         // will be used by the changelog reader to determine if restoration is completed, hence public

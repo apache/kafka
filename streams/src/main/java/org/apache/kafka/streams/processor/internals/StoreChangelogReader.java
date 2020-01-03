@@ -43,18 +43,26 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
+ * restoring active tasks. It manages the restore consumer, including its assigned partitions, when to pause / resume
+ * these partitions, etc.
+ *
+ * The reader also maintains the source of truth for restoration state: only active tasks restoring changelog could
+ * be completed, while standby tasks updating changelog would always be in restoring state after being initialized.
+ */
 public class StoreChangelogReader implements ChangelogReader {
 
     private static final long UNKNOWN_OFFSET = -1L;
 
     enum ChangelogState {
-        // registered but need to be initialized
+        // registered but need to be initialized (i.e. set its starting, end, limit offsets)
         REGISTERED("REGISTERED"),
 
         // initialized and restoring
         RESTORING("RESTORING"),
 
-        // completed restoring (only for active restoring task)
+        // completed restoring (only for active restoring task, standby task should never be completed)
         COMPLETED("COMPLETED");
 
         public final String name;
@@ -65,10 +73,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     // NOTE we assume that the changelog read is used only for either 1) restoring active task
-    // or 2) updating standby task at a given time:
-    //
-    //    * only after we've completed restoring all active tasks we'll then move on to update standby tasks;
-    //    * once some new tasks need to be restored, we pause on the existing standby tasks.
+    // or 2) updating standby task at a given time, but never doing both
     enum ChangelogReaderState {
         ACTIVE_RESTORING("ACTIVE_RESTORING"),
 
@@ -203,6 +208,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    // Once some new tasks are created, we transit to restore them and pause on the existing standby tasks.
+    // NOTE: even if the newly created tasks do not need any restoring, we still first transit to this state and then
+    // immediately transit back -- there's no overhead of transiting back and forth but simplifies the logic a lot.
+    // TODO K9113: this function should be called by stream thread
     public void transitToRestoreActive() {
         if (state != ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("The changelog reader is not processing standby tasks while trying to " +
@@ -216,6 +225,11 @@ public class StoreChangelogReader implements ChangelogReader {
         state = ChangelogReaderState.ACTIVE_RESTORING;
     }
 
+    // Only after we've completed restoring all active tasks we'll then move back to resume updating standby tasks.
+    // NOTE: we do not clear completed active restoring changelogs or remove partitions from restore consumer either
+    // upon completing them but only pause the corresponding partitions; the changelog metadata / partitions would only
+    // be cleared when the corresponding task is being removed from the thread.
+    // TODO K9113: this function should be called by stream thread
     public void transitToUpdateStandby() {
         if (state != ChangelogReaderState.ACTIVE_RESTORING) {
             throw new IllegalStateException("The changelog reader is not restoring actove tasks while trying to " +
@@ -229,6 +243,10 @@ public class StoreChangelogReader implements ChangelogReader {
         state = ChangelogReaderState.STANDBY_UPDATING;
     }
 
+    /**
+     * Since it is shared for multiple tasks and hence multiple state managers, the registration would take its
+     * corresponding state manager as well for restoring.
+     */
     @Override
     public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
         final ChangelogMetadata changelogMetadata = new ChangelogMetadata(partition, stateManager);
@@ -271,11 +289,10 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
+    // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
+    // 2. if all changelogs have finished, return early;
+    // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     public void restore() {
-        // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
-        // 2. if all changelogs have finished, return early;
-        // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
-
         final Set<TopicPartition> registeredChangelogs = registeredChangelogs();
         if (!registeredChangelogs.isEmpty()) {
             initializeChangelogs(registeredChangelogs);
@@ -350,20 +367,22 @@ public class StoreChangelogReader implements ChangelogReader {
             final Long currentOffset = storeMetadata.offset;
             changelogMetadata.totalRestored += numRecords;
 
-            // do not trigger restore listener if we are processing standby tasks
-            if (state == ChangelogReaderState.ACTIVE_RESTORING)
-                stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
-
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
                 partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
 
-            if (restoredToEnd(changelogMetadata.restoreEndOffset, currentOffset)) {
-                log.info("Finished restoring changelog {} to store {} with a total number of {} records",
-                    partition, storeName, changelogMetadata.totalRestored);
+            // do not trigger restore listener if we are processing standby tasks, also we do not need to check
+            // if it has been completed since standby task never completes
+            if (state == ChangelogReaderState.ACTIVE_RESTORING) {
+                stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
 
-                stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+                if (restoredToEnd(changelogMetadata.restoreEndOffset, currentOffset)) {
+                    log.info("Finished restoring changelog {} to store {} with a total number of {} records",
+                        partition, storeName, changelogMetadata.totalRestored);
 
-                pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.changelogPartition));
+                    stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+
+                    pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.changelogPartition));
+                }
             }
 
             // NOTE we use removeAll of ArrayList in order to achieve efficiency, otherwise one-at-a-time removal
@@ -599,6 +618,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
+    // TODO K9113: when a task is removed from the thread, this should be called
     public void remove(final List<TopicPartition> revokedChangelogs) {
         for (final TopicPartition partition : revokedChangelogs) {
             ChangelogMetadata changelogMetadata = changelogs.remove(partition);

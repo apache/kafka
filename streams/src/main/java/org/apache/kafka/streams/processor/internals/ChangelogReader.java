@@ -24,8 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Performs bulk read operations from a set of partitions. Used to
- * restore a state store from {@link TopicPartition} changelog.
+ * See {@link StoreChangelogReader}.
  */
 public interface ChangelogReader {
     /**
