@@ -754,18 +754,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata != null) {
-                final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
-                final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                    offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                    leaderAndEpoch);
-
-                log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                // first update the epoch if necessary
                 entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
 
                 // it's possible that the partition is no longer assigned when the response is received,
                 // so we need to ignore seeking if that's the case
-                if (this.subscriptions.isAssigned(tp))
+                if (this.subscriptions.isAssigned(tp)) {
+                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                        offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                        leaderAndEpoch);
+
                     this.subscriptions.seekUnvalidated(tp, position);
+
+                    log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                }
+
+
             }
         }
         return true;

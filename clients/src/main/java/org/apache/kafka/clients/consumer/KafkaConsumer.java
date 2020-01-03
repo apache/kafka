@@ -1381,9 +1381,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
      *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
      *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
-     *      *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
-     *      *            their fetch positions may have changed too if more records are returned from the {@link #poll(Duration)}
-     *      *            call, so when you retry committing only those assigned partitions would be committed with the current positions.
+     *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
+     *            their fetch positions may have changed too if more records are returned from the {@link #poll(Duration)}
+     *            call, so when you retry committing only those assigned partitions would be committed with the current positions.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
