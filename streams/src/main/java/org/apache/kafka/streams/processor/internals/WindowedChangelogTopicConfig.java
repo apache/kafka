@@ -48,6 +48,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
+    @Override
     public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
         // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
         final Map<String, String> topicConfig = new HashMap<>(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
