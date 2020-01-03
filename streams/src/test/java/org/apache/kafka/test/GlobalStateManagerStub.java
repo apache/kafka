@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,21 +44,30 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
 
     @Override
+    public Set<String> initialize() {
+        initialized = true;
+        return storeNames;
+    }
+
+    @Override
+    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
+                                                     final InternalProcessorContext processorContext) {}
+
+    @Override
     public File baseDir() {
         return null;
     }
 
     @Override
-    public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback) {
-        storeNames.add(store.name());
-    }
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {}
 
     @Override
     public void flush() {}
 
     @Override
-    public void close(final boolean clean) {
+    public void close(final boolean clean) throws IOException {
+        this.offsets.putAll(offsets);
         closed = true;
     }
 
@@ -66,12 +77,17 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
+    public StateStore getGlobalStore(final String name) {
+        return null;
+    }
+
+    @Override
     public StateStore getStore(final String name) {
         return null;
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, Long> checkpointed() {
         return offsets;
     }
 }
