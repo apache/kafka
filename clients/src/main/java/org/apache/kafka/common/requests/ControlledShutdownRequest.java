@@ -30,13 +30,14 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
         private final ControlledShutdownRequestData data;
 
-        public Builder(ControlledShutdownRequestData data, short desiredVersion) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN, desiredVersion);
+        public Builder(ControlledShutdownRequestData data) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN);
             this.data = data;
         }
 
         @Override
         public ControlledShutdownRequest build(short version) {
+            ensureSupportedVersion(version);
             return new ControlledShutdownRequest(data, version);
         }
 

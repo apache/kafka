@@ -35,8 +35,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val partition = new TopicPartition(topic, 0)
 
     val epochs = Map(partition -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty[Integer], 0)).asJava
-    val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
+    val request = OffsetsForLeaderEpochRequest.Builder.forReplica(epochs, 1).build()
 
     // Unknown topic
     val randomBrokerId = servers.head.config.brokerId
@@ -62,8 +61,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
       val epochs = Map(topicPartition -> new OffsetsForLeaderEpochRequest.PartitionData(
         currentLeaderEpoch, 0)).asJava
-      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs, 1).build()
+      val request = OffsetsForLeaderEpochRequest.Builder.forReplica(epochs, 1).build()
       assertResponseError(error, brokerId, request)
     }
 

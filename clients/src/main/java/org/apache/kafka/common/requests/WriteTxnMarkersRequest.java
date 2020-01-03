@@ -146,6 +146,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         @Override
         public WriteTxnMarkersRequest build(short version) {
+            ensureSupportedVersion(version);
             return new WriteTxnMarkersRequest(version, markers);
         }
     }

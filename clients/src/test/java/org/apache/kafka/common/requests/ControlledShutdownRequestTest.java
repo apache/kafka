@@ -31,17 +31,16 @@ public class ControlledShutdownRequestTest {
     @Test
     public void testUnsupportedVersion() {
         ControlledShutdownRequest.Builder builder = new ControlledShutdownRequest.Builder(
-                new ControlledShutdownRequestData().setBrokerId(1),
-                (short) (CONTROLLED_SHUTDOWN.latestVersion() + 1));
-        assertThrows(UnsupportedVersionException.class, builder::build);
+                new ControlledShutdownRequestData().setBrokerId(1));
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) (CONTROLLED_SHUTDOWN.latestVersion() + 1)));
     }
 
     @Test
     public void testGetErrorResponse() {
         for (short version = CONTROLLED_SHUTDOWN.oldestVersion(); version < CONTROLLED_SHUTDOWN.latestVersion(); version++) {
             ControlledShutdownRequest.Builder builder = new ControlledShutdownRequest.Builder(
-                    new ControlledShutdownRequestData().setBrokerId(1), version);
-            ControlledShutdownRequest request = builder.build();
+                    new ControlledShutdownRequestData().setBrokerId(1));
+            ControlledShutdownRequest request = builder.build(version);
             ControlledShutdownResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());

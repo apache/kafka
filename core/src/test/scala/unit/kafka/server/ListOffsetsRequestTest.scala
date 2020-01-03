@@ -42,12 +42,12 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .build()
 
     val replicaRequest = ListOffsetRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, servers.head.config.brokerId)
+      .forReplica(servers.head.config.brokerId)
       .setTargetTimes(targetTimes)
       .build()
 
     val debugReplicaRequest = ListOffsetRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, ListOffsetRequest.DEBUGGING_REPLICA_ID)
+      .forReplica(ListOffsetRequest.DEBUGGING_REPLICA_ID)
       .setTargetTimes(targetTimes)
       .build()
 

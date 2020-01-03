@@ -137,8 +137,9 @@ public class ListOffsetRequest extends AbstractRequest {
         private final IsolationLevel isolationLevel;
         private Map<TopicPartition, PartitionData> partitionTimestamps = new HashMap<>();
 
-        public static Builder forReplica(short allowedVersion, int replicaId) {
-            return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
+        public static Builder forReplica(int replicaId) {
+            return new Builder(ApiKeys.LIST_OFFSETS.oldestVersion(), ApiKeys.LIST_OFFSETS.latestVersion(),
+                    replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
         public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
@@ -166,6 +167,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
         @Override
         public ListOffsetRequest build(short version) {
+            ensureSupportedVersion(version);
             return new ListOffsetRequest(replicaId, partitionTimestamps, isolationLevel, version);
         }
 

@@ -45,9 +45,9 @@ public class OffsetsForLeaderEpochRequestTest {
     public void testDefaultReplicaId() {
         for (short version = 0; version < ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
             int replicaId = 1;
-            OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
-                    version, Collections.emptyMap(), replicaId);
-            OffsetsForLeaderEpochRequest request = builder.build();
+            OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forReplica(
+                    Collections.emptyMap(), replicaId);
+            OffsetsForLeaderEpochRequest request = builder.build(version);
             OffsetsForLeaderEpochRequest parsed = (OffsetsForLeaderEpochRequest) AbstractRequest.parseRequest(
                     ApiKeys.OFFSET_FOR_LEADER_EPOCH, version, request.toStruct());
             if (version < 3)

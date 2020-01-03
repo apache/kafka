@@ -86,9 +86,10 @@ class LogOffsetTest extends BaseRequestTest {
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
+    val request = ListOffsetRequest.Builder.forReplica(0)
       .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
+        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava)
+      .build(0)
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 3L), consumerOffsets)
   }
@@ -114,9 +115,10 @@ class LogOffsetTest extends BaseRequestTest {
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
+    val request = ListOffsetRequest.Builder.forReplica(0)
       .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava).build()
+        new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP, 15)).asJava)
+      .build(0)
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
 
@@ -142,9 +144,10 @@ class LogOffsetTest extends BaseRequestTest {
     var offsetChanged = false
     for (_ <- 1 to 14) {
       val topicPartition = new TopicPartition(topic, 0)
-      val request = ListOffsetRequest.Builder.forReplica(0, 0)
+      val request = ListOffsetRequest.Builder.forReplica(0)
         .setTargetTimes(Map(topicPartition ->
-          new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 1)).asJava).build()
+          new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 1)).asJava)
+        .build(0)
       val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
       if (consumerOffsets.head == 1)
         offsetChanged = true
@@ -175,9 +178,10 @@ class LogOffsetTest extends BaseRequestTest {
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
+    val request = ListOffsetRequest.Builder.forReplica(0)
       .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(now, 15)).asJava).build()
+        new ListOffsetRequest.PartitionData(now, 15)).asJava)
+      .build(0)
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
@@ -203,9 +207,10 @@ class LogOffsetTest extends BaseRequestTest {
 
     TestUtils.waitUntilTrue(() => TestUtils.isLeaderLocalOnBroker(topic, topicPartition.partition, server),
       "Leader should be elected")
-    val request = ListOffsetRequest.Builder.forReplica(0, 0)
+    val request = ListOffsetRequest.Builder.forReplica(0)
       .setTargetTimes(Map(topicPartition ->
-        new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)).asJava).build()
+        new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, 10)).asJava)
+      .build(0)
     val consumerOffsets = sendListOffsetsRequest(request).responseData.get(topicPartition).offsets.asScala
     assertEquals(Seq(0L), consumerOffsets)
   }

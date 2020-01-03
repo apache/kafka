@@ -272,8 +272,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100, Optional.of(27)))
-    val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(5000, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
@@ -317,7 +316,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setSecurityProtocol(securityProtocol.id)
         .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers).build()
+    new requests.UpdateMetadataRequest.Builder(brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers)
+      .build(version)
   }
 
   private def createJoinGroupRequest = {
@@ -398,7 +398,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   ).build()
 
   private def leaderAndIsrRequest = {
-    new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+    new requests.LeaderAndIsrRequest.Builder(brokerId, Int.MaxValue, Long.MaxValue,
       Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp.topic)
         .setPartitionIndex(tp.partition)
@@ -409,16 +409,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setZkVersion(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
-      Set(new Node(brokerId, "localhost", 0)).asJava).build()
+     Set(new Node(brokerId, "localhost", 0)).asJava)
+      .build()
   }
 
-  private def stopReplicaRequest = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava).build()
+  private def stopReplicaRequest = new StopReplicaRequest.Builder(brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava).build()
 
   private def controlledShutdownRequest = new ControlledShutdownRequest.Builder(
       new ControlledShutdownRequestData()
         .setBrokerId(brokerId)
-        .setBrokerEpoch(Long.MaxValue),
-      ApiKeys.CONTROLLED_SHUTDOWN.latestVersion).build()
+        .setBrokerEpoch(Long.MaxValue)).build()
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(new CreateTopicsRequestData().setTopics(

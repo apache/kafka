@@ -49,18 +49,17 @@ public class LeaderAndIsrRequestTest {
 
     @Test
     public void testUnsupportedVersion() {
-        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
-                (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(0, 0, 0,
                 Collections.emptyList(), Collections.emptySet());
-        assertThrows(UnsupportedVersionException.class, builder::build);
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) (LEADER_AND_ISR.latestVersion() + 1)));
     }
 
     @Test
     public void testGetErrorResponse() {
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
-            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
+            LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(0, 0, 0,
                     Collections.emptyList(), Collections.emptySet());
-            LeaderAndIsrRequest request = builder.build();
+            LeaderAndIsrRequest request = builder.build(version);
             LeaderAndIsrResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
@@ -116,8 +115,8 @@ public class LeaderAndIsrRequestTest {
                 new Node(0, "host0", 9090),
                 new Node(1, "host1", 9091)
             );
-            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
-                liveNodes).build();
+            LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(1, 2, 3, partitionStates,
+                liveNodes).build(version);
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
                 .setBrokerId(n.id())
@@ -158,7 +157,7 @@ public class LeaderAndIsrRequestTest {
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
         }
-        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
+        LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(0, 0, 0,
             partitionStates, Collections.emptySet());
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);

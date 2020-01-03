@@ -30,8 +30,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
-        private final short oldestAllowedVersion;
-        private final short latestAllowedVersion;
+        private short oldestAllowedVersion;
+        private short latestAllowedVersion;
 
         /**
          * Construct a new builder which allows any supported version
@@ -56,6 +56,11 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
             this.latestAllowedVersion = latestAllowedVersion;
         }
 
+        public void requireVersion(short version) {
+            this.oldestAllowedVersion = version;
+            this.latestAllowedVersion = version;
+        }
+
         public ApiKeys apiKey() {
             return apiKey;
         }
@@ -66,6 +71,12 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
 
         public short latestAllowedVersion() {
             return latestAllowedVersion;
+        }
+
+        protected void ensureSupportedVersion(short version) {
+            if (version < oldestAllowedVersion || version > latestAllowedVersion)
+                throw new UnsupportedVersionException("Version " + version + " is not in the supported " +
+                        "version range [" + oldestAllowedVersion + ", " + latestAllowedVersion + "]");
         }
 
         public T build() {

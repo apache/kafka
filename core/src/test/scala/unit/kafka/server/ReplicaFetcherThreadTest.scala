@@ -26,9 +26,9 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.utils.SystemTime
@@ -59,7 +59,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldSendLatestRequestVersionsByDefault(): Unit = {
+  def shouldUseApiVersionDiscoveryByDefault(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
@@ -76,9 +76,8 @@ class ReplicaFetcherThreadTest {
       time = new SystemTime(),
       quota = UnboundedQuota,
       leaderEndpointBlockingSend = None)
-    assertEquals(ApiKeys.FETCH.latestVersion, thread.fetchRequestVersion)
-    assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, thread.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, thread.listOffsetRequestVersion)
+    assertEquals(None, thread.fetchRequiredVersion)
+    assertEquals(None, thread.listOffsetRequiredVersion)
   }
 
   @Test
@@ -506,7 +505,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
     assertEquals("OffsetsForLeaderEpochRequest version.",
-                 0, mockNetwork.lastUsedOffsetForLeaderEpochVersion)
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, mockNetwork.lastUsedOffsetForLeaderEpochVersion)
 
     //Loop 2 we should not fetch epochs
     thread.doWork()

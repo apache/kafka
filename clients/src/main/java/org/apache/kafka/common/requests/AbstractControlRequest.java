@@ -28,8 +28,11 @@ public abstract class AbstractControlRequest extends AbstractRequest {
         protected final int controllerEpoch;
         protected final long brokerEpoch;
 
-        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {
-            super(api, version);
+        protected Builder(ApiKeys api,
+                          int controllerId,
+                          int controllerEpoch,
+                          long brokerEpoch) {
+            super(api);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.brokerEpoch = brokerEpoch;

@@ -71,7 +71,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isEmpty, "failed to kill controller")
     waitUntilControllerEpoch(firstControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
@@ -104,14 +104,18 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
       }
     }
-    assertEquals(1e-0, controlPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
-    assertEquals(0e-0, dataPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
-    assertEquals(1e-0, controlPlaneMetricMap("request-total").metricValue().asInstanceOf[Double], 0)
-    assertEquals(0e-0, dataPlaneMetricMap("request-total").metricValue().asInstanceOf[Double], 0)
+
+    // On the control plane listener, we expect to receive the initial ApiVersions and UpdateMetadata
+    assertEquals(2.0, controlPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
+    assertEquals(2.0, controlPlaneMetricMap("request-total").metricValue().asInstanceOf[Double], 0)
     assertTrue(controlPlaneMetricMap("incoming-byte-total").metricValue().asInstanceOf[Double] > 1.0)
-    assertTrue(dataPlaneMetricMap("incoming-byte-total").metricValue().asInstanceOf[Double] == 0.0)
-    assertTrue(controlPlaneMetricMap("network-io-total").metricValue().asInstanceOf[Double] == 2.0)
-    assertTrue(dataPlaneMetricMap("network-io-total").metricValue().asInstanceOf[Double] == 0.0)
+    assertEquals(4.0, controlPlaneMetricMap("network-io-total").metricValue().asInstanceOf[Double], 0)
+
+    // On the data plane listener, we do not expect any requests
+    assertEquals(0.0, dataPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
+    assertEquals(0.0, dataPlaneMetricMap("request-total").metricValue().asInstanceOf[Double], 0)
+    assertEquals(0.0, dataPlaneMetricMap("incoming-byte-total").metricValue().asInstanceOf[Double], 0)
+    assertEquals(0.0, dataPlaneMetricMap("network-io-total").metricValue().asInstanceOf[Double], 0)
   }
 
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
@@ -122,7 +126,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     // Need to make sure the broker we shutdown and startup are not the controller. Otherwise we will send out
-    // full UpdateMetadataReuqest to all brokers during controller failover.
+    // full UpdateMetadataRequest to all brokers during controller failover.
     val testBroker = servers.filter(e => e.config.brokerId != controllerId).head
     val remainingBrokers = servers.filter(_.config.brokerId != testBroker.config.brokerId)
     val topic = "topic1"

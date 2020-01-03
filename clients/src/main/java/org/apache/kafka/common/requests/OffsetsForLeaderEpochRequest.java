@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Field;
@@ -122,14 +121,14 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                     epochsByPartition, CONSUMER_REPLICA_ID);
         }
 
-        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
-            return new Builder(version, version, epochsByPartition, replicaId);
+        public static Builder forReplica(Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            return new Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.oldestVersion(),
+                    ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), epochsByPartition, replicaId);
         }
 
         @Override
         public OffsetsForLeaderEpochRequest build(short version) {
-            if (version < oldestAllowedVersion() || version > latestAllowedVersion())
-                throw new UnsupportedVersionException("Cannot build " + this + " with version " + version);
+            ensureSupportedVersion(version);
             return new OffsetsForLeaderEpochRequest(epochsByPartition, replicaId, version);
         }
 
