@@ -209,7 +209,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 "transit to restoring active tasks");
         }
 
-        // all the current restoring changelogs should be for standby tasks, pause them all from the restore consumer
+        // all the current restoring changelogs should be for standby tasks since newly added stores for active
+        // should still be in registered state, pause them all from the restore consumer
         pauseChangelogsFromRestoreConsumer(restoringChangelogs());
 
         state = ChangelogReaderState.ACTIVE_RESTORING;
@@ -221,7 +222,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 "transit to update standby tasks");
         }
 
-        // all the current restoring changelogs should be from standby tasks and could be resumed
+        // all the current restoring changelogs should be from standby tasks since active restoring
+        // changelogs should all be in completed state; resume them all from the restore consumer
         resumeChangelogsFromRestoreConsumer(restoringChangelogs());
 
         state = ChangelogReaderState.STANDBY_UPDATING;
@@ -425,6 +427,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    // TODO K9113: standby task that have source changelogs should call this function periodically
     public void updateLimitOffsets() {
         if (state != ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("We should not try to update standby tasks limit offsets if there are still" +

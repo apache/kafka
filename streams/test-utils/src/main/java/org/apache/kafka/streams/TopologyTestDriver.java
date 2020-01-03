@@ -389,10 +389,10 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
+                    streamsConfig,
+                    logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
-                    Duration.ZERO,
-                    stateRestoreListener,
-                    logContext),
+                    stateRestoreListener),
                 logContext);
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 TASK_ID,

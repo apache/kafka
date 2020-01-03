@@ -169,13 +169,16 @@ public abstract class AbstractTask implements Task {
                 e
             );
         }
-        log.trace("Initializing state stores");
+        log.debug("Acquired state directory lock");
 
+        // load the checkpoint file AFTER initialize the state stores
         for (final StateStore store : topology.stateStores()) {
             processorContext.uninitialize();
             store.init(processorContext, store);
-            log.debug("Initialized state store {}", store.name());
+            log.trace("Registered state store {}", store.name());
         }
+        stateMgr.loadCheckpoint();
+        log.debug("Initialized state stores");
     }
 
     /**
