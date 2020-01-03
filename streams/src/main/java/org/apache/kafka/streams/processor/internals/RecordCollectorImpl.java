@@ -93,7 +93,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
         producer = producerSupplier.get(taskId);
 
-        // TODO: this should be moved to task when it transits to running from created / restoring
+        // TODO K9113: this should be moved to task when it transits to running from created / restoring
         // then even if there's a long time between the initialization and the first txn that is also fine.
         initialize();
     }
@@ -118,7 +118,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\n Consider overwriting `max.block.ms` to a larger value to avoid timeout errors";
 
-                // TODO: we do NOT try to handle timeout exception here but throw it as a fatal error
+                // TODO K9113: we do NOT try to handle timeout exception here but throw it as a fatal error
                 throw new StreamsException(errorMessage, exception);
             } catch (final KafkaException exception) {
                 throw new StreamsException("Error encountered while initializing transactions for task " + taskId, exception);
@@ -166,7 +166,7 @@ public class RecordCollectorImpl implements RecordCollector {
             } catch (final ProducerFencedException error) {
                 throw new TaskMigratedException(taskId, "Producer get fenced trying to commit a transaction", error);
             } catch (final TimeoutException error) {
-                // TODO: handle timeout exception as a fatal error
+                // TODO K9113: currently handle timeout exception as a fatal error, should discuss whether we want to handle it
                 throw new StreamsException("Timed out while committing transaction via producer for task " + taskId, error);
             } catch (final KafkaException error) {
                 throw new StreamsException("Error encountered sending offsets and committing transaction " +
@@ -179,7 +179,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 throw new TaskMigratedException(taskId, "Consumer committing offsets failed, " +
                     "indicating the corresponding thread is no longer part of the group.", error);
             } catch (final TimeoutException error) {
-                // TODO: handle timeout exception as a fatal error
+                // TODO K9113: currently handle timeout exception as a fatal error
                 throw new StreamsException("Timed out while committing offsets via consumer for task " + taskId, error);
             } catch (final KafkaException error) {
                 throw new StreamsException("Error encountered committing offsets via consumer for task " + taskId, error);
