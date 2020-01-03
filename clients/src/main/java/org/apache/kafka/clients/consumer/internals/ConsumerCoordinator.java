@@ -1079,7 +1079,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
-                .compose(new OffsetCommitResponseHandler(offsets));
+                .compose(new OffsetCommitResponseHandler(offsets, generation));
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {

@@ -1509,7 +1509,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
-            maybeThrowIfCommitOffsetsNotOwned(offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
@@ -1580,7 +1579,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
-            maybeThrowIfCommitOffsetsNotOwned(offsets);
             log.debug("Committing offsets: {}", offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
@@ -1589,19 +1587,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             callback.onComplete(offsets, e);
         } finally {
             release();
-        }
-    }
-
-    // this is an optimization on the client side: if we are doomed to be rejected by the group coordinator
-    // due to invalid generation, we can just fail fast and inform the callers earlier
-    private void maybeThrowIfCommitOffsetsNotOwned(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (subscriptions.hasAutoAssignedPartitions()) {
-            final Set<TopicPartition> partitions = assignment();
-            for (final TopicPartition tp : offsets.keySet()) {
-                if (!partitions.contains(tp))
-                    throw new CommitFailedException("Cannot commit offset of topic partition " + tp +
-                        " since the partition was not dynamically assigned to this consumer");
-            }
         }
     }
 
