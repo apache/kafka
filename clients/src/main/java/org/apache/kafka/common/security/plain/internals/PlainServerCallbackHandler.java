@@ -36,7 +36,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
 
     private static final String JAAS_USER_PREFIX = "user_";
-    private List<AppConfigurationEntry> jaasConfigEntries;
+    protected List<AppConfigurationEntry> jaasConfigEntries;
 
     @Override
     public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {

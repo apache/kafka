@@ -999,13 +999,15 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
-
+    compile libs.shiro
+    
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
+    testCompile libs.apachedsTestFramework
     testCompile libs.junit
     testCompile libs.mockitoCore
 
