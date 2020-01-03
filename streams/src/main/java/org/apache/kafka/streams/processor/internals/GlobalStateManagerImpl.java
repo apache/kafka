@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -41,7 +40,6 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -258,9 +256,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
                         storeName,
                         recoverableException.toString());
-                    reinitializeStateStoresForPartitions(recoverableException.partitions(), globalProcessorContext);
 
-                    stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+                    // TODO K9113: we should escalate all the way to the thread to decide how to handle this
                     restoreCount = 0L;
                 }
             }

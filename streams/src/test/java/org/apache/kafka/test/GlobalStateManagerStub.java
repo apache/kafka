@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -44,41 +42,27 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
 
     @Override
-    public Set<String> initialize() {
-        initialized = true;
-        return storeNames;
-    }
-
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {}
-
-    @Override
     public File baseDir() {
         return null;
     }
 
     @Override
     public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback) {}
+                              final StateRestoreCallback stateRestoreCallback) {
+        storeNames.add(store.name());
+    }
 
     @Override
     public void flush() {}
 
     @Override
-    public void close(final boolean clean) throws IOException {
-        this.offsets.putAll(offsets);
+    public void close(final boolean clean) {
         closed = true;
     }
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
         this.offsets.putAll(offsets);
-    }
-
-    @Override
-    public StateStore getGlobalStore(final String name) {
-        return null;
     }
 
     @Override
