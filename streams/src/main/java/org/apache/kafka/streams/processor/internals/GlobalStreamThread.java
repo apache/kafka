@@ -198,7 +198,7 @@ public class GlobalStreamThread extends Thread {
 
     static class StateConsumer {
         private final Consumer<byte[], byte[]> globalConsumer;
-        private final GlobalTask stateMaintainer;
+        private final GlobalStateMaintainer stateMaintainer;
         private final Time time;
         private final Duration pollTime;
         private final long flushInterval;
@@ -208,7 +208,7 @@ public class GlobalStreamThread extends Thread {
 
         StateConsumer(final LogContext logContext,
                       final Consumer<byte[], byte[]> globalConsumer,
-                      final GlobalTask stateMaintainer,
+                      final GlobalStateMaintainer stateMaintainer,
                       final Time time,
                       final Duration pollTime,
                       final long flushInterval) {
