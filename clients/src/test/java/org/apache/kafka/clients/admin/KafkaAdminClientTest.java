@@ -262,20 +262,22 @@ public class KafkaAdminClientTest {
 
     /**
      * Test if admin client can be closed in the callback invoked when
-     * an api call completes.
-     *
-     * KAFKA-9330: If calling close in callback, AdminClient thread hangs
+     * an api call completes. If calling {@link Admin#close()} in callback, AdminClient thread hangs
      */
-    @Test(timeout = 5_000)
+    @Test(timeout = 10_000)
     public void testCloseAdminClientInCallback() throws InterruptedException {
-        AdminClientUnitTestEnv env = mockClientEnv();
+        MockTime time = new MockTime();
+        AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(3, 0));
+
         final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
-        final KafkaFuture<Map<String, TopicListing>> kafkaFuture = result.namesToListings();
+        final KafkaFuture<Collection<TopicListing>> kafkaFuture = result.listings();
         final Semaphore callbackCalled = new Semaphore(0);
-        kafkaFuture.whenComplete((stringTopicListingMap, throwable) -> {
+        kafkaFuture.whenComplete((topicListings, throwable) -> {
             env.close();
             callbackCalled.release();
         });
+
+        time.sleep(2000); // Advance time to timeout and complete listTopics request
         callbackCalled.acquire();
     }
 
