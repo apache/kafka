@@ -761,7 +761,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 log.info("Setting offset for partition {} to the committed offset {}", tp, position);
                 entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-                this.subscriptions.seekUnvalidated(tp, position);
+
+                // it's possible that the partition is no longer assigned when the response is received,
+                // so we need to ignore seeking if that's the case
+                if (this.subscriptions.isAssigned(tp))
+                    this.subscriptions.seekUnvalidated(tp, position);
             }
         }
         return true;
