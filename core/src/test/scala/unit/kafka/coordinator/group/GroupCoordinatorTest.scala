@@ -420,7 +420,7 @@ class GroupCoordinatorTest {
 
     val deadGroupId = "deadGroupId"
 
-    groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
+    groupCoordinator.groupManager.addGroup(new  GroupMetadata(deadGroupId, Dead, new MockTime()))
     val joinGroupResult = dynamicJoinGroup(deadGroupId, memberId, protocolType, protocols)
     assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, joinGroupResult.error)
   }
