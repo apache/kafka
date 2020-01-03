@@ -556,7 +556,7 @@ public class KafkaAdminClient extends AdminClient {
             // cause deadlock, so check for that condition.
             if (Thread.currentThread() != thread) {
                 // Wait for the thread to be joined.
-                thread.join();
+                thread.join(waitTimeMs);
             }
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
