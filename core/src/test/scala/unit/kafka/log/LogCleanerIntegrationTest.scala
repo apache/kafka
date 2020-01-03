@@ -194,13 +194,10 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     writeKeyDups(numKeys = 1, numDups = 1, log, CompressionType.NONE, timestamp = T0, 
                  startValue = 0, step = 1, isRecordTombstone = true)
 
-    val activeSegAtT0 = log.activeSegment
-
     // roll the active segment
     log.roll()
 
     cleaner.startup()
-    Thread.sleep(400)
 
     import JavaConverters._
     var containsTombstones: Boolean = false
@@ -208,15 +205,27 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
       containsTombstones = true
     }
     assertTrue(containsTombstones)
+
+    Thread.sleep(400)
     time.sleep(tombstoneRetentionMs + 1)
 
-    val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset
-
-    Thread.sleep(300)
+    val latestOffset: Long = log.latestEpoch match {
+      case None => 
+        fail("There should be epoch defined.")
+        RecordBatch.NO_TIMESTAMP
+      case Some(epoch) =>
+        log.endOffsetForEpoch(epoch) match {
+          case None =>
+            fail("Offset should have been found.")
+            RecordBatch.NO_TIMESTAMP
+          case Some(offsetAndEpoch) =>
+            offsetAndEpoch.offset
+        }
+    }
 
     // the first block should get cleaned
     cleaner.awaitCleaned(new TopicPartition("log-partition", 0), 
-                         firstBlockCleanableSegmentOffset, maxWaitMs = tombstoneRetentionMs * 5)
+                         latestOffset + 1, maxWaitMs = tombstoneRetentionMs)
 
     for (segment <- log.logSegments; record <- segment.log.records.asScala) {
       fail ("The log should not contain record " + record + ", tombstone has expired its lifetime.")
