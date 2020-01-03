@@ -23,7 +23,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -43,7 +42,6 @@ public abstract class AbstractTask implements Task {
     final Set<TopicPartition> partitions;
     final Consumer<byte[], byte[]> consumer;
     final String logPrefix;
-    final boolean eosEnabled;
     final Logger log;
     final LogContext logContext;
     final StateDirectory stateDirectory;
@@ -61,8 +59,8 @@ public abstract class AbstractTask implements Task {
                  final Set<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
-                 final ChangelogReader changelogReader,
                  final boolean isStandby,
+                 final ProcessorStateManager stateMgr,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
         this.id = id;
@@ -70,28 +68,14 @@ public abstract class AbstractTask implements Task {
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
-        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
+
+        this.stateMgr = stateMgr;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         this.logPrefix = threadIdPrefix + String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-
-        // create the processor state manager
-        try {
-            stateMgr = new ProcessorStateManager(
-                id,
-                partitions,
-                isStandby,
-                stateDirectory,
-                topology.storeToChangelogTopic(),
-                changelogReader,
-                eosEnabled,
-                logContext);
-        } catch (final IOException e) {
-            throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
-        }
     }
 
     @Override
@@ -135,10 +119,6 @@ public abstract class AbstractTask implements Task {
         return toString("");
     }
 
-    public boolean isEosEnabled() {
-        return eosEnabled;
-    }
-
     /**
      * Produces a string representation containing useful information about a Task starting with the given indent.
      * This is useful in debugging scenarios.
@@ -167,19 +147,6 @@ public abstract class AbstractTask implements Task {
             sb.append("]\n");
         }
         return sb.toString();
-    }
-
-    /**
-     * Flush all state stores owned by this task
-     */
-    void flushState() {
-        try {
-            stateMgr.flush();
-        } catch (final ProcessorStateException e) {
-            if (e.getCause() instanceof RecoverableClientException) {
-                throw new TaskMigratedException(this, e);
-            }
-        }
     }
 
     /**

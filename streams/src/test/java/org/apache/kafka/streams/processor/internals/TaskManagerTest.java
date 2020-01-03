@@ -85,9 +85,9 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private Consumer<byte[], byte[]> consumer;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator<StreamTask> activeTaskCreator;
+    private StreamThread.TaskCreator activeTaskCreator;
     @Mock(type = MockType.NICE)
-    private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
+    private StreamThread.StandbyTaskCreator standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private Admin adminClient;
     @Mock(type = MockType.NICE)

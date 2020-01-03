@@ -76,7 +76,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             }
 
             try {
-                task.close(true, false);
+                task.close(true);
             } catch (final RuntimeException e) {
                 log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {

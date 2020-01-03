@@ -62,11 +62,11 @@ public class StandbyTask extends AbstractTask {
                 final Set<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final Consumer<byte[], byte[]> consumer,
-                final ChangelogReader changelogReader,
                 final StreamsConfig config,
                 final StreamsMetricsImpl metrics,
+                final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory) {
-        super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
+        super(id, partitions, topology, consumer, true, stateMgr, stateDirectory, config);
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
@@ -132,11 +132,9 @@ public class StandbyTask extends AbstractTask {
      * - {@link #commit()}
      * - close state
      * <pre>
-     * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
-    public void close(final boolean clean,
-                      final boolean isZombie) {
+    public void close(final boolean clean) {
         closeTaskSensor.record();
         if (!taskInitialized) {
             return;

@@ -90,7 +90,7 @@ public class AbstractTaskTest {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         EasyMock.replay(stateDirectory);
 
-        final AbstractTask task = createTask(consumer, Collections.<StateStore, String>emptyMap());
+        final AbstractTask task = createTask(consumer, Collections.emptyMap());
 
         task.registerStateStores();
 
@@ -205,16 +205,26 @@ public class AbstractTaskTest {
             storeNamesToChangelogTopics.put(e.getKey().name(), e.getValue());
         }
 
+        final LogContext logContext = new LogContext("stream-task-test ");
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            id,
+            storeTopicPartitions,
+            false,
+            stateDirectory,
+            storeNamesToChangelogTopics,
+            new StoreChangelogReader(consumer,
+                Duration.ZERO,
+                new MockStateRestoreListener(),
+                logContext),
+            logContext);
+
         return new AbstractTask(id,
                                 storeTopicPartitions,
                                 withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()),
                                                 storeNamesToChangelogTopics),
                                 consumer,
-                                new StoreChangelogReader(consumer,
-                                                         Duration.ZERO,
-                                                         new MockStateRestoreListener(),
-                                                         new LogContext("stream-task-test ")),
                                 false,
+                                stateManager,
                                 stateDirectory,
                                 config) {
 
@@ -228,7 +238,7 @@ public class AbstractTaskTest {
             public void commit() {}
 
             @Override
-            public void close(final boolean clean, final boolean isZombie) {}
+            public void close(final boolean clean) {}
 
             @Override
             public boolean initializeStateStores() {

@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -954,7 +955,6 @@ public class StreamThreadTest {
         thread.runOnce();
         assertThat(producer.history().size(), equalTo(1));
 
-        assertFalse(producer.transactionCommitted());
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         TestUtils.waitForCondition(
             () -> producer.commitCount() == 1,
@@ -966,7 +966,8 @@ public class StreamThreadTest {
         try {
             thread.runOnce();
             fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
+        } catch (final KafkaException expected) {
+            assertTrue(expected.getCause() instanceof TaskMigratedException);
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
                         thread.tasks().containsKey(task1));
         }
@@ -1007,7 +1008,6 @@ public class StreamThreadTest {
 
         clientSupplier.producers.get(0).fenceProducer();
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
-        assertTrue(clientSupplier.producers.get(0).transactionInFlight());
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertTrue(clientSupplier.producers.get(0).closed());
         assertTrue(thread.tasks().isEmpty());

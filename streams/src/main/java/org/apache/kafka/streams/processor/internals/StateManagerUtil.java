@@ -48,7 +48,6 @@ final class StateManagerUtil {
     }
 
     public static void reinitializeStateStoresForPartitions(final Logger log,
-                                                            final boolean eosEnabled,
                                                             final File baseDir,
                                                             final FixedOrderMap<String, Optional<StateStore>> stateStores,
                                                             final Map<String, String> storeToChangelogTopic,
@@ -62,18 +61,6 @@ final class StateManagerUtil {
         for (final TopicPartition topicPartition : partitions) {
             checkpointFileCache.remove(topicPartition);
             storesToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
-        }
-
-        if (!eosEnabled) {
-            try {
-                checkpointFile.write(checkpointFileCache);
-            } catch (final IOException fatalException) {
-                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}",
-                          checkpointFile,
-                          stateStores,
-                          fatalException);
-                throw new StreamsException("Failed to reinitialize global store.", fatalException);
-            }
         }
 
         for (final String storeName : storesToBeReinitialized) {
