@@ -400,7 +400,7 @@ public class SchemaBuilder implements Schema {
     public Schema build() {
         return new ConnectSchema(type, isOptional(), defaultValue, name, version, doc,
                 parameters == null ? null : Collections.unmodifiableMap(parameters),
-                fields == null ? null : Collections.unmodifiableList(new ArrayList<Field>(fields.values())), keySchema, valueSchema);
+                fields == null ? null : Collections.unmodifiableList(new ArrayList<>(fields.values())), keySchema, valueSchema);
     }
 
     /**
