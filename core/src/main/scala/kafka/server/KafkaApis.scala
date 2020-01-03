@@ -35,6 +35,7 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupRes
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
+import kafka.network.RequestChannel.{Request, Response}
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
@@ -47,6 +48,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
+import org.apache.kafka.common.memory.BounceBufferPool
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
@@ -57,7 +59,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ListenerName, Send}
+import org.apache.kafka.common.network.{ListenerName, NetworkSend, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
@@ -67,7 +69,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, A
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{FetchResponse, _}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
@@ -103,7 +105,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
-                val tokenManager: DelegationTokenManager) extends Logging {
+                val tokenManager: DelegationTokenManager,
+                val fetchBufferPool: BounceBufferPool) extends Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -700,8 +703,49 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    // the callback for process a fetch response, invoked before throttling
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+    def sendFetchResponse(fetchResponse: FetchResponse[BaseRecords]): Unit = {
+      val fetchBuffer = fetchBufferPool.allocate()
+
+      def completeFetchResponse(send: Send): Unit = {
+        // update conversion stats
+        send match {
+          case send: MultiRecordsSend if send.recordConversionStats != null =>
+            send.recordConversionStats.asScala.toMap.foreach {
+              case (tp, stats) => updateRecordConversionStats(request, tp, stats)
+            }
+          case _ =>
+        }
+        fetchBufferPool.release(fetchBuffer)
+      }
+
+      try {
+        // Update error metrics for each error code in the response including Errors.NONE
+        requestChannel.updateErrorMetrics(request.header.apiKey, fetchResponse.errorCounts.asScala)
+
+        fetchBuffer.clear()
+        val responseHeader = request.context.header.toResponseHeader
+        val headerStruct = responseHeader.toStruct
+        val bodyStruct = fetchResponse.toStruct(request.context.apiVersion())
+        headerStruct.writeTo(fetchBuffer)
+        bodyStruct.writeTo(fetchBuffer)
+        fetchBuffer.flip()
+        val networkSend = new NetworkSend(request.context.connectionId, fetchBuffer)
+        val responseString =
+          if (RequestChannel.isRequestLoggingEnabled) Some(fetchResponse.toString(request.context.apiVersion))
+          else None
+        val sendResponse = new RequestChannel.SendResponse(
+          request, networkSend, responseString, Some(completeFetchResponse))
+        requestChannel.sendResponse(sendResponse)
+    } catch {
+      case e: Throwable => {
+        fetchBufferPool.release(fetchBuffer)
+        throw e
+      }
+    }
+  }
+
+  // the callback for process a fetch response, invoked before throttling
+  def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
       val reassigningPartitions = mutable.Set[TopicPartition]()
       responsePartitionData.foreach { case (tp, data) =>
@@ -741,16 +785,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         response
       }
 
-      def updateConversionStats(send: Send): Unit = {
-        send match {
-          case send: MultiRecordsSend if send.recordConversionStats != null =>
-            send.recordConversionStats.asScala.toMap.foreach {
-              case (tp, stats) => updateRecordConversionStats(request, tp, stats)
-            }
-          case _ =>
-        }
-      }
-
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
@@ -758,7 +792,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         quotas.leader.record(responseSize)
         trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
           s"metadata=${unconvertedFetchResponse.sessionId()}")
-        sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
+        quotas.request.maybeRecordExempt(request)
+        sendFetchResponse(createResponse(0))
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
@@ -790,8 +825,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
         }
 
-        // Send the response immediately.
-        sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
+        sendFetchResponse(createResponse(maxThrottleTimeMs))
       }
     }
 
