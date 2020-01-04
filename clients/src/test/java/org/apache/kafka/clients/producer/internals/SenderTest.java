@@ -1155,7 +1155,9 @@ public class SenderTest {
         Deque<ProducerBatch> batches = accumulator.batches().get(tp0);
         assertEquals(0, batches.size());
         assertTrue(transactionManager.hasProducerId(producerId));
+
         // We should now clear the old producerId and get a new one in a single run loop.
+        time.sleep(10);
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
         assertTrue(transactionManager.hasProducerId(producerId + 1));
     }
@@ -1184,10 +1186,12 @@ public class SenderTest {
         responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
+
         sender.runOnce();
         assertTrue(failedResponse.isDone());
         assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE); // also send request to tp1
+        sender.runOnce();
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
 
         assertFalse(successfulResponse.isDone());

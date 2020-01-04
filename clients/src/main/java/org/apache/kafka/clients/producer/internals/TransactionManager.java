@@ -218,7 +218,7 @@ public class TransactionManager {
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
                 case INITIALIZING:
-                    return source == UNINITIALIZED;
+                    return source == UNINITIALIZED || source == READY;
                 case READY:
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
@@ -418,6 +418,10 @@ public class TransactionManager {
 
     synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
+
+        if (pendingResult != null) {
+            pendingResult.fail(exception);
+        }
     }
 
     // visible for testing
@@ -487,6 +491,17 @@ public class TransactionManager {
         if (shouldResetProducerStateAfterResolvingSequences())
             // Check if the previous run expired batches which requires a reset of the producer state.
             resetProducerId();
+
+        if (!isTransactional()
+                && currentState != State.INITIALIZING
+                && !hasProducerId()) {
+            transitionTo(State.INITIALIZING);
+            InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                    .setTransactionalId(null)
+                    .setTransactionTimeoutMs(Integer.MAX_VALUE);
+            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData));
+            enqueueRequest(handler);
+        }
     }
 
     /**
@@ -726,7 +741,7 @@ public class TransactionManager {
         topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = sequence;
     }
 
-    synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
+    synchronized TxnRequestHandler nextRequest(boolean hasIncompleteBatches) {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
@@ -776,8 +791,7 @@ public class TransactionManager {
         pendingRequests.forEach(handler ->
                 handler.fatalError(shutdownException));
         if (pendingResult != null) {
-            pendingResult.setError(shutdownException);
-            pendingResult.done();
+            pendingResult.fail(shutdownException);
         }
     }
 
@@ -804,7 +818,7 @@ public class TransactionManager {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    boolean hasInFlightTransactionalRequest() {
+    boolean hasInFlightRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -1036,20 +1050,17 @@ public class TransactionManager {
         }
 
         void fatalError(RuntimeException e) {
-            result.setError(e);
+            result.fail(e);
             transitionToFatalError(e);
-            result.done();
         }
 
         void abortableError(RuntimeException e) {
-            result.setError(e);
+            result.fail(e);
             transitionToAbortableError(e);
-            result.done();
         }
 
         void fail(RuntimeException e) {
-            result.setError(e);
-            result.done();
+            result.fail(e);
         }
 
         void reenqueue() {
@@ -1138,6 +1149,15 @@ public class TransactionManager {
         }
 
         @Override
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            if (isTransactional()) {
+                return FindCoordinatorRequest.CoordinatorType.TRANSACTION;
+            } else {
+                return null;
+            }
+        }
+
+        @Override
         public void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
@@ -1154,7 +1174,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
-            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED ||
+                    error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else {
                 fatalError(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
