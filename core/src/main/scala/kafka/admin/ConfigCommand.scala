@@ -406,7 +406,8 @@ object ConfigCommand extends Config {
           (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
         case _ =>
           validateBrokerId()
-          (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG))
+          val configSource = if (describeAll) None else Some(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG)
+          (ConfigResource.Type.BROKER, configSource)
       }
       case BrokerLoggerConfigType =>
         if (!entityName.isEmpty)
@@ -656,8 +657,15 @@ object ConfigCommand extends Config {
         throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
       else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
-      else if (options.has(zkConnectOpt) && options.has(allOpt))
-        throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
+
+      if (options.has(allOpt)) {
+        if (options.has(zkConnectOpt))
+          throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
+        else if (!hasEntityName)
+          throw new IllegalArgumentException(s"--entity-name must be specified for --all")
+        else if (!entityTypeVals.contains(ConfigType.Broker))
+          throw new IllegalArgumentException(s"--all only applies to --entity-type=${ConfigType.Broker}")
+      }
 
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
         Seq(entityName, broker, brokerLogger).filter(options.has(_)).map(options.valueOf(_)).foreach { brokerId =>
