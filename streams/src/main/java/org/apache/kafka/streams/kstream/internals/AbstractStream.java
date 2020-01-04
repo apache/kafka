@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -84,11 +85,11 @@ public abstract class AbstractStream<K, V> {
         return builder.internalTopologyBuilder;
     }
 
-    Set<String> ensureJoinableWith(final AbstractStream<K, ?> other) {
-        final Set<String> allSourceNodes = new HashSet<>();
-        allSourceNodes.addAll(sourceNodes);
-        allSourceNodes.addAll(other.sourceNodes);
-
+    Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
+        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
+        for (final AbstractStream<K, ?> other: otherStreams) {
+            allSourceNodes.addAll(other.sourceNodes);
+        }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
         return allSourceNodes;

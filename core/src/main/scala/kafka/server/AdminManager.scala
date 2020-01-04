@@ -179,6 +179,9 @@ class AdminManager(val config: KafkaConfig,
         CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
+        case e: TopicExistsException =>
+          debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
           CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
@@ -259,20 +262,20 @@ class AdminManager(val config: KafkaConfig,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
 
-    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
     val allBrokers = adminZkClient.getBrokerMetadatas()
     val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
     val metadata = newPartitions.map { case (topic, newPartition) =>
       try {
-        // We prevent addition partitions while a reassignment is in progress, since
-        // during reassignment there is no meaningful notion of replication factor
-        if (reassignPartitionsInProgress)
-          throw new ReassignmentInProgressException("A partition reassignment is in progress.")
-
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
-          case (topicPartition, assignment) => topicPartition.partition -> assignment
+          case (topicPartition, assignment) =>
+            if (assignment.isBeingReassigned) {
+              // We prevent adding partitions while topic reassignment is in progress, to protect from a race condition
+              // between the controller thread processing reassignment update and createPartitions(this) request.
+              throw new ReassignmentInProgressException(s"A partition reassignment is in progress for the topic '$topic'.")
+            }
+            topicPartition.partition -> assignment
         }
         if (existingAssignment.isEmpty)
           throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
@@ -470,6 +473,7 @@ class AdminManager(val config: KafkaConfig,
       alterConfigOp.opType() match {
         case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
         case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
+        case OpType.APPEND | OpType.SUBTRACT => // ignore
       }
     }
   }

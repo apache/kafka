@@ -33,8 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_ONE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
 
 public final class AssignorConfiguration {
     private final String logPrefix;
@@ -147,13 +145,13 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Turning off cooperative rebalancing for upgrade from {}.x", upgradeFrom);
+                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
                     return RebalanceProtocol.EAGER;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-
+        log.info("Cooperative rebalancing enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 
@@ -170,7 +168,7 @@ public final class AssignorConfiguration {
                         "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
-                    return VERSION_ONE;
+                    return 1;
                 case StreamsConfig.UPGRADE_FROM_0101:
                 case StreamsConfig.UPGRADE_FROM_0102:
                 case StreamsConfig.UPGRADE_FROM_0110:
@@ -181,7 +179,7 @@ public final class AssignorConfiguration {
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );
-                    return VERSION_TWO;
+                    return 2;
                 case StreamsConfig.UPGRADE_FROM_20:
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:

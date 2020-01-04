@@ -27,6 +27,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -52,6 +55,7 @@ import java.util.concurrent.Future;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -78,6 +82,11 @@ public class RecordCollectorTest {
         return Integer.parseInt(key) % numPartitions;
     };
 
+    private final String topic1TimeoutHint = "Timeout exception caught when sending record to topic topic1." +
+            " This might happen if the producer cannot send data to the Kafka cluster and thus, its internal buffer fills up." +
+            " This can also happen if the broker is slow to respond, if the network connection to the broker was interrupted, or if similar circumstances arise." +
+            " You can increase producer parameter `max.block.ms` to increase this timeout.";
+
     @Test
     public void testSpecificPartition() {
 
@@ -85,7 +94,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -123,7 +132,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestStreamPartitioner",
             new LogContext("RecordCollectorTest-TestStreamPartitioner "),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -157,7 +166,7 @@ public class RecordCollectorTest {
             "RecordCollectorTest-TestSpecificPartition",
             new LogContext("RecordCollectorTest-TestSpecificPartition "),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         );
         collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
 
@@ -173,22 +182,113 @@ public class RecordCollectorTest {
         assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
 
-    @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
-        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
-            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                 throw new KafkaException();
             }
         });
 
+        final StreamsException thrown = assertThrows(StreamsException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionOnProducerFencedException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                throw new KafkaException(new ProducerFencedException("asdf"));
+            }
+        });
+
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
+        assertThat(thrown.getCause().getCause(), instanceOf(ProducerFencedException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionOnUnknownProducerException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                throw new KafkaException(new UnknownProducerIdException("asdf"));
+            }
+        });
+
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
+        assertThat(thrown.getCause().getCause(), instanceOf(UnknownProducerIdException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionWhenProducerFencedInCallback() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records"));
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                callback.onCompletion(null, new ProducerFencedException("asdf"));
+                return null;
+            }
+        });
+
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(ProducerFencedException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionWhenProducerForgottenInCallback() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records"));
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                callback.onCompletion(null, new UnknownProducerIdException("asdf"));
+                return null;
+            }
+        });
+
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(UnknownProducerIdException.class));
     }
 
     @SuppressWarnings("unchecked")
@@ -198,7 +298,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -222,7 +323,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -240,7 +342,7 @@ public class RecordCollectorTest {
     @Test
     public void shouldRecordSkippedMetricAndLogWarningIfSendFailsWithContinueExceptionHandler() {
         final Metrics metrics = new Metrics();
-        final Sensor sensor = metrics.sensor("skipped-records");
+        final Sensor sensor = metrics.sensor("dropped-records");
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
         sensor.add(metricName, new WindowedSum());
@@ -248,7 +350,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            sensor);
+            metrics.sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -269,7 +372,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -286,6 +390,28 @@ public class RecordCollectorTest {
         } catch (final StreamsException expected) { /* ok */ }
     }
 
+    @Test
+    public void shouldThrowStreamsExceptionWithTimeoutHintOnProducerTimeoutWithDefaultExceptionHandler() {
+        final RecordCollector collector = new RecordCollectorImpl(
+                "test",
+                logContext,
+                new DefaultProductionExceptionHandler(),
+                new Metrics().sensor("skipped-records"));
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+                callback.onCompletion(null, new TimeoutException());
+                return null;
+            }
+        });
+
+        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final StreamsException expected = assertThrows(StreamsException.class, () -> collector.flush());
+        assertTrue(expected.getCause() instanceof TimeoutException);
+        assertTrue(expected.getMessage().endsWith(topic1TimeoutHint));
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowStreamsExceptionOnFlushIfASendFailedWithContinueExceptionHandler() {
@@ -293,7 +419,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -314,7 +441,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -338,7 +466,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
@@ -359,7 +488,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -377,7 +507,8 @@ public class RecordCollectorTest {
             "test",
             logContext,
             new AlwaysContinueProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records"));
+            new Metrics().sensor("dropped-records")
+        );
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
@@ -395,10 +526,10 @@ public class RecordCollectorTest {
         keySerializer.configure(Collections.emptyMap(), true);
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-                "test",
-                logContext,
-                new DefaultProductionExceptionHandler(),
-                new Metrics().sensor("skipped-records")
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
         );
         final MockProducer<byte[], byte[]> mockProducer = new MockProducer<>(cluster, true, new DefaultPartitioner(),
                 byteArraySerializer, byteArraySerializer);
@@ -418,10 +549,10 @@ public class RecordCollectorTest {
     @Test
     public void testShouldNotThrowNPEOnCloseIfProducerIsNotInitialized() {
         final RecordCollectorImpl collector = new RecordCollectorImpl(
-                "NoNPE",
-                logContext,
-                new DefaultProductionExceptionHandler(),
-                new Metrics().sensor("skipped-records")
+            "NoNPE",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
         );
 
         collector.close();

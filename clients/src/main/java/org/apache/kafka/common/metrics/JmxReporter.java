@@ -16,30 +16,26 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.lang.management.ManagementFactory;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.management.Attribute;
-import javax.management.AttributeList;
-import javax.management.AttributeNotFoundException;
-import javax.management.DynamicMBean;
-import javax.management.InvalidAttributeValueException;
-import javax.management.JMException;
-import javax.management.MBeanAttributeInfo;
-import javax.management.MBeanException;
-import javax.management.MBeanInfo;
-import javax.management.MBeanServer;
-import javax.management.MalformedObjectNameException;
-import javax.management.ObjectName;
-import javax.management.ReflectionException;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.AttributeNotFoundException;
+import javax.management.DynamicMBean;
+import javax.management.JMException;
+import javax.management.MBeanAttributeInfo;
+import javax.management.MBeanInfo;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Register metrics in JMX as dynamic mbeans based on the metric names
@@ -49,7 +45,7 @@ public class JmxReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
-    private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
+    private final Map<String, KafkaMbean> mbeans = new HashMap<>();
 
     public JmxReporter() {
         this("");
@@ -175,7 +171,7 @@ public class JmxReporter implements MetricsReporter {
         private final ObjectName objectName;
         private final Map<String, KafkaMetric> metrics;
 
-        public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
+        KafkaMbean(String mbeanName) throws MalformedObjectNameException {
             this.metrics = new HashMap<>();
             this.objectName = new ObjectName(mbeanName);
         }
@@ -184,12 +180,12 @@ public class JmxReporter implements MetricsReporter {
             return objectName;
         }
 
-        public void setAttribute(String name, KafkaMetric metric) {
+        void setAttribute(String name, KafkaMetric metric) {
             this.metrics.put(name, metric);
         }
 
         @Override
-        public Object getAttribute(String name) throws AttributeNotFoundException, MBeanException, ReflectionException {
+        public Object getAttribute(String name) throws AttributeNotFoundException {
             if (this.metrics.containsKey(name))
                 return this.metrics.get(name).metricValue();
             else
@@ -209,7 +205,7 @@ public class JmxReporter implements MetricsReporter {
             return list;
         }
 
-        public KafkaMetric removeAttribute(String name) {
+        KafkaMetric removeAttribute(String name) {
             return this.metrics.remove(name);
         }
 
@@ -232,15 +228,12 @@ public class JmxReporter implements MetricsReporter {
         }
 
         @Override
-        public Object invoke(String name, Object[] params, String[] sig) throws MBeanException, ReflectionException {
+        public Object invoke(String name, Object[] params, String[] sig) {
             throw new UnsupportedOperationException("Set not allowed.");
         }
 
         @Override
-        public void setAttribute(Attribute attribute) throws AttributeNotFoundException,
-                                                     InvalidAttributeValueException,
-                                                     MBeanException,
-                                                     ReflectionException {
+        public void setAttribute(Attribute attribute) {
             throw new UnsupportedOperationException("Set not allowed.");
         }
 

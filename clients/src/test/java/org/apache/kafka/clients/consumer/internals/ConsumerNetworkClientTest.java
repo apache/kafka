@@ -235,7 +235,7 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void testAuthenticationExceptionPropagatedFromMetadata() {
-        metadata.failedUpdate(time.milliseconds(), new AuthenticationException("Authentication failed"));
+        metadata.fatalError(new AuthenticationException("Authentication failed"));
         try {
             consumerClient.poll(time.timer(Duration.ZERO));
             fail("Expected authentication error thrown");
@@ -264,7 +264,7 @@ public class ConsumerNetworkClientTest {
     @Test
     public void testMetadataFailurePropagated() {
         KafkaException metadataException = new KafkaException();
-        metadata.failedUpdate(time.milliseconds(), metadataException);
+        metadata.fatalError(metadataException);
         try {
             consumerClient.poll(time.timer(Duration.ZERO));
             fail("Expected poll to throw exception");

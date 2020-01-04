@@ -90,7 +90,8 @@ class EndToEndTest(Test):
             for partition, offset in last_acked_offsets.iteritems():
                 if not partition in self.last_consumed_offsets:
                     return False
-                if self.last_consumed_offsets[partition] < offset:
+                last_commit = self.consumer.last_commit(partition)
+                if not last_commit or last_commit < offset:
                     return False
             return True
 

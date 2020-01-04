@@ -133,9 +133,12 @@ class KiboshService(Service):
         :param node:        The node.
         :param spec:        An array of FaultSpec objects describing the faults.
         """
-        fault_array = [spec.kibosh_message for spec in specs]
-        obj = { 'faults': fault_array }
-        obj_json = json.dumps(obj)
+        if len(specs) == 0:
+            obj_json = "{}"
+        else:
+            fault_array = [spec.kibosh_message for spec in specs]
+            obj = { 'faults': fault_array }
+            obj_json = json.dumps(obj)
         node.account.create_file(self.control_path, obj_json)
 
     def get_fault_json(self, node):
