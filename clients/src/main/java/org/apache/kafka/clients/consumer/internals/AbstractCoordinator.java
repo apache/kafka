@@ -131,6 +131,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
+    private RuntimeException findCoordinatorException = null;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
@@ -226,11 +227,26 @@ public abstract class AbstractCoordinator implements Closeable {
             return true;
 
         do {
+            if (findCoordinatorException != null && !(findCoordinatorException instanceof RetriableException)) {
+                final RuntimeException fatalException = findCoordinatorException;
+                findCoordinatorException = null;
+                throw fatalException;
+            }
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, timer);
 
             if (!future.isDone()) {
                 // ran out of time
+                future.addListener(new RequestFutureListener<Void>() {
+                    @Override
+                    public void onSuccess(Void value) {} // do nothing
+
+                    @Override
+                    public void onFailure(RuntimeException e) {
+                        findCoordinatorException = e;
+                    }
+                });
+
                 break;
             }
 
