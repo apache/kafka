@@ -2488,12 +2488,12 @@ class GroupCoordinatorTest {
 
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
-    val leaderNoMemberIdCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), leaderInstanceId)
+    val leaderNoMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), groupInstanceId = leaderInstanceId)
     assertEquals(Errors.FENCED_INSTANCE_ID, leaderNoMemberIdCommitOffsetResult (tp))
 
-    val leaderCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), leaderInstanceId, rebalanceResult.leaderId)
+    val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), rebalanceResult.leaderId, leaderInstanceId)
     assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
   }
 
@@ -2509,17 +2509,17 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
     EasyMock.reset(replicaManager)
-    val invalidIdCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), Option.empty, "invalid-member")
+    val invalidIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), "invalid-member", Option.empty)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, invalidIdCommitOffsetResult (tp))
 
-    val unknownMemberIdCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), Option.empty, JoinGroupRequest.UNKNOWN_MEMBER_ID)
+    val unknownMemberIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty)
     assertEquals(Errors.NONE, unknownMemberIdCommitOffsetResult (tp))
 
     val assignedConsumerId = joinGroupResult.memberId
-    val leaderCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), Option.empty, assignedConsumerId)
+    val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), assignedConsumerId, Option.empty)
     assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
   }
 
@@ -2538,12 +2538,12 @@ class GroupCoordinatorTest {
 
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
-    val leaderCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), Option.empty, assignedConsumerId, initialGenerationId)
+    val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), assignedConsumerId, Option.empty, initialGenerationId)
     assertEquals(Errors.NONE, leaderCommitOffsetResult (tp))
 
-    val illegalGenerationCommitOffsetResult = commitTransactionalOffsets(
-      groupId, producerId, producerEpoch, Map(tp -> offset), Option.empty, assignedConsumerId, initialGenerationId + 5)
+    val illegalGenerationCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
+      Map(tp -> offset), assignedConsumerId, Option.empty, initialGenerationId + 5)
     assertEquals(Errors.ILLEGAL_GENERATION, illegalGenerationCommitOffsetResult (tp))
   }
 
@@ -3457,9 +3457,9 @@ class GroupCoordinatorTest {
                                          producerId: Long,
                                          producerEpoch: Short,
                                          offsets: Map[TopicPartition, OffsetAndMetadata],
-                                         groupInstanceId: Option[String] = Option.empty,
                                          memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                                         generationId: Int = JoinGroupResponse.UNKNOWN_GENERATION_ID): CommitOffsetCallbackParams = {
+                                         groupInstanceId: Option[String] = Option.empty,
+                                         generationId: Int = JoinGroupResponse.UNKNOWN_GENERATION_ID) = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()

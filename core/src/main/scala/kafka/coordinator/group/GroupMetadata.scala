@@ -404,13 +404,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       false
   }
 
-  def isUnknownCommit(memberId: String,
-                      producerId: Long): Boolean = {
+  def isManualCommit(generationId: Int): Boolean = {
+    generationId < 0 && is(Empty)
+  }
+
+  def isUnknownCommit(memberId: String, producerId: Long, generationId: Int): Boolean = {
     if (producerId != NO_PRODUCER_ID) {
       // For txn commit, only check member.id when it isn't empty.
       memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !has(memberId)
     } else {
-      !has(memberId)
+      // For consumer commit, only check member.id when it is on subscribed mode.
+      !isManualCommit(generationId) && !has(memberId)
     }
   }
 

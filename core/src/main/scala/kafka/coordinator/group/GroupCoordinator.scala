@@ -729,9 +729,9 @@ class GroupCoordinator(val brokerId: Int,
       } else if (generationId >= 0 && generationId != group.generationId) {
         // Validate non-zero generation id for both transactional and non-transactional commits.
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
-      } else if (group.isUnknownCommit(memberId, producerId)) {
+      } else if (group.isUnknownCommit(memberId, producerId, generationId)) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID })
-      } else if (generationId < 0 && group.is(Empty) || producerId != NO_PRODUCER_ID) {
+      } else if (group.isManualCommit(generationId) || producerId != NO_PRODUCER_ID) {
         // The group is only using Kafka to store offsets.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
       } else {
