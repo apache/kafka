@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.AbstractTask.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -99,6 +100,7 @@ public class ProcessorStateManager implements StateManager {
     private final Logger log;
     private final TaskId taskId;
     private final String logPrefix;
+    private final TaskType taskType;
     private final ChangelogReader changelogReader;
     private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
@@ -138,6 +140,8 @@ public class ProcessorStateManager implements StateManager {
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+
+        this.taskType = isStandby ? TaskType.STANDBY : TaskType.ACTIVE;
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -251,6 +255,11 @@ public class ProcessorStateManager implements StateManager {
     // used by the changelog reader only
     boolean changelogAsSource(final TopicPartition partition) {
         return sourcePartitions.contains(partition);
+    }
+
+    // used by the changelog reader only
+    TaskType taskType() {
+        return taskType;
     }
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {

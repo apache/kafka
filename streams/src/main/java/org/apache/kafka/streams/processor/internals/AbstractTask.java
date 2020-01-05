@@ -52,6 +52,20 @@ public abstract class AbstractTask implements Task {
 
     InternalProcessorContext processorContext;
 
+    public enum TaskType {
+        ACTIVE("ACTIVE"),
+
+        STANDBY("STANDBY"),
+
+        GLOBAL("GLOBAL");
+
+        public final String name;
+
+        TaskType(final String name) {
+            this.name = name;
+        }
+    }
+
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
