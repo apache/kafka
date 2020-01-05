@@ -37,7 +37,8 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics => kMetrics}
+import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.metrics.{JmxReporter, MetricConfig, Sensor, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
@@ -60,6 +61,7 @@ class GroupMetadataManagerTest {
   var zkClient: KafkaZkClient = null
   var partition: Partition = null
   var defaultOffsetRetentionMs = Long.MaxValue
+  var metricConfig: MetricConfig = null
   var metrics: kMetrics = null
 
   val groupId = "foo"
@@ -73,8 +75,24 @@ class GroupMetadataManagerTest {
   @Before
   def setUp(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
+    val offsetCfg = offsetConfig(config)
+    defaultOffsetRetentionMs = offsetCfg.offsetsRetentionMs
 
-    val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
+    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
+    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2)).times(1, 2)
+    EasyMock.replay(zkClient)
+
+    time = new MockTime
+    metricConfig = new MetricConfig
+    metrics = new kMetrics(metricConfig, time)
+    replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetCfg, replicaManager, zkClient, time, metrics)
+    partition = EasyMock.niceMock(classOf[Partition])
+  }
+
+  def offsetConfig(config: KafkaConfig): OffsetConfig = {
+    OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
       offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
@@ -84,19 +102,31 @@ class GroupMetadataManagerTest {
       offsetsTopicCompressionCodec = config.offsetsTopicCompressionCodec,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+  }
 
-    defaultOffsetRetentionMs = offsetConfig.offsetsRetentionMs
+  /**
+   * Assert that the OffsetExpired metric is incremented once we remove expired offsets
+   */
+  @Test
+  def testOffsetExpiredMetric(): Unit = {
+    val expectedExpiredOffsets = 100
+    val meterMock: Meter = EasyMock.createNiceMock(classOf[Meter])
 
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
+    EasyMock.expect(meterMock.record(metricConfig, expectedExpiredOffsets, time.milliseconds())).once()
+    EasyMock.expect(meterMock.stats()).andReturn(List().asJava)
+    EasyMock.replay(meterMock)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion,
+      offsetConfig(KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))),
+      replicaManager, zkClient, time, metrics) {
 
-    metrics = new kMetrics()
-    time = new MockTime
-    replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time, metrics)
-    partition = EasyMock.niceMock(classOf[Partition])
+      override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int =
+        expectedExpiredOffsets
+
+      override def offsetExpiredMeter(): Meter = meterMock
+    }
+
+    groupMetadataManager.cleanupGroupMetadata()
+    EasyMock.verify(meterMock)
   }
 
   @Test
