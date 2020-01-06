@@ -124,50 +124,48 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   recreateGauge("NumOffsets",
-    new Gauge[Int] {
-      def value = groupMetadataCache.values.map(group => {
-        group.inLock { group.numOffsets }
-      }).sum
-    })
+    () => groupMetadataCache.values.map { group =>
+      group.inLock { group.numOffsets }
+    }.sum
+  )
 
   recreateGauge("NumGroups",
-    new Gauge[Int] {
-      def value = groupMetadataCache.size
-    })
+    () => groupMetadataCache.size
+  )
 
   recreateGauge("NumGroupsPreparingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(PreparingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(PreparingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsCompletingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(CompletingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(CompletingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsStable",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Stable) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Stable)
+      }
     })
 
   recreateGauge("NumGroupsDead",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Dead) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Dead)
+      }
     })
 
   recreateGauge("NumGroupsEmpty",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Empty) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Empty)
+      }
     })
 
   def startup(enableMetadataExpiration: Boolean): Unit = {

@@ -59,9 +59,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     * @return The final value associated with the key.
     */
   def getAndMaybePut(key: K, createValue: => V): V =
-    pool.computeIfAbsent(key, new java.util.function.Function[K, V] {
-      override def apply(k: K): V = createValue
-    })
+    pool.computeIfAbsent(key, _ => createValue)
 
   def contains(id: K): Boolean = pool.containsKey(id)
   

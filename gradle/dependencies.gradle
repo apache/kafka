@@ -22,20 +22,17 @@ ext {
   libs = [:]
   
   // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.11', '2.12', '2.13' ]
+  defaultScalaVersions = [ '2.12', '2.13' ]
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
   // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
-  availableScalaVersions = [ '2.11', '2.12', '2.13' ]
+  availableScalaVersions = [ '2.12', '2.13' ]
 }
 
 // Add Scala version
-def defaultScala211Version = '2.11.12'
 def defaultScala212Version = '2.12.10'
 def defaultScala213Version = '2.13.1'
 if (hasProperty('scalaVersion')) {
-  if (scalaVersion == '2.11') {
-    versions["scala"] = defaultScala211Version
-  } else if (scalaVersion == '2.12') {
+  if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
   } else if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
@@ -47,7 +44,7 @@ if (hasProperty('scalaVersion')) {
 }
 
 /* Resolve base Scala version according to these patterns:
- 1. generally available Scala versions (such as: 2.11.x, 2.12.y and 2.13.z) corresponding base versions will be: 2.11, 2.12 and 2.13 (respectively)
+ 1. generally available Scala versions (such as: 2.12.y and 2.13.z) corresponding base versions will be: 2.12 and 2.13 (respectively)
  2. pre-release Scala versions (i.e. milestone/rc, such as: 2.13.0-M5, 2.13.0-RC1, 2.14.0-M1, etc.) will have identical base versions;
     rationale: pre-release Scala versions are not binary compatible with each other and that's the reason why libraries include the full
     Scala release string in their name for pre-releases (see dependencies below with an artifact name suffix '_$versions.baseScala')

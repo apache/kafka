@@ -81,27 +81,21 @@ object DecodeJson {
       if (node.isTextual) Right(node.textValue) else Left(s"Expected `String` value, received $node")
   }
 
-  implicit def decodeOption[E](implicit decodeJson: DecodeJson[E]): DecodeJson[Option[E]] = new DecodeJson[Option[E]] {
-    def decodeEither(node: JsonNode): Either[String, Option[E]] = {
-      if (node.isNull) Right(None)
-      else decodeJson.decodeEither(node).right.map(Some(_))
-    }
+  implicit def decodeOption[E](implicit decodeJson: DecodeJson[E]): DecodeJson[Option[E]] = (node: JsonNode) => {
+    if (node.isNull) Right(None)
+    else decodeJson.decodeEither(node).right.map(Some(_))
   }
 
-  implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = new DecodeJson[S[E]] {
-    def decodeEither(node: JsonNode): Either[String, S[E]] = {
-      if (node.isArray)
-        decodeIterator(node.elements.asScala)(decodeJson.decodeEither)
-      else Left(s"Expected JSON array, received $node")
-    }
+  implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = (node: JsonNode) => {
+    if (node.isArray)
+      decodeIterator(node.elements.asScala)(decodeJson.decodeEither)
+    else Left(s"Expected JSON array, received $node")
   }
 
-  implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = new DecodeJson[M[String, V]] {
-    def decodeEither(node: JsonNode): Either[String, M[String, V]] = {
-      if (node.isObject)
-        decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))
-      else Left(s"Expected JSON object, received $node")
-    }
+  implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = (node: JsonNode) => {
+    if (node.isObject)
+      decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))
+    else Left(s"Expected JSON object, received $node")
   }
 
   private def decodeIterator[S, T, C](it: Iterator[S])(f: S => Either[String, T])(implicit factory: Factory[T, C]): Either[String, C] = {

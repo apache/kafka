@@ -534,15 +534,9 @@ class TransactionStateManagerTest {
           EasyMock.capture(capturedArgument),
           EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
           EasyMock.anyObject()
-        )).andAnswer(new IAnswer[Unit] {
-          override def answer(): Unit = {
-            capturedArgument.getValue.apply(
-              Map(partition ->
-                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-              )
-            )
-          }
-        })
+        )).andAnswer(() => capturedArgument.getValue.apply(
+          Map(partition -> new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+        )
       case _ => // shouldn't append
     }
 
@@ -646,13 +640,9 @@ class TransactionStateManagerTest {
       EasyMock.capture(capturedArgument),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = capturedArgument.getValue.apply(
-          Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-          )
-        )
-      }
+    ).andAnswer(() => capturedArgument.getValue.apply(
+      Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
+        new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
       .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
