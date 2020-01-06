@@ -27,7 +27,6 @@ import java.util.regex.Pattern
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
 import org.apache.kafka.streams.kstream.{
   Aggregator,
-  ForeachAction,
   Initializer,
   JoinWindows,
   KeyValueMapper,
@@ -35,11 +34,9 @@ import org.apache.kafka.streams.kstream.{
   KStream => KStreamJ,
   KTable => KTableJ,
   Materialized => MaterializedJ,
-  Predicate,
   Reducer,
   StreamJoined => StreamJoinedJ,
   Transformer,
-  TransformerSupplier,
   ValueJoiner,
   ValueMapper
 }
@@ -140,7 +137,6 @@ class TopologyTest {
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
-
       textLines
         .mapValues(v => v.length)
         .groupByKey
@@ -163,16 +159,8 @@ class TopologyTest {
       )
 
       splits.groupByKey
-        .cogroup(
-          new Aggregator[String, Int, Long] {
-            def apply(k: String, v: Int, a: Long): Long = a + v
-          }
-        )
-        .aggregate(
-          new Initializer[Long] {
-            def apply(): Long = 0L
-          }
-        )
+        .cogroup((k: String, v: Int, a: Long) => a + v)
+        .aggregate(() => 0L)
 
       streamBuilder.build().describe()
     }
@@ -216,22 +204,9 @@ class TopologyTest {
       )
 
       splits.groupByKey
-        .cogroup(
-          new Aggregator[String, Int, Long] {
-            def apply(k: String, v: Int, a: Long): Long = a + v
-          }
-        )
-        .cogroup(
-          textLines2.groupByKey(),
-          new Aggregator[String, String, Long] {
-            def apply(k: String, v: String, a: Long): Long = v.length + a
-          }
-        )
-        .aggregate(
-          new Initializer[Long] {
-            def apply(): Long = 0L
-          }
-        )
+        .cogroup((k: String, v: Int, a: Long) => a + v)
+        .cogroup(textLines2.groupByKey(), (k: String, v: String, a: Long) => v.length + a)
+        .aggregate(() => 0L)
 
       streamBuilder.build().describe()
     }
