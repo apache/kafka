@@ -143,6 +143,7 @@ public class ConnectionStressWorker implements TaskWorker {
         private final AdminClientConfig conf;
         private final ManualMetadataUpdater updater;
         private final ChannelBuilder channelBuilder;
+        private final LogContext logContext = new LogContext();
 
         ConnectStressor(ConnectionStressSpec spec) {
             Properties props = new Properties();
@@ -153,7 +154,7 @@ public class ConnectionStressWorker implements TaskWorker {
                 conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                 conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
-            this.channelBuilder = ClientUtils.createChannelBuilder(conf, TIME);
+            this.channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, logContext);
         }
 
         @Override
@@ -162,7 +163,6 @@ public class ConnectionStressWorker implements TaskWorker {
                 List<Node> nodes = updater.fetchNodes();
                 Node targetNode = nodes.get(ThreadLocalRandom.current().nextInt(nodes.size()));
                 try (Metrics metrics = new Metrics()) {
-                    LogContext logContext = new LogContext();
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                         metrics, TIME, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,

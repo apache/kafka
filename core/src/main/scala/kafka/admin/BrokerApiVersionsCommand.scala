@@ -269,7 +269,7 @@ object BrokerApiVersionsCommand {
       val metrics = new Metrics(time)
       val metadata = new Metadata(100L, 60 * 60 * 1000L, logContext,
         new ClusterResourceListeners)
-      val channelBuilder = ClientUtils.createChannelBuilder(config, time)
+      val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 

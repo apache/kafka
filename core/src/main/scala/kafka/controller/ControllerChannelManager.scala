@@ -122,7 +122,8 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         controllerToBrokerListenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
-        config.saslInterBrokerHandshakeRequestEnable
+        config.saslInterBrokerHandshakeRequestEnable,
+        logContext
       )
       val reconfigurableChannelBuilder = channelBuilder match {
         case reconfigurable: Reconfigurable =>

@@ -428,7 +428,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.interBrokerListenerName,
           config.saslMechanismInterBrokerProtocol,
           time,
-          config.saslInterBrokerHandshakeRequestEnable)
+          config.saslInterBrokerHandshakeRequestEnable,
+          logContext)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
