@@ -18,14 +18,12 @@ package kafka.security.authorizer
 
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.{AclSets, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.CoreUtils.inWriteLock
 import kafka.utils._
 import kafka.zk._
 import org.apache.kafka.common.Endpoint
@@ -123,7 +121,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
-  private val lock = new ReentrantReadWriteLock()
+  private val lock = new Object()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
   // This should never occur, but is a safeguard just in case.
@@ -199,7 +197,7 @@ class AclAuthorizer extends Authorizer with Logging {
       }.groupBy(_._1.pattern)
 
     if (aclsToCreate.nonEmpty) {
-      inWriteLock(lock) {
+      lock synchronized {
         aclsToCreate.foreach { case (resource, aclsWithIndex) =>
           try {
             updateResourceAcls(resource) { currentAcls =>
@@ -222,7 +220,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val deletedBindings = new mutable.HashMap[AclBinding, Int]()
     val deleteExceptions = new mutable.HashMap[AclBinding, ApiException]()
     val filters = aclBindingFilters.asScala.zipWithIndex
-    inWriteLock(lock) {
+    lock synchronized {
       // Find all potentially matching resource patterns from the provided filters and ACL cache and apply the filters
       val resources = aclCache.keys ++ filters.map(_._1.patternFilter).filter(_.matchesAtMostOne).flatMap(filterToResources)
       val resourcesToUpdate = resources.map { resource =>
@@ -384,7 +382,7 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def loadCache(): Unit = {
-    inWriteLock(lock) {
+    lock synchronized  {
       ZkAclStore.stores.foreach(store => {
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
         for (rType <- resourceTypes) {
@@ -545,7 +543,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {
     override def processNotification(resource: ResourcePattern): Unit = {
-      inWriteLock(lock) {
+      lock synchronized {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)
       }
