@@ -769,8 +769,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     log.info("Setting offset for partition {} to the committed offset {}", tp, position);
                 }
-
-
             }
         }
         return true;

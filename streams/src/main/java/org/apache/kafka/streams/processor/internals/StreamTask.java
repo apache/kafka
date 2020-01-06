@@ -520,7 +520,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final RetriableCommitFailedException error) {
             // commitSync throws this error and can be ignored (since EOS is not enabled, even if the task crashed
             // immediately after this commit, we would just reprocess those records again)
-            log.info("Committing failed with a non-fatal error, we can ignore this since commit may succeed still");
+            log.info("Committing failed with a non-fatal error: {}, " +
+                "we can ignore this since commit may succeed still",  error.toString());
         }
 
         commitNeeded = false;
