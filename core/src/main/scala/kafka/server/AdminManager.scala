@@ -291,12 +291,11 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val newPartitionsAssignment = Option(newPartition.assignments())
-          .map { createPartitionAssignments => createPartitionAssignments.asScala.map {
-              createPartitionAssignment => createPartitionAssignment.brokerIds().asScala.map(_.toInt)
+        val newPartitionsAssignment = Option(newPartition.assignments).filterNot(_.isEmpty)
+          .map { assignmentMap =>
+            val assignments = assignmentMap.asScala.map {
+              createPartitionAssignment => createPartitionAssignment.brokerIds.asScala.map(_.toInt)
             }
-          }
-          .map { assignments =>
             val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
             if (unknownBrokers.nonEmpty)
               throw new InvalidReplicaAssignmentException(
@@ -309,7 +308,7 @@ class AdminManager(val config: KafkaConfig,
 
             assignments.zipWithIndex.map { case (replicas, index) =>
               existingAssignment.size + index -> replicas
-          }.toMap
+            }.toMap
         }
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,

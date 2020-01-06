@@ -2323,7 +2323,7 @@ public class KafkaAdminClient extends AdminClient {
                     List<List<Integer>> newAssignments = newPartition.assignments();
                     List<CreatePartitionsAssignment> assignments = newAssignments == null ? null :
                             newAssignments.stream()
-                            .map(integers -> new CreatePartitionsAssignment().setBrokerIds(integers))
+                            .map(brokerIds -> new CreatePartitionsAssignment().setBrokerIds(brokerIds))
                             .collect(Collectors.toList());
                     return new CreatePartitionsTopic()
                             .setName(partitionsEntry.getKey())
