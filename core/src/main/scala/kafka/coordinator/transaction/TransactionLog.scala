@@ -281,7 +281,7 @@ object TransactionLog {
       case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
         s"producerEpoch:${txnMetadata.producerEpoch}," +
         s"state=${txnMetadata.state}," +
-        s"partitions=${txnMetadata.topicPartitions}," +
+        s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
         s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
         s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
     }
