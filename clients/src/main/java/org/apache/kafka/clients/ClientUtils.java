@@ -91,7 +91,12 @@ public final class ClientUtils {
     }
 
     /**
+     * Create a new channel builder from the provided configuration.
+     *
      * @param config client configs
+     * @param time the time implementation
+     * @param logContext the logging context
+     *
      * @return configured ChannelBuilder based on the configs.
      */
     public static ChannelBuilder createChannelBuilder(AbstractConfig config, Time time, LogContext logContext) {
