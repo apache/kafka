@@ -123,7 +123,7 @@ class TransactionLogTest {
     val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
     assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
     assertEquals(Some(s"producerId:$producerId,producerEpoch:$producerEpoch,state=Ongoing," +
-      s"partitions=Set($topicPartition),txnLastUpdateTimestamp=0,txnTimeoutMs=$transactionTimeoutMs"), valueStringOpt)
+      s"partitions=[$topicPartition],txnLastUpdateTimestamp=0,txnTimeoutMs=$transactionTimeoutMs"), valueStringOpt)
   }
 
   @Test
