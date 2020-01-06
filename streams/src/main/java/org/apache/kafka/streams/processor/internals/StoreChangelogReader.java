@@ -386,7 +386,13 @@ public class StoreChangelogReader implements ChangelogReader {
 
             final StateStoreMetadata storeMetadata = stateManager.storeMetadata(partition);
             final String storeName = storeMetadata.stateStore.name();
-            final Long currentOffset = storeMetadata.offset;
+
+            // NOTE this is to handle a special case: if there are txn markers then
+            // the last record's offset == last txn marker offset - 1 == end / committed offset - 2
+            // so if we know that we have restored all the records buffered, then we should
+            // set the current offset as the consumer's position -1 to cover this case
+            final Long currentOffset = numRecords == changelogMetadata.bufferedRecords.size() ?
+                restoreConsumer.position(changelogMetadata.changelogPartition) : storeMetadata.offset;
             changelogMetadata.totalRestored += numRecords;
 
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
