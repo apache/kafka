@@ -342,6 +342,14 @@ object LogConfig {
       throw new InvalidConfigurationException(s"conflict topic config setting $MinCompactionLagMsProp " +
         s"($minCompactionLag) > $MaxCompactionLagMsProp ($maxCompactionLag)")
     }
+
+    val compactStrategy =  props.get(CompactionStrategyProp).asInstanceOf[String]
+    if (Defaults.CompactionStrategyHeader.equalsIgnoreCase(compactStrategy)) {
+      val headerKey =  props.get(CompactionStrategyHeaderKeyProp).asInstanceOf[String]
+      if (headerKey.trim().isEmpty()) {
+        throw new InvalidConfigurationException(CompactionStrategyHeaderKeyProp + " must be specified.")
+      }
+    }
   }
 
   /**

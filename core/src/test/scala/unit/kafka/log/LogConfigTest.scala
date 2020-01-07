@@ -79,7 +79,7 @@ class LogConfigTest {
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case LogConfig.CompactionStrategyProp => assertPropertyInvalid(name, "")
+      case LogConfig.CompactionStrategyProp => assertPropertyInvalid(name, "", "unknown_strategy")
       case LogConfig.CompactionStrategyHeaderKeyProp => // ignore optional string
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
@@ -90,6 +90,15 @@ class LogConfigTest {
     val props = new Properties
     props.setProperty(LogConfig.MaxCompactionLagMsProp, "100")
     props.setProperty(LogConfig.MinCompactionLagMsProp, "200")
+    intercept[Exception] {
+      LogConfig.validate(props)
+    }
+  }
+
+  @Test
+  def testInvalidCompactionHeaderKeyConfig(): Unit = {
+    val props = new Properties
+    props.setProperty(LogConfig.CompactionStrategyProp, "header")
     intercept[Exception] {
       LogConfig.validate(props)
     }

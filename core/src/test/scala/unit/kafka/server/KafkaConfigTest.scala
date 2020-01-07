@@ -836,6 +836,15 @@ class KafkaConfigTest {
     assertFalse(isValidKafkaConfig(props))
   }
 
+  @Test
+  def testInvalidCompactionHeaderKeyConfig(): Unit = {
+    val props = new Properties
+    props.setProperty(KafkaConfig.LogCleanerCompactionStrategyProp, "header")
+    intercept[Exception] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*): Unit = {
     values.foreach((value) => {
       val props = validRequiredProps
