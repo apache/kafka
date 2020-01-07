@@ -458,7 +458,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                             numPartitions = numPartitionsCandidate;
                                         }
                                     }
-
                                 }
                             }
                         }
@@ -467,6 +466,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     // if we still have not find the right number of partitions,
                     // another iteration is needed
                     if (numPartitions == null) {
+                        log.info("Still need partition");
                         numPartitionsNeeded = true;
                     } else {
                         repartitionTopicMetadata.get(topicName).setNumberOfPartitions(numPartitions);
