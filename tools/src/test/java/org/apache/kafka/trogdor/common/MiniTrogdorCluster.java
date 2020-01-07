@@ -18,6 +18,7 @@
 package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;

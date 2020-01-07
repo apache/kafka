@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.powermock.api.easymock.PowerMock;
@@ -30,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
 
@@ -41,6 +43,11 @@ public class FileOffsetBackingStoreTest {
     File tempFile;
 
     private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
+    private static final Runnable EMPTY_RUNNABLE = new Runnable() {
+        @Override
+        public void run() {
+        }
+    };
 
     static {
         firstSet.put(buffer("key"), buffer("value"));
@@ -98,6 +105,12 @@ public class FileOffsetBackingStoreTest {
         assertEquals(buffer("value"), values.get(buffer("key")));
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testThreadName() {
+        Assert.assertTrue(((ThreadPoolExecutor) store.executor).getThreadFactory()
+                .newThread(EMPTY_RUNNABLE).getName().startsWith(FileOffsetBackingStore.class.getSimpleName()));
     }
 
     private static ByteBuffer buffer(String v) {

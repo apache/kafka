@@ -60,6 +60,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.slf4j.Logger;
 
 import javax.crypto.KeyGenerator;
@@ -80,7 +81,6 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -227,15 +227,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       : new WorkerGroupMember(config, restUrl, this.configBackingStore,
                               new RebalanceListener(time), time, clientId, logContext);
 
-        this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>(1),
-                new ThreadFactory() {
-                    @Override
-                    public Thread newThread(Runnable herder) {
-                        return new Thread(herder, "DistributedHerder-" + clientId);
-                    }
-                });
-        this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
-        this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE);
+        this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingDeque<Runnable>(1),
+                ThreadUtils.createThreadFactory(
+                        this.getClass().getSimpleName() + "-" + clientId + "-%d", false));
+
+        this.forwardRequestExecutor = Executors.newFixedThreadPool(1,
+                ThreadUtils.createThreadFactory(
+                        "ForwardRequestExecutor-" + clientId + "-%d", false));
+        this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE,
+                ThreadUtils.createThreadFactory(
+                        "StartAndStopExecutor-" + clientId + "-%d", false));
         this.config = config;
 
         stopping = new AtomicBoolean(false);

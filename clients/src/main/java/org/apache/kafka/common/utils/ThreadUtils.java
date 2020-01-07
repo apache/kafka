@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.common;
+package org.apache.kafka.common.utils;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
