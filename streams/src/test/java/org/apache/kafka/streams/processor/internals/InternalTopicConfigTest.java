@@ -39,7 +39,23 @@ public class InternalTopicConfigTest {
     }
 
     @Test
-    public void shouldSetCreateTimeByDefault() {
+    public void shouldSetCreateTimeByDefaultForWindowedChangelog() {
+        final WindowedChangelogTopicConfig topicConfig = new WindowedChangelogTopicConfig("name", Collections.emptyMap());
+
+        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 0);
+        assertEquals("CreateTime", properties.get(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
+    }
+
+    @Test
+    public void shouldSetCreateTimeByDefaultForUnwindowedChangelog() {
+        final UnwindowedChangelogTopicConfig topicConfig = new UnwindowedChangelogTopicConfig("name", Collections.emptyMap());
+
+        final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 0);
+        assertEquals("CreateTime", properties.get(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
+    }
+
+    @Test
+    public void shouldSetCreateTimeByDefaultForRepartitionTopic() {
         final RepartitionTopicConfig topicConfig = new RepartitionTopicConfig("name", Collections.emptyMap());
 
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 0);
