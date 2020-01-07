@@ -214,10 +214,9 @@ public class StoreChangelogReader implements ChangelogReader {
             // So we make the following decision:
             //  1) if all the buffered records have been applied, then we compare the end offset with the
             //     current consumer's position, which is the "next" record to fetch, bypassing the txn marker already
-            //  2) if not all the buffered records have been applied, then it means we are restricted by the end offset
-            //     already (limit offset is only for standby tasks and do not need to be worried here), and the consumer's
-            //     position is likely ahead of that end offset already. Then we just need to check the first record in the
-            //     buffer and see if that record is no smaller than the end offset already.
+            //  2) if not all the buffered records have been applied, then it means we are restricted by the end offset,
+            //     and the consumer's position is likely already ahead of that end offset. Then we just need to check
+            //     the first record in the remaining buffer and see if that record is no smaller than the end offset.
             if (metadata.bufferedRecords.isEmpty()) {
                 try {
                     return restoreConsumer.position(metadata.changelogPartition) >= endOffset;
