@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.internals.DefaultPartitionGrouper;
 
 import java.util.Map;
 import java.util.Set;
