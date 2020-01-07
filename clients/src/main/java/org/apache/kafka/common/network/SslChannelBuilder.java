@@ -23,11 +23,11 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
-import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -40,23 +40,26 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
-    private static final Logger log = LoggerFactory.getLogger(SslChannelBuilder.class);
-
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
     private SslFactory sslFactory;
     private Mode mode;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
+    private final Logger log;
 
     /**
      * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
-    public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean isInterBrokerListener) {
+    public SslChannelBuilder(Mode mode,
+                             ListenerName listenerName,
+                             boolean isInterBrokerListener,
+                             LogContext logContext) {
         this.mode = mode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
+        this.log = logContext.logger(getClass());
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {

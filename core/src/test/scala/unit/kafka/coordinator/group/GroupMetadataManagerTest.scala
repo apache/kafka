@@ -17,13 +17,13 @@
 
 package kafka.coordinator.group
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
-import java.util.Collections
-import java.util.Optional
 import java.util.concurrent.locks.ReentrantLock
+import java.util.{Collections, Optional}
+
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
@@ -32,6 +32,7 @@ import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
@@ -41,6 +42,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
@@ -667,7 +669,7 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
-      protocolType = "consumer", protocol = "range", memberId, assignmentSize)
+      protocolType = "consumer", protocol = "range", memberId, new Array[Byte](assignmentSize))
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
@@ -2109,6 +2111,62 @@ class GroupMetadataManagerTest {
     }
   }
 
+  @Test
+  def testCommittedOffsetParsing(): Unit = {
+    val groupId = "group"
+    val topicPartition = new TopicPartition("topic", 0)
+    val offsetCommitRecord = TestUtils.records(Seq(
+      new SimpleRecord(
+        GroupMetadataManager.offsetCommitKey(groupId, topicPartition),
+        GroupMetadataManager.offsetCommitValue(OffsetAndMetadata(35L, "", time.milliseconds()), ApiVersion.latestVersion)
+      )
+    )).records.asScala.head
+    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(offsetCommitRecord)
+    assertEquals(Some(s"offset_commit::group=$groupId,partition=$topicPartition"), keyStringOpt)
+    assertEquals(Some("offset=35"), valueStringOpt)
+  }
+
+  @Test
+  def testCommittedOffsetTombstoneParsing(): Unit = {
+    val groupId = "group"
+    val topicPartition = new TopicPartition("topic", 0)
+    val offsetCommitRecord = TestUtils.records(Seq(
+      new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, topicPartition), null)
+    )).records.asScala.head
+    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(offsetCommitRecord)
+    assertEquals(Some(s"offset_commit::group=$groupId,partition=$topicPartition"), keyStringOpt)
+    assertEquals(Some("<DELETE>"), valueStringOpt)
+  }
+
+  @Test
+  def testGroupMetadataParsingWithNullUserData(): Unit = {
+    val generation = 935
+    val protocolType = "consumer"
+    val protocol = "range"
+    val memberId = "98098230493"
+    val assignmentBytes = Utils.toArray(ConsumerProtocol.serializeAssignment(
+      new ConsumerPartitionAssignor.Assignment(List(new TopicPartition("topic", 0)).asJava, null)
+    ))
+    val groupMetadataRecord = TestUtils.records(Seq(
+      buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, assignmentBytes)
+    )).records.asScala.head
+    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(groupMetadataRecord)
+    assertEquals(Some(s"group_metadata::group=$groupId"), keyStringOpt)
+    assertEquals(Some("{\"protocolType\":\"consumer\",\"protocol\":\"range\"," +
+      "\"generationId\":935,\"assignment\":\"{98098230493=[topic-0]}\"}"), valueStringOpt)
+  }
+
+  @Test
+  def testGroupMetadataTombstoneParsing(): Unit = {
+    val groupId = "group"
+    val groupMetadataRecord = TestUtils.records(Seq(
+      new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
+    )).records.asScala.head
+    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(groupMetadataRecord)
+    assertEquals(Some(s"group_metadata::group=$groupId"), keyStringOpt)
+    assertEquals(Some("<DELETE>"), valueStringOpt)
+  }
+
   private def appendAndCaptureCallback(): Capture[Map[TopicPartition, PartitionResponse] => Unit] = {
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
@@ -2149,14 +2207,14 @@ class GroupMetadataManagerTest {
                                                protocolType: String,
                                                protocol: String,
                                                memberId: String,
-                                               assignmentSize: Int = 0,
+                                               assignmentBytes: Array[Byte] = Array.emptyByteArray,
                                                apiVersion: ApiVersion = ApiVersion.latestVersion): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> new Array[Byte](assignmentSize)), apiVersion)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> assignmentBytes), apiVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 

@@ -18,7 +18,7 @@ import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -132,7 +132,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val adminClient = AdminClient.create(props)
+    val adminClient = Admin.create(props)
 
     def describeTopic(): Unit = {
       try {

@@ -22,7 +22,6 @@ import java.nio._
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.core.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
@@ -114,34 +113,24 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   newGauge("max-buffer-utilization-percent",
-           new Gauge[Int] {
-             def value: Int = cleaners.map(_.lastStats).map(100 * _.bufferUtilization).max.toInt
-           })
+    () => cleaners.iterator.map(100 * _.lastStats.bufferUtilization).max.toInt)
+
   /* a metric to track the recopy rate of each thread's last cleaning */
-  newGauge("cleaner-recopy-percent",
-           new Gauge[Int] {
-             def value: Int = {
-               val stats = cleaners.map(_.lastStats)
-               val recopyRate = stats.map(_.bytesWritten).sum.toDouble / math.max(stats.map(_.bytesRead).sum, 1)
-               (100 * recopyRate).toInt
-             }
-           })
+  newGauge("cleaner-recopy-percent", () => {
+    val stats = cleaners.map(_.lastStats)
+    val recopyRate = stats.iterator.map(_.bytesWritten).sum.toDouble / math.max(stats.iterator.map(_.bytesRead).sum, 1)
+    (100 * recopyRate).toInt
+  })
+
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  newGauge("max-clean-time-secs",
-           new Gauge[Int] {
-             def value: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
-           })
+  newGauge("max-clean-time-secs", () => cleaners.iterator.map(_.lastStats.elapsedSecs).max.toInt)
+
   // a metric to track delay between the time when a log is required to be compacted
   // as determined by max compaction lag and the time of last cleaner run.
   newGauge("max-compaction-delay-secs",
-          new Gauge[Int] {
-          def value: Int = Math.max(0, (cleaners.map(_.lastPreCleanStats).map(_.maxCompactionDelayMs).max / 1000).toInt)
-          })
+    () => Math.max(0, (cleaners.iterator.map(_.lastPreCleanStats.maxCompactionDelayMs).max / 1000).toInt))
 
-  newGauge("DeadThreadCount",
-    new Gauge[Int] {
-      def value: Int = deadThreadCount
-    })
+  newGauge("DeadThreadCount", () => deadThreadCount)
 
   private[log] def deadThreadCount: Int = cleaners.count(_.isThreadFailed)
 

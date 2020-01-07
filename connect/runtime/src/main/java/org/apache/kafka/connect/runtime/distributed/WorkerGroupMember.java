@@ -98,7 +98,7 @@ public class WorkerGroupMember {
                     config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,

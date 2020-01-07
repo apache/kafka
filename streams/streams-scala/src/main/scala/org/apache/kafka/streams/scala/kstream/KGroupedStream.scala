@@ -78,8 +78,6 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */
   def reduce(reducer: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
-    // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
-    // works perfectly with Scala 2.12 though
     new KTable(inner.reduce(reducer.asReducer, materialized))
 
   /**
