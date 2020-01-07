@@ -45,6 +45,15 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * Test out a topology with 3 level of sub-topology as:
+ *           0
+ *         /   \
+ *        1    3
+ *         \  /
+ *          2
+ * Where each pair of the sub topology is connected by repartition topic.
+ */
 @Category({IntegrationTest.class})
 public class BranchedRepartitionTopicIntegrationTest {
 
@@ -59,7 +68,6 @@ public class BranchedRepartitionTopicIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
     private final MockTime mockTime = CLUSTER.time;
-
 
     @Before
     public void setUp() throws Exception {
@@ -80,23 +88,39 @@ public class BranchedRepartitionTopicIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testTopologyBuild() throws InterruptedException, ExecutionException {
 
         StreamsBuilder builder = new StreamsBuilder();
 
         KStream<byte[], byte[]> input = builder.stream(inputStream);
 
-        KStream<byte[], byte[]>[] branches = input.flatMapValues(value -> Collections.singletonList(new byte[0]))
+        KStream<byte[], byte[]>[] branches = input
+            .flatMapValues(value -> Collections.singletonList(new byte[0]))
             .branch((k, v) -> true, (k, v) -> false);
+
         KTable<byte[], byte[]> b1 = branches[0]
-            .map(KeyValue::new).groupByKey().reduce((k, v) -> v, Materialized.as("odd_store"))
-            .toStream().peek((k, v) -> {}).map(KeyValue::new).groupByKey().reduce((k, v) -> v, Materialized.as("odd_store_2"));
+            .map(KeyValue::new)
+            .groupByKey()
+            .reduce((k, v) -> v, Materialized.as("odd_store"))
+            .toStream()
+            .peek((k, v) -> {})
+            .map(KeyValue::new)
+            .groupByKey()
+            .reduce((k, v) -> v, Materialized.as("odd_store_2"));
 
         KTable<byte[], byte[]> b2 = branches[1]
-            .map(KeyValue::new).groupByKey().reduce((k, v) -> v, Materialized.as("even_store"))
-            .toStream().peek((k, v) -> {}).map(KeyValue::new).groupByKey().reduce((k, v) -> v, Materialized.as("even_store_2"));
+            .map(KeyValue::new)
+            .groupByKey()
+            .reduce((k, v) -> v, Materialized.as("even_store"))
+            .toStream()
+            .peek((k, v) -> {})
+            .map(KeyValue::new)
+            .groupByKey()
+            .reduce((k, v) -> v, Materialized.as("even_store_2"));
 
-        b1.join(b2, (v1, v2) -> v1, Materialized.as("joined_store")).toStream();
+        b1.join(b2, (v1, v2) -> v1, Materialized.as("joined_store"))
+            .toStream();
 
         Topology topology = builder.build(streamsConfiguration);
         log.info("Built topology: {}", topology.describe());
@@ -116,7 +140,7 @@ public class BranchedRepartitionTopicIntegrationTest {
         kafkaStreams.start();
 
         TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
-                                   "Failed to observe stream to RUNNING");
+                                   "Failed to observe stream transits to RUNNING");
 
         kafkaStreams.close();
     }

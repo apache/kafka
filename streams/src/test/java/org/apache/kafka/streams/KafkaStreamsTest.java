@@ -29,10 +29,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
-import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -64,11 +61,9 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-import scala.reflect.internal.TypeDebugging;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -848,24 +843,6 @@ public class KafkaStreamsTest {
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
         startStreamsAndCheckDirExists(topology, true);
-    }
-
-    @Test
-    public void shouldBeAbleToBuildTopologyWithMultipleRepartitionTopicChanging() {
-        StreamsBuilder builder = new StreamsBuilder();
-
-        KStream<byte[], byte[]> input = builder.stream("input_topic");
-
-        KStream<byte[], byte[]>[] branches = input.branch((k, v) -> true, (k, v) -> false);
-        KStream<byte[], byte[]> b1 = branches[0].groupByKey().reduce((k, v) -> v).toStream();
-        KStream<byte[], byte[]> b2 = branches[1].groupByKey().reduce((k, v) -> v).toStream();
-
-        b1.outerJoin(b2, (v1, v2) -> v1, JoinWindows.of(Duration.ofHours(1)));
-
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
-
-        streams.cleanUp();
-        streams.start();
     }
 
     @SuppressWarnings("unchecked")
