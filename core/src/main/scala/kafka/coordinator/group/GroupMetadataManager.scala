@@ -555,22 +555,28 @@ class GroupMetadataManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        var currOffset = log.logStartOffset
-
-        // buffer may not be needed if records are read from memory
-        var buffer = ByteBuffer.allocate(0)
-
-        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < logEndOffset && !shuttingDown.get()) {
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
+
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
+        var currOffset = log.logStartOffset
+
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
+        while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
             isolation = FetchLogEnd,
             minOneMessage = true)
+
+          readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
