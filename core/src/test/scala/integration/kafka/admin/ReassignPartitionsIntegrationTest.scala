@@ -153,7 +153,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
 object ReassignPartitionsIntegrationTest {
   def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
     Map(
-      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),
+      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT")),
       AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG -> "20000"
     )
   }
@@ -165,12 +165,5 @@ object ReassignPartitionsIntegrationTest {
   def waitForAllReassignmentsToComplete(client: JAdminClient): Unit = {
     TestUtils.waitUntilTrue(() => client.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments", pause = 100L)
-  }
-
-  def bootstrapServers(servers: Seq[KafkaServer]): String = {
-    servers.map { server =>
-      val port = server.socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
-      s"localhost:$port"
-    }.headOption.mkString(",")
   }
 }
