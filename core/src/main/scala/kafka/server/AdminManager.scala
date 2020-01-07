@@ -291,7 +291,7 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val newPartitionsAssignment = Option(newPartition.assignments).filterNot(_.isEmpty)
+        val newPartitionsAssignment = Option(newPartition.assignments)
           .map { assignmentMap =>
             val assignments = assignmentMap.asScala.map {
               createPartitionAssignment => createPartitionAssignment.brokerIds.asScala.map(_.toInt)
