@@ -1230,7 +1230,7 @@ public class KafkaStreams implements AutoCloseable {
             localOffsetLags.put(storeName, partitionToOffsetLag);
         });
 
-        return localOffsetLags;
+        return Collections.unmodifiableMap(localOffsetLags);
     }
 
     /**

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
@@ -260,6 +261,19 @@ public class QueryableStateIntegrationTest {
         return new KafkaStreams(builder.build(), streamsConfiguration);
     }
 
+    private void verifyOffsetLagFetch(final List<KafkaStreams> streamsList,
+                                      final Set<String> stores,
+                                      final List<Integer> partitionsPerStreamsInstance) {
+        for (int i = 0; i < streamsList.size(); i++) {
+            final Map<String, Map<Integer, Long>> localOffsetLags = streamsList.get(i).allLocalOffsetLags();
+            final int expectedPartitions = partitionsPerStreamsInstance.get(i);
+            assertThat(localOffsetLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
+            if (expectedPartitions > 0) {
+                assertThat(localOffsetLags.keySet(), equalTo(stores));
+            }
+        }
+    }
+
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListener,
@@ -404,7 +418,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void queryOnRebalance() throws Exception {
+    public void shouldBeAbleToQueryDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
         final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
@@ -427,6 +441,9 @@ public class QueryableStateIntegrationTest {
             streamsList.add(streams);
         }
         startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
+
+        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -451,6 +468,7 @@ public class QueryableStateIntegrationTest {
                     DEFAULT_TIMEOUT_MS,
                     true);
             }
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 4));
 
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
@@ -460,10 +478,12 @@ public class QueryableStateIntegrationTest {
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 0));
 
             // It's not enough to assert that the first instance is RUNNING because it is possible
             // for the above checks to succeed while the instance is in a REBALANCING state.
             waitForApplicationState(streamsList.subList(0, 1), State.RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(4, 0));
 
             // Even though the closed instance(s) are now in NOT_RUNNING there is no guarantee that
             // the running instance is aware of this, so we must run our follow up queries with
@@ -488,6 +508,7 @@ public class QueryableStateIntegrationTest {
                 WINDOW_SIZE,
                 DEFAULT_TIMEOUT_MS,
                 true);
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0));
         } finally {
             for (final KafkaStreams streams : streamsList) {
                 streams.close();
@@ -522,6 +543,8 @@ public class QueryableStateIntegrationTest {
             streamsList.add(streams);
         }
         startApplicationAndWaitUntilRunning(streamsList, Duration.ofSeconds(60));
+        final Set<String> stores = mkSet(storeName + "-" + streamThree, windowStoreName + "-" + streamThree);
+        verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -547,6 +570,7 @@ public class QueryableStateIntegrationTest {
                     DEFAULT_TIMEOUT_MS,
                     false);
             }
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 8));
 
             // kill N-1 threads
             for (int i = 1; i < streamsList.size(); i++) {
@@ -556,6 +580,7 @@ public class QueryableStateIntegrationTest {
             }
 
             waitForApplicationState(streamsList.subList(1, numThreads), State.NOT_RUNNING, Duration.ofSeconds(60));
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0));
 
             // Now, confirm that all the keys are still queryable on the remaining thread, regardless of the state
             verifyAllKVKeys(
@@ -576,6 +601,7 @@ public class QueryableStateIntegrationTest {
                 WINDOW_SIZE,
                 DEFAULT_TIMEOUT_MS,
                 false);
+            verifyOffsetLagFetch(streamsList, stores, Arrays.asList(8, 0));
         } finally {
             for (final KafkaStreams streams : streamsList) {
                 streams.close();
