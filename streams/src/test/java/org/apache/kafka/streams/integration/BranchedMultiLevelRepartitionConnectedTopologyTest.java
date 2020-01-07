@@ -52,12 +52,16 @@ import java.util.concurrent.ExecutionException;
  *        1    3
  *         \  /
  *          2
- * Where each pair of the sub topology is connected by repartition topic.
+ * where each pair of the sub topology is connected by repartition topic.
+ * The purpose of this test is to verify the robustness of the stream partition assignor algorithm,
+ * especially whether it could build the repartition topic counts (step zero) with a complex topology.
+ * The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
+ * parent 3 hasn't been initialized yet.
  */
 @Category({IntegrationTest.class})
-public class BranchedRepartitionTopicIntegrationTest {
+public class BranchedMultiLevelRepartitionConnectedTopologyTest {
 
-    private static final Logger log = LoggerFactory.getLogger(BranchedRepartitionTopicIntegrationTest.class);
+    private static final Logger log = LoggerFactory.getLogger(BranchedMultiLevelRepartitionConnectedTopologyTest.class);
 
     private static String inputStream;
 
@@ -71,7 +75,7 @@ public class BranchedRepartitionTopicIntegrationTest {
 
     @Before
     public void setUp() throws Exception {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.NO_OPTIMIZATION);
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
@@ -91,30 +95,30 @@ public class BranchedRepartitionTopicIntegrationTest {
     @SuppressWarnings("unchecked")
     public void testTopologyBuild() throws InterruptedException, ExecutionException {
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<byte[], byte[]> input = builder.stream(inputStream);
+        final KStream<byte[], byte[]> input = builder.stream(inputStream);
 
-        KStream<byte[], byte[]>[] branches = input
+        final KStream<byte[], byte[]>[] branches = input
             .flatMapValues(value -> Collections.singletonList(new byte[0]))
             .branch((k, v) -> true, (k, v) -> false);
 
-        KTable<byte[], byte[]> b1 = branches[0]
+        final KTable<byte[], byte[]> b1 = branches[0]
             .map(KeyValue::new)
             .groupByKey()
             .reduce((k, v) -> v, Materialized.as("odd_store"))
             .toStream()
-            .peek((k, v) -> {})
+            .peek((k, v) -> { })
             .map(KeyValue::new)
             .groupByKey()
             .reduce((k, v) -> v, Materialized.as("odd_store_2"));
 
-        KTable<byte[], byte[]> b2 = branches[1]
+        final KTable<byte[], byte[]> b2 = branches[1]
             .map(KeyValue::new)
             .groupByKey()
             .reduce((k, v) -> v, Materialized.as("even_store"))
             .toStream()
-            .peek((k, v) -> {})
+            .peek((k, v) -> { })
             .map(KeyValue::new)
             .groupByKey()
             .reduce((k, v) -> v, Materialized.as("even_store_2"));
@@ -122,7 +126,7 @@ public class BranchedRepartitionTopicIntegrationTest {
         b1.join(b2, (v1, v2) -> v1, Materialized.as("joined_store"))
             .toStream();
 
-        Topology topology = builder.build(streamsConfiguration);
+        final Topology topology = builder.build(streamsConfiguration);
         log.info("Built topology: {}", topology.describe());
 
         final Properties producerConfig = TestUtils.producerConfig(
