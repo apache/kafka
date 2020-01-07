@@ -195,21 +195,40 @@ public class StoreChangelogReader implements ChangelogReader {
         return endOffset == null ? "UNKNOWN (since it is for standby task)" : endOffset.toString();
     }
 
-    private static boolean restoredToEnd(final Long endOffset, final Long currentOffset) {
+    private boolean restoredToEnd(final ChangelogMetadata metadata) {
+        final Long endOffset = metadata.restoreEndOffset;
+        final Long currentOffset = metadata.stateManager.storeMetadata(metadata.changelogPartition).offset;
         if (endOffset == null) {
-            // end offset is not initialized meaning that it is from a standby task (i.e. it should never end)
-            return false;
+            // end offset is not initialized meaning that it is from a standby task,
+            // this should never happen since we only call this function for active task in restoring phase
+            throw new IllegalStateException("End offset for changelog " + metadata + " is unknown when deciding " +
+                "if it has completed restoration, this should never happen.");
         } else if (endOffset == 0) {
             // this is a special case, meaning there's nothing to be restored since the changelog has no data
-            // of the changelog is a source topic and there's no committed offset
+            // OR the changelog is a source topic and there's no committed offset
             return true;
         } else if (currentOffset == null) {
             // current offset is not initialized meaning there's no checkpointed offset,
             // we would start restoring from beginning and it does not end yet
             return false;
         } else {
-            // note the end offset returned of the consumer is actually the last offset + 1
-            return currentOffset + 1 < endOffset;
+            // NOTE there are several corner cases that we need to consider:
+            //  1) the end / committed offset returned from the consumer is the last offset + 1
+            //  2) there could be txn markers as the last record if EOS is enabled at the producer
+            //
+            // It is possible that: the last record's offset == last txn marker offset - 1 == end / committed offset - 2
+            //
+            // So we make the following decision:
+            //  1) if all the buffered records have been applied, then we compare the end offset with the
+            //     current consumer's position, which is the "next" record to fetch, bypassing the txn marker already
+            //  2) if not all the buffered records have been applied, then it means we are restricted by the end offset
+            //     already (limit offset is only for standby tasks and do not need to be worried here), and the consumer's
+            //     position is likely ahead of that end offset already. Then we just need to check the first record in the
+            //     buffer and see if that record is no smaller than the end offset already.
+            if (metadata.bufferedRecords.isEmpty())
+                return restoreConsumer.position(metadata.changelogPartition) >= endOffset;
+            else
+                return metadata.bufferedRecords.get(0).offset() >= endOffset;
         }
     }
 
@@ -387,13 +406,17 @@ public class StoreChangelogReader implements ChangelogReader {
             final StateStoreMetadata storeMetadata = stateManager.storeMetadata(partition);
             final String storeName = storeMetadata.stateStore.name();
 
-            // NOTE this is to handle a special case: if there are txn markers then
-            // the last record's offset == last txn marker offset - 1 == end / committed offset - 2
-            // so if we know that we have restored all the records buffered, then we should
-            // set the current offset as the consumer's position -1 to cover this case
-            final Long currentOffset = numRecords == changelogMetadata.bufferedRecords.size() ?
-                restoreConsumer.position(changelogMetadata.changelogPartition) : storeMetadata.offset;
+            final Long currentOffset = storeMetadata.offset;
             changelogMetadata.totalRestored += numRecords;
+
+            // NOTE we use removeAll of ArrayList in order to achieve efficiency, otherwise one-at-a-time removal
+            // would be very costly as it shifts element each time.
+            if (numRecords < changelogMetadata.bufferedRecords.size()) {
+                changelogMetadata.bufferedRecords.removeAll(restoreRecords);
+            } else {
+                changelogMetadata.bufferedRecords.clear();
+                changelogMetadata.bufferedRecords = null;
+            }
 
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
                 partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
@@ -403,7 +426,7 @@ public class StoreChangelogReader implements ChangelogReader {
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
                 stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
 
-                if (restoredToEnd(changelogMetadata.restoreEndOffset, currentOffset)) {
+                if (restoredToEnd(changelogMetadata)) {
                     log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                         partition, storeName, changelogMetadata.totalRestored);
 
@@ -411,15 +434,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
                     pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.changelogPartition));
                 }
-            }
-
-            // NOTE we use removeAll of ArrayList in order to achieve efficiency, otherwise one-at-a-time removal
-            // would be very costly as it shifts element each time.
-            if (numRecords < changelogMetadata.bufferedRecords.size()) {
-                changelogMetadata.bufferedRecords.removeAll(restoreRecords);
-            } else {
-                changelogMetadata.bufferedRecords.clear();
-                changelogMetadata.bufferedRecords = null;
             }
         }
     }
@@ -610,7 +624,9 @@ public class StoreChangelogReader implements ChangelogReader {
             final Long endOffset = changelogs.get(partition).restoreEndOffset;
 
             if (currentOffset != null) {
-                restoreConsumer.seek(partition, currentOffset);
+                // the current offset is the offset of the last record, so we should set the position
+                // as that offset + 1 as the "next" record to fetch
+                restoreConsumer.seek(partition, currentOffset + 1);
 
                 log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
                     partition, currentOffset, recordEndOffset(endOffset));

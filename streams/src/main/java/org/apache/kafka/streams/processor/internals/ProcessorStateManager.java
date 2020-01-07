@@ -62,9 +62,9 @@ public class ProcessorStateManager implements StateManager {
     public class StateStoreMetadata {
         public StateStore stateStore;
 
-        // indicating the current snapshot of the store, used for both
-        // restoration (active and standby tasks restored offset) and
-        // running (written offset); could be null (when initialized)
+        // indicating the current snapshot of the store as the offset of last changelog record that has been
+        // applied to the store used for both restoration (active and standby tasks restored offset) and
+        // normal processing that update stores (written offset); could be null (when initialized)
         //
         // the offset is updated in three ways:
         //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
