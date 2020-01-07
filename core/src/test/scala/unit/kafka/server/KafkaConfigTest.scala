@@ -636,7 +636,7 @@ class KafkaConfigTest {
         case KafkaConfig.LogCleanerDeleteRetentionMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerMinCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerMaxCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
-        case KafkaConfig.LogCleanerCompactionStrategyProp => assertPropertyInvalid(getBaseProperties(), name, "", "unknown_strategy", Defaults.LogCleanerCompactionStrategy)
+        case KafkaConfig.LogCleanerCompactionStrategyProp => assertPropertyInvalid(getBaseProperties(), name, "", "unknown_strategy")
         case KafkaConfig.LogCleanerCompactionStrategyHeaderKeyProp => // ignore optional string
         case KafkaConfig.LogCleanerMinCleanRatioProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogIndexSizeMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "3")
