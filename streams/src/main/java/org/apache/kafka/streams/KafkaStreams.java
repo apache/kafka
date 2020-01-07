@@ -1158,14 +1158,14 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Returns offset lag info, for all store partitions (active or standby) local to this Streams instance. Note that the
+     * Returns {@link LagInfo}, for all store partitions (active or standby) local to this Streams instance. Note that the
      * values returned are just estimates and meant to be used for making soft decisions on whether the data in the store
      * partition is fresh enough for querying.
      *
-     * @return map of store names to another map of partition to offset lags
+     * @return map of store names to another map of partition to {@link LagInfo}s
      */
-    public Map<String, Map<Integer, Long>> allLocalOffsetLags() {
-        final Map<String, Map<Integer, Long>> localOffsetLags = new HashMap<>();
+    public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
+        final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new HashMap<>();
         final Map<TopicPartition, Long> standbyChangelogPositions = new HashMap<>();
         final Map<TopicPartition, Long> activeChangelogPositions = new HashMap<>();
 
@@ -1218,19 +1218,18 @@ public class KafkaStreams implements AutoCloseable {
                 throw new IllegalStateException("Topic Partition " + topicPartition + " should be either active or standby");
             }
 
-            final long offsetLag = offsetsResultInfo.offset() - offsetPosition;
-            final Map<Integer, Long> partitionToOffsetLag = localOffsetLags
-                    .getOrDefault(storeName, new HashMap<>());
+            final LagInfo lagInfo = new LagInfo(offsetPosition, offsetsResultInfo.offset());
+            final Map<Integer, LagInfo> partitionToOffsetLag = localStorePartitionLags.getOrDefault(storeName, new HashMap<>());
             if (!partitionToOffsetLag.containsKey(topicPartition.partition())) {
-                partitionToOffsetLag.put(topicPartition.partition(), offsetLag);
+                partitionToOffsetLag.put(topicPartition.partition(), lagInfo);
             } else {
                 throw new IllegalStateException("Encountered the same store partition" + storeName + ","
                         + topicPartition.partition() + " more than once");
             }
-            localOffsetLags.put(storeName, partitionToOffsetLag);
+            localStorePartitionLags.put(storeName, partitionToOffsetLag);
         });
 
-        return Collections.unmodifiableMap(localOffsetLags);
+        return Collections.unmodifiableMap(localStorePartitionLags);
     }
 
     /**

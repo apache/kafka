@@ -26,7 +26,7 @@ import java.util.Set;
  * Represents all the metadata related to a key, where a particular key resides in a {@link KafkaStreams} application.
  * It contains the active {@link HostInfo} and a set of standby {@link HostInfo}s, denoting the instances where the key resides.
  * It also contains the partition number where the key belongs, which could be useful when used in conjunction with other APIs.
- * e.g: Relating with lags for that store partition using {@link KafkaStreams#allLocalOffsetLags()}
+ * e.g: Relating with lags for that store partition using {@link KafkaStreams#allLocalStorePartitionLags()}
  * NOTE: This is a point in time view. It may change as rebalances happen.
  */
 public class KeyQueryMetadata {
@@ -38,11 +38,10 @@ public class KeyQueryMetadata {
             Collections.emptySet(),
             -1);
 
-    // Active streams instance for key
     private final HostInfo activeHost;
-    // Streams instances that host the key as standbys
+
     private final Set<HostInfo> standbyHosts;
-    // Store partition corresponding to the key.
+
     private final int partition;
 
     public KeyQueryMetadata(final HostInfo activeHost, final Set<HostInfo> standbyHosts, final int partition) {
@@ -51,14 +50,29 @@ public class KeyQueryMetadata {
         this.partition = partition;
     }
 
+    /**
+     * Get the Active streams instance for given key
+     *
+     * @return active instance's {@link HostInfo}
+     */
     public HostInfo getActiveHost() {
         return activeHost;
     }
 
+    /**
+     * Get the Streams instances that host the key as standbys
+     *
+     * @return set of standby {@link HostInfo} or a empty set, if no standbys are configured
+     */
     public Set<HostInfo> getStandbyHosts() {
         return standbyHosts;
     }
 
+    /**
+     * Get the Store partition corresponding to the key.
+     *
+     * @return store partition number
+     */
     public int getPartition() {
         return partition;
     }

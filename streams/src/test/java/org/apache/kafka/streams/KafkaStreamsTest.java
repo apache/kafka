@@ -687,7 +687,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldReturnEmptyLocalOffsetLags() {
+    public void shouldReturnEmptyLocalStorePartitionLags() {
         // Mock all calls made to compute the offset lags,
         final ListOffsetsResult result = EasyMock.mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
@@ -704,7 +704,7 @@ public class KafkaStreamsTest {
 
         final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, mockClientSupplier, time);
         streams.start();
-        assertEquals(0, streams.allLocalOffsetLags().size());
+        assertEquals(0, streams.allLocalStorePartitionLags().size());
     }
 
     @Test

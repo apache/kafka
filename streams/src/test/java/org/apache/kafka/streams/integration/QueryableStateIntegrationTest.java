@@ -73,6 +73,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -265,11 +266,11 @@ public class QueryableStateIntegrationTest {
                                       final Set<String> stores,
                                       final List<Integer> partitionsPerStreamsInstance) {
         for (int i = 0; i < streamsList.size(); i++) {
-            final Map<String, Map<Integer, Long>> localOffsetLags = streamsList.get(i).allLocalOffsetLags();
+            final Map<String, Map<Integer, LagInfo>> localLags = streamsList.get(i).allLocalStorePartitionLags();
             final int expectedPartitions = partitionsPerStreamsInstance.get(i);
-            assertThat(localOffsetLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
+            assertThat(localLags.values().stream().mapToInt(Map::size).sum(), equalTo(expectedPartitions));
             if (expectedPartitions > 0) {
-                assertThat(localOffsetLags.keySet(), equalTo(stores));
+                assertThat(localLags.keySet(), equalTo(stores));
             }
         }
     }
