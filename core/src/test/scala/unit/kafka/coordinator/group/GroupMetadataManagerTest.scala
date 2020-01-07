@@ -686,6 +686,30 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testLoadGroupAndOffsetsWithCorruptedLog(): Unit = {
+    // Simulate a case where startOffset < endOffset but log is empty. This could theoretically happen
+    // when all the records are expired and the active segment is truncated or when the partition
+    // is accidentally corrupted.
+    val startOffset = 0L
+    val endOffset = 10L
+
+    val logMock: Log = EasyMock.mock(classOf[Log])
+    EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
+    expectGroupMetadataLoad(logMock, startOffset, MemoryRecords.EMPTY)
+    EasyMock.expect(replicaManager.getLogEndOffset(groupTopicPartition)).andStubReturn(Some(endOffset))
+    EasyMock.replay(logMock)
+
+    EasyMock.replay(replicaManager)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupTopicPartition, _ => ())
+
+    EasyMock.verify(logMock)
+    EasyMock.verify(replicaManager)
+
+    assertFalse(groupMetadataManager.isPartitionLoading(groupTopicPartition.partition()))
+  }
+
+  @Test
   def testOffsetWriteAfterGroupRemoved(): Unit = {
     // this test case checks the following scenario:
     // 1. the group exists at some point in time, but is later removed (because all members left)
