@@ -776,7 +776,6 @@ private[log] class Cleaner(val id: Int,
       val isRetainedValue = record.hasValue || retainDeletes
       isLatestRecordForKey && isRetainedValue
     } else {
-      info("invalid message")
       stats.invalidMessage()
       false
     }

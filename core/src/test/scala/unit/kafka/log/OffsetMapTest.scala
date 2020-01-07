@@ -87,8 +87,9 @@ class OffsetMapTest {
     map.init("timestamp")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    val time = System.currentTimeMillis()
     for (i <- 0 until 10)
-      map.put(new FakeRecord(key(i), i, fakeTimestamp = System.currentTimeMillis()))
+      map.put(new FakeRecord(key(i), i, fakeTimestamp = time+i))
 
     // map should hold offset 0 for key 0
     assertEquals(0, map.get(key(0)))
@@ -99,9 +100,9 @@ class OffsetMapTest {
     assertEquals(10, map.size)
 
     // putting latest value for key=0 first followed by old value
-    val fr1 = new FakeRecord(key(0), 10, fakeTimestamp = System.currentTimeMillis())
+    val fr1 = new FakeRecord(key(0), 10, fakeTimestamp = time+10)
     map.put(fr1)
-    val fr2 = new FakeRecord(key(0), 11, fakeTimestamp = System.currentTimeMillis()-1000)
+    val fr2 = new FakeRecord(key(0), 11, fakeTimestamp = time-1000)
     map.put(fr2)
 
     // map should hold offset 10 for key 0
@@ -115,7 +116,7 @@ class OffsetMapTest {
     // size should 10
     assertEquals(10, map.size)
 
-    map.put(new FakeRecord(key(10), 12, fakeTimestamp = System.currentTimeMillis()))
+    map.put(new FakeRecord(key(10), 12, fakeTimestamp = time+12))
 
     // latest offset in map should be 12
     assertEquals(12, map.latestOffset)
@@ -227,8 +228,9 @@ class OffsetMapTest {
     map.init("timestamp")
 
     // put offset keys from 0 - 9 with corresponding offset 0-9 respectively
+    val time = System.currentTimeMillis()
     for (i <- 0 until 10)
-      map.put(new FakeRecord(key(i), i, fakeTimestamp = System.currentTimeMillis()))
+      map.put(new FakeRecord(key(i), i, fakeTimestamp = time+i))
 
     // map should hold offset 0 for key 0
     assertEquals(0, map.get(key(0)))
@@ -239,9 +241,9 @@ class OffsetMapTest {
     assertEquals(10, map.size)
 
     // putting latest value for key=0 first followed by old value
-    val fr1 = new FakeRecord(key(0), 10, fakeTimestamp = System.currentTimeMillis())
+    val fr1 = new FakeRecord(key(0), 10, fakeTimestamp = time+10)
     map.put(fr1)
-    val fr2 = new FakeRecord(key(0), 11, fakeTimestamp = System.currentTimeMillis()-1000)
+    val fr2 = new FakeRecord(key(0), 11, fakeTimestamp = time-1000)
     map.put(fr2)
 
     // map should hold offset 10 for key 0

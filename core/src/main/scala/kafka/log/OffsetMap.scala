@@ -21,6 +21,7 @@ import java.util.Arrays
 import java.security.MessageDigest
 import java.nio.ByteBuffer
 
+import kafka.log.CompactionStrategy.CompactionStrategy
 import kafka.utils._
 import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.utils.{ByteUtils, Utils}
@@ -30,7 +31,7 @@ trait OffsetMap {
   def slots: Int
 
   /* Initialize the map with the topic compact strategy */
-  def init(strategy: String, headerKey: String, cleanerThreadId: Int, topicPartition: String)
+  def init(strategy: String, headerKey: String, cleanerThreadId: Int, topicPartitionName: String)
 
   /**
    * Associate this offset to the given key.
@@ -73,6 +74,14 @@ trait OffsetMap {
 
   /* The latest offset put into the map */
   def latestOffset: Long
+}
+
+object CompactionStrategy extends Enumeration {
+  type CompactionStrategy = Value
+
+  val OFFSET = Value(Defaults.CompactionStrategy)
+  val TIMESTAMP = Value(Defaults.CompactionStrategyTimestamp)
+  val HEADER = Value(Defaults.CompactionStrategyHeader)
 }
 
 /**
@@ -119,14 +128,8 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    */
   var slots: Int = memory / bytesPerEntry
 
-  /* compact using offset strategy */
-  private var isOffsetStrategy: Boolean = false
-
-  /* compact using timestamp strategy */
-  private var isTimestampStrategy: Boolean = false
-
-  /* compact using header strategy */
-  private var isHeaderStrategy: Boolean = false
+  /* compact strategy */
+  private var compactionStrategy: CompactionStrategy = null
 
   /* header key for the Strategy header to look for */
   private var headerKey: String = ""
@@ -150,41 +153,15 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     this.lastOffset = -1L
     Arrays.fill(bytes.array, bytes.arrayOffset, bytes.arrayOffset + bytes.limit(), 0.toByte)
 
-    // reset all strategy flags
-    this.isOffsetStrategy = false
-    this.isTimestampStrategy = false
-    this.isHeaderStrategy = false
-
-    if (strategy != null && Defaults.CompactionStrategyTimestamp.equalsIgnoreCase(strategy)) {
-      // timestamp strategy
-      this.isOffsetStrategy = false
-      this.isTimestampStrategy = true
-      this.isHeaderStrategy = false
-      this.headerKey = ""
-      info("Compaction strategy set to 'timestamp'")
-    } else if (strategy != null && Defaults.CompactionStrategyHeader.equalsIgnoreCase(strategy) && !headerKey.trim().isEmpty()) {
-      // header strategy
-      this.isOffsetStrategy = false
-      this.isTimestampStrategy = false
-      this.isHeaderStrategy = true
-      this.headerKey = headerKey.trim()
-      info(s"Compaction strategy set to 'header' with header key as '$headerKey''")
+    this.compactionStrategy = CompactionStrategy.withName(strategy)
+    this.headerKey = headerKey.trim()
+    if (this.compactionStrategy == CompactionStrategy.HEADER && this.headerKey.isEmpty()) {
+      // fall back to offset if header key not set
+      this.compactionStrategy == CompactionStrategy.OFFSET
     }
 
-    if (!this.isTimestampStrategy && !this.isHeaderStrategy)
-    {
-      // make it as offset strategy for anything else
-      //   - offset strategy set explictly 
-      //   - missing broker/topic level strategy config
-      //   - doesn't fall under timestamp/header sequence
-      this.isOffsetStrategy = true
-      this.isTimestampStrategy = false
-      this.isHeaderStrategy = false
-      this.headerKey = ""
-      info("Compaction strategy set to 'offset'")
-    }
-
-    this.bytesPerEntry = hashSize + 8 + (if (isOffsetStrategy) 0 else 8)
+    info(s"Compaction strategy set to '${this.compactionStrategy}'")
+    this.bytesPerEntry = hashSize + 8 + (if (this.compactionStrategy == CompactionStrategy.OFFSET) 0 else 8)
     this.slots = memory / bytesPerEntry
   }
   
@@ -204,10 +181,6 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     lookups += 1
     hashInto(key, hash1)
 
-    val b = new Array[Byte](key.limit())
-    key.get(b)
-    val keyStr = new String(b, "UTF-8")
-
     // probe until we find the first empty slot
     var attempt = 0
     var pos = positionOf(hash1, attempt)  
@@ -216,12 +189,11 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
       bytes.get(hash2)
       if (Arrays.equals(hash1, hash2)) {
         // we found an existing entry, overwrite it and return (size does not change)
-        if (!isOffsetStrategy) {
+        if (this.compactionStrategy != CompactionStrategy.OFFSET) {
           // read previous value by skipping offset
           bytes.position(bytes.position() + 8)
           val foundVersion = bytes.getLong()
           if (foundVersion > currVersion) {
-            debug(s"map already holding latest value for the key $keyStr; offset: $offset; found version: $foundVersion; current version: $currVersion")
             // map already holding latest record
             return false
           }
@@ -232,7 +204,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
 
         // we found an existing entry, overwrite it and return (size does not change)
         bytes.putLong(offset)
-        if (!isOffsetStrategy) {
+        if (this.compactionStrategy != CompactionStrategy.OFFSET) {
           bytes.putLong(currVersion)
         }
 
@@ -247,7 +219,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     bytes.position(pos)
     bytes.put(hash1)
     bytes.putLong(offset)
-    if (!isOffsetStrategy) {
+    if (this.compactionStrategy != CompactionStrategy.OFFSET) {
       bytes.putLong(currVersion)
     }
 
@@ -267,7 +239,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @return true to retain; false not to
    */
   override def shouldRetainRecord(record: Record): Boolean = {
-    if (!isOffsetStrategy) {
+    if (this.compactionStrategy != CompactionStrategy.OFFSET) {
       val foundVersion = getVersion(record.key)
       val currentVersion = extractVersion(record)
       // use version if available & different otherwise fallback to offset
@@ -297,7 +269,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @return The version associated with this key or -1 if the key is not found
    */
   override def getVersion(key: ByteBuffer): Long = {
-    if (isOffsetStrategy)
+    if (this.compactionStrategy == CompactionStrategy.OFFSET)
       -1L
     else if (!search(key))
       -1L
@@ -387,9 +359,9 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @return The version extracted from the record if the strategy is not offset, or -1
    */
   private def extractVersion(record: Record): Long = {
-    if (isOffsetStrategy) // offset strategy
+    if (this.compactionStrategy == CompactionStrategy.OFFSET) // offset strategy
       -1L
-    else if (isTimestampStrategy) // record timestamp strategy
+    else if (this.compactionStrategy == CompactionStrategy.TIMESTAMP) // record timestamp strategy
       record.timestamp
     else if (record == null || record.headers() == null || record.headers().isEmpty) // record header empty
       -1L
