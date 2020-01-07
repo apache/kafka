@@ -1245,7 +1245,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                         final String... stateStoreNames) {
-        process(processorSupplier, NamedInternal.empty(), stateStoreNames);
+        process(processorSupplier, Named.as(builder.newProcessorName(PROCESSOR_NAME)), stateStoreNames);
     }
 
     @Override
@@ -1259,7 +1259,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
         }
 
-        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PROCESSOR_NAME);
+        final String name = new NamedInternal(named).name();
         final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
