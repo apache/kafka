@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashMap;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
 import java.util.Map;
@@ -32,8 +34,12 @@ public abstract class InternalTopicConfig {
 
     private Optional<Integer> numberOfPartitions = Optional.empty();
 
-    InternalTopicConfig(final String name,
-                        final Map<String, String> topicConfigs) {
+    static final Map<String, String> INTERNAL_TOPIC_DEFAULT_OVERRIDES = new HashMap<>();
+    static {
+        INTERNAL_TOPIC_DEFAULT_OVERRIDES.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime");
+    }
+
+    InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 

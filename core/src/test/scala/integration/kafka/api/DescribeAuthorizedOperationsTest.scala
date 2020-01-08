@@ -117,7 +117,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @Test
   def testConsumerGroupAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
 
     val results = client.createAcls(List(group1Acl, group2Acl, group3Acl).asJava)
     assertEquals(Set(group1Acl, group2Acl, group3Acl), results.values.keySet.asScala)
@@ -141,7 +141,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @Test
   def testClusterAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
 
     // test without includeAuthorizedOperations flag
     var clusterDescribeResult = client.describeCluster()
@@ -169,7 +169,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @Test
   def testTopicAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
+    client = Admin.create(createConfig())
     createTopic(topic1)
     createTopic(topic2)
 
