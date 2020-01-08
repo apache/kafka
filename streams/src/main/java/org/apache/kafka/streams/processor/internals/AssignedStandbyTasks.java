@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +29,16 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
 
     AssignedStandbyTasks(final LogContext logContext) {
         super(logContext, "standby task");
+    }
+
+    @Override
+    public void shutdown(final boolean clean) {
+        final String shutdownType = clean ? "Clean" : "Unclean";
+        log.debug("{} shutdown of all standby tasks" + "\n" +
+                      "non-initialized standby tasks to close: {}" + "\n" +
+                      "running standby tasks to close: {}",
+            shutdownType, created.keySet(), running.keySet());
+        super.shutdown(clean);
     }
 
     @Override
@@ -53,7 +64,7 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : revokedTasks.entrySet()) {
             final TaskId taskId = entry.getKey();
-            final Task task;
+            final StandbyTask task;
 
             if (running.containsKey(taskId)) {
                 task = running.get(taskId);
@@ -67,9 +78,9 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
             try {
                 task.close(true, false);
             } catch (final RuntimeException e) {
-                log.error("Closing the {} {} failed due to the following error:", taskTypeName, task.id(), e);
+                log.error("Closing the standby task {} failed due to the following error:", task.id(), e);
             } finally {
-                running.remove(taskId);
+                removeTaskFromAllStateMaps(task, Collections.emptyMap());
                 revokedChangelogs.addAll(task.changelogPartitions());
             }
         }

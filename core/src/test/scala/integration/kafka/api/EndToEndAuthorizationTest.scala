@@ -181,6 +181,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
+  this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1500")
 
   /**
     * Starts MiniKDC and only then sets up the parent trait.
@@ -363,7 +364,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)
-    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = numRecords, topic2)
+    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 1, topic2)
     sendRecords(producer, numRecords, tp)
     consumeRecords(consumer, numRecords, topic = topic)
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values

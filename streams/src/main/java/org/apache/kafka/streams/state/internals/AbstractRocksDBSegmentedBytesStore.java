@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
@@ -39,9 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
@@ -148,7 +146,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
         if (segment == null) {
             expiredRecordSensor.record();
-            LOG.debug("Skipping record for expired segment.");
+            LOG.warn("Skipping record for expired segment.");
         } else {
             segment.put(key, value);
         }
@@ -177,18 +175,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
-        expiredRecordSensor = metrics.storeLevelSensor(
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
             threadId,
             taskName,
+            metricScope,
             name(),
-            EXPIRED_WINDOW_RECORD_DROP,
-            Sensor.RecordingLevel.INFO
-        );
-        addInvocationRateAndCountToSensor(
-            expiredRecordSensor,
-            "stream-" + metricScope + "-metrics",
-            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
-            EXPIRED_WINDOW_RECORD_DROP
+            metrics
         );
 
         segments.openExisting(this.context, observedStreamTime);

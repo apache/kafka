@@ -21,7 +21,6 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -265,7 +264,7 @@ case class FetchSession(val id: Int,
       ", privileged=" + privileged +
       ", partitionMap.size=" + partitionMap.size +
       ", creationMs=" + creationMs +
-      ", creationMs=" + lastUsedMs +
+      ", lastUsedMs=" + lastUsedMs +
       ", epoch=" + epoch + ")"
   }
 }
@@ -547,19 +546,11 @@ class FetchSessionCache(private val maxEntries: Int,
 
   // Set up metrics.
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS,
-    new Gauge[Int] {
-      def value = FetchSessionCache.this.size
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS, () => FetchSessionCache.this.size)
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED,
-    new Gauge[Long] {
-      def value = FetchSessionCache.this.totalPartitions
-    }
-  )
+  newGauge(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED, () => FetchSessionCache.this.totalPartitions)
   removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
-  val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
+  private[server] val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
     FetchSession.EVICTIONS, TimeUnit.SECONDS, Map.empty)
 
   /**
@@ -781,11 +772,7 @@ class FetchManager(private val time: Time,
                 cache.remove(session)
                 new SessionlessFetchContext(fetchData)
               } else {
-                if (session.size != session.cachedSize) {
-                  // If the number of partitions in the session changed, update the session's
-                  // position in the cache.
-                  cache.touch(session, session.lastUsedMs)
-                }
+                cache.touch(session, time.milliseconds())
                 session.epoch = JFetchMetadata.nextEpoch(session.epoch)
                 debug(s"Created a new incremental FetchContext for session id ${session.id}, " +
                   s"epoch ${session.epoch}: added ${partitionsToLogString(added)}, " +

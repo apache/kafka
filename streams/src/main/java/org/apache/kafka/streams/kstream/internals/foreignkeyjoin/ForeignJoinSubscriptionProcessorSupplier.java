@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -57,15 +57,18 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
 
 
     private final class KTableKTableJoinProcessor extends AbstractProcessor<KO, Change<VO>> {
-        private Sensor skippedRecordsSensor;
+        private Sensor droppedRecordsSensor;
         private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
 
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-            skippedRecordsSensor =
-                ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), internalProcessorContext.metrics());
+            droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(),
+                internalProcessorContext.taskId().toString(),
+                internalProcessorContext.metrics()
+            );
             store = internalProcessorContext.getStateStore(storeBuilder);
         }
 
@@ -81,7 +84,7 @@ public class ForeignJoinSubscriptionProcessorSupplier<K, KO, VO> implements Proc
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
-                skippedRecordsSensor.record();
+                droppedRecordsSensor.record();
                 return;
             }
 

@@ -620,14 +620,14 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
         final Map<String, String> properties1 = topicConfig1.getProperties(Collections.emptyMap(), 10000);
-        assertEquals(2, properties1.size());
+        assertEquals(3, properties1.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store1-changelog", topicConfig1.name());
         assertTrue(topicConfig1 instanceof WindowedChangelogTopicConfig);
         final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
         final Map<String, String> properties2 = topicConfig2.getProperties(Collections.emptyMap(), 10000);
-        assertEquals(2, properties2.size());
+        assertEquals(3, properties2.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store2-changelog", topicConfig2.name());
@@ -644,7 +644,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
-        assertEquals(1, properties.size());
+        assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-store-changelog", topicConfig.name());
         assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
@@ -658,7 +658,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.emptyMap(), 10000);
-        assertEquals(3, properties.size());
+        assertEquals(4, properties.size());
         assertEquals(String.valueOf(-1), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());

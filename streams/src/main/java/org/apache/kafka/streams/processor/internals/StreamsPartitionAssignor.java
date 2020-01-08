@@ -52,8 +52,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -64,11 +64,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_FIVE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_FOUR;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_THREE;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_ONE;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -237,6 +232,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             rebalanceProtocol);
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
+            LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             activeTasks,
             standbyTasks,
@@ -358,9 +354,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // add the consumer and any info its its subscription to the client
             clientMetadata.addConsumer(consumerId, subscription.ownedPartitions());
             allOwnedPartitions.addAll(subscription.ownedPartitions());
-            if (info.prevTasks() != null && info.standbyTasks() != null) {
-                clientMetadata.addPreviousTasks(info);
-            }
+            clientMetadata.addPreviousTasks(info);
         }
 
         final boolean versionProbing;
@@ -383,8 +377,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         if (minReceivedMetadataVersion < LATEST_SUPPORTED_VERSION) {
-            log.info("Downgrading metadata to version {}. Latest supported version is {}.",
+            log.info("Downgrade metadata to version {}. Latest supported version is {}.",
                 minReceivedMetadataVersion,
+                LATEST_SUPPORTED_VERSION);
+        }
+        if (minSupportedMetadataVersion < LATEST_SUPPORTED_VERSION) {
+            log.info("Downgrade latest supported metadata to version {}. Latest supported version is {}.",
+                minSupportedMetadataVersion,
                 LATEST_SUPPORTED_VERSION);
         }
 
@@ -434,7 +433,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
                                 for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    int numPartitionsCandidate = 0;
+                                    Integer numPartitionsCandidate = null;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
                                     if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
@@ -454,13 +453,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                         numPartitionsCandidate = count;
                                     }
 
-                                    if (numPartitions == null || numPartitionsCandidate > numPartitions) {
-                                        numPartitions = numPartitionsCandidate;
+                                    if (numPartitionsCandidate != null) {
+                                        if (numPartitions == null || numPartitionsCandidate > numPartitions) {
+                                            numPartitions = numPartitionsCandidate;
+                                        }
                                     }
                                 }
                             }
                         }
-                        // if we still have not find the right number of partitions,
+
+                        // if we still have not found the right number of partitions,
                         // another iteration is needed
                         if (numPartitions == null) {
                             numPartitionsNeeded = true;
@@ -1055,9 +1057,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 log.info(
                     "Sent a version {} subscription and got version {} assignment back (successful version probing). "
                         +
-                        "Downgrade subscription metadata to commonly supported version and trigger new rebalance.",
+                        "Downgrade subscription metadata to commonly supported version {} and trigger new rebalance.",
                     usedSubscriptionMetadataVersion,
-                    receivedAssignmentMetadataVersion
+                    receivedAssignmentMetadataVersion,
+                    latestCommonlySupportedVersion
                 );
                 usedSubscriptionMetadataVersion = latestCommonlySupportedVersion;
                 return true;
@@ -1103,7 +1106,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // Check if this was a version probing rebalance and check the error code to trigger another rebalance if so
         if (maybeUpdateSubscriptionVersion(receivedAssignmentMetadataVersion, latestCommonlySupportedVersion)) {
             setAssignmentErrorCode(AssignorError.VERSION_PROBING.code());
-            return;
         }
 
         // version 1 field
@@ -1115,14 +1117,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
 
         switch (receivedAssignmentMetadataVersion) {
-            case VERSION_ONE:
+            case 1:
                 processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
                 partitionsByHost = Collections.emptyMap();
                 break;
-            case VERSION_TWO:
-            case VERSION_THREE:
-            case VERSION_FOUR:
-            case VERSION_FIVE:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
                 processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
                 partitionsByHost = info.partitionsByHost();
                 break;
@@ -1237,7 +1239,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private int updateMinSupportedVersion(final int supportedVersion, final int minSupportedMetadataVersion) {
-        return supportedVersion < minSupportedMetadataVersion ? supportedVersion : minSupportedMetadataVersion;
+        if (supportedVersion < minSupportedMetadataVersion) {
+            log.debug("Downgrade the current minimum supported version {} to the smaller seen supported version {}",
+                minSupportedMetadataVersion, supportedVersion);
+            return supportedVersion;
+        } else {
+            log.debug("Current minimum supported version remains at {}, last seen supported version was {}",
+                minSupportedMetadataVersion, supportedVersion);
+            return minSupportedMetadataVersion;
+        }
     }
 
     protected void setAssignmentErrorCode(final Integer errorCode) {

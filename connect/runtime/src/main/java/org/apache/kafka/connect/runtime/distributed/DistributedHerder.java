@@ -1538,10 +1538,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             short priorProtocolVersion = currentProtocolVersion;
             DistributedHerder.this.currentProtocolVersion = member.currentProtocolVersion();
             log.info(
-                "Joined group at generation {} with protocol version {} and got assignment: {}",
+                "Joined group at generation {} with protocol version {} and got assignment: {} with rebalance delay: {}",
                 generation,
                 DistributedHerder.this.currentProtocolVersion,
-                assignment
+                assignment,
+                assignment.delay()
             );
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
@@ -1611,12 +1612,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                 // The actual timeout for graceful task stop is applied in worker's stopAndAwaitTask method.
                 startAndStop(callables);
+                log.info("Finished stopping tasks in preparation for rebalance");
 
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
                 // completes.
                 statusBackingStore.flush();
-                log.info("Finished stopping tasks in preparation for rebalance");
+                log.info("Finished flushing status backing store in preparation for rebalance");
             } else {
                 log.info("Wasn't unable to resume work after last rebalance, can skip stopping connectors and tasks");
             }

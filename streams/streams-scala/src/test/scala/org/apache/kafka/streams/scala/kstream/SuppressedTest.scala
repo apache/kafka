@@ -28,9 +28,10 @@ import org.apache.kafka.streams.kstream.internals.suppress.{
 }
 import org.apache.kafka.streams.scala.kstream.Suppressed.BufferConfig
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
+@deprecated(message = "org.apache.kafka.streams.scala.kstream.Suppressed has been deprecated", since = "2.5")
 @RunWith(classOf[JUnitRunner])
 class SuppressedTest extends FlatSpec with Matchers {
 

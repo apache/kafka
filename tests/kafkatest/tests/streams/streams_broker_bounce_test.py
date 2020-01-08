@@ -149,7 +149,7 @@ class StreamsBrokerBounceTest(Test):
         return True
 
         
-    def setup_system(self, start_processor=True):
+    def setup_system(self, start_processor=True, num_threads=3):
         # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
@@ -164,7 +164,7 @@ class StreamsBrokerBounceTest(Test):
 
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads)
 
         self.driver.start()
 
@@ -207,13 +207,16 @@ class StreamsBrokerBounceTest(Test):
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader", "controller"],
+            num_threads=[1, 3],
             sleep_time_secs=[120])
-    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs):
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
-        Record if records are delivered. 
+        Record if records are delivered.
+        We also add a single thread stream client to make sure we could get all partitions reassigned in
+        next generation so to verify the partition lost is correctly triggered.
         """
-        self.setup_system() 
+        self.setup_system(num_threads=num_threads)
 
         # Sleep to allow test to run for a bit
         time.sleep(sleep_time_secs)

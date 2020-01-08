@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import kafka.api.ApiVersion
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
@@ -73,7 +74,8 @@ class TransactionStateManager(brokerId: Int,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
                               time: Time,
-                              metrics: Metrics) extends Logging {
+                              metrics: Metrics,
+                              interBrokerProtocolVersion: ApiVersion) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
@@ -86,13 +88,13 @@ class TransactionStateManager(brokerId: Int,
   private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
-  private val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
+  private[transaction] val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
 
   /** partitions of transaction topic that are being removed, state lock should be called BEFORE accessing this set */
-  private val leavingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
+  private[transaction] val leavingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
 
   /** transaction metadata cache indexed by assigned transaction topic partition ids */
-  private val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
+  private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
@@ -221,13 +223,15 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
-  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] =
+  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     getAndMaybeAddTransactionState(transactionalId, None)
+  }
 
   def putTransactionStateIfNotExists(transactionalId: String,
-                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
+                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
       .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
 
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
@@ -308,14 +312,20 @@ class TransactionStateManager(brokerId: Int,
         // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         var currOffset = log.logStartOffset
 
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
         try {
-          while (currOffset < logEndOffset && !shuttingDown.get() && inReadLock(stateLock) {
+          while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get() && inReadLock(stateLock) {
             loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset,
               maxLength = config.transactionLogLoadBufferSize,
               isolation = FetchLogEnd,
               minOneMessage = true)
+
+            readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
             val memRecords = fetchDataInfo.records match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
@@ -343,11 +353,11 @@ class TransactionStateManager(brokerId: Int,
                 val txnKey = TransactionLog.readTxnRecordKey(record.key)
                 // load transaction metadata along with transaction state
                 val transactionalId = txnKey.transactionalId
-                if (!record.hasValue) {
-                  loadedTransactions.remove(transactionalId)
-                } else {
-                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
-                  loadedTransactions.put(transactionalId, txnMetadata)
+                TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
+                  case None =>
+                    loadedTransactions.remove(transactionalId)
+                  case Some(txnMetadata) =>
+                    loadedTransactions.put(transactionalId, txnMetadata)
                 }
                 currOffset = batch.nextOffset
               }
@@ -367,31 +377,25 @@ class TransactionStateManager(brokerId: Int,
 
   /**
    * Add a transaction topic partition into the cache
-   *
-   * Make it package-private to be used only for unit tests.
    */
-  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
-    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, metadataPerTransactionalId)
-    val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
+  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
+                                                        coordinatorEpoch: Int,
+                                                        loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
+    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
+    val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
-    if (currentTxnMetadataCacheEntry.isDefined) {
-      val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
-      val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
-      val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
-        s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
-        s"this should not happen"
-      fatal(errorMsg)
-      throw new IllegalStateException(errorMsg)
+    previousTxnMetadataCacheEntryOpt.foreach { previousTxnMetadataCacheEntry =>
+      warn(s"Unloaded transaction metadata $previousTxnMetadataCacheEntry from $txnTopicPartition as part of " +
+        s"loading metadata at epoch $coordinatorEpoch")
     }
   }
 
   /**
-   * When this broker becomes a leader for a transaction log partition, load this partition and
-   * populate the transaction metadata cache with the transactional ids.
+   * When this broker becomes a leader for a transaction log partition, load this partition and populate the transaction
+   * metadata cache with the transactional ids. This operation must be resilient to any partial state left off from
+   * the previous loading / unloading operation.
    */
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
@@ -401,7 +405,9 @@ class TransactionStateManager(brokerId: Int,
     }
 
     def loadTransactions(): Unit = {
-      info(s"Loading transaction metadata from $topicPartition")
+      info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
+      validateTransactionTopicPartitionCountIsStable()
+
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
       inWriteLock(stateLock) {
@@ -436,6 +442,8 @@ class TransactionStateManager(brokerId: Int,
           }
         }
       }
+
+      info(s"Completed loading transaction metadata from $topicPartition for coordinator epoch $coordinatorEpoch")
     }
 
     scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions)
@@ -446,8 +454,6 @@ class TransactionStateManager(brokerId: Int,
    * that belong to that partition.
    */
   def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
@@ -461,11 +467,10 @@ class TransactionStateManager(brokerId: Int,
         if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
           transactionMetadataCache.remove(partitionId) match {
             case Some(txnMetadataCacheEntry) =>
-              info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
+              info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
             case None =>
-              info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
-                s"it is likely that another process for removing the cached entries has just executed earlier before")
+              info(s"No cached transaction metadata found for $topicPartition during become-follower transition")
           }
 
           leavingPartitions.remove(partitionAndLeaderEpoch)
@@ -658,9 +663,15 @@ class TransactionStateManager(brokerId: Int,
 }
 
 
-private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata])
+private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
+                                                      metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
+  override def toString: String = {
+    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
+  }
+}
 
-private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int, transactionMetadata: TransactionMetadata)
+private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
+                                                               transactionMetadata: TransactionMetadata)
 
 private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
                                                   transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,

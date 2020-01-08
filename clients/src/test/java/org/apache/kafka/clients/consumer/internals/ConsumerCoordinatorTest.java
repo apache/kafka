@@ -454,6 +454,34 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testUnsubscribeWithValidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+        coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
+    public void testUnsubscribeWithInvalidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
     public void testUnknownMemberId() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2277,6 +2305,63 @@ public class ConsumerCoordinatorTest {
                 coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback()));
         assertThrows(FencedInstanceIdException.class, () ->
                 coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
+    }
+
+    @Test
+    public void testConsumerRejoinAfterRebalance() throws Exception {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
+
+            assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(
+                singletonMap(t1p, new OffsetAndMetadata(100L)),
+                time.timer(Long.MAX_VALUE)));
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+
+            MockTime time = new MockTime(1);
+
+            // onJoinPrepare will be executed and onJoinComplete will not.
+            boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            // SynGroupRequest not responded.
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(generationId, coordinator.generation().generationId);
+            assertEquals(memberId, coordinator.generation().memberId);
+
+            // Imitating heartbeat thread that clears generation data.
+            coordinator.maybeLeaveGroup("Clear generation data.");
+
+            assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+
+            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            // Join future should succeed but generation already cleared so result of join is false.
+            res = coordinator.joinGroupIfNeeded(time.timer(1));
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            // Retry join should then succeed
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            res = coordinator.joinGroupIfNeeded(time.timer(2));
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+        }
     }
 
     private void receiveFencedInstanceIdException() {

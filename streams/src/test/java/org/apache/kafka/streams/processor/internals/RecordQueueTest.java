@@ -56,7 +56,7 @@ public class RecordQueueTest {
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
 
-    private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
+    private final Sensor droppedRecordsSensor = new Metrics().sensor("skipped-records");
 
     final InternalMockProcessorContext context = new InternalMockProcessorContext(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
@@ -64,7 +64,7 @@ public class RecordQueueTest {
             null,
             new LogContext("record-queue-test "),
             new DefaultProductionExceptionHandler(),
-            skippedRecordsSensor
+            droppedRecordsSensor
         )
     );
     private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);

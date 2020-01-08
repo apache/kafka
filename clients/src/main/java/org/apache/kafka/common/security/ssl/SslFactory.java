@@ -318,6 +318,8 @@ public class SslFactory implements Reconfigurable {
             while (true) {
                 switch (handshakeStatus) {
                     case NEED_WRAP:
+                        if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
+                            return;
                         handshakeResult = sslEngine.wrap(EMPTY_BUF, netBuffer);
                         switch (handshakeResult.getStatus()) {
                             case OK: break;

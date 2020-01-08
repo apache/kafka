@@ -73,7 +73,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
       val partitions: Set[TopicPartition] = consumer.partitionsFor(topic)
         .asScala.toSet.map {partitionInfo : PartitionInfo => new TopicPartition(partitionInfo.topic, partitionInfo.partition)}
 
-      consumer.committed(partitions.asJava).asScala.mapValues(_.offset()).toMap
+      consumer.committed(partitions.asJava).asScala.filter(_._2 != null).mapValues(_.offset()).toMap
     } finally {
       consumer.close()
     }
