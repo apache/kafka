@@ -1239,7 +1239,6 @@ public class TransactionManagerTest {
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
         assertEquals(singleton(tp0.topic()), exception.unauthorizedTopics());
         assertAbortableError(TopicAuthorizationException.class);
-
         sender.runOnce();
 
         TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
@@ -1450,10 +1449,8 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
         sender.runOnce();
         assertFutureFailed(unauthorizedTopicProduceFuture);
-
-        sender.runOnce();
-        assertNotNull(authorizedTopicProduceFuture.get());
         assertTrue(authorizedTopicProduceFuture.isDone());
+        assertNotNull(authorizedTopicProduceFuture.get());
         assertTrue(authorizedTopicProduceFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
