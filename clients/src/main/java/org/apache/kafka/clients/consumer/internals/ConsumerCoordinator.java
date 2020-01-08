@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -1062,17 +1063,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (subscriptions.hasAutoAssignedPartitions()) {
             generation = generationIfStable();
             // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll();
-            // we use RetriableCommitFailedException to indicate this may not be a fatal error, and leave
-            // it to users whether they want to handle differently than CommitFailed
+            // the only thing we can do is fail the commit and let the user rejoin the group in poll().
             if (generation == null) {
                 log.info("Failing OffsetCommit request since the consumer is not part of an active group");
-                return RequestFuture.failure(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
-                    "consumer is not part of an active group for auto partition assignment yet. You can try completing the rebalance " +
-                    "by calling poll() and then retry the operation"));
+
+                if (rebalanceInProgress()) {
+                    // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
+                    // CommitFailedException to indicate this is not a fatal error
+                    return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                        "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
+                        "by calling poll() and then retry the operation."));
+                } else {
+                    return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
+                        "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
+                        "was kicked out of the group."));
+                }
             }
-        } else
+        } else {
             generation = Generation.NO_GENERATION;
+        }
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
@@ -1086,16 +1095,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
         return client.send(coordinator, builder)
-                .compose(new OffsetCommitResponseHandler(offsets, generation));
+                .compose(new OffsetCommitResponseHandler(offsets));
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
 
-        private final Generation generation;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets, Generation generation) {
-            this.generation = generation;
+        private OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
             this.offsets = offsets;
         }
 
@@ -1151,28 +1158,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                              * and hence on broker-side it is not expected to see a commit offset request
                              * during CompletingRebalance phase; if it ever happens then broker would return
                              * this error to indicate that we are still in the middle of a rebalance.
-                             * In this case we would throw a RetriableCommitFailedException,
+                             * In this case we would throw a RebalanceInProgressException,
                              * request re-join but do not reset generations. If the callers decide to retry they
                              * can go ahead and call poll to finish up the rebalance first, and then try commit again.
                              */
                             requestRejoin();
-                            future.raise(new RetriableCommitFailedException("Offset commit cannot be completed since the " +
+                            future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
                                 "consumer group is executing a rebalance at the moment. You can try completing the rebalance " +
                                 "by calling poll() and then retry commit again"));
                             return;
-                        } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                        } else if (error == Errors.UNKNOWN_MEMBER_ID
+                                || error == Errors.ILLEGAL_GENERATION) {
                             // need to reset generation and re-join group
                             resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                            future.raise(new CommitFailedException());
-                            return;
-                        } else if (error == Errors.ILLEGAL_GENERATION) {
-                            if (this.generation.equals(ConsumerCoordinator.this.generation())) {
-                                // need to reset generation and re-join group if the generation has not changed, meaning
-                                // this is indeed a illegal generation; otherwise if the generation has changed the current
-                                // generation may actually be valid so we do not reset it -- if it is not, the next request
-                                // would still fail and then we would reset generation and re-join at that time.
-                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                            }
                             future.raise(new CommitFailedException());
                             return;
                         } else {

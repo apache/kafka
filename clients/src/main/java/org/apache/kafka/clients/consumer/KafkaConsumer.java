@@ -1333,7 +1333,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retried.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed but can be retried.
      *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
      *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
      *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
@@ -1377,8 +1377,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retried.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
+     *            it is in the middle of a rebalance so it is not yet determined
      *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
      *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
      *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
@@ -1433,8 +1433,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retried.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
+     *            it is in the middle of a rebalance so it is not yet determined
      *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
      *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
      *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
@@ -1482,8 +1482,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.clients.consumer.RetriableCommitFailedException if the commit failed but can be retried.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
+     *            it is in the middle of a rebalance so it is not yet determined
      *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
      *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
      *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned

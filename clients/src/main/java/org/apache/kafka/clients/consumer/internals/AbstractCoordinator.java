@@ -452,9 +452,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 resetJoinGroupFuture();
                 final RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
-                        exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException ||
-                        exception instanceof MemberIdRequiredException)
+                    exception instanceof RebalanceInProgressException ||
+                    exception instanceof IllegalGenerationException ||
+                    exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
@@ -856,6 +856,10 @@ public abstract class AbstractCoordinator implements Closeable {
         if (this.state != MemberState.STABLE)
             return null;
         return generation;
+    }
+
+    protected synchronized boolean rebalanceInProgress() {
+        return this.state == MemberState.REBALANCING;
     }
 
     protected synchronized String memberId() {
