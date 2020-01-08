@@ -45,8 +45,8 @@ class JsonTest {
     assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
     assertEquals(Json.tryParseFull("{}"), Right(Some(JsonValue(new ObjectNode(jnf)))))
 
-    assertEquals(Json.parseFull(""), None)
-    assertEquals(Json.tryParseFull(""), Right(None))
+    assertEquals(Json.parseFull(""), Option(MissingNode.getInstance()).map(JsonValue(_)))
+    assertEquals(Json.tryParseFull(""), Right(Option(MissingNode.getInstance()).map(JsonValue(_))))
 
     assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
     val tryRes = Json.tryParseFull("""{"foo":"bar"s}""")
