@@ -22,12 +22,15 @@ package org.apache.kafka.streams.scala
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
-  KGroupedStream => KGroupedStreamJ,
-  KGroupedTable => KGroupedTableJ,
   KStream => KStreamJ,
-  KTable => KTableJ,
+  KGroupedStream => KGroupedStreamJ,
+  TimeWindowedKStream => TimeWindowedKStreamJ,
   SessionWindowedKStream => SessionWindowedKStreamJ,
-  TimeWindowedKStream => TimeWindowedKStreamJ
+  CogroupedKStream => CogroupedKStreamJ,
+  TimeWindowedCogroupedKStream => TimeWindowedCogroupedKStreamJ,
+  SessionWindowedCogroupedKStream => SessionWindowedCogroupedKStreamJ,
+  KTable => KTableJ,
+  KGroupedTable => KGroupedTableJ
 }
 import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
@@ -51,6 +54,19 @@ object ImplicitConversions {
 
   implicit def wrapSessionWindowedKStream[K, V](inner: SessionWindowedKStreamJ[K, V]): SessionWindowedKStream[K, V] =
     new SessionWindowedKStream[K, V](inner)
+
+  implicit def wrapCogroupedKStream[K, V](inner: CogroupedKStreamJ[K, V]): CogroupedKStream[K, V] =
+    new CogroupedKStream[K, V](inner)
+
+  implicit def wrapTimeWindowedCogroupedKStream[K, V](
+    inner: TimeWindowedCogroupedKStreamJ[K, V]
+  ): TimeWindowedCogroupedKStream[K, V] =
+    new TimeWindowedCogroupedKStream[K, V](inner)
+
+  implicit def wrapSessionWindowedCogroupedKStream[K, V](
+    inner: SessionWindowedCogroupedKStreamJ[K, V]
+  ): SessionWindowedCogroupedKStream[K, V] =
+    new SessionWindowedCogroupedKStream[K, V](inner)
 
   implicit def wrapKTable[K, V](inner: KTableJ[K, V]): KTable[K, V] =
     new KTable[K, V](inner)
