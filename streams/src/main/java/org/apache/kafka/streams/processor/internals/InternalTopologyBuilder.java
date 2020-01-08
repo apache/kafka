@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -123,6 +124,8 @@ public class InternalTopologyBuilder {
     private String applicationId = null;
 
     private Pattern topicPattern = null;
+
+    private Collection<String> topicCollection = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
@@ -1213,7 +1216,41 @@ public class InternalTopologyBuilder {
         return subscriptionUpdates;
     }
 
+    boolean hasPatternSubscribedTopics() {
+        return (!nodeToSourcePatterns.isEmpty());
+    }
+
+    synchronized Collection<String> sourceTopicCollection() {
+        if (hasPatternSubscribedTopics() || topicPattern != null) {
+            log.error("Collection subscription should not be used with hasPatternSubscribedTopics = {}, topicPattern = {}",
+                hasPatternSubscribedTopics(), topicPattern);
+            throw new IllegalStateException("Main consumer tried to use collection subscription when it should have used patterns to subscribe source topics.");
+        } else {
+            log.debug("No source topics using pattern subscription found, using regular subscription for the main consumer.");
+        }
+
+        if (topicCollection == null) {
+            topicCollection = new ArrayList<>();
+            if (!nodeToSourceTopics.isEmpty()) {
+                for (final List<String> topics : nodeToSourceTopics.values()) {
+                    topicCollection.addAll(maybeDecorateInternalSourceTopics(topics));
+                }
+                topicCollection.removeAll(globalTopics);
+            }
+        }
+
+        return topicCollection;
+    }
+
     synchronized Pattern sourceTopicPattern() {
+        if (!hasPatternSubscribedTopics() || topicCollection != null) {
+            log.error("Pattern subscription should not be used with hasPatternSubscribedTopics = {}, topicCollection = {}",
+                hasPatternSubscribedTopics(), topicCollection);
+            throw new IllegalStateException("Main consumer tried to use pattern subscription when it should have used collections to subscribe source topics.");
+        } else {
+            log.debug("Found pattern subscribed source topics, falling back to pattern subscription for the main consumer.");
+        }
+
         if (topicPattern == null) {
             final List<String> allSourceTopics = new ArrayList<>();
             if (!nodeToSourceTopics.isEmpty()) {
