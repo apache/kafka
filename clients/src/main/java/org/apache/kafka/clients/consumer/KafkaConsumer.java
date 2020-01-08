@@ -2200,6 +2200,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Return the current group metadata associated with this consumer.
+     *
+     * @return consumer group metadata
+     */
+    @Override
+    public ConsumerGroupMetadata groupMetadata() {
+        return coordinator.groupMetadata();
+    }
+
+    /**
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}

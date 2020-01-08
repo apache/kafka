@@ -18,6 +18,10 @@ package org.apache.kafka.clients.consumer;
 
 import java.util.Optional;
 
+/**
+ * A metadata struct containing the consumer group information.
+ * Note: Any change to this class is considered public and requires a KIP.
+ */
 public class ConsumerGroupMetadata {
     private String groupId;
     private int generationId;
@@ -29,6 +33,14 @@ public class ConsumerGroupMetadata {
         this.generationId = generationId;
         this.memberId = memberId;
         this.groupInstanceId = groupInstanceId;
+    }
+
+    public ConsumerGroupMetadata(ConsumerGroupMetadata other) {
+        String otherGroupInstanceId = other.groupInstanceId.orElse(null);
+        this.groupId = other.groupId;
+        this.generationId = other.generationId;
+        this.memberId = other.memberId;
+        this.groupInstanceId =  Optional.ofNullable(otherGroupInstanceId);
     }
 
     public String groupId() {
@@ -46,5 +58,4 @@ public class ConsumerGroupMetadata {
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }
-
 }

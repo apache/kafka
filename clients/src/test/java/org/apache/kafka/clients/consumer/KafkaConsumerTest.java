@@ -118,6 +118,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -1780,6 +1781,40 @@ public class KafkaConsumerTest {
 
         // the assignment is still updated regardless of the exception
         assertTrue(subscription.assignedPartitions().isEmpty());
+    }
+
+    @Test
+    public void testGetGroupMetadata() {
+        final Time time = new MockTime();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        final Node node = metadata.fetch().nodes().get(0);
+
+        final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        final ConsumerGroupMetadata groupMetadataOnStart = consumer.groupMetadata();
+        assertEquals(groupId, groupMetadataOnStart.groupId());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadataOnStart.memberId());
+        assertEquals(JoinGroupResponse.UNKNOWN_GENERATION_ID, groupMetadataOnStart.generationId());
+        assertEquals(groupInstanceId, groupMetadataOnStart.groupInstanceId());
+
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        // initial fetch
+        client.prepareResponseFrom(fetchResponse(tp0, 0, 0), node);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+
+        final ConsumerGroupMetadata groupMetadataAfterPoll = consumer.groupMetadata();
+        assertEquals(groupId, groupMetadataAfterPoll.groupId());
+        assertNotEquals(0, groupMetadataAfterPoll.memberId().length());
+        assertEquals(1, groupMetadataAfterPoll.generationId());
+        assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
