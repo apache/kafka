@@ -126,7 +126,9 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldNotThrowExceptionWhenOnChangeNotCalled() {
-        new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), hostOne).getAllMetadataForStore("store");
+        final Collection<StreamsMetadata> metadata = new StreamsMetadataState(
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()), hostOne).getAllMetadataForStore("store");
+        assertEquals(0, metadata.size());
     }
 
     @Test

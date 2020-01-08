@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -1083,6 +1085,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param <K>           key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
      * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * @deprecated Use {@link #queryMetadataForKey(String, Object, Serializer)} instead.
      */
     @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
@@ -1115,6 +1118,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param <K>         key type
      * @return {@link StreamsMetadata} for the {@code KafkaStreams} instance with the provided {@code storeName} and
      * {@code key} of this application or {@link StreamsMetadata#NOT_AVAILABLE} if Kafka Streams is (re-)initializing
+     * @deprecated Use {@link #queryMetadataForKey(String, Object, StreamPartitioner)} instead.
      */
     @Deprecated
     public <K> StreamsMetadata metadataForKey(final String storeName,
@@ -1172,10 +1176,9 @@ public class KafkaStreams implements AutoCloseable {
         // Obtain the current positions, of all the active-restoring and standby tasks
         for (final StreamThread streamThread : this.threads) {
             for (final StandbyTask standbyTask : streamThread.allStandbyTasks()) {
-                final Map<TopicPartition, Long> changelogPartitionLimits = standbyTask.checkpointedOffsets();
+                final Map<TopicPartition, Long> checkpointedOffsets = standbyTask.checkpointedOffsets();
                 standbyTask.changelogPartitions().forEach(topicPartition ->
-                    standbyChangelogPositions.put(topicPartition,
-                        changelogPartitionLimits.getOrDefault(topicPartition, UNKNOWN_POSITION)));
+                    standbyChangelogPositions.put(topicPartition, checkpointedOffsets.getOrDefault(topicPartition, UNKNOWN_POSITION)));
             }
 
             final Set<TaskId> restoringTaskIds = streamThread.restoringTaskIds();
@@ -1193,9 +1196,9 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         log.info("Current changelog positions, for active: " + activeChangelogPositions + " standby:" + standbyChangelogPositions);
-        final Map<TopicPartition, OffsetSpec> offsetSpecMap = new HashMap<>();
-        Stream.concat(activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
-            .forEach(topicPartition ->  offsetSpecMap.put(topicPartition, OffsetSpec.latest()));
+        final Map<TopicPartition, OffsetSpec> offsetSpecMap = Stream.concat(
+            activeChangelogPositions.keySet().stream(), standbyChangelogPositions.keySet().stream())
+            .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets = new HashMap<>();
         try {
             allEndOffsets.putAll(adminClient.listOffsets(offsetSpecMap).all().get());

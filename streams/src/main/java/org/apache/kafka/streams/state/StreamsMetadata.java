@@ -42,23 +42,14 @@ public class StreamsMetadata {
                                                                             Collections.emptySet());
 
     private final HostInfo hostInfo;
-    /**
-     * State stores owned by the instance as an active replica
-     */
-    private final Set<String> stateStoreNames;
-    /**
-     * Topic partitions consumed by the instance as an active replica
-     */
-    private final Set<TopicPartition> topicPartitions;
-    /**
-     * State stores owned by the instance as a standby replica
-     */
-    private final Set<String> standbyStateStoreNames;
-    /**
-     * (Source) Topic partitions for which the instance acts as standby.
-     */
-    private final Set<TopicPartition> standbyTopicPartitions;
 
+    private final Set<String> stateStoreNames;
+
+    private final Set<TopicPartition> topicPartitions;
+
+    private final Set<String> standbyStateStoreNames;
+
+    private final Set<TopicPartition> standbyTopicPartitions;
 
     public StreamsMetadata(final HostInfo hostInfo,
                            final Set<String> stateStoreNames,
@@ -73,24 +64,50 @@ public class StreamsMetadata {
         this.standbyStateStoreNames = standbyStateStoreNames;
     }
 
-    public Set<TopicPartition> standbyTopicPartitions() {
-        return standbyTopicPartitions;
-    }
-
-    public Set<String> standbyStateStoreNames() {
-        return standbyStateStoreNames;
-    }
-
+    /**
+     * The value of {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_SERVER_CONFIG} configured for the streams
+     * instance, which is typically host/port
+     *
+     * @return {@link HostInfo} corresponding to the streams instance
+     */
     public HostInfo hostInfo() {
         return hostInfo;
     }
 
+    /**
+     * State stores owned by the instance as an active replica
+     *
+     * @return set of active state store names
+     */
     public Set<String> stateStoreNames() {
         return stateStoreNames;
     }
 
+    /**
+     * Topic partitions consumed by the instance as an active replica
+     *
+     * @return set of active topic partitions
+     */
     public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
+    }
+
+    /**
+     * (Source) Topic partitions for which the instance acts as standby.
+     *
+     * @return set of standby topic partitions
+     */
+    public Set<TopicPartition> standbyTopicPartitions() {
+        return standbyTopicPartitions;
+    }
+
+    /**
+     * State stores owned by the instance as a standby replica
+     *
+     * @return set of standby state store names
+     */
+    public Set<String> standbyStateStoreNames() {
+        return standbyStateStoreNames;
     }
 
     public String host() {
@@ -110,21 +127,13 @@ public class StreamsMetadata {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        final StreamsMetadata that = (StreamsMetadata) o;
-        if (!hostInfo.equals(that.hostInfo)) {
-            return false;
-        }
-        if (!stateStoreNames.equals(that.stateStoreNames)) {
-            return false;
-        }
-        if (!topicPartitions.equals(that.topicPartitions)) {
-            return false;
-        }
-        if (!standbyStateStoreNames.equals(that.standbyStateStoreNames)) {
-            return false;
-        }
 
-        return standbyTopicPartitions.equals(that.standbyTopicPartitions);
+        final StreamsMetadata that = (StreamsMetadata) o;
+        return Objects.equals(hostInfo, that.hostInfo)
+            && Objects.equals(stateStoreNames, that.stateStoreNames)
+            && Objects.equals(topicPartitions, that.topicPartitions)
+            && Objects.equals(standbyStateStoreNames, that.standbyStateStoreNames)
+            && Objects.equals(standbyTopicPartitions, that.standbyTopicPartitions);
     }
 
     @Override

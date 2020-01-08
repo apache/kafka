@@ -24,11 +24,13 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 import static org.junit.Assert.assertEquals;
@@ -39,36 +41,31 @@ public class AssignmentInfoTest {
         new TaskId(0, 1),
         new TaskId(1, 0),
         new TaskId(1, 1));
-    private final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<TaskId, Set<TopicPartition>>() {
-        {
-            put(new TaskId(1, 0),
-                Utils.mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0)));
-            put(new TaskId(1, 1),
-                Utils.mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)));
-        }
-    };
-    private final Map<HostInfo, Set<TopicPartition>> activeAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
-        {
-            put(new HostInfo("localhost", 8088), Utils.mkSet(
-                new TopicPartition("t0", 0),
+
+    private final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(
+        mkEntry(new TaskId(1, 0), mkSet(new TopicPartition("t1", 0), new TopicPartition("t2", 0))),
+        mkEntry(new TaskId(1, 1), mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)))
+    );
+
+    private final Map<HostInfo, Set<TopicPartition>> activeAssignment = mkMap(
+        mkEntry(new HostInfo("localhost", 8088),
+            mkSet(new TopicPartition("t0", 0),
                 new TopicPartition("t1", 0),
-                new TopicPartition("t2", 0)));
-            put(new HostInfo("localhost", 8089), Utils.mkSet(
-                new TopicPartition("t0", 1),
+                new TopicPartition("t2", 0))),
+        mkEntry(new HostInfo("localhost", 8089),
+            mkSet(new TopicPartition("t0", 1),
                 new TopicPartition("t1", 1),
-                new TopicPartition("t2", 1)));
-        }
-    };
-    private final Map<HostInfo, Set<TopicPartition>> standbyAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
-        {
-            put(new HostInfo("localhost", 8088), Utils.mkSet(
-                new TopicPartition("t1", 0),
-                new TopicPartition("t2", 0)));
-            put(new HostInfo("localhost", 8089), Utils.mkSet(
-                new TopicPartition("t1", 1),
-                new TopicPartition("t2", 1)));
-        }
-    };
+                new TopicPartition("t2", 1)))
+    );
+
+    private final Map<HostInfo, Set<TopicPartition>> standbyAssignment = mkMap(
+        mkEntry(new HostInfo("localhost", 8088),
+            Utils.mkSet(new TopicPartition("t1", 0),
+                new TopicPartition("t2", 0))),
+        mkEntry(new HostInfo("localhost", 8089),
+            Utils.mkSet(new TopicPartition("t1", 1),
+                new TopicPartition("t2", 1)))
+    );
 
     @Test
     public void shouldUseLatestSupportedVersionByDefault() {

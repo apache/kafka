@@ -50,7 +50,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         }
         if (!streamThread.isRunning()) {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                streamThread.state() + ", not RUNNING");
+                streamThread.state() + ", not RUNNING or REBALANCING");
         }
         final List<T> stores = new ArrayList<>();
         final Set<Task> tasks = new HashSet<>(streamThread.tasks().values());

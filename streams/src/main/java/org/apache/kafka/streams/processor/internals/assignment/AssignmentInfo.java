@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.HostInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -34,13 +39,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.HostInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
 
 public class AssignmentInfo {
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
