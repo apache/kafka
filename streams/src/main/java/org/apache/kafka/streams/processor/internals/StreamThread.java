@@ -62,8 +62,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.util.Collections.singleton;
-
 public class StreamThread extends Thread {
 
     /**
@@ -373,7 +371,7 @@ public class StreamThread extends Thread {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 partitions,
-                false,
+                AbstractTask.TaskType.ACTIVE,
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 storeChangelogReader,
@@ -467,7 +465,7 @@ public class StreamThread extends Thread {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,
-                    true,
+                    AbstractTask.TaskType.STANDBY,
                     stateDirectory,
                     topology.storeToChangelogTopic(),
                     storeChangelogReader,

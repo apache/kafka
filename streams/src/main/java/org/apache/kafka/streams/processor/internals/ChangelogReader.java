@@ -19,8 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collection;
-import java.util.Map;
 import java.util.Set;
 
 /**

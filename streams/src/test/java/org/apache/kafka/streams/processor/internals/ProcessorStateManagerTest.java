@@ -25,16 +25,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
-import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockKeyValueStore;
-import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
 import org.junit.After;
@@ -47,13 +43,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -191,7 +185,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
@@ -215,7 +209,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 2),
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
@@ -268,7 +262,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             sourcePartitions,
-            true, // standby
+            AbstractTask.TaskType.STANDBY,
             stateDirectory,
             storeToChangelogTopic,
             changelogReader,
@@ -300,7 +294,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 1),
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             emptyMap(),
             changelogReader,
@@ -329,7 +323,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             mkMap(mkEntry(persistentStoreName, persistentStoreTopicName),
                   mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)),
@@ -363,46 +357,11 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldMaintainRegistrationOrderWhenReregistered() throws IOException {
-        checkpoint.write(emptyMap());
-
-        // set up ack'ed offsets
-        final TopicPartition persistentTopicPartition = new TopicPartition(persistentStoreTopicName, 1);
-        final TopicPartition nonPersistentTopicPartition = new TopicPartition(nonPersistentStoreTopicName, 1);
-
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            noPartitions,
-            false,
-            stateDirectory,
-            mkMap(mkEntry(persistentStoreName, persistentStoreTopicName),
-                  mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)),
-            changelogReader,
-            logContext);
-        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-        // de-registers the stores, but doesn't re-register them because
-        // the context isn't connected to our state manager
-        stateMgr.reinitializeStateStoresForPartitions(asList(nonPersistentTopicPartition, persistentTopicPartition),
-                                                      new MockInternalProcessorContext());
-        // register them in backward order
-        stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-
-        stateMgr.flush();
-
-        // make sure that flush is called in the proper order
-        assertTrue(persistentStore.flushed);
-        assertTrue(nonPersistentStore.flushed);
-        assertThat(persistentStore.getLastFlushCount(), Matchers.lessThan(nonPersistentStore.getLastFlushCount()));
-    }
-
-    @Test
     public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 1),
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             emptyMap(),
             changelogReader,
@@ -423,7 +382,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
@@ -447,7 +406,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
@@ -471,7 +430,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
@@ -499,7 +458,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
@@ -529,7 +488,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(persistentStore.name(), persistentStoreTopicName),
             changelogReader,
@@ -546,7 +505,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            true, // standby
+            AbstractTask.TaskType.STANDBY,
             stateDirectory,
             singletonMap(persistentStore.name(), persistentStoreTopicName),
             changelogReader,
@@ -572,7 +531,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            true, // standby
+            AbstractTask.TaskType.STANDBY,
             stateDirectory,
             singletonMap(nonPersistentStoreName, nonPersistentStoreTopicName),
             changelogReader,
@@ -590,7 +549,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             noPartitions,
-            true, // standby
+            AbstractTask.TaskType.STANDBY,
             stateDirectory,
             emptyMap(),
             changelogReader,
@@ -609,7 +568,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             emptyMap(),
             changelogReader,
@@ -628,7 +587,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             noPartitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             emptyMap(),
             changelogReader,
@@ -651,7 +610,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
             changelogReader,
@@ -679,7 +638,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
             changelogReader,
@@ -712,7 +671,7 @@ public class ProcessorStateManagerTest {
             stateMgr = new ProcessorStateManager(
                 taskId,
                 noPartitions,
-                false,
+                AbstractTask.TaskType.ACTIVE,
                 stateDirectory,
                 singletonMap(persistentStore.name(), persistentStoreTopicName),
                 changelogReader,
@@ -760,7 +719,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
             changelogReader,
@@ -795,7 +754,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
             changelogReader,
@@ -820,7 +779,7 @@ public class ProcessorStateManagerTest {
             stateManager = new ProcessorStateManager(
                 taskId,
                 noPartitions,
-                false,
+                AbstractTask.TaskType.ACTIVE,
                 stateDirectory,
                 emptyMap(),
                 changelogReader,
@@ -834,51 +793,11 @@ public class ProcessorStateManagerTest {
         }
     }
 
-    @Test
-    public void shouldSuccessfullyReInitializeStateStores() {
-        final String store2Name = "store2";
-        final String store2Changelog = "store2-changelog";
-        final TopicPartition store2Partition = new TopicPartition(store2Changelog, 0);
-        final List<TopicPartition> changelogPartitions = asList(changelogTopicPartition, store2Partition);
-        final Map<String, String> storeToChangelog = mkMap(
-            mkEntry(storeName, changelogTopic),
-            mkEntry(store2Name, store2Changelog)
-        );
-
-        final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, true);
-        final MockKeyValueStore stateStore2 = new MockKeyValueStore(store2Name, true);
-
-        final ProcessorStateManager stateManager = new ProcessorStateManager(
-            taskId,
-            changelogPartitions,
-            false,
-            stateDirectory,
-            storeToChangelog,
-            changelogReader,
-            logContext);
-
-        stateManager.registerStore(stateStore, stateStore.stateRestoreCallback);
-        stateManager.registerStore(stateStore2, stateStore2.stateRestoreCallback);
-
-        stateStore.initialized = false;
-        stateStore2.initialized = false;
-
-        stateManager.reinitializeStateStoresForPartitions(changelogPartitions, new NoOpProcessorContext() {
-            @Override
-            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-                stateManager.registerStore(store, stateRestoreCallback);
-            }
-        });
-
-        assertTrue(stateStore.initialized);
-        assertTrue(stateStore2.initialized);
-    }
-
     private ProcessorStateManager getStandByStateManager(final TaskId taskId) {
         return new ProcessorStateManager(
             taskId,
             noPartitions,
-            true,
+            AbstractTask.TaskType.STANDBY,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStoreTopicName),
             changelogReader,

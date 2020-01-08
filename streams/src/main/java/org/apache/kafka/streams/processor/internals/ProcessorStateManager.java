@@ -59,8 +59,18 @@ import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackA
  */
 public class ProcessorStateManager implements StateManager {
 
-    public class StateStoreMetadata {
-        public StateStore stateStore;
+    public static class StateStoreMetadata {
+        public final StateStore stateStore;
+
+        // corresponding changelog partition of the store, this and the following two fields
+        // will only be not-null if the state store is logged (i.e. changelog partition and restorer provided)
+        private final TopicPartition changelogPartition;
+
+        // could be used for both active restoration and standby
+        private final StateRestoreCallback restoreCallback;
+
+        // record converters used for restoration and standby
+        private final RecordConverter recordConverter;
 
         // indicating the current snapshot of the store as the offset of last changelog record that has been
         // applied to the store used for both restoration (active and standby tasks restored offset) and
@@ -75,23 +85,33 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         //
         // will be used by the changelog reader to determine if restoration is completed, hence public
-        public Long offset;
-
-        // could be used for both active restoration and standby
-        private StateRestoreCallback restoreCallback;
-
-        // record converters used for restoration and standby
-        private RecordConverter recordConverter;
-
-        // corresponding changelog partition of the store
-        private TopicPartition changelogPartition;
+        private Long offset;
 
         private StateStoreMetadata(final StateStore stateStore) {
             this.stateStore = stateStore;
-            this.offset = null;
             this.restoreCallback = null;
             this.recordConverter = null;
             this.changelogPartition = null;
+            this.offset = null;
+        }
+
+        private StateStoreMetadata(final StateStore stateStore,
+                                   final TopicPartition changelogPartition,
+                                   final StateRestoreCallback restoreCallback,
+                                   final RecordConverter recordConverter) {
+            this.stateStore = stateStore;
+            this.changelogPartition = changelogPartition;
+            this.restoreCallback = restoreCallback;
+            this.recordConverter = recordConverter;
+            this.offset = null;
+        }
+
+        public void setOffset(final Long offset) {
+            this.offset = offset;
+        }
+
+        public Long offset() {
+            return this.offset;
         }
     }
 
@@ -125,7 +145,7 @@ public class ProcessorStateManager implements StateManager {
      */
     public ProcessorStateManager(final TaskId taskId,
                                  final Collection<TopicPartition> sources,
-                                 final boolean isStandby,
+                                 final TaskType taskType,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final ChangelogReader changelogReader,
@@ -134,14 +154,13 @@ public class ProcessorStateManager implements StateManager {
         this.log = logContext.logger(ProcessorStateManager.class);
 
         this.taskId = taskId;
+        this.taskType = taskType;
         this.sourcePartitions = sources;
         this.changelogReader = changelogReader;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-
-        this.taskType = isStandby ? TaskType.STANDBY : TaskType.ACTIVE;
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -153,20 +172,20 @@ public class ProcessorStateManager implements StateManager {
 
             log.trace("Loaded offsets from the checkpoint filed: {}", loadedCheckpoints);
 
-            for (final StateStoreMetadata storeMetadata : stores.values()) {
-                if (storeMetadata.changelogPartition == null) {
-                    log.info("State store {} is not logged and hence would not be restored", storeMetadata.stateStore.name());
+            for (final StateStoreMetadata store : stores.values()) {
+                if (store.changelogPartition == null) {
+                    log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
                 }
 
-                if (loadedCheckpoints.containsKey(storeMetadata.changelogPartition)) {
-                    storeMetadata.offset = loadedCheckpoints.remove(storeMetadata.changelogPartition);
+                if (loadedCheckpoints.containsKey(store.changelogPartition)) {
+                    store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
 
                     log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
-                        storeMetadata.stateStore.name(), storeMetadata.offset, storeMetadata.changelogPartition);
+                        store.stateStore.name(), store.offset, store.changelogPartition);
                 } else {
                     log.info("State store {} did not find checkpoint offset, hence would " +
                             "default to the starting offset at changelog {}",
-                        storeMetadata.stateStore.name(), storeMetadata.changelogPartition);
+                        store.stateStore.name(), store.changelogPartition);
                 }
             }
 
@@ -198,18 +217,18 @@ public class ProcessorStateManager implements StateManager {
             throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
-        final StateStoreMetadata storeMetadata = new StateStoreMetadata(store);
+        final String topic = storeToChangelogTopic.get(storeName);
 
         // if the store name does not exist in the changelog map, it means the underlying store
         // is not log enabled (including global stores), and hence it does not need to be restored
-        final String topic = storeToChangelogTopic.get(storeName);
+        final StateStoreMetadata storeMetadata;
         if (topic != null && stateRestoreCallback != null) {
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
-            storeMetadata.changelogPartition = storePartition;
-            storeMetadata.restoreCallback = stateRestoreCallback;
-            storeMetadata.recordConverter = converterForStore(store);
+            storeMetadata = new StateStoreMetadata(store, storePartition, stateRestoreCallback, converterForStore(store));
 
             changelogReader.register(storePartition, this);
+        } else {
+            storeMetadata = new StateStoreMetadata(store);
         }
 
         stores.put(storeName, storeMetadata);
@@ -233,7 +252,7 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         // return the current offsets for those logged stores
-        Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
+        final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (storeMetadata.changelogPartition != null && storeMetadata.offset != null) {
                 changelogOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
@@ -303,7 +322,7 @@ public class ProcessorStateManager implements StateManager {
                     logPrefix, changelogPartition), e);
             }
 
-            store.offset = batchEndOffset;
+            store.setOffset(batchEndOffset);
         }
     }
 
@@ -382,7 +401,7 @@ public class ProcessorStateManager implements StateManager {
             final StateStoreMetadata store = findStore(entry.getKey());
 
             if (store != null) {
-                store.offset = entry.getValue();
+                store.setOffset(entry.getValue());
 
                 log.debug("State store {} updated to written offset {} at changelog {}",
                     store.stateStore.name(), store.offset, store.changelogPartition);
