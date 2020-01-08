@@ -81,8 +81,10 @@ class KafkaScheduler(val threads: Int,
       executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
       executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
       executor.setRemoveOnCancelPolicy(true)
-      executor.setThreadFactory(runnable =>
-        new KafkaThread(threadNamePrefix + schedulerThreadId.getAndIncrement(), runnable, daemon))
+      executor.setThreadFactory(new ThreadFactory() {
+                                  def newThread(runnable: Runnable): Thread = 
+                                    new KafkaThread(threadNamePrefix + schedulerThreadId.getAndIncrement(), runnable, daemon)
+                                })
     }
   }
   
@@ -108,7 +110,7 @@ class KafkaScheduler(val threads: Int,
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
       ensureRunning()
-      val runnable: Runnable = () => {
+      val runnable = CoreUtils.runnable {
         try {
           trace("Beginning execution of scheduled task '%s'.".format(name))
           fun()
@@ -118,7 +120,7 @@ class KafkaScheduler(val threads: Int,
           trace("Completed execution of scheduled task '%s'.".format(name))
         }
       }
-      if (period >= 0)
+      if(period >= 0)
         executor.scheduleAtFixedRate(runnable, delay, period, unit)
       else
         executor.schedule(runnable, delay, unit)

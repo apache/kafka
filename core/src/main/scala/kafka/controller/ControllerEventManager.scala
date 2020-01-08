@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import java.util.concurrent.locks.ReentrantLock
 
+import com.yammer.metrics.core.Gauge
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
@@ -81,7 +82,14 @@ class ControllerEventManager(controllerId: Int,
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
-  newGauge(EventQueueSizeMetricName, () => queue.size)
+  newGauge(
+    EventQueueSizeMetricName,
+    new Gauge[Int] {
+      def value: Int = {
+        queue.size()
+      }
+    }
+  )
 
   def state: ControllerState = _state
 

@@ -132,5 +132,9 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
   }
 }
 object MockTask {
-  implicit def MockTaskOrdering: Ordering[MockTask] = (x, y) => x.compare(y)
+  implicit def MockTaskOrdering : Ordering[MockTask] = new Ordering[MockTask] {
+    def compare(x: MockTask, y: MockTask): Int = {
+      x.compare(y)
+    }
+  }
 }

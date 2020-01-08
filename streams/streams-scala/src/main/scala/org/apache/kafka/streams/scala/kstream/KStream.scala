@@ -424,7 +424,10 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
   def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
-    val processorSupplierJ: ProcessorSupplier[K, V] = () => processorSupplier()
+    //noinspection ConvertExpressionToSAM // because of the 2.11 build
+    val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
+      override def get(): Processor[K, V] = processorSupplier()
+    }
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }
 

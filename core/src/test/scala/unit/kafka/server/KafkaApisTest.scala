@@ -301,8 +301,11 @@ class KafkaApisTest {
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
-      EasyMock.anyObject())
-    ).andAnswer(() => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
+      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE)))
+      }
+    })
 
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
@@ -337,8 +340,11 @@ class KafkaApisTest {
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
-      EasyMock.anyObject())
-    ).andAnswer(() => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
+      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE)))
+      }
+    })
 
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
     EasyMock.replay(replicaManager, replicaQuotaManager, requestChannel)
@@ -825,7 +831,7 @@ class KafkaApisTest {
     assertReassignmentAndReplicationBytesOutPerSec(false)
   }
 
-  private def assertReassignmentAndReplicationBytesOutPerSec(isReassigning: Boolean): Unit = {
+  private def assertReassignmentAndReplicationBytesOutPerSec(isReassigning: Boolean) {
     val leaderEpoch = 0
     val tp0 = new TopicPartition("tp", 0)
 

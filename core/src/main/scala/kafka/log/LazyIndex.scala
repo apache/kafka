@@ -76,7 +76,7 @@ object LazyIndex {
 
   private sealed trait IndexWrapper {
     def file: File
-    def file_=(f: File): Unit
+    def file_=(f: File)
   }
 
   private class IndexFile(@volatile var file: File) extends IndexWrapper

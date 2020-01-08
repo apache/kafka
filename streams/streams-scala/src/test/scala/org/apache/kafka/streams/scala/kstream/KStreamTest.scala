@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
   Transformer,
+  TransformerSupplier,
   ValueTransformer,
   ValueTransformerSupplier,
   ValueTransformerWithKey,
@@ -196,7 +197,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .transform(() => new TestTransformer)
+      .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+        def get(): Transformer[String, String, KeyValue[String, String]] =
+          new TestTransformer
+      })
       .to(sinkTopic)
 
     val now = Instant.now()
@@ -228,7 +232,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .flatTransform(() => new TestTransformer)
+      .flatTransform(new TransformerSupplier[String, String, Iterable[KeyValue[String, String]]] {
+        def get(): Transformer[String, String, Iterable[KeyValue[String, String]]] =
+          new TestTransformer
+      })
       .to(sinkTopic)
 
     val now = Instant.now()

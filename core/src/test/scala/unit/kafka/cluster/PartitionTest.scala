@@ -42,6 +42,7 @@ import org.mockito.Mockito._
 import org.scalatest.Assertions.assertThrows
 import org.mockito.ArgumentMatchers
 import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import unit.kafka.cluster.AbstractPartitionTest
 
 import scala.collection.JavaConverters._
@@ -907,11 +908,13 @@ class PartitionTest extends AbstractPartitionTest {
         logManager)
 
       when(delayedOperations.checkAndCompleteFetch())
-        .thenAnswer((invocation: InvocationOnMock) => {
-          // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
-          val anotherPartition = (tp.partition + 1) % topicPartitions.size
-          val partition = partitions(anotherPartition)
-          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+        .thenAnswer(new Answer[Unit] {
+          override def answer(invocation: InvocationOnMock): Unit = {
+            // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
+            val anotherPartition = (tp.partition + 1) % topicPartitions.size
+            val partition = partitions(anotherPartition)
+            partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+          }
         })
 
       partition.setLog(log, isFutureLog = false)
@@ -943,16 +946,16 @@ class PartitionTest extends AbstractPartitionTest {
     val executor = Executors.newFixedThreadPool(topicPartitions.size + 1)
     try {
       // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
-      executor.submit((() => {
+      executor.submit(CoreUtils.runnable {
         while (!done.get) {
           partitions.foreach(_.maybeShrinkIsr())
         }
-      }): Runnable)
+      })
       // Append records to partitions, one partition-per-thread
       val futures = partitions.map { partition =>
-        executor.submit((() => {
+        executor.submit(CoreUtils.runnable {
           (1 to 10000).foreach { _ => partition.appendRecordsToLeader(createRecords(baseOffset = 0), isFromClient = true) }
-        }): Runnable)
+        })
       }
       futures.foreach(_.get(15, TimeUnit.SECONDS))
       done.set(true)
@@ -1586,9 +1589,11 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testLogConfigDirtyAsTopicUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer((invocation: InvocationOnMock) => {
-      logManager.initializingLog(topicPartition)
-      logManager.topicConfigUpdated(topicPartition.topic())
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.topicConfigUpdated(topicPartition.topic())
+      }
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,
@@ -1621,9 +1626,11 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testLogConfigDirtyAsBrokerUpdated(): Unit = {
     val spyLogManager = spy(logManager)
-    doAnswer((invocation: InvocationOnMock) => {
-      logManager.initializingLog(topicPartition)
-      logManager.brokerConfigUpdated()
+    doAnswer(new Answer[Unit] {
+      def answer(invocation: InvocationOnMock): Unit = {
+        logManager.initializingLog(topicPartition)
+        logManager.brokerConfigUpdated()
+      }
     }).when(spyLogManager).initializingLog(ArgumentMatchers.eq(topicPartition))
 
     val partition = new Partition(topicPartition,

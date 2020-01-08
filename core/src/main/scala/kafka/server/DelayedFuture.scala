@@ -92,7 +92,7 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     delayedFuture
   }
 
-  def shutdown(): Unit = {
+  def shutdown() {
     executor.shutdownNow()
     executor.awaitTermination(60, TimeUnit.SECONDS)
     purgatory.shutdown()
