@@ -600,19 +600,14 @@ sealed trait ZkAclChangeStore {
   def createChangeNode(resource: Resource): AclChangeNode = AclChangeNode(createPath, encode(resource))
 
   def createListener(handler: AclChangeNotificationHandler, zkClient: KafkaZkClient): AclChangeSubscription = {
-    val rawHandler: NotificationHandler = new NotificationHandler {
-      def processNotification(bytes: Array[Byte]): Unit =
-        handler.processNotification(decode(bytes))
-    }
+    val rawHandler: NotificationHandler = (bytes: Array[Byte]) => handler.processNotification(decode(bytes))
 
     val aclChangeListener = new ZkNodeChangeNotificationListener(
       zkClient, aclChangePath, ZkAclChangeStore.SequenceNumberPrefix, rawHandler)
 
     aclChangeListener.init()
 
-    new AclChangeSubscription {
-      def close(): Unit = aclChangeListener.close()
-    }
+    () => aclChangeListener.close()
   }
 }
 

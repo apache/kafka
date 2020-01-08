@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
@@ -124,7 +125,7 @@ public class SaslChannelBuilderTest {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 SecurityProtocol.SASL_PLAINTEXT,
                 new ListenerName("GSSAPI"), false, "GSSAPI",
-                true, null, null, Time.SYSTEM) {
+                true, null, null, Time.SYSTEM, new LogContext()) {
 
             @Override
             protected GSSManager gssManager() {
@@ -143,7 +144,8 @@ public class SaslChannelBuilderTest {
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap("PLAIN", jaasContext);
         return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName("PLAIN"),
-                false, "PLAIN", true, null, null, Time.SYSTEM);
+                false, "PLAIN", true, null,
+                null, Time.SYSTEM, new LogContext());
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

@@ -25,7 +25,7 @@ import kafka.security.auth._
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -102,7 +102,7 @@ object AclCommand extends Logging {
       else
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      val adminClient = JAdminClient.create(props)
+      val adminClient = Admin.create(props)
 
       try {
         f(adminClient)
@@ -291,7 +291,7 @@ object AclCommand extends Logging {
 
   class JAuthorizerService(val authorizerClass: Class[_ <: JAuthorizer], val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    private def withAuthorizer()(f: JAuthorizer => Unit) {
+    private def withAuthorizer()(f: JAuthorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
       val authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {

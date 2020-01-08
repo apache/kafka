@@ -144,6 +144,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -257,6 +258,27 @@ public class KafkaAdminClientTest {
     public void testCloseAdminClient() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
         }
+    }
+
+    /**
+     * Test if admin client can be closed in the callback invoked when
+     * an api call completes. If calling {@link Admin#close()} in callback, AdminClient thread hangs
+     */
+    @Test(timeout = 10_000)
+    public void testCloseAdminClientInCallback() throws InterruptedException {
+        MockTime time = new MockTime();
+        AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(3, 0));
+
+        final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
+        final KafkaFuture<Collection<TopicListing>> kafkaFuture = result.listings();
+        final Semaphore callbackCalled = new Semaphore(0);
+        kafkaFuture.whenComplete((topicListings, throwable) -> {
+            env.close();
+            callbackCalled.release();
+        });
+
+        time.sleep(2000); // Advance time to timeout and complete listTopics request
+        callbackCalled.acquire();
     }
 
     private static OffsetDeleteResponse prepareOffsetDeleteResponse(Errors error) {

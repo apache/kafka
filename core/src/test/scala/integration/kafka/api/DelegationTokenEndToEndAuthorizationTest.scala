@@ -21,7 +21,7 @@ import java.util
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
@@ -93,7 +93,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 
-    val adminClient = AdminClient.create(config)
+    val adminClient = Admin.create(config)
     try {
       val token = adminClient.createDelegationToken().delegationToken().get()
       //wait for token to reach all the brokers

@@ -28,7 +28,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     outputTopic = "streamsResilienceSink"
     client_id = "streams-broker-resilience-verify-consumer"
     num_messages = 10000
-    message = "processed[0-9]*messages"
+    message = "processed [0-9]* messages"
     connected_message = "Discovered group coordinator"
 
     def __init__(self, test_context):

@@ -49,7 +49,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.{Java, Utils}
+import org.apache.kafka.common.utils.{Java, KafkaThread, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -390,7 +390,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Runtime.getRuntime.addShutdownHook(CoreUtils.newThread("minikdc-shutdown-hook", daemon = false) {
+    Runtime.getRuntime.addShutdownHook(new KafkaThread("minikdc-shutdown-hook", false) {
       miniKdc.stop()
     })
   }

@@ -1735,6 +1735,48 @@
             <td>Group</td>
             <td></td>
         </tr>
+        <tr>
+            <td>ELECT_PREFERRED_LEADERS (43)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INCREMENTAL_ALTER_CONFIGS (44)</td>
+            <td>AlterConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are altered, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>INCREMENTAL_ALTER_CONFIGS (44)</td>
+            <td>AlterConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are altered, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_PARTITION_REASSIGNMENTS (45)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LIST_PARTITION_REASSIGNMENTS (46)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_DELETE (47)</td>
+            <td>Delete</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_DELETE (47)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
         </tbody>
     </table>
 

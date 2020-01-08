@@ -110,24 +110,22 @@ object BrokerApiVersionsCommand {
     @volatile var running: Boolean = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
-    val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
-      override def run(): Unit = {
-        try {
-          while (running)
-            client.poll(time.timer(Long.MaxValue))
-        } catch {
-          case t : Throwable =>
-            error("admin-client-network-thread exited", t)
-        } finally {
-          pendingFutures.asScala.foreach { future =>
-            try {
-              future.raise(Errors.UNKNOWN_SERVER_ERROR)
-            } catch {
-              case _: IllegalStateException => // It is OK if the future has been completed
-            }
+    val networkThread = new KafkaThread("admin-client-network-thread", () => {
+      try {
+        while (running)
+          client.poll(time.timer(Long.MaxValue))
+      } catch {
+        case t: Throwable =>
+          error("admin-client-network-thread exited", t)
+      } finally {
+        pendingFutures.asScala.foreach { future =>
+          try {
+            future.raise(Errors.UNKNOWN_SERVER_ERROR)
+          } catch {
+            case _: IllegalStateException => // It is OK if the future has been completed
           }
-          pendingFutures.clear()
         }
+        pendingFutures.clear()
       }
     }, true)
 
@@ -271,7 +269,7 @@ object BrokerApiVersionsCommand {
       val metrics = new Metrics(time)
       val metadata = new Metadata(100L, 60 * 60 * 1000L, logContext,
         new ClusterResourceListeners)
-      val channelBuilder = ClientUtils.createChannelBuilder(config, time)
+      val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
