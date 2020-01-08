@@ -48,7 +48,8 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     public static final String DESCRIPTOR_HASH_MISMATCH = "Stream frame descriptor corrupted";
 
     private static final LZ4SafeDecompressor DECOMPRESSOR = LZ4Factory.fastestInstance().safeDecompressor();
-    private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
+    private static final XXHash32 HEADER_CHECKSUM = XXHashFactory.fastestJavaInstance().hash32(); // not JNI for few bytes
+    private static final XXHash32 BLOCK_CHECKSUM = XXHashFactory.fastestInstance().hash32();
 
     private final ByteBuffer in;
     private final boolean ignoreFlagDescriptorChecksum;
@@ -133,8 +134,8 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
 
         int hash = in.hasArray() ?
                        // workaround for https://github.com/lz4/lz4-java/pull/65
-                       CHECKSUM.hash(in.array(), in.arrayOffset() + in.position(), len, 0) :
-                       CHECKSUM.hash(in, in.position(), len, 0);
+                       HEADER_CHECKSUM.hash(in.array(), in.arrayOffset() + in.position(), len, 0) :
+                       HEADER_CHECKSUM.hash(in, in.position(), len, 0);
         in.position(in.position() + len);
         if (in.get() != (byte) ((hash >> 8) & 0xFF)) {
             throw new IOException(DESCRIPTOR_HASH_MISMATCH);
@@ -203,8 +204,8 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
         if (flg.isBlockChecksumSet()) {
             // workaround for https://github.com/lz4/lz4-java/pull/65
             int hash = in.hasArray() ?
-                       CHECKSUM.hash(in.array(), in.arrayOffset() + in.position(), blockSize, 0) :
-                       CHECKSUM.hash(in, in.position(), blockSize, 0);
+                       BLOCK_CHECKSUM.hash(in.array(), in.arrayOffset() + in.position(), blockSize, 0) :
+                       BLOCK_CHECKSUM.hash(in, in.position(), blockSize, 0);
             in.position(in.position() + blockSize);
             if (hash != in.getInt()) {
                 throw new IOException(BLOCK_HASH_MISMATCH);
