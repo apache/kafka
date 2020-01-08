@@ -36,7 +36,7 @@ buildscript {
     classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
     classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
+    classpath "com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
   }
 }
 
@@ -749,19 +749,14 @@ project(':core') {
     testCompile libs.scalatest
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
-
-    scoverage libs.scoveragePlugin
-    scoverage libs.scoverageRuntime
   }
 
   scoverage {
+    scoverageVersion = "$versions.scoverage"
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
-  }
-  checkScoverage {
     minimumRate = 0.0
   }
-  checkScoverage.shouldRunAfter('test')
 
   configurations {
     // manually excludes some unnecessary dependencies
