@@ -34,8 +34,4 @@ public class PendingTransactionException extends RetriableException {
     public PendingTransactionException(Set<TopicPartition> pendingTopicPartitions) {
         this("The following partitions still have pending offsets: " + pendingTopicPartitions);
     }
-
-    public PendingTransactionException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }
