@@ -29,7 +29,10 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
@@ -59,6 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.QueryableStoreTypes.timestampedWindowStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
@@ -302,22 +306,39 @@ public class StreamThreadStateStoreProviderTest {
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
-        return new StreamTask(
+        final LogContext logContext = new LogContext("test-stream-task ");
+        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
-            Collections.singleton(new TopicPartition(topicName, taskId.partition)),
-            topology,
-            clientSupplier.consumer,
+            partitions,
+            false,
+            stateDirectory,
+            topology.storeToChangelogTopic(),
             new StoreChangelogReader(
                 clientSupplier.restoreConsumer,
                 Duration.ZERO,
                 new MockStateRestoreListener(),
                 new LogContext("test-stream-task ")),
+            logContext);
+        final RecordCollector recordCollector = new RecordCollectorImpl(
+            taskId,
+            streamsConfig,
+            logContext,
+            new MockStreamsMetrics(metrics),
+            clientSupplier.consumer,
+            id -> clientSupplier.getProducer(new HashMap<>()));
+        return new StreamTask(
+            taskId,
+            partitions,
+            topology,
+            clientSupplier.consumer,
             streamsConfig,
             new MockStreamsMetrics(metrics),
             stateDirectory,
             null,
             new MockTime(),
-            () -> clientSupplier.getProducer(new HashMap<>()));
+            stateManager,
+            recordCollector);
     }
 
     private void mockThread(final boolean initialized) {

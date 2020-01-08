@@ -54,7 +54,7 @@ public class TaskManager {
     private final ChangelogReader changelogReader;
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
-    private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
+    private final StreamThread.TaskCreator taskCreator;
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
 
@@ -82,8 +82,8 @@ public class TaskManager {
                 final String logPrefix,
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamsMetadataState streamsMetadataState,
-                final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
-                final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final StreamThread.TaskCreator taskCreator,
+                final StreamThread.StandbyTaskCreator standbyTaskCreator,
                 final Admin adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
@@ -302,7 +302,6 @@ public class TaskManager {
             firstException.compareAndSet(null, fatalException);
         }
         taskCreator.close();
-        standbyTaskCreator.close();
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {

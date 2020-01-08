@@ -21,16 +21,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -39,50 +33,40 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
+import org.easymock.EasyMockRunner;
+import org.easymock.Mock;
+import org.easymock.MockType;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -93,7 +77,6 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -103,12 +86,13 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+// TODO K9113: should improve test coverage
+@RunWith(EasyMockRunner.class)
 public class StreamTaskTest {
 
     private static final File BASE_DIR = TestUtils.tempDirectory();
 
     private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
-    private final Serializer<byte[]> bytesSerializer = Serdes.ByteArray().serializer();
     private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
@@ -135,23 +119,8 @@ public class StreamTaskTest {
     private final String storeName = "store";
     private final StateStore stateStore = new MockKeyValueStore(storeName, false);
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 0);
-    private final Long offset = 543L;
-
-    private final ProcessorTopology topology = withSources(
-        asList(source1, source2, processorStreamTime, processorSystemTime),
-        mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
-    );
 
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private MockProducer<byte[], byte[]> producer;
-    private final MockConsumer<byte[], byte[]> restoreStateConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreStateConsumer, Duration.ZERO, stateRestoreListener, new LogContext("stream-task-test ")) {
-        @Override
-        public Map<TopicPartition, Long> restoredOffsets() {
-            return Collections.singletonMap(changelogPartition, offset);
-        }
-    };
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
@@ -164,6 +133,12 @@ public class StreamTaskTest {
 
     private static final String APPLICATION_ID = "stream-task-test";
     private static final long DEFAULT_TIMESTAMP = 1000;
+
+    @Mock(type = MockType.NICE)
+    private ProcessorStateManager stateManager;
+
+    @Mock(type = MockType.NICE)
+    private RecordCollector recordCollector;
 
     private final Punctuator punctuator = new Punctuator() {
         @Override
@@ -196,7 +171,7 @@ public class StreamTaskTest {
     }
 
     // Exposed to make it easier to create StreamTask config from other tests.
-    static StreamsConfig createConfig(final boolean enableEoS) {
+    private static StreamsConfig createConfig(final boolean enableEoS) {
         final String canonicalPath;
         try {
             canonicalPath = BASE_DIR.getCanonicalPath();
@@ -225,7 +200,7 @@ public class StreamTaskTest {
         try {
             if (task != null) {
                 try {
-                    task.close(true, false);
+                    task.close(true);
                 } catch (final Exception e) {
                     // swallow
                 }
@@ -233,136 +208,6 @@ public class StreamTaskTest {
         } finally {
             Utils.delete(BASE_DIR);
         }
-    }
-
-    @Test
-    public void shouldHandleInitTransactionsTimeoutExceptionOnCreation() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        final ProcessorTopology topology = withSources(
-            asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
-        );
-
-        source1.addChild(processorStreamTime);
-        source2.addChild(processorStreamTime);
-        source1.addChild(processorSystemTime);
-        source2.addChild(processorSystemTime);
-
-        try {
-            new StreamTask(
-                taskId00,
-                partitions,
-                topology,
-                consumer,
-                changelogReader,
-                createConfig(true),
-                streamsMetrics,
-                stateDirectory,
-                null,
-                time,
-                () -> producer = new MockProducer<byte[], byte[]>(false, bytesSerializer, bytesSerializer) {
-                    @Override
-                    public void initTransactions() {
-                        throw new TimeoutException("test");
-                    }
-                },
-                null
-            );
-            fail("Expected an exception");
-        } catch (final StreamsException expected) {
-            // make sure we log the explanation as an ERROR
-            assertTimeoutErrorLog(appender);
-
-            // make sure we report the correct message
-            assertThat(
-                expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
-
-            // make sure we preserve the cause
-            assertEquals(expected.getCause().getClass(), TimeoutException.class);
-            assertThat(expected.getCause().getMessage(), is("test"));
-        }
-        LogCaptureAppender.unregister(appender);
-    }
-
-    @Test
-    public void shouldHandleInitTransactionsTimeoutExceptionOnResume() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        final ProcessorTopology topology = withSources(
-            asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
-        );
-
-        source1.addChild(processorStreamTime);
-        source2.addChild(processorStreamTime);
-        source1.addChild(processorSystemTime);
-        source2.addChild(processorSystemTime);
-
-        final AtomicBoolean timeOut = new AtomicBoolean(false);
-
-        final StreamTask testTask = new StreamTask(
-            taskId00,
-            partitions,
-            topology,
-            consumer,
-            changelogReader,
-            createConfig(true),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<byte[], byte[]>(false, bytesSerializer, bytesSerializer) {
-                @Override
-                public void initTransactions() {
-                    if (timeOut.get()) {
-                        throw new TimeoutException("test");
-                    } else {
-                        super.initTransactions();
-                    }
-                }
-            },
-            null
-        );
-        testTask.initializeTopology();
-        testTask.suspend();
-        timeOut.set(true);
-        try {
-            testTask.resume();
-            fail("Expected an exception");
-        } catch (final StreamsException expected) {
-            // make sure we log the explanation as an ERROR
-            assertTimeoutErrorLog(appender);
-
-            // make sure we report the correct message
-            assertThat(
-                expected.getMessage(),
-                is("stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Failed to initialize task 0_0 due to timeout."));
-
-            // make sure we preserve the cause
-            assertEquals(expected.getCause().getClass(), TimeoutException.class);
-            assertThat(expected.getCause().getMessage(), is("test"));
-        }
-        LogCaptureAppender.unregister(appender);
-    }
-
-    private void assertTimeoutErrorLog(final LogCaptureAppender appender) {
-
-        final String expectedErrorLogMessage =
-            "stream-thread [" + Thread.currentThread().getName() + "] task [0_0] Timeout exception caught when initializing transactions for task 0_0. " +
-                "This might happen if the broker is slow to respond, if the network " +
-                "connection to the broker was interrupted, or if similar circumstances arise. " +
-                "You can increase producer parameter `max.block.ms` to increase this timeout.";
-
-        final List<String> expectedError =
-            appender
-                .getEvents()
-                .stream()
-                .filter(event -> event.getMessage().equals(expectedErrorLogMessage))
-                .map(LogCaptureAppender.Event::getLevel)
-                .collect(Collectors.toList());
-        assertThat(expectedError, is(singletonList("ERROR")));
     }
 
     @Test
@@ -776,44 +621,6 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
-        createTaskWithProcessAndCommit(false);
-
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(Collections.singleton(partition1)).get(partition1).metadata()));
-        // reset times here by creating a new task
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-
-        task.initializeMetadata();
-        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
-        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
-    }
-
-    @Test
-    public void shouldRestorePartitionTimeAfterRestartWithEosEnabled() {
-        createTaskWithProcessAndCommit(true);
-
-        moveCommittedOffsetsFromProducerToConsumer(DEFAULT_TIMESTAMP);
-
-        // reset times here by creating a new task
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-
-        task.initializeMetadata();
-        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
-        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
-    }
-
-    private void createTaskWithProcessAndCommit(final boolean eosEnabled) {
-        task = createStatelessTask(createConfig(eosEnabled), StreamsConfig.METRICS_LATEST);
-        task.initializeStateStores();
-        task.initializeTopology();
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
-
-        task.process();
-        task.commit();
-    }
-
-    @Test
     public void shouldEncodeAndDecodeMetadata() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
         assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)));
@@ -1017,21 +824,6 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContext() {
-        task = createTaskThatThrowsException(false);
-        task.initializeStateStores();
-        task.initializeTopology();
-        task.addRecords(partition2, singletonList(getConsumerRecord(partition2, 0)));
-
-        try {
-            task.process();
-            fail("Should've thrown StreamsException");
-        } catch (final Exception e) {
-            assertThat(task.processorContext.currentNode(), nullValue());
-        }
-    }
-
-    @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
         task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
         task.initializeStateStores();
@@ -1068,42 +860,29 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldFlushRecordCollectorOnFlushState() {
-        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final MockRecordCollector collector = new MockRecordCollector();
-        final StreamTask streamTask = new StreamTask(
-            taskId00,
-            partitions,
-            topology,
-            consumer,
-            changelogReader,
-            createConfig(false),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            collector);
-        streamTask.flushState();
-        assertTrue(collector.flushed());
-    }
+    public void shouldCheckpointOffsetsOnCommit() {
+        final Long offset = 543L;
 
-    @Test
-    public void shouldCheckpointOffsetsOnCommit() throws IOException {
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
+        stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
+        EasyMock.expectLastCall();
+
         task = createStatefulTask(createConfig(false), true);
+        EasyMock.replay(stateManager, recordCollector);
+
+
         task.initializeStateStores();
         task.initializeTopology();
         task.commit();
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId00), StateManagerUtil.CHECKPOINT_FILE_NAME)
-        );
 
-        assertThat(checkpoint.read(), equalTo(Collections.singletonMap(changelogPartition, offset)));
+        EasyMock.verify(recordCollector);
     }
 
     @Test
     public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
         task = createStatefulTask(createConfig(true), true);
+        EasyMock.replay(stateManager, recordCollector);
+
         task.initializeStateStores();
         task.initializeTopology();
         task.commit();
@@ -1163,677 +942,45 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldNotCloseProducerOnCleanCloseWithEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.close(true, false);
-        task = null;
-
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldNotCloseProducerOnUncleanCloseWithEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.close(false, false);
-        task = null;
-
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldNotCloseProducerOnErrorDuringCleanCloseWithEosDisabled() {
-        task = createTaskThatThrowsException(false);
-
-        try {
-            task.close(true, false);
-            fail("should have thrown runtime exception");
-        } catch (final RuntimeException expected) {
-            task = null;
-        }
-
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldNotCloseProducerOnErrorDuringUncleanCloseWithEosDisabled() {
-        task = createTaskThatThrowsException(false);
-
-        task.close(false, false);
-        task = null;
-
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldCommitTransactionAndCloseProducerOnCleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        task.close(true, false);
-        task = null;
-
-        assertTrue(producer.transactionCommitted());
-        assertFalse(producer.transactionInFlight());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldNotAbortTransactionAndNotCloseProducerOnErrorDuringCleanCloseWithEosEnabled() {
-        task = createTaskThatThrowsException(true);
-        task.initializeTopology();
-
-        try {
-            task.close(true, false);
-            fail("should have thrown runtime exception");
-        } catch (final RuntimeException expected) {
-            task = null;
-        }
-
-        assertTrue(producer.transactionInFlight());
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldOnlyCloseProducerIfFencedOnCommitDuringCleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        producer.fenceProducer();
-
-        try {
-            task.close(true, false);
-            fail("should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            task = null;
-            assertTrue(expected.getCause() instanceof RecoverableClientException);
-        }
-
-        assertFalse(producer.transactionCommitted());
-        assertTrue(producer.transactionInFlight());
-        assertFalse(producer.transactionAborted());
-        assertFalse(producer.transactionCommitted());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldNotCloseProducerIfFencedOnCloseDuringCleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        producer.fenceProducerOnClose();
-
-        try {
-            task.close(true, false);
-            fail("should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            task = null;
-            assertTrue(expected.getCause() instanceof RecoverableClientException);
-        }
-
-        assertTrue(producer.transactionCommitted());
-        assertFalse(producer.transactionInFlight());
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldAbortTransactionAndCloseProducerOnUncleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        task.close(false, false);
-        task = null;
-
-        assertTrue(producer.transactionAborted());
-        assertFalse(producer.transactionInFlight());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldAbortTransactionAndCloseProducerOnErrorDuringUncleanCloseWithEosEnabled() {
-        task = createTaskThatThrowsException(true);
-        task.initializeTopology();
-
-        task.close(false, false);
-
-        assertTrue(producer.transactionAborted());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldOnlyCloseProducerIfFencedOnAbortDuringUncleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        producer.fenceProducer();
-
-        task.close(false, false);
-        task = null;
-
-        assertTrue(producer.transactionInFlight());
-        assertFalse(producer.transactionAborted());
-        assertFalse(producer.transactionCommitted());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldMigrateTaskIfFencedDuringFlush() {
-        final StateStore stateStore = new MockKeyValueStore(storeName, true, true);
-
-        final Map<String, String> storeToChangelogTopic = true ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap();
-        final ProcessorTopology topology1 = new ProcessorTopology(
-            asList(source1, source2),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
-            Collections.emptyMap(),
+    public void shouldCloseStateManagerEvenFailureOnUncleanTaskClose() {
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
+            asList(source1, source3),
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
-            Collections.emptyList(),
-            storeToChangelogTopic,
-            Collections.emptySet()
-        );
+            Collections.emptyMap());
+
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        stateManager.registerGlobalStateStores(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
+        stateManager.close(EasyMock.eq(false));
+        EasyMock.expectLastCall();
+        EasyMock.replay(stateManager);
 
         task = new StreamTask(
             taskId00,
             partitions,
-            topology1,
+            topology,
             consumer,
-            changelogReader,
             createConfig(true),
             streamsMetrics,
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)
-        );
-        task.initializeStateStores();
-        task.initializeTopology();
-        producer.fenceProducer();
-
-        try {
-            task.flushState();
-            fail("Expected a TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
-        }
-    }
-
-    @Test
-    public void shouldMigrateTaskIfFencedDuringProcess() {
-        final StateStore stateStore = new MockKeyValueStore(storeName, true, true);
-
-        final Map<String, String> storeToChangelogTopic = true ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap();
-        final SourceNode<Integer, Integer> sourceNode = new SourceNode<>("test", singletonList(topic1), new WallclockTimestampExtractor(), intDeserializer, intDeserializer);
-        final SinkNode<Integer, Integer> sinkNode = new SinkNode<>("test-sink", new StaticTopicNameExtractor<>("out-topic"), intSerializer, intSerializer, new StreamPartitioner<Integer, Integer>() {
-            @Override
-            public Integer partition(final String topic,
-                                     final Integer key,
-                                     final Integer value,
-                                     final int numPartitions) {
-                return 1;
-            }
-        });
-
-        sourceNode.addChild(sinkNode);
-
-        final ProcessorTopology topology1 = new ProcessorTopology(
-            asList(sourceNode, sinkNode),
-            mkMap(mkEntry(topic1, sourceNode), mkEntry(topic2, sourceNode)),
-            mkMap(mkEntry("out-topic", sinkNode)),
-            singletonList(stateStore),
-            Collections.emptyList(),
-            storeToChangelogTopic,
-            Collections.emptySet()
-        );
-
-        task = new StreamTask(
-            taskId00,
-            partitions,
-            topology1,
-            consumer,
-            changelogReader,
-            createConfig(true),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<byte[], byte[]>(
-                Cluster.empty(),
-                false,
-                new DefaultPartitioner(),
-                bytesSerializer,
-                bytesSerializer
-            ) {
-                @Override
-                public List<PartitionInfo> partitionsFor(final String topic) {
-                    return singletonList(null);
-                }
-            }
-        );
-        task.initializeStateStores();
-        task.initializeTopology();
-        producer.fenceProducer();
-
-        try {
-
-            task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-            task.process();
-            fail("Expected a TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
-        }
-    }
-
-    @Test
-    public void shouldMigrateTaskIfFencedDuringPunctuate() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-
-        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
-                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
-        recordCollector.init(producer);
+            stateManager,
+            recordCollector);
 
         task.initializeStateStores();
         task.initializeTopology();
-        producer.fenceProducer();
-        try {
-            task.punctuate(
-                processorSystemTime,
-                5,
-                PunctuationType.WALL_CLOCK_TIME,
-                timestamp -> recordCollector.send(
-                    "result-topic1",
-                    3,
-                    5,
-                    null,
-                    0,
-                    time.milliseconds(),
-                    new IntegerSerializer(),
-                    new IntegerSerializer()
-                )
-            );
-            fail("Expected a TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
-        }
-    }
 
-    @Test
-    public void shouldMigrateTaskIfFencedDuringCommit() {
-        final ProcessorTopology topology1 = withSources(
-            asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
-        );
+        task.close(false);
 
-        source1.addChild(processorStreamTime);
-        source2.addChild(processorStreamTime);
-        source1.addChild(processorSystemTime);
-        source2.addChild(processorSystemTime);
-
-        task = new StreamTask(
-            taskId00,
-            partitions,
-            topology1,
-            consumer,
-            changelogReader,
-            createConfig(true),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)) {
-            @Override
-            protected void flushState() {
-                // do nothing so that we actually make it to the commit interaction.
-            }
-        };
-
-        final RecordCollectorImpl recordCollector = new RecordCollectorImpl("StreamTask",
-                                                                            new LogContext("StreamTaskTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
-        recordCollector.init(producer);
-
-        task.initializeStateStores();
-        task.initializeTopology();
-        producer.fenceProducer();
-        try {
-            task.commit();
-            fail("Expected a TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertThat(expected.migratedTask(), is(task));
-        }
-    }
-
-    @Test
-    public void shouldOnlyCloseFencedProducerOnUncleanClosedWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        producer.fenceProducer();
-
-        task.close(false, true);
-        task = null;
-
-        assertFalse(producer.transactionAborted());
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldAbortTransactionButNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        producer.fenceProducerOnClose();
-
-        task.close(false, false);
-        task = null;
-
-        assertTrue(producer.transactionAborted());
-        assertFalse(producer.closed());
-    }
-
-    @Test
-    public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() {
-        task = createTaskThatThrowsException(false);
-        task.initializeStateStores();
-        task.initializeTopology();
-        try {
-            task.close(true, false);
-            fail("should have thrown runtime exception");
-        } catch (final RuntimeException expected) {
-            task = null;
-        }
-        assertTrue(processorSystemTime.closed);
-        assertTrue(processorStreamTime.closed);
-        assertTrue(source1.closed);
-    }
-
-    @Test
-    public void shouldInitAndBeginTransactionOnCreateIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        assertTrue(producer.transactionInitialized());
-        assertTrue(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionForBeginTransaction() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        producer.fenceProducer();
-
-        try {
-            task.initializeTopology();
-            fail("Should have throws TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof ProducerFencedException);
-        }
-    }
-
-    @Test
-    public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-
-        assertFalse(producer.transactionInFlight());
-        task.close(false, false);
-    }
-
-    @Test
-    public void shouldNotInitOrBeginTransactionOnCreateIfEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-
-        assertFalse(producer.transactionInitialized());
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldSendOffsetsAndCommitTransactionButNotStartNewTransactionOnSuspendIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-
-        task.suspend();
-        assertTrue(producer.sentOffsets());
-        assertTrue(producer.transactionCommitted());
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldCommitTransactionOnSuspendEvenIfTransactionIsEmptyIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        task.suspend();
-
-        assertTrue(producer.transactionCommitted());
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldNotSendOffsetsAndCommitTransactionNorStartNewTransactionOnSuspendIfEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-        task.suspend();
-
-        assertFalse(producer.sentOffsets());
-        assertFalse(producer.transactionCommitted());
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionInSuspendWhenCommitting() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        producer.fenceProducer();
-
-        try {
-            task.suspend();
-            fail("Should have throws TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof RecoverableClientException);
-        }
-        task = null;
-
-        assertFalse(producer.transactionCommitted());
-    }
-
-    @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionInSuspendWhenClosingProducer() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        producer.fenceProducerOnClose();
-        try {
-            task.suspend();
-            fail("Should have throws TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            assertTrue(expected.getCause() instanceof RecoverableClientException);
-        }
-
-        assertTrue(producer.transactionCommitted());
-    }
-
-    @Test
-    public void shouldInitTaskTimeOnResumeWithEosDisabled() {
-        shouldInitTaskTimeOnResume(false);
-    }
-
-    @Test
-    public void shouldInitTaskTimeOnResumeWithEosEnabled() {
-        shouldInitTaskTimeOnResume(true);
-    }
-
-    private void shouldInitTaskTimeOnResume(final boolean eosEnabled) {
-        task = createStatelessTask(createConfig(eosEnabled), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        assertThat(task.partitionTime(partition1), is(RecordQueue.UNKNOWN));
-        assertThat(task.streamTime(), is(RecordQueue.UNKNOWN));
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-        assertThat(task.partitionTime(partition1), is(0L));
-        assertThat(task.streamTime(), is(0L));
-
-        task.suspend();
-        assertThat(task.partitionTime(partition1), is(RecordQueue.UNKNOWN));
-        assertThat(task.streamTime(), is(RecordQueue.UNKNOWN));
-
-        if (eosEnabled) {
-            moveCommittedOffsetsFromProducerToConsumer(0L);
-        }
-
-        task.resume();
-        assertThat(task.partitionTime(partition1), is(0L));
-        assertThat(task.streamTime(), is(0L));
-    }
-
-    @Test
-    public void shouldStartNewTransactionOnResumeIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-        task.suspend();
-
-        task.resume();
-        task.initializeTopology();
-        assertTrue(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldNotStartNewTransactionOnResumeIfEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-        task.suspend();
-
-        task.resume();
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldStartNewTransactionOnCommitIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-
-        task.commit();
-        assertTrue(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldNotStartNewTransactionOnCommitIfEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
-        task.process();
-
-        task.commit();
-        assertFalse(producer.transactionInFlight());
-    }
-
-    @Test
-    public void shouldNotAbortTransactionOnZombieClosedIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.close(false, true);
-        task = null;
-
-        assertFalse(producer.transactionAborted());
-    }
-
-    @Test
-    public void shouldNotAbortTransactionOnDirtyClosedIfEosDisabled() {
-        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
-        task.close(false, false);
-        task = null;
-
-        assertFalse(producer.transactionAborted());
-    }
-
-    @Test
-    public void shouldCloseProducerOnCloseWhenEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        task.close(true, false);
-        task = null;
-
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldCloseProducerOnUncleanCloseNotZombieWhenEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        task.close(false, false);
-        task = null;
-
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldCloseProducerOnUncleanCloseIsZombieWhenEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        task.initializeTopology();
-        task.close(false, true);
-        task = null;
-
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushing() {
-        task = createTaskThatThrowsException(false);
-        task.initializeStateStores();
-        task.initializeTopology();
-
-        try {
-            task.commit();
-            fail("should have thrown an exception");
-        } catch (final Exception e) {
-            // all good
-        }
-    }
-
-    @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
-        final StreamTask task = createTaskThatThrowsException(false);
-
-        task.initializeStateStores();
-        task.initializeTopology();
-        try {
-            task.suspend();
-            fail("should have thrown an exception");
-        } catch (final Exception e) {
-            // all good
-        }
-    }
-
-    @Test
-    public void shouldCloseStateManagerIfFailureOnTaskClose() {
-        task = createStatefulTaskThatThrowsExceptionOnClose();
-        task.initializeStateStores();
-        task.initializeTopology();
-
-        try {
-            task.close(true, false);
-            fail("should have thrown an exception");
-        } catch (final Exception e) {
-            // all good
-        }
-
-        task = null;
-        assertFalse(stateStore.isOpen());
-    }
-
-    @Test
-    public void shouldNotCloseTopologyProcessorNodesIfNotInitialized() {
-        final StreamTask task = createTaskThatThrowsException(false);
-        try {
-            task.close(false, false);
-        } catch (final Exception e) {
-            fail("should have not closed non-initialized topology");
-        }
+        EasyMock.verify(stateManager);
     }
 
     @Test
     public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
         final StreamTask task = createStatefulTask(createConfig(false), false);
+        EasyMock.replay(stateManager, recordCollector);
 
         assertTrue(task.initializeStateStores());
     }
@@ -1841,6 +988,7 @@ public class StreamTaskTest {
     @Test
     public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
         final StreamTask task = createStatefulTask(createConfig(false), true);
+        EasyMock.replay(stateManager, recordCollector);
 
         assertFalse(task.initializeStateStores());
     }
@@ -1856,18 +1004,22 @@ public class StreamTaskTest {
         );
         consumer.assign(asList(partition1, repartition));
 
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
+
         task = new StreamTask(
             taskId00,
             mkSet(partition1, repartition),
             topology,
             consumer,
-            changelogReader,
             createConfig(false),
             streamsMetrics,
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            stateManager,
+            recordCollector);
         task.initializeStateStores();
         task.initializeTopology();
 
@@ -1884,44 +1036,12 @@ public class StreamTaskTest {
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
 
-    @Test
-    public void shouldThrowOnCleanCloseTaskWhenEosEnabledIfTransactionInFlight() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-        try {
-            task.close(true, false);
-            fail("should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) {
-            // pass
-        }
-        task = null;
-
-        assertTrue(producer.closed());
-    }
-
-    @Test
-    public void shouldAlwaysCommitIfEosEnabled() {
-        task = createStatelessTask(createConfig(true), StreamsConfig.METRICS_LATEST);
-
-        final RecordCollectorImpl recordCollector =  new RecordCollectorImpl(
-            "StreamTask",
-            new LogContext("StreamTaskTest "),
-            new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("dropped-records")
-        );
-        recordCollector.init(producer);
-
-        task.initializeStateStores();
-        task.initializeTopology();
-        task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, timestamp -> recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
-                new IntegerSerializer(),  new IntegerSerializer()));
-        task.commit();
-        assertEquals(1, producer.history().size());
-    }
-
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new AuthorizationException("message"));
         final StreamTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        EasyMock.replay(stateManager);
+
         task.initializeMetadata();
         task.initializeStateStores();
     }
@@ -1930,6 +1050,8 @@ public class StreamTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new KafkaException("message"));
         final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        EasyMock.replay(stateManager);
+
         task.initializeMetadata();
         task.initializeStateStores();
     }
@@ -1938,6 +1060,8 @@ public class StreamTaskTest {
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() {
         final Consumer<byte[], byte[]> consumer = mockConsumerWithCommittedException(new WakeupException());
         final AbstractTask task = createOptimizedStatefulTask(createConfig(false), consumer);
+        EasyMock.replay(stateManager);
+
         task.initializeMetadata();
         task.initializeStateStores();
     }
@@ -1951,22 +1075,6 @@ public class StreamTaskTest {
         };
     }
 
-    private void moveCommittedOffsetsFromProducerToConsumer(final long expectedPartitionTime) {
-        // extract the committed metadata from MockProducer
-        final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList =
-            producer.consumerGroupOffsetsHistory();
-        final String storedMetadata = metadataList.get(0).get(APPLICATION_ID).get(partition1).metadata();
-        final long partitionTime = task.decodeTimestamp(storedMetadata);
-        assertThat(partitionTime, is(expectedPartitionTime));
-
-        // since producer and consumer is mocked, we need to "connect" producer and consumer
-        // so we should manually commit offsets here to simulate this "connection"
-        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        final String encryptedMetadata = task.encodeTimestamp(partitionTime);
-        offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
-        consumer.commitSync(offsetMap);
-    }
-
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {
         final StateStore stateStore = new MockKeyValueStore(storeName, true);
 
@@ -1976,18 +1084,20 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.singletonMap(storeName, topic1));
 
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition1));
+
         return new StreamTask(
             taskId00,
             mkSet(partition1),
             topology,
             consumer,
-            changelogReader,
             config,
             streamsMetrics,
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            stateManager,
+            recordCollector);
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
@@ -1999,39 +1109,21 @@ public class StreamTaskTest {
             singletonList(stateStore),
             logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
 
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(
+            logged ? Collections.singleton(new TopicPartition(storeName + "-changelog", 1)) : Collections.emptySet());
+
         return new StreamTask(
             taskId00,
             partitions,
             topology,
             consumer,
-            changelogReader,
             config,
             streamsMetrics,
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
-    }
-
-    private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
-        final ProcessorTopology topology = ProcessorTopologyFactories.with(
-            asList(source1, source3),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
-            singletonList(stateStore),
-            Collections.emptyMap());
-
-        return new StreamTask(
-            taskId00,
-            partitions,
-            topology,
-            consumer,
-            changelogReader,
-            createConfig(true),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            stateManager,
+            recordCollector);
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig,
@@ -2046,49 +1138,22 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source2.addChild(processorSystemTime);
 
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
+
         return new StreamTask(
             taskId00,
             partitions,
             topology,
             consumer,
-            changelogReader,
             streamsConfig,
             new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion),
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
-    }
-
-    // this task will throw exception when processing (on partition2), flushing, suspending and closing
-    private StreamTask createTaskThatThrowsException(final boolean enableEos) {
-        final ProcessorTopology topology = withSources(
-            asList(source1, source3, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3))
-        );
-
-        source1.addChild(processorStreamTime);
-        source3.addChild(processorStreamTime);
-        source1.addChild(processorSystemTime);
-        source3.addChild(processorSystemTime);
-
-        return new StreamTask(
-            taskId00,
-            partitions,
-            topology,
-            consumer,
-            changelogReader,
-            createConfig(enableEos),
-            streamsMetrics,
-            stateDirectory,
-            null,
-            time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)) {
-            @Override
-            protected void flushState() {
-                throw new RuntimeException("KABOOM!");
-            }
-        };
+            stateManager,
+            recordCollector);
     }
 
     private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {

@@ -45,8 +45,7 @@ public interface Task {
 
     void resume();
 
-    void close(final boolean clean,
-               final boolean isZombie);
+    void close(final boolean clean);
 
     StateStore getStore(final String name);
 

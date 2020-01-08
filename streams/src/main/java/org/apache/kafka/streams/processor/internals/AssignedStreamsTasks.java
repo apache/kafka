@@ -75,9 +75,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     void closeTask(final StreamTask task, final boolean clean) {
         if (suspended.containsKey(task.id())) {
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean);
         } else {
-            task.close(clean, false);
+            task.close(clean);
         }
     }
 
@@ -155,7 +155,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 firstException.compareAndSet(null, e);
                 try {
                     prevActiveTasks.remove(id);
-                    task.close(false, false);
+                    task.close(false);
                 } catch (final RuntimeException f) {
                     log.error(
                         "After suspending failed, closing the same stream task {} failed again due to the following error:",
@@ -179,7 +179,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
         for (final TaskId id : nonRunningTasksToClose) {
             final StreamTask task = created.get(id);
-            firstException.compareAndSet(null, closeNonRunning(false, task, closedTaskChangelogs));
+            firstException.compareAndSet(null, closeNonRunning(true, task, closedTaskChangelogs));
         }
 
         return firstException.get();
@@ -192,19 +192,17 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
         for (final TaskId id : restoringTasksToClose) {
             final StreamTask task = restoring.get(id);
-            firstException.compareAndSet(null, closeRestoring(false, task, closedTaskChangelogs));
+            firstException.compareAndSet(null, closeRestoring(true, task, closedTaskChangelogs));
         }
 
         return firstException.get();
     }
 
-    private RuntimeException closeRunning(final boolean isZombie,
-                                          final StreamTask task) {
+    private RuntimeException closeRunning(final boolean clean, final StreamTask task) {
         removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
         try {
-            final boolean clean = !isZombie;
-            task.close(clean, isZombie);
+            task.close(clean);
         } catch (final RuntimeException e) {
             log.error("Failed to close the stream task {}", task.id(), e);
             return e;
@@ -213,14 +211,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
-    private RuntimeException closeNonRunning(final boolean isZombie,
+    private RuntimeException closeNonRunning(final boolean clean,
                                              final StreamTask task,
                                              final List<TopicPartition> closedTaskChangelogs) {
         removeTaskFromAllStateMaps(task, Collections.emptyMap());
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
-            task.close(false, isZombie);
+            task.close(clean);
         } catch (final RuntimeException e) {
             log.error("Failed to close the stream task {}", task.id(), e);
             return e;
@@ -230,14 +228,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     // Since a restoring task has not had its topology initialized yet, we need only close the state manager
-    private RuntimeException closeRestoring(final boolean isZombie,
+    private RuntimeException closeRestoring(final boolean clean,
                                             final StreamTask task,
                                             final List<TopicPartition> closedTaskChangelogs) {
         removeTaskFromAllStateMaps(task, Collections.emptyMap());
         closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
-            final boolean clean = !isZombie;
             task.closeStateManager(clean);
         } catch (final RuntimeException e) {
             log.error("Failed to close the restoring stream task {} due to the following error:", task.id(), e);
@@ -247,13 +244,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
-    private RuntimeException closeSuspended(final boolean isZombie,
-                                            final StreamTask task) {
+    private RuntimeException closeSuspended(final boolean clean, final StreamTask task) {
         removeTaskFromAllStateMaps(task, Collections.emptyMap());
 
         try {
-            final boolean clean = !isZombie;
-            task.closeSuspended(clean, null);
+            task.closeSuspended(clean);
         } catch (final RuntimeException e) {
             log.error("Failed to close the suspended stream task {} due to the following error:", task.id(), e);
             return e;
@@ -270,7 +265,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             final StreamTask suspendedTask = suspended.get(revokedTask);
 
             if (suspendedTask != null) {
-                firstException.compareAndSet(null, closeSuspended(false, suspendedTask));
+                firstException.compareAndSet(null, closeSuspended(true, suspendedTask));
             } else {
                 log.debug("Revoked stream task {} could not be found in suspended, may have already been closed", revokedTask);
             }
@@ -287,16 +282,16 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TaskId id : allAssignedTaskIds()) {
             if (running.containsKey(id)) {
                 log.debug("Closing the zombie running stream task {}.", id);
-                firstException.compareAndSet(null, closeRunning(true, running.get(id)));
+                firstException.compareAndSet(null, closeRunning(false, running.get(id)));
             } else if (created.containsKey(id)) {
                 log.debug("Closing the zombie created stream task {}.", id);
-                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), changelogs));
+                firstException.compareAndSet(null, closeNonRunning(false, created.get(id), changelogs));
             } else if (restoring.containsKey(id)) {
                 log.debug("Closing the zombie restoring stream task {}.", id);
-                firstException.compareAndSet(null, closeRestoring(true, restoring.get(id), changelogs));
+                firstException.compareAndSet(null, closeRestoring(false, restoring.get(id), changelogs));
             } else if (suspended.containsKey(id)) {
                 log.debug("Closing the zombie suspended stream task {}.", id);
-                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
+                firstException.compareAndSet(null, closeSuspended(false, suspended.get(id)));
             }
         }
 
@@ -330,7 +325,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 return true;
             } else {
                 log.warn("Couldn't resume stream task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-                task.closeSuspended(true, null);
+                task.closeSuspended(true);
             }
         }
         return false;

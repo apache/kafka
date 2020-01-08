@@ -99,7 +99,7 @@ abstract class AssignedTasks<T extends Task> {
 
     void tryCloseZombieTask(final T task) {
         try {
-            task.close(false, true);
+            task.close(false);
         } catch (final RuntimeException e) {
             log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
         }
@@ -279,13 +279,13 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     void closeTask(final T task, final boolean clean) {
-        task.close(clean, false);
+        task.close(clean);
     }
 
     private void closeUnclean(final T task) {
         log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
         try {
-            task.close(false, false);
+            task.close(false);
         } catch (final RuntimeException fatalException) {
             log.error("Failed while closing {} {} due to the following error:",
                 task.getClass().getSimpleName(),
