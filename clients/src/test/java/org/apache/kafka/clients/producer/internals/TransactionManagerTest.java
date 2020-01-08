@@ -1288,17 +1288,10 @@ public class TransactionManagerTest {
         // The next call aborts the records, which have not yet been sent. It should
         // not block because there are no requests pending and we still need to cancel
         // the pending transaction commit.
-        client.enableBlockingUntilWakeup(1);
-        sender.runOnce();
-        client.wakeup();
-
-        assertFalse(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
-
-        // The last call errors the pending commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
+        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
         assertTrue(commitResult.error() instanceof TopicAuthorizationException);
     }
 

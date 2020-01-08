@@ -321,10 +321,6 @@ public class Sender implements Runnable {
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
                     return;
-                } else if (transactionManager.hasAbortableError()) {
-                    if (accumulator.abortUndrainedBatches(transactionManager.lastError())) {
-                        return;
-                    }
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
@@ -429,15 +425,17 @@ public class Sender implements Runnable {
             return true;
         }
 
-        if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
-            if (transactionManager.isAborting())
+        if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
+            if (accumulator.hasIncomplete())
                 accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
+        }
+
+        if (transactionManager.isCompleting() && !accumulator.flushInProgress()) {
             // There may still be requests left which are being retried. Since we do not know whether they had
             // been successfully appended to the broker log, we must resend them until their final status is clear.
             // If they had been appended and we did not receive the error, then our sequence number would no longer
             // be correct which would lead to an OutOfSequenceException.
-            if (!accumulator.flushInProgress())
-                accumulator.beginFlush();
+            accumulator.beginFlush();
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
