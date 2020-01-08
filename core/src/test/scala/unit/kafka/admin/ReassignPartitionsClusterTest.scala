@@ -22,7 +22,7 @@ import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
@@ -67,7 +67,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000")
-    JAdminClient.create(props)
+    Admin.create(props)
   }
 
   def getRandomLogDirAssignment(brokerId: Int): String = {

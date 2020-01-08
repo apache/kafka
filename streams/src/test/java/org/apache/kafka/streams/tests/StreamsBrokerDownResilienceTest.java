@@ -97,7 +97,7 @@ public class StreamsBrokerDownResilienceTest {
                 public void apply(final String key, final String value) {
                     System.out.println("received key " + key + " and value " + value);
                     messagesProcessed++;
-                    System.out.println("processed" + messagesProcessed + "messages");
+                    System.out.println("processed " + messagesProcessed + " messages");
                     System.out.flush();
                 }
             }).to(SINK_TOPIC);
