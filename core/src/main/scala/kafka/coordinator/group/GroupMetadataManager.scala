@@ -124,50 +124,48 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   recreateGauge("NumOffsets",
-    new Gauge[Int] {
-      def value = groupMetadataCache.values.map(group => {
-        group.inLock { group.numOffsets }
-      }).sum
-    })
+    () => groupMetadataCache.values.map { group =>
+      group.inLock { group.numOffsets }
+    }.sum
+  )
 
   recreateGauge("NumGroups",
-    new Gauge[Int] {
-      def value = groupMetadataCache.size
-    })
+    () => groupMetadataCache.size
+  )
 
   recreateGauge("NumGroupsPreparingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(PreparingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(PreparingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsCompletingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(CompletingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(CompletingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsStable",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Stable) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Stable)
+      }
     })
 
   recreateGauge("NumGroupsDead",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Dead) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Dead)
+      }
     })
 
   recreateGauge("NumGroupsEmpty",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Empty) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Empty)
+      }
     })
 
   def startup(enableMetadataExpiration: Boolean): Unit = {
@@ -557,22 +555,28 @@ class GroupMetadataManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        var currOffset = log.logStartOffset
-
-        // buffer may not be needed if records are read from memory
-        var buffer = ByteBuffer.allocate(0)
-
-        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < logEndOffset && !shuttingDown.get()) {
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
+
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
+        var currOffset = log.logStartOffset
+
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
+        while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
             isolation = FetchLogEnd,
             minOneMessage = true)
+
+          readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>

@@ -47,6 +47,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.ietf.jgss.GSSContext;
@@ -56,8 +57,9 @@ import org.ietf.jgss.GSSManager;
 import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosPrincipal;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
@@ -69,11 +71,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-import javax.security.auth.Subject;
-import javax.security.auth.kerberos.KerberosPrincipal;
-
 public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
-    private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
     static final String GSS_NATIVE_PROP = "sun.security.jgss.native";
 
     private final SecurityProtocol securityProtocol;
@@ -94,6 +92,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
+    private final LogContext logContext;
+    private final Logger log;
 
     public SaslChannelBuilder(Mode mode,
                               Map<String, JaasContext> jaasContexts,
@@ -104,7 +104,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache,
-                              Time time) {
+                              Time time,
+                              LogContext logContext) {
         this.mode = mode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -119,6 +120,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.saslCallbackHandlers = new HashMap<>();
         this.connectionsMaxReauthMsByMechanism = new HashMap<>();
         this.time = time;
+        this.logContext = logContext;
+        this.log = logContext.logger(getClass());
     }
 
     @SuppressWarnings("unchecked")
@@ -136,7 +139,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 entry.getValue().configure(configs, mechanism, jaasContexts.get(mechanism).configurationEntries());
             }
 
-            Class<? extends Login> defaultLoginClass = defaultLoginClass(configs);
+            Class<? extends Login> defaultLoginClass = defaultLoginClass();
             if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM)) {
                 String defaultRealm;
                 try {
@@ -269,7 +272,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) {
         return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
-                serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time);
+                serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time, logContext);
     }
 
     // Package private for testing
@@ -323,7 +326,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         }
     }
 
-    private Class<? extends Login> defaultLoginClass(Map<String, ?> configs) {
+    private Class<? extends Login> defaultLoginClass() {
         if (jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM))
             return KerberosLogin.class;
         if (OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(clientSaslMechanism))
