@@ -37,6 +37,12 @@ object ReplicaAssignment {
   }
 }
 
+
+/**
+ * @param replicas the seq of brokers assigned to the partition
+ * @param addingReplicas the replicas that were added if there is a pending reassignment
+ * @param removingReplicas the replicas that were removed if there is a pending reassignment
+ */
 case class ReplicaAssignment(replicas: Seq[Int],
                              addingReplicas: Seq[Int],
                              removingReplicas: Seq[Int]) {
