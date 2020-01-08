@@ -118,7 +118,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -149,6 +148,8 @@ public class KafkaConsumerTest {
     private final int autoCommitIntervalMs = 500;
 
     private final String groupId = "mock-group";
+    private final String memberId = "memberId";
+    private final String leaderId = "leaderId";
     private final Optional<String> groupInstanceId = Optional.of("mock-instance");
 
     private final String partitionRevoked = "Hit partition revoke ";
@@ -1534,7 +1535,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
 
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
@@ -1544,20 +1545,13 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // heartbeat fails due to rebalance in progress
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                return true;
-            }
-        }, new HeartbeatResponse(
-                new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())),
-                coordinator);
+        client.prepareResponseFrom(body -> true, new HeartbeatResponse(
+            new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())), coordinator);
 
         // join group
         final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(singletonList(topic)));
 
         // This member becomes the leader
-        String memberId = "memberId";
         final JoinGroupResponse leaderResponse = new JoinGroupResponse(
                 new JoinGroupResponseData()
                         .setErrorCode(Errors.NONE.code())
@@ -1580,15 +1574,11 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
 
         // rejoin group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(final AbstractRequest body) {
-                return body instanceof FetchRequest && ((FetchRequest) body).fetchData().containsKey(tp0);
-            }
-        }, fetchResponse(tp0, 1, 1), node);
+        client.prepareResponseFrom(body -> body instanceof FetchRequest 
+            && ((FetchRequest) body).fetchData().containsKey(tp0), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
@@ -1755,7 +1745,7 @@ public class KafkaConsumerTest {
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         // assign throws
@@ -1812,7 +1802,7 @@ public class KafkaConsumerTest {
 
         final ConsumerGroupMetadata groupMetadataAfterPoll = consumer.groupMetadata();
         assertEquals(groupId, groupMetadataAfterPoll.groupId());
-        assertNotEquals(0, groupMetadataAfterPoll.memberId().length());
+        assertEquals(memberId, groupMetadataAfterPoll.memberId());
         assertEquals(1, groupMetadataAfterPoll.generationId());
         assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
     }
@@ -1891,7 +1881,7 @@ public class KafkaConsumerTest {
                 ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
-        }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        }, joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -1907,7 +1897,7 @@ public class KafkaConsumerTest {
         }
 
         // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         // sync group
         client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE), coordinator);
@@ -1917,12 +1907,9 @@ public class KafkaConsumerTest {
 
     private AtomicBoolean prepareHeartbeatResponse(MockClient client, Node coordinator, Errors error) {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                heartbeatReceived.set(true);
-                return true;
-            }
+        client.prepareResponseFrom(body -> {
+            heartbeatReceived.set(true);
+            return true;
         }, new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code())), coordinator);
         return heartbeatReceived;
     }

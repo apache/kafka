@@ -52,7 +52,6 @@ public class ConsumerGroupMetadataTest {
         ConsumerGroupMetadata originalGroupMetadata = new ConsumerGroupMetadata(groupId,
             generationId, memberId, Optional.of(groupInstanceId));
 
-
         ConsumerGroupMetadata otherGroupMetadata = new ConsumerGroupMetadata(originalGroupMetadata);
 
         assertTrue(otherGroupMetadata.groupInstanceId().isPresent());
