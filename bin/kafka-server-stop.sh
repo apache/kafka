@@ -14,7 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
-PIDS=$(ps ax | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $1}')
+if [[ $(uname -s) != "OS/390" ]] ; then
+  PIDS=$(ps ax | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $1}')
+else
+  PIDS=$(ps -A -o pid,jobname,comm | grep -i 'KAFKSTRT' | grep java | grep -v grep | awk '{print $1}')
+fi
 
 if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
