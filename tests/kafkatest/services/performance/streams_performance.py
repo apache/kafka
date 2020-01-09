@@ -94,7 +94,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
 
     def clean_node(self, node):
         if self.jmx_option != "":
-            JmxMixin.clean_node(self, self.idx(node), node)
+            JmxMixin.clean_node(self, node)
 
         super(StreamsSimpleBenchmarkService, self).clean_node(node)
 

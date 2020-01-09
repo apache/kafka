@@ -214,7 +214,7 @@ class QuotaTest(Test):
 
         # validate that maximum_consumer_throughput <= consumer_quota * (1 + maximum_client_deviation_percentage/100)
         consumer_attribute_name = 'kafka.consumer:type=consumer-fetch-manager-metrics,client-id=%s:bytes-consumed-rate' % consumer.client_id
-        consumer_maximum_bps = consumer.jmx_tool.maximum_jmx_value[consumer_attribute_name]
+        consumer_maximum_bps = consumer.maximum_jmx_value[consumer_attribute_name]
         consumer_quota_bps = self.quota_config.consumer_quota
         self.logger.info('consumer has maximum throughput %.2f bps with consumer quota %.2f bps' % (consumer_maximum_bps, consumer_quota_bps))
         if consumer_maximum_bps > consumer_quota_bps*(self.maximum_client_deviation_percentage/100+1):

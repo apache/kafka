@@ -18,7 +18,6 @@ import os
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 from kafkatest.version import get_version, V_0_11_0_0, DEV_BRANCH
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -42,13 +41,10 @@ class JmxMixin(object):
         self.jmx_tool_log = os.path.join(root, "jmx_tool.log")
         self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
 
-    def clean_node(self, idx, node):
-        if self.jmx_object_names is None:
-            self.logger.debug("%s: Not cleaning jmx tool because no jmx objects are defined" % node.account)
-            return
-
+    def clean_node(self, node):
         node.account.kill_java_processes(self.jmx_class_name(), clean_shutdown=False,
                                          allow_fail=True)
+        idx = self.idx(node)
         self.started[idx-1] = False
         node.account.ssh("rm -f -- %s %s" % (self.jmx_tool_log, self.jmx_tool_err_log), allow_fail=False)
 
@@ -143,15 +139,3 @@ class JmxMixin(object):
 
     def jmx_class_name(self):
         return "kafka.tools.JmxTool"
-
-class JmxTool(JmxMixin, KafkaPathResolverMixin):
-    """
-    Simple helper class for using the JmxTool directly instead of as a mix-in
-    """
-    def __init__(self, text_context, num_nodes=1, *args, **kwargs):
-        JmxMixin.__init__(self, num_nodes=num_nodes, *args, **kwargs)
-        self.context = text_context
-
-    @property
-    def logger(self):
-        return self.context.logger
