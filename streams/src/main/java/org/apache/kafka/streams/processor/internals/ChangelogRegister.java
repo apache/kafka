@@ -16,42 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
-import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
 
 /**
  * See {@link StoreChangelogReader}.
  */
-public interface ChangelogReader extends ChangelogRegister {
+interface ChangelogRegister {
     /**
-     * Restore all registered state stores by reading from their changelogs.
+     * Register a state store and it's partition for later restoration.
+     *
+     * @param partition the changelog topic partition to restore
+     * @param stateManager the state manager used for restoring (one per task)
      */
-    void restore();
-
-    /**
-     * Update offset limit of a given changelog partition
-     */
-    void updateLimitOffsets();
-
-    /**
-     * @return the changelog partitions that have been completed restoring
-     */
-    Set<TopicPartition> completedChangelogs();
-
-    /**
-     * Removes the passed in partitions from the set of changelogs
-     * @param revokedPartitions the set of partitions to remove
-     */
-    void remove(List<TopicPartition> revokedPartitions);
-
-    /**
-     * Clear all partitions
-     */
-    void clear();
-
-    /**
-     * @return whether the changelog reader has just been cleared or is uninitialized.
-     */
-    boolean isEmpty();
+    void register(final TopicPartition partition, final ProcessorStateManager stateManager);
 }

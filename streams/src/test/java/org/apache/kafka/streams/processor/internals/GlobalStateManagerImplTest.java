@@ -678,68 +678,6 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    @Test
-    public void shouldDeleteAndRecreateStoreDirectoryOnReinitialize() throws IOException {
-        final File storeDirectory1 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + "rocksdb"
-                                                  + File.separator + storeName1);
-        final File storeDirectory2 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + "rocksdb"
-                                                  + File.separator + storeName2);
-        final File storeDirectory3 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + storeName3);
-        final File storeDirectory4 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + storeName4);
-        final File testFile1 = new File(storeDirectory1.getAbsolutePath() + File.separator + "testFile");
-        final File testFile2 = new File(storeDirectory2.getAbsolutePath() + File.separator + "testFile");
-        final File testFile3 = new File(storeDirectory3.getAbsolutePath() + File.separator + "testFile");
-        final File testFile4 = new File(storeDirectory4.getAbsolutePath() + File.separator + "testFile");
-
-        consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
-        consumer.updatePartitions(t2.topic(), Collections.singletonList(new PartitionInfo(t2.topic(), t2.partition(), null, null, null)));
-        consumer.updatePartitions(t3.topic(), Collections.singletonList(new PartitionInfo(t3.topic(), t3.partition(), null, null, null)));
-        consumer.updatePartitions(t4.topic(), Collections.singletonList(new PartitionInfo(t4.topic(), t4.partition(), null, null, null)));
-        consumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(t1, 0L);
-                put(t2, 0L);
-                put(t3, 0L);
-                put(t4, 0L);
-            }
-        });
-        consumer.updateEndOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(t1, 0L);
-                put(t2, 0L);
-                put(t3, 0L);
-                put(t4, 0L);
-            }
-        });
-
-        stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback);
-        stateManager.registerStore(store2, stateRestoreCallback);
-        stateManager.registerStore(store3, stateRestoreCallback);
-        stateManager.registerStore(store4, stateRestoreCallback);
-
-        testFile1.createNewFile();
-        assertTrue(testFile1.exists());
-        testFile2.createNewFile();
-        assertTrue(testFile2.exists());
-        testFile3.createNewFile();
-        assertTrue(testFile3.exists());
-        testFile4.createNewFile();
-        assertTrue(testFile4.exists());
-
-        // only delete and recreate store 1 and 3 -- 2 and 4 must be untouched
-        stateManager.reinitializeStateStoresForPartitions(asList(t1, t3), processorContext);
-
-        assertFalse(testFile1.exists());
-        assertTrue(testFile2.exists());
-        assertFalse(testFile3.exists());
-        assertTrue(testFile4.exists());
-    }
-
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
         try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {

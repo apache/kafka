@@ -113,6 +113,11 @@ public class ProcessorStateManager implements StateManager {
         public Long offset() {
             return this.offset;
         }
+
+        @Override
+        public String toString() {
+            return "StateStoreMetadata (" + stateStore.name() + " : " + changelogPartition + " @ " + offset;
+        }
     }
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
@@ -121,16 +126,12 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final TaskType taskType;
-    private final ChangelogReader changelogReader;
+    private final ChangelogRegister changelogReader;
     private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
-
-    // NOTE we assume the partition of the topic can always be inferred from the task id;
-    // if user ever use a default partition grouper (deprecated in KIP-528) this would break and
-    // it is not a regression (it would always break anyways)
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
@@ -148,7 +149,7 @@ public class ProcessorStateManager implements StateManager {
                                  final TaskType taskType,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final ChangelogReader changelogReader,
+                                 final ChangelogRegister changelogReader,
                                  final LogContext logContext) throws ProcessorStateException {
         this.logPrefix = format("task [%s] ", taskId);
         this.log = logContext.logger(ProcessorStateManager.class);
@@ -165,27 +166,27 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
+    // load the checkpointed offsets, initialize the registered stores and then delete the checkpoint file
     public void loadCheckpoint() {
         try {
-            // load the checkpointed offsets, initialize the registered stores and then delete the checkpoint file
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
-            log.trace("Loaded offsets from the checkpoint filed: {}", loadedCheckpoints);
+            log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
 
             for (final StateStoreMetadata store : stores.values()) {
                 if (store.changelogPartition == null) {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
-                }
-
-                if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                    store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
-
-                    log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
-                        store.stateStore.name(), store.offset, store.changelogPartition);
                 } else {
-                    log.info("State store {} did not find checkpoint offset, hence would " +
-                            "default to the starting offset at changelog {}",
-                        store.stateStore.name(), store.changelogPartition);
+                    if (loadedCheckpoints.containsKey(store.changelogPartition)) {
+                        store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
+
+                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                            store.stateStore.name(), store.offset, store.changelogPartition);
+                    } else {
+                        log.info("State store {} did not find checkpoint offset, hence would " +
+                                "default to the starting offset at changelog {}",
+                            store.stateStore.name(), store.changelogPartition);
+                    }
                 }
             }
 
@@ -210,7 +211,8 @@ public class ProcessorStateManager implements StateManager {
         final String storeName = store.name();
 
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
-            throw new IllegalArgumentException(format("%sIllegal store name: %s", logPrefix, storeName));
+            throw new IllegalArgumentException(format("%sIllegal store name: %s, which collides with the pre-defined " +
+                "checkpoint file name", logPrefix, storeName));
         }
 
         if (stores.containsKey(storeName)) {
@@ -222,7 +224,14 @@ public class ProcessorStateManager implements StateManager {
         // if the store name does not exist in the changelog map, it means the underlying store
         // is not log enabled (including global stores), and hence it does not need to be restored
         final StateStoreMetadata storeMetadata;
-        if (topic != null && stateRestoreCallback != null) {
+        if (topic != null) {
+            if (stateRestoreCallback == null) {
+                throw new IllegalStateException("Log enabled store should always provide a restore callback upon registration");
+            }
+
+            // NOTE we assume the partition of the topic can always be inferred from the task id;
+            // if user ever use a default partition grouper (deprecated in KIP-528) this would break and
+            // it is not a regression (it would always break anyways)
             final TopicPartition storePartition = new TopicPartition(topic, taskId.partition);
             storeMetadata = new StateStoreMetadata(store, storePartition, stateRestoreCallback, converterForStore(store));
 
@@ -281,6 +290,29 @@ public class ProcessorStateManager implements StateManager {
         return taskType;
     }
 
+    // used by the changelog reader only
+    void restore(final TopicPartition changelogPartition, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+        final StateStoreMetadata store = mustFindStore(changelogPartition);
+
+        if (!restoreRecords.isEmpty()) {
+            // restore states from changelog records and update the snapshot offset as the batch end record's offset
+            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
+            final RecordBatchingStateRestoreCallback restoreCallback = adapt(store.restoreCallback);
+            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
+                .map(store.recordConverter::convert)
+                .collect(Collectors.toList());
+
+            try {
+                restoreCallback.restoreBatch(convertedRecords);
+            } catch (final RuntimeException e) {
+                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
+                    logPrefix, changelogPartition), e);
+            }
+
+            store.setOffset(batchEndOffset);
+        }
+    }
+
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
         final List<StateStoreMetadata> found = stores.values().stream()
             .filter(metadata -> metadata.changelogPartition == changelogPartition).collect(Collectors.toList());
@@ -303,29 +335,6 @@ public class ProcessorStateManager implements StateManager {
         return storeMetadata;
     }
 
-    void restore(final TopicPartition changelogPartition, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
-        final StateStoreMetadata store = mustFindStore(changelogPartition);
-
-        if (!restoreRecords.isEmpty()) {
-            // restore states from changelog records and update the snapshot offset as the batch end record's offset
-            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
-            final RecordBatchingStateRestoreCallback restoreCallback = adapt(store.restoreCallback);
-            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(restoreRecords.size());
-            for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
-                convertedRecords.add(store.recordConverter.convert(record));
-            }
-
-            try {
-                restoreCallback.restoreBatch(convertedRecords);
-            } catch (final RuntimeException e) {
-                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
-                    logPrefix, changelogPartition), e);
-            }
-
-            store.setOffset(batchEndOffset);
-        }
-    }
-
     /**
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
      * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
@@ -336,7 +345,7 @@ public class ProcessorStateManager implements StateManager {
         RuntimeException firstException = null;
         // attempting to flush the stores
         if (!stores.isEmpty()) {
-            log.debug("Flushing all stores registered in the state manager");
+            log.debug("Flushing all stores registered in the state manager: {}", stores);
             for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
                 final StateStore store = entry.getValue().stateStore;
                 log.trace("Flushing store {}", store.name());
@@ -373,10 +382,10 @@ public class ProcessorStateManager implements StateManager {
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
         if (!stores.isEmpty()) {
-            log.debug("Closing its state manager and all the registered state stores");
+            log.debug("Closing its state manager and all the registered state stores: {}", stores);
             for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
                 final StateStore store = entry.getValue().stateStore;
-                log.debug("Closing storage engine {}", store.name());
+                log.trace("Closing storage engine {}", store.name());
                 try {
                     store.close();
                 } catch (final RuntimeException e) {
