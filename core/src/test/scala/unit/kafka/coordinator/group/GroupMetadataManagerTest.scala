@@ -325,14 +325,16 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
+    val foo3 = new TopicPartition("foo", 3)
+
     val abortedOffsets = Map(
       new TopicPartition("foo", 2) -> 231L,
-      new TopicPartition("foo", 3) -> 4551L,
+      foo3 -> 4551L,
       new TopicPartition("bar", 1) -> 89921L
     )
 
     val pendingOffsets = Map(
-      new TopicPartition("foo", 3) -> 2312L,
+      foo3 -> 2312L,
       new TopicPartition("foo", 4) -> 45512L,
       new TopicPartition("bar", 2) -> 899212L
     )
@@ -368,6 +370,7 @@ class GroupMetadataManagerTest {
 
     // We should have pending commits.
     assertTrue(group.hasPendingOffsetCommitsFromProducer(producerId))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(foo3))
 
     // The loaded pending commits should materialize after a commit marker comes in.
     groupMetadataManager.handleTxnCompletion(producerId, List(groupMetadataTopicPartition.partition).toSet, isCommit = true)

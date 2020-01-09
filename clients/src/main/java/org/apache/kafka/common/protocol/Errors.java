@@ -78,7 +78,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
-import org.apache.kafka.common.errors.PendingTransactionException;
+import org.apache.kafka.common.errors.PendingOffsetException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -319,8 +319,7 @@ public enum Errors {
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
         GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new),
-    PENDING_TRANSACTION(88, "There are pending transactions for the offset topic that need to be cleared",
-        PendingTransactionException::new);
+    PENDING_OFFSET(88, "There are pending offsets that need to be cleared", PendingOffsetException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

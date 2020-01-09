@@ -67,7 +67,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                             .setTopics(topics);
         }
 
-        public boolean isAllTopicPartitions() {
+        boolean isAllTopicPartitions() {
             return this.data.topics() == ALL_TOPIC_PARTITIONS;
         }
 

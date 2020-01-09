@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.PendingTransactionException;
+import org.apache.kafka.common.errors.PendingOffsetException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1272,7 +1272,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             unauthorizedTopics = new HashSet<>();
                         }
                         unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.PENDING_TRANSACTION) {
+                    } else if (error == Errors.PENDING_OFFSET) {
                         pendingTxnOffsetTopicPartitions.add(tp);
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
@@ -1293,10 +1293,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!pendingTxnOffsetTopicPartitions.isEmpty()) {
                 // just retry
-                future.raise(new PendingTransactionException(
-                    "The following partitions still have pending transactional offsets " +
-                        "which are not committed/aborted on the broker side: "
-                        + pendingTxnOffsetTopicPartitions));
+                future.raise(new PendingOffsetException(
+                    "The following partitions still have pending offsets " +
+                        "which are not cleared on the broker side: " +
+                        pendingTxnOffsetTopicPartitions + ", this could be either" +
+                        "transactional offsets waiting for completion, or " +
+                        "normal offsets waiting for replication after appending to local log"));
             } else {
                 future.complete(offsets);
             }

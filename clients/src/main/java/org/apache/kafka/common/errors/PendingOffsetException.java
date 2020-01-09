@@ -17,13 +17,13 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Exception thrown when there is pending transactional offset commit.
+ * Exception thrown when there are pending offsets for the requested topic partitions.
  */
-public class PendingTransactionException extends RetriableException {
+public class PendingOffsetException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public PendingTransactionException(String message) {
+    public PendingOffsetException(String message) {
         super(message);
     }
 }

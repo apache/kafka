@@ -2202,7 +2202,7 @@ class GroupCoordinatorTest {
     val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp, nonExistTp)))
     assertEquals(Errors.NONE, error)
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
-    assertEquals(Some(Errors.PENDING_TRANSACTION), partitionData.get(tp).map(_.error))
+    assertEquals(Some(Errors.PENDING_OFFSET), partitionData.get(tp).map(_.error))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
     assertEquals(Some(Errors.NONE), partitionData.get(nonExistTp).map(_.error))
 
