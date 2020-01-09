@@ -2539,7 +2539,8 @@ public class ConsumerCoordinatorTest {
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-            false, null);
+                false,
+                null);
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,

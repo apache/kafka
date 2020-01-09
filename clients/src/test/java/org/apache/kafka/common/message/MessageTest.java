@@ -467,9 +467,9 @@ public final class MessageTest {
                                                       .setTopics(null);
 
         OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
-                                                         .setGroupId(groupId)
-                                                         .setTopics(null)
-                                                         .setRequireStable(true);
+                                                       .setGroupId(groupId)
+                                                       .setTopics(null)
+                                                       .setRequireStable(true);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             if (version < 2) {

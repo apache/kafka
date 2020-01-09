@@ -2212,7 +2212,7 @@ public class KafkaConsumerTest {
                                                                           time,
                                                                           autoCommitEnabled,
                                                                           autoCommitIntervalMs,
-            requireStable,
+                                                                          requireStable,
                                                                           interceptors);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
