@@ -33,6 +33,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AuthorizerUtils
@@ -572,7 +573,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
-        isFromClient = true,
+        origin = AppendOrigin.Client,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback)
@@ -2026,7 +2027,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           timeout = config.requestTimeoutMs.toLong,
           requiredAcks = -1,
           internalTopicsAllowed = true,
-          isFromClient = false,
+          origin = AppendOrigin.Coordinator,
           entriesPerPartition = controlRecords,
           responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
       }
