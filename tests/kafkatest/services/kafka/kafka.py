@@ -405,7 +405,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.logger.warn("Could not dump threads on node")
 
     def clean_node(self, node):
-        JmxMixin.clean_node(self, node)
+        JmxMixin.clean_node(self, self.idx(node), node)
         self.security_config.clean_node(node)
         node.account.kill_java_processes(self.java_class_name(),
                                          clean_shutdown=False, allow_fail=True)

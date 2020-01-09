@@ -19,7 +19,7 @@ import os
 from ducktape.services.background_thread import BackgroundThreadService
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.services.monitor.jmx import JmxTool
 from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
 
 """
@@ -27,7 +27,7 @@ The console consumer is a tool that reads data from Kafka and outputs it to stan
 """
 
 
-class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
+class ConsoleConsumer(KafkaPathResolverMixin, BackgroundThreadService):
     # Root directory for persistent output
     PERSISTENT_ROOT = "/mnt/console_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stdout")
@@ -88,8 +88,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             client_prop_file_override   Override client.properties file used by the consumer
             consumer_properties         A dict of values to pass in as --consumer-property key=value
         """
-        JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
-                          root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.new_consumer = new_consumer
@@ -101,6 +99,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.consumer_timeout_ms = consumer_timeout_ms
         for node in self.nodes:
             node.version = version
+
+        self.jmx_tool = JmxTool(context, num_nodes=num_nodes,
+                                jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
+                                root=ConsoleConsumer.PERSISTENT_ROOT)
 
         self.from_beginning = from_beginning
         self.message_validator = message_validator
@@ -152,7 +154,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['log4j_config'] = ConsoleConsumer.LOG4J_CONFIG
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
-        args['jmx_port'] = self.jmx_port
+        args['jmx_port'] = self.jmx_tool.jmx_port
         args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
 
@@ -249,9 +251,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         consumer_output = node.account.ssh_capture(cmd, allow_fail=False)
 
         with self.lock:
-            self._init_jmx_attributes()
-            self.logger.debug("collecting following jmx objects: %s", self.jmx_object_names)
-            self.start_jmx_tool(idx, node)
+            self.logger.debug("collecting following jmx objects: %s", self.jmx_tool.jmx_object_names)
+            self.jmx_tool.start_jmx_tool(idx, node)
 
         for line in consumer_output:
             msg = line.strip()
@@ -267,7 +268,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                     self.messages_consumed[idx].append(msg)
 
         with self.lock:
-            self.read_jmx_output(idx, node)
+            self.jmx_tool.read_jmx_output(idx, node)
 
     def start_node(self, node):
         BackgroundThreadService.start_node(self, node)
@@ -285,35 +286,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         if self.alive(node):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        JmxMixin.clean_node(self, node)
+        self.jmx_tool.clean_node(self.idx(node), node)
         node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
 
     def java_class_name(self):
         return "ConsoleConsumer"
-
-    def has_partitions_assigned(self, node):
-        if self.new_consumer is False:
-            return False
-        idx = self.idx(node)
-        with self.lock:
-            self._init_jmx_attributes()
-            self.start_jmx_tool(idx, node)
-            self.read_jmx_output(idx, node)
-        if not self.assigned_partitions_jmx_attr in self.maximum_jmx_value:
-            return False
-        self.logger.debug("Number of partitions assigned %f" % self.maximum_jmx_value[self.assigned_partitions_jmx_attr])
-        return self.maximum_jmx_value[self.assigned_partitions_jmx_attr] > 0.0
-
-    def _init_jmx_attributes(self):
-        # Must hold lock
-        if self.new_consumer:
-            # We use a flag to track whether we're using this automatically generated ID because the service could be
-            # restarted multiple times and the client ID may be changed.
-            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
-                self._automatic_metrics = True
-                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes = ["assigned-partitions"]
-                self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
-
