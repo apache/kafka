@@ -3459,7 +3459,7 @@ class GroupCoordinatorTest {
                                          offsets: Map[TopicPartition, OffsetAndMetadata],
                                          memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
                                          groupInstanceId: Option[String] = Option.empty,
-                                         generationId: Int = JoinGroupResponse.UNKNOWN_GENERATION_ID) = {
+                                         generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID) = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()

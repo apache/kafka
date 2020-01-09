@@ -959,7 +959,7 @@ public class AbstractCoordinatorTest {
     }
 
     private JoinGroupResponse joinGroupResponse(Errors error) {
-        return joinGroupFollowerResponse(JoinGroupResponse.UNKNOWN_GENERATION_ID,
+        return joinGroupFollowerResponse(JoinGroupRequest.UNKNOWN_GENERATION_ID,
             JoinGroupRequest.UNKNOWN_MEMBER_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, error);
     }
 

@@ -1412,8 +1412,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(JoinGroupResult(
         List.empty,
         JoinGroupRequest.UNKNOWN_MEMBER_ID,
-        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-        JoinGroupResponse.UNKNOWN_PROTOCOL,
+        JoinGroupRequest.UNKNOWN_GENERATION_ID,
+        JoinGroupRequest.UNKNOWN_PROTOCOL,
         JoinGroupRequest.UNKNOWN_MEMBER_ID,
         Errors.UNSUPPORTED_VERSION
       ))
@@ -1423,8 +1423,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
+            .setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupRequest.UNKNOWN_PROTOCOL)
             .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
             .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
             .setMembers(util.Collections.emptyList())

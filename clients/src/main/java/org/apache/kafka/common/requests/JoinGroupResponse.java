@@ -29,9 +29,6 @@ public class JoinGroupResponse extends AbstractResponse {
 
     private final JoinGroupResponseData data;
 
-    public static final String UNKNOWN_PROTOCOL = "";
-    public static final int UNKNOWN_GENERATION_ID = -1;
-
     public JoinGroupResponse(JoinGroupResponseData data) {
         this.data = data;
     }

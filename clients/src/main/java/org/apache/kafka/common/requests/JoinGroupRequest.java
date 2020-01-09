@@ -56,6 +56,8 @@ public class JoinGroupRequest extends AbstractRequest {
     private final JoinGroupRequestData data;
 
     public static final String UNKNOWN_MEMBER_ID = "";
+    public static final int UNKNOWN_GENERATION_ID = -1;
+    public static final String UNKNOWN_PROTOCOL = "";
 
     private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
 
@@ -120,8 +122,8 @@ public class JoinGroupRequest extends AbstractRequest {
         return new JoinGroupResponse(new JoinGroupResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code())
-                .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
-                .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
+                .setGenerationId(UNKNOWN_GENERATION_ID)
+                .setProtocolName(UNKNOWN_PROTOCOL)
                 .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
                 .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
                 .setMembers(Collections.emptyList()));
