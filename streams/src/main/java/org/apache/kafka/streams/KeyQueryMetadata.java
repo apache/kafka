@@ -83,12 +83,14 @@ public class KeyQueryMetadata {
             return false;
         }
         final KeyQueryMetadata keyQueryMetadata = (KeyQueryMetadata) obj;
-        return Objects.equals(keyQueryMetadata.activeHost, activeHost) && Objects.equals(keyQueryMetadata.standbyHosts, standbyHosts) && Objects.equals(keyQueryMetadata.partition, partition);
+        return Objects.equals(keyQueryMetadata.activeHost, activeHost)
+            && Objects.equals(keyQueryMetadata.standbyHosts, standbyHosts)
+            && Objects.equals(keyQueryMetadata.partition, partition);
     }
 
     @Override
     public String toString() {
-        return "KeyQueryMetadata{" +
+        return "KeyQueryMetadata {" +
                 "activeHost=" + activeHost +
                 ", standbyHosts=" + standbyHosts +
                 ", partition=" + partition +

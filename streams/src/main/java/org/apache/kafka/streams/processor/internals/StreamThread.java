@@ -1276,4 +1276,8 @@ public class StreamThread extends Thread {
     int currentNumIterations() {
         return numIterations;
     }
+
+    public StreamThread.StateListener stateListener() {
+        return stateListener;
+    }
 }

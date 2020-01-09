@@ -93,6 +93,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -275,6 +276,7 @@ public class QueryableStateIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListener,
@@ -287,17 +289,22 @@ public class QueryableStateIntegrationTest {
             final List<String> nullStoreKeys = new ArrayList<>();
             final List<String> nullValueKeys = new ArrayList<>();
             final Map<String, Exception> exceptionalKeys = new TreeMap<>();
+            final StringSerializer serializer = new StringSerializer();
 
             for (final String key: keys) {
                 try {
-                    final KeyQueryMetadata metadata = streams
-                        .queryMetadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null || metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
+                    final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
+                    if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    if (!pickInstanceByPort) {
+                        assertThat("Should have standbys to query from", queryMetadata.getStandbyHosts().size() > 0);
+                    }
 
-                    final int index = metadata.getActiveHost().port();
+                    final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyKeyValueStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore());
@@ -308,7 +315,6 @@ public class QueryableStateIntegrationTest {
 
                     if (store.get(key) == null) {
                         nullValueKeys.add(key);
-                        continue;
                     }
                 } catch (final InvalidStateStoreException e) {
                     if (stateListener.mapStates.get(KafkaStreams.State.REBALANCING) < 1) {
@@ -325,6 +331,7 @@ public class QueryableStateIntegrationTest {
         });
     }
 
+    @SuppressWarnings("deprecation")
     private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
@@ -339,17 +346,24 @@ public class QueryableStateIntegrationTest {
             final List<String> nullStoreKeys = new ArrayList<>();
             final List<String> nullValueKeys = new ArrayList<>();
             final Map<String, Exception> exceptionalKeys = new TreeMap<>();
+            final StringSerializer serializer = new StringSerializer();
 
             for (final String key: keys) {
                 try {
-                    final KeyQueryMetadata metadata = streams
-                        .queryMetadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null || metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
+                    final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
+                    if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    if (pickInstanceByPort) {
+                        assertThat(queryMetadata.getStandbyHosts().size(), equalTo(0));
+                    } else {
+                        assertThat("Should have standbys to query from", queryMetadata.getStandbyHosts().size() > 0);
+                    }
 
-                    final int index = metadata.getActiveHost().port();
+                    final int index = queryMetadata.getActiveHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyWindowStore<String, Long> store =
                         streamsWithKey.store(storeName, QueryableStoreTypes.windowStore());
