@@ -91,11 +91,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
-    // Wait until metadata is propagated to all brokers so that adminClient.listTopics returns the topic from any broker
-    TestUtils.waitUntilTrue(() => servers.forall { server => server.metadataCache.contains(topicName) },
-      s"Topic not created and propagated within $timeout ms", timeout)
-    val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
-    assertTrue(s"Topic $topicName not returned by adminClient", topics.contains(topicName))
+    TestUtils.waitUntilMetadataIsPropagated(servers, topicName, partition = 0, timeout)
   }
 
   @Before
