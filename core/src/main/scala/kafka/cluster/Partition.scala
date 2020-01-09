@@ -813,7 +813,17 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
-  def maybeShrinkIsr(): Unit = {
+  private def shouldShrinkIsr(): Boolean = {
+    leaderLogIfLocal match {
+      case Some(leaderLog) =>
+        inReadLock(leaderIsrUpdateLock) {
+          getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty
+        }
+      case None => false
+    }
+  }
+
+  private def tryShrinkIsr(): Unit = {
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -848,6 +858,11 @@ class Partition(val topicPartition: TopicPartition,
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
       tryCompleteDelayedRequests()
+  }
+
+  def maybeShrinkIsr(): Unit = {
+    if (shouldShrinkIsr)
+      tryShrinkIsr
   }
 
   private def isFollowerOutOfSync(replicaId: Int,
