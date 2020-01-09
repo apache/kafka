@@ -193,14 +193,233 @@ public class StreamsMetricsImplTest {
         streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, storeName, sensorName2, RecordingLevel.INFO);
     }
 
-    private void setupGetSensorTest(final Metrics metrics,
-                                    final String level,
-                                    final RecordingLevel recordingLevel) {
-        final String fullSensorName =
-            INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER + sensorName1;
+    private void setupGetNewSensorTest(final Metrics metrics,
+                                       final String level,
+                                       final RecordingLevel recordingLevel) {
+        final String fullSensorName = fullSensorName(level);
+        expect(metrics.getSensor(fullSensorName)).andStubReturn(null);
         final Sensor[] parents = {};
         expect(metrics.sensor(fullSensorName, recordingLevel, parents)).andReturn(sensor);
         replay(metrics);
+    }
+
+    private void setupGetExistingSensorTest(final Metrics metrics,
+                                            final String level) {
+        final String fullSensorName = fullSensorName(level);
+        expect(metrics.getSensor(fullSensorName)).andStubReturn(sensor);
+        replay(metrics);
+    }
+
+    private String fullSensorName(final String level) {
+        return INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER + sensorName1;
+    }
+
+    @Test
+    public void shouldGetNewThreadLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetNewSensorTest(metrics, THREAD_ID, recordingLevel);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.threadLevelSensor(
+            THREAD_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingThreadLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetExistingSensorTest(metrics, THREAD_ID);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.threadLevelSensor(
+            THREAD_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetNewTaskLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetNewSensorTest(metrics, THREAD_ID + ".task." + TASK_ID, recordingLevel);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.taskLevelSensor(
+            THREAD_ID,
+            TASK_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingTaskLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetExistingSensorTest(metrics, THREAD_ID + ".task." + TASK_ID);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.taskLevelSensor(
+            THREAD_ID,
+            TASK_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetNewStoreLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetNewSensorTest(
+            metrics,
+            THREAD_ID + ".task." + storeName + SENSOR_PREFIX_DELIMITER + storeName + SENSOR_PREFIX_DELIMITER
+                + TASK_ID,
+            recordingLevel
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.storeLevelSensor(
+            THREAD_ID,
+            storeName,
+            TASK_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingStoreLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetExistingSensorTest(
+            metrics, THREAD_ID + ".task." + storeName + SENSOR_PREFIX_DELIMITER + storeName + SENSOR_PREFIX_DELIMITER
+                + TASK_ID
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.storeLevelSensor(
+            THREAD_ID,
+            storeName,
+            TASK_ID,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetNewNodeLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String processorNodeName = "processorNodeName";
+        setupGetNewSensorTest(metrics, THREAD_ID + ".task." + TASK_ID + SENSOR_PREFIX_DELIMITER + "node"
+            + SENSOR_PREFIX_DELIMITER + processorNodeName,
+            recordingLevel
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.nodeLevelSensor(
+            THREAD_ID,
+            TASK_ID,
+            processorNodeName,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingNodeLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String processorNodeName = "processorNodeName";
+        setupGetExistingSensorTest(
+            metrics, THREAD_ID + ".task." + TASK_ID + SENSOR_PREFIX_DELIMITER
+            + "node" + SENSOR_PREFIX_DELIMITER + processorNodeName
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.nodeLevelSensor(
+            THREAD_ID,
+            TASK_ID,
+            processorNodeName,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetNewCacheLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String processorCacheName = "processorNodeName";
+        setupGetNewSensorTest(
+            metrics, THREAD_ID + ".task." + TASK_ID + SENSOR_PREFIX_DELIMITER
+            + "cache" + SENSOR_PREFIX_DELIMITER + processorCacheName,
+            recordingLevel
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.cacheLevelSensor(
+            THREAD_ID,
+            TASK_ID,
+            processorCacheName,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingCacheLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        final String processorCacheName = "processorNodeName";
+        setupGetExistingSensorTest(
+            metrics, THREAD_ID + ".task." + TASK_ID + SENSOR_PREFIX_DELIMITER
+            + "cache" + SENSOR_PREFIX_DELIMITER + processorCacheName
+        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
+
+        final Sensor actualSensor = streamsMetrics.cacheLevelSensor(
+            THREAD_ID, TASK_ID,
+            processorCacheName,
+            sensorName1,
+            recordingLevel
+        );
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
     @Test
@@ -242,19 +461,6 @@ public class StreamsMetricsImplTest {
     public void shouldProvideCorrectStrings() {
         assertThat(LATENCY_SUFFIX, is("-latency"));
         assertThat(ROLLUP_VALUE, is("all"));
-    }
-
-    @Test
-    public void shouldGetThreadLevelSensor() {
-        final Metrics metrics = mock(Metrics.class);
-        final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        setupGetSensorTest(metrics, THREAD_ID, recordingLevel);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION);
-
-        final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID, sensorName1, recordingLevel);
-
-        verify(metrics);
-        assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
     private void setupRemoveSensorsTest(final Metrics metrics,
