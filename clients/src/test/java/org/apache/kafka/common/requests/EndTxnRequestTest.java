@@ -48,6 +48,8 @@ public class EndTxnRequestTest {
 
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 1), response.errorCounts());
 
+            assertEquals(TransactionResult.COMMIT, request.result());
+
             assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
     }

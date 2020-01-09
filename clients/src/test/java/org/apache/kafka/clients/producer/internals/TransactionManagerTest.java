@@ -2781,7 +2781,7 @@ public class TransactionManagerTest {
             assertEquals(transactionalId, endTxnRequest.data.transactionalId());
             assertEquals(pid, endTxnRequest.data.producerId());
             assertEquals(epoch, endTxnRequest.data.producerEpoch());
-            assertEquals(result, TransactionResult.forId(endTxnRequest.data.committed()));
+            assertEquals(result, endTxnRequest.result());
             return true;
         };
     }

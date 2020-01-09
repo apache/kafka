@@ -57,6 +57,13 @@ public class EndTxnRequest extends AbstractRequest {
         this.data = new EndTxnRequestData(struct, version);
     }
 
+    public TransactionResult result() {
+        if (data.committed())
+            return TransactionResult.COMMIT;
+        else
+            return TransactionResult.ABORT;
+    }
+
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());

@@ -2342,7 +2342,7 @@ public class SenderTest {
         @Override
         public boolean matches(AbstractRequest body) {
             if (body instanceof EndTxnRequest) {
-                assertSame(requiredResult, TransactionResult.forId(((EndTxnRequest) body).data.committed()));
+                assertSame(requiredResult, ((EndTxnRequest) body).result());
                 matched = true;
                 return true;
             } else {
