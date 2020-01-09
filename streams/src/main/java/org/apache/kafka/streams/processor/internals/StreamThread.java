@@ -62,8 +62,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.util.Collections.singleton;
-
 public class StreamThread extends Thread {
 
     /**
@@ -373,7 +371,7 @@ public class StreamThread extends Thread {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 partitions,
-                false,
+                AbstractTask.TaskType.ACTIVE,
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 storeChangelogReader,
@@ -467,7 +465,7 @@ public class StreamThread extends Thread {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     partitions,
-                    true,
+                    AbstractTask.TaskType.STANDBY,
                     stateDirectory,
                     topology.storeToChangelogTopic(),
                     storeChangelogReader,
@@ -521,6 +519,8 @@ public class StreamThread extends Thread {
     private StreamThread.StateListener stateListener;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
 
+    private final StoreChangelogReader changelogReader;
+
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> restoreConsumer;
@@ -550,8 +550,8 @@ public class StreamThread extends Thread {
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
-        final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
+
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(config, logContext, restoreConsumer, userStateRestoreListener);
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
@@ -600,6 +600,7 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
+        changelogReader.setMainConsumer(consumer);
         taskManager.setConsumer(consumer);
 
         return new StreamThread(
@@ -608,6 +609,7 @@ public class StreamThread extends Thread {
             activeTaskCreator.threadProducer,
             restoreConsumer,
             consumer,
+            changelogReader,
             originalReset,
             taskManager,
             streamsMetrics,
@@ -623,6 +625,7 @@ public class StreamThread extends Thread {
                         final Producer<byte[], byte[]> producer,
                         final Consumer<byte[], byte[]> restoreConsumer,
                         final Consumer<byte[], byte[]> consumer,
+                        final StoreChangelogReader changelogReader,
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
@@ -662,6 +665,7 @@ public class StreamThread extends Thread {
         this.restoreConsumer = restoreConsumer;
         this.consumer = consumer;
         this.producer = producer;
+        this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.assignmentErrorCode = assignmentErrorCode;
 
@@ -1038,83 +1042,9 @@ public class StreamThread extends Thread {
     private void maybeUpdateStandbyTasks() {
         if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
             if (processStandbyRecords) {
-                if (!standbyRecords.isEmpty()) {
-                    final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
+                changelogReader.restore();
 
-                    for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> entry : standbyRecords.entrySet()) {
-                        final TopicPartition partition = entry.getKey();
-                        List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
-                        if (remaining != null) {
-                            final StandbyTask task = taskManager.standbyTask(partition);
-
-                            if (task.isClosed()) {
-                                log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                                throw new TaskMigratedException(task.id());
-                            }
-
-                            remaining = task.update(partition, remaining);
-                            if (!remaining.isEmpty()) {
-                                remainingStandbyRecords.put(partition, remaining);
-                            } else {
-                                restoreConsumer.resume(singleton(partition));
-                            }
-                        }
-                    }
-
-                    standbyRecords = remainingStandbyRecords;
-
-                    if (log.isDebugEnabled()) {
-                        log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
-                    }
-                }
                 processStandbyRecords = false;
-            }
-
-            try {
-                // poll(0): Since this is during the normal processing, not during restoration.
-                // We can afford to have slower restore (because we don't wait inside poll for results).
-                // Instead, we want to proceed to the next iteration to call the main consumer#poll()
-                // as soon as possible so as to not be kicked out of the group.
-                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(Duration.ZERO);
-
-                if (!records.isEmpty()) {
-                    for (final TopicPartition partition : records.partitions()) {
-                        final StandbyTask task = taskManager.standbyTask(partition);
-
-                        if (task == null) {
-                            throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
-                        }
-
-                        if (task.isClosed()) {
-                            log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                            throw new TaskMigratedException(task.id());
-                        }
-
-                        final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                        if (!remaining.isEmpty()) {
-                            restoreConsumer.pause(singleton(partition));
-                            standbyRecords.put(partition, remaining);
-                        }
-                    }
-                }
-            } catch (final InvalidOffsetException recoverableException) {
-                log.warn("Updating StandbyTasks failed. Deleting StandbyTasks stores to recreate from scratch.", recoverableException);
-                final Set<TopicPartition> partitions = recoverableException.partitions();
-                for (final TopicPartition partition : partitions) {
-                    final StandbyTask task = taskManager.standbyTask(partition);
-
-                    if (task.isClosed()) {
-                        log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                            "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                        throw new TaskMigratedException(task.id());
-                    }
-
-                    log.info("Reinitializing StandbyTask {} from changelogs {}", task, recoverableException.partitions());
-                    task.reinitializeStateStoresForPartitions(recoverableException.partitions());
-                }
-                restoreConsumer.seekToBeginning(partitions);
             }
 
             // update now if the standby restoration indeed executed
@@ -1162,6 +1092,11 @@ public class StreamThread extends Thread {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
+        }
+        try {
+            changelogReader.clear();
+        } catch (final Throwable e) {
+            log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
             consumer.close();

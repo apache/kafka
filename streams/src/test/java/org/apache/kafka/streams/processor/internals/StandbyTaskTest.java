@@ -165,7 +165,7 @@ public class StandbyTaskTest {
 
     @Test
     public void testStorePartitions() throws IOException {
-        EasyMock.expect(stateManager.checkpointed()).andReturn(Collections.singletonMap(partition, 50L));
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
         EasyMock.replay(stateManager);
 
         final StreamsConfig config = createConfig(baseDir);

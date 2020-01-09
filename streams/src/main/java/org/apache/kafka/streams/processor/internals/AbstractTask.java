@@ -52,6 +52,20 @@ public abstract class AbstractTask implements Task {
 
     InternalProcessorContext processorContext;
 
+    public enum TaskType {
+        ACTIVE("ACTIVE"),
+
+        STANDBY("STANDBY"),
+
+        GLOBAL("GLOBAL");
+
+        public final String name;
+
+        TaskType(final String name) {
+            this.name = name;
+        }
+    }
+
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -169,17 +183,18 @@ public abstract class AbstractTask implements Task {
                 e
             );
         }
-        log.trace("Initializing state stores");
+        log.debug("Acquired state directory lock");
 
+        // We should only load checkpoint AFTER the corresponding state directory lock has been acquired and
+        // the state stores have been registered; we should not try to load at the state manager construction time.
+        // See https://issues.apache.org/jira/browse/KAFKA-8574
         for (final StateStore store : topology.stateStores()) {
-            log.debug("Initializing store {}", store.name());
             processorContext.uninitialize();
             store.init(processorContext, store);
+            log.trace("Registered state store {}", store.name());
         }
-    }
-
-    void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions) {
-        stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
+        stateMgr.initStoresFromCheckpointedOffsets();
+        log.debug("Initialized state stores");
     }
 
     /**
@@ -221,5 +236,4 @@ public abstract class AbstractTask implements Task {
     public Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
     }
-
 }

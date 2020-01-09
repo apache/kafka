@@ -211,7 +211,7 @@ public class GlobalStateTaskTest {
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertEquals(expectedOffsets, stateMgr.checkpointed());
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
     }
 
     @Test
@@ -222,7 +222,7 @@ public class GlobalStateTaskTest {
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertThat(stateMgr.checkpointed(), equalTo(expectedOffsets));
+        assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
     }
 
 }

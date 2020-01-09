@@ -43,6 +43,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
+import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
@@ -385,14 +386,14 @@ public class TopologyTestDriver implements Closeable {
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 TASK_ID,
                 new HashSet<>(partitionsByTopic.values()),
-                false,
+                AbstractTask.TaskType.ACTIVE,
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
                 new StoreChangelogReader(
+                    streamsConfig,
+                    logContext,
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
-                    Duration.ZERO,
-                    stateRestoreListener,
-                    logContext),
+                    stateRestoreListener),
                 logContext);
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 TASK_ID,
@@ -829,7 +830,7 @@ public class TopologyTestDriver implements Closeable {
         }
 
         if (globalStateManager != null) {
-            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            final StateStore stateStore = globalStateManager.getStore(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {
                     throwIfBuiltInStore(stateStore);
