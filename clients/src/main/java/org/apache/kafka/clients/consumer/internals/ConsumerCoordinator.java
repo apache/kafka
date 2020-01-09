@@ -826,7 +826,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return the current consumer group metadata
      */
     public ConsumerGroupMetadata groupMetadata() {
-        return new ConsumerGroupMetadata(groupMetadata);
+        return groupMetadata;
     }
 
     /**

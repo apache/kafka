@@ -41,25 +41,4 @@ public class ConsumerGroupMetadataTest {
         assertTrue(groupMetadata.groupInstanceId().isPresent());
         assertEquals(groupInstanceId, groupMetadata.groupInstanceId().get());
     }
-
-    @Test
-    public void testCopyConstructor() {
-        String groupId = "group";
-        String memberId = "member";
-        int generationId = 2;
-        String groupInstanceId = "instance";
-
-        ConsumerGroupMetadata originalGroupMetadata = new ConsumerGroupMetadata(groupId,
-            generationId, memberId, Optional.of(groupInstanceId));
-
-        ConsumerGroupMetadata otherGroupMetadata = new ConsumerGroupMetadata(originalGroupMetadata);
-
-        assertTrue(otherGroupMetadata.groupInstanceId().isPresent());
-        assertEquals(groupInstanceId, otherGroupMetadata.groupInstanceId().get());
-
-        originalGroupMetadata.groupInstanceId = Optional.empty();
-
-        assertTrue(otherGroupMetadata.groupInstanceId().isPresent());
-        assertEquals(groupInstanceId, otherGroupMetadata.groupInstanceId().get());
-    }
 }
