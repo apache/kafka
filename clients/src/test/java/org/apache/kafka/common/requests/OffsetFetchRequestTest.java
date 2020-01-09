@@ -99,7 +99,7 @@ public class OffsetFetchRequestTest {
     }
 
     @Test
-    public void testConstructorFailForUnsupportedWaitTransaction() {
+    public void testConstructorFailForUnsupportedRequireStable() {
         builder = new OffsetFetchRequest.Builder(groupId, true, null);
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             short finalVersion = version;
@@ -108,7 +108,7 @@ public class OffsetFetchRequestTest {
             } else {
                 OffsetFetchRequest request = builder.build(finalVersion);
                 assertEquals(groupId, request.groupId());
-                assertTrue(request.waitTransaction());
+                assertTrue(request.requireStable());
                 assertNull(request.partitions());
                 assertTrue(request.isAllPartitions());
             }

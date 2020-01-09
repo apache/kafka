@@ -466,10 +466,10 @@ public final class MessageTest {
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
 
-        OffsetFetchRequestData waitTransactionData = new OffsetFetchRequestData()
+        OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
                                                          .setGroupId(groupId)
                                                          .setTopics(null)
-                                                         .setWaitTransaction(true);
+                                                         .setRequireStable(true);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             if (version < 2) {
@@ -477,7 +477,7 @@ public final class MessageTest {
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
             } else if (version < 7) {
                 final short finalVersion = version;
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, waitTransactionData));
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
             }

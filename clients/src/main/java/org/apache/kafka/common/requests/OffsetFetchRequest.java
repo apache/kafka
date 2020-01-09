@@ -41,7 +41,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         public final OffsetFetchRequestData data;
 
         public Builder(String groupId,
-                       boolean waitTransaction,
+                       boolean requireStable,
                        List<TopicPartition> partitions) {
             super(ApiKeys.OFFSET_FETCH);
 
@@ -63,7 +63,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
-                            .setWaitTransaction(waitTransaction)
+                            .setRequireStable(requireStable)
                             .setTopics(topics);
         }
 
@@ -78,7 +78,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     "v" + version + ", but we need v2 or newer to request all topic partitions.");
             }
 
-            if (data.waitTransaction() && version < 7) {
+            if (data.requireStable() && version < 7) {
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
                     "v" + version + ", but we need v7 or newer to request wait transactions.");
             }
@@ -109,8 +109,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.groupId();
     }
 
-    public boolean waitTransaction() {
-        return data.waitTransaction();
+    public boolean requireStable() {
+        return data.requireStable();
     }
 
     private OffsetFetchRequest(OffsetFetchRequestData data, short version) {
