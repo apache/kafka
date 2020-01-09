@@ -305,7 +305,10 @@ public class ProcessorStateManager implements StateManager {
             try {
                 restoreCallback.restoreBatch(convertedRecords);
             } catch (final RuntimeException e) {
-                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
+                throw new ProcessorStateException(
+                    format("%sException caught while trying to restore state from %s", logPrefix, changelogPartition),
+                    e
+                );
                     logPrefix, changelogPartition), e);
             }
 
