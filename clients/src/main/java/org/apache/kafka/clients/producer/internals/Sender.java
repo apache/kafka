@@ -426,8 +426,13 @@ public class Sender implements Runnable {
         }
 
         if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
-            if (accumulator.hasIncomplete())
-                accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
+            if (accumulator.hasIncomplete()) {
+                RuntimeException exception = transactionManager.lastError();
+                if (exception == null) {
+                    exception = new KafkaException("Failing batch since transaction was aborted");
+                }
+                accumulator.abortUndrainedBatches(exception);
+            }
         }
 
         if (transactionManager.isCompleting() && !accumulator.flushInProgress()) {
