@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -79,6 +81,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -736,6 +739,19 @@ public class KafkaStreams implements AutoCloseable {
 
         // use client id instead of thread client id since this admin client may be shared among threads
         adminClient = clientSupplier.getAdmin(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
+
+        // Send out a DescribeConfigRequest to the broker.
+        String interBrokerProtocolVersionName = "inter.broker.protocol.version";
+        ConfigResource interBrokerProtocolVersionKey = new ConfigResource(ConfigResource.Type.BROKER, "inter.broker.protocol.version");
+        DescribeConfigsResult result = adminClient.describeConfigs(Collections.singletonList(interBrokerProtocolVersionKey));
+        try {
+            // the actual IBP returned
+            String interBrokerProtocolVersion = result.values().get(interBrokerProtocolVersionKey).get().get(interBrokerProtocolVersionName).value();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
