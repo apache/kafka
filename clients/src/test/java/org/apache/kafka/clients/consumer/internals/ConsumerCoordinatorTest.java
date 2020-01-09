@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -2308,7 +2309,28 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testConsumerRejoinAfterRebalance() throws Exception {
+    public void testGetGroupMetadata() {
+        final ConsumerGroupMetadata groupMetadata = coordinator.groupMetadata();
+        assertNotNull(groupMetadata);
+        assertEquals(groupId, groupMetadata.groupId());
+        assertEquals(JoinGroupResponse.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
+        assertFalse(groupMetadata.groupInstanceId().isPresent());
+
+        try (final ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, groupInstanceId)) {
+            coordinator.ensureActiveGroup();
+
+            final ConsumerGroupMetadata joinedGroupMetadata = coordinator.groupMetadata();
+            assertNotNull(joinedGroupMetadata);
+            assertEquals(groupId, joinedGroupMetadata.groupId());
+            assertEquals(1, joinedGroupMetadata.generationId());
+            assertEquals("consumer", joinedGroupMetadata.memberId());
+            assertEquals(groupInstanceId, joinedGroupMetadata.groupInstanceId());
+        }
+    }
+
+    @Test
+    public void testConsumerRejoinAfterRebalance() {
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
             coordinator.ensureActiveGroup();
 
