@@ -1204,7 +1204,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTopicAuthorizationFailureInAddPartitions() {
+    public void testTopicAuthorizationFailureInAddPartitions() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
         final TopicPartition tp0 = new TopicPartition("foo", 0);
@@ -1217,6 +1217,10 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
         transactionManager.failIfNotReadyForSend();
         transactionManager.maybeAddPartitionToTransaction(tp1);
+
+        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
+        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
         errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
@@ -1234,8 +1238,60 @@ public class TransactionManagerTest {
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
         assertEquals(singleton(tp0.topic()), exception.unauthorizedTopics());
-
         assertAbortableError(TopicAuthorizationException.class);
+        sender.runOnce();
+
+        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+    }
+
+    @Test
+    public void testCommitWithTopicAuthorizationFailureInAddPartitionsInFlight() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp0 = new TopicPartition("foo", 0);
+        final TopicPartition tp1 = new TopicPartition("bar", 0);
+
+        doInitTransactions(pid, epoch);
+
+        // Begin a transaction, send two records, and begin commit
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        transactionManager.maybeAddPartitionToTransaction(tp1);
+        FutureRecordMetadata firstPartitionAppend = appendToAccumulator(tp0);
+        FutureRecordMetadata secondPartitionAppend = appendToAccumulator(tp1);
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        // We send the AddPartitionsToTxn request in the first sender call
+        sender.runOnce();
+        assertFalse(transactionManager.hasError());
+        assertFalse(commitResult.isCompleted());
+        assertFalse(firstPartitionAppend.isDone());
+
+        // The AddPartitionsToTxn response returns in the next call with the error
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(tp0, Errors.TOPIC_AUTHORIZATION_FAILED);
+        errors.put(tp1, Errors.OPERATION_NOT_ATTEMPTED);
+        client.respond(body -> {
+            AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
+            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            return true;
+        }, new AddPartitionsToTxnResponse(0, errors));
+
+        sender.runOnce();
+        assertTrue(transactionManager.hasError());
+        assertFalse(commitResult.isCompleted());
+        assertFalse(firstPartitionAppend.isDone());
+        assertFalse(secondPartitionAppend.isDone());
+
+        // The next call aborts the records, which have not yet been sent. It should
+        // not block because there are no requests pending and we still need to cancel
+        // the pending transaction commit.
+        sender.runOnce();
+        assertTrue(commitResult.isCompleted());
+        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        assertTrue(commitResult.error() instanceof TopicAuthorizationException);
     }
 
     @Test
