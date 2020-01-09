@@ -861,6 +861,15 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testInitializeTransactionsTwiceRaisesError() {
+        final long producerId = 13131L;
+        final short epoch = 1;
+        doInitTransactions(producerId, epoch);
+        assertTrue(transactionManager.hasProducerId());
+        assertThrows(KafkaException.class, () -> transactionManager.initializeTransactions());
+    }
+
+    @Test
     public void testUnsupportedFindCoordinator() {
         transactionManager.initializeTransactions();
         client.prepareUnsupportedVersionResponse(body -> {

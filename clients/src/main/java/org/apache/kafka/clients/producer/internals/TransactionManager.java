@@ -278,6 +278,10 @@ public class TransactionManager {
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         return handleCachedTransactionRequestResult(() -> {
+            if (currentState != State.UNINITIALIZED)
+                throw new KafkaException("The `initializeTransactions` API should only be called once " +
+                        "after the producer is instantiated");
+
             transitionTo(State.INITIALIZING);
             setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
