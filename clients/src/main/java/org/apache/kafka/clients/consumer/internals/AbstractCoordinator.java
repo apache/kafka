@@ -131,7 +131,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
-    private RuntimeException findCoordinatorException = null;
+    volatile private RuntimeException findCoordinatorException = null;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
@@ -237,16 +237,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (!future.isDone()) {
                 // ran out of time
-                future.addListener(new RequestFutureListener<Void>() {
-                    @Override
-                    public void onSuccess(Void value) {} // do nothing
-
-                    @Override
-                    public void onFailure(RuntimeException e) {
-                        findCoordinatorException = e;
-                    }
-                });
-
                 break;
             }
 
@@ -274,8 +264,20 @@ public abstract class AbstractCoordinator implements Closeable {
             if (node == null) {
                 log.debug("No broker available to send FindCoordinator request");
                 return RequestFuture.noBrokersAvailable();
-            } else
+            } else{
                 findCoordinatorFuture = sendFindCoordinatorRequest(node);
+                // remember the exception even after the future is cleared so that
+                // it can still be thrown by the ensureCoordinatorReady caller
+                findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                    @Override
+                    public void onSuccess(Void value) {} // do nothing
+
+                    @Override
+                    public void onFailure(RuntimeException e) {
+                        findCoordinatorException = e;
+                    }
+                });
+            }
         }
         return findCoordinatorFuture;
     }

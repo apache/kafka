@@ -769,6 +769,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     this.subscriptions.seekUnvalidated(tp, position);
 
                     log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                } else {
+                    log.info("Ignoring the returned {} since its partition {} is no longer assigned",
+                        offsetAndMetadata, tp);
                 }
             }
         }

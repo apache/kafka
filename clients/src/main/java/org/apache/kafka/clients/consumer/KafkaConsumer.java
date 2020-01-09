@@ -1333,13 +1333,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed but can be retried.
-     *            This can occur if, e.g. consumer instance is in the middle of a rebalance so it is not yet determined
-     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
-     *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
-     *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
-     *            their fetch positions may have changed too if more records are returned from the {@link #poll(Duration)}
-     *            call, so when you retry committing only those assigned partitions would be committed with the current positions.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1377,13 +1376,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
-     *            it is in the middle of a rebalance so it is not yet determined
-     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
-     *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
-     *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
-     *            their fetch positions may have changed too if more records are returned from the {@link #poll(Duration)}
-     *            call, so when you retry committing only those assigned partitions would be committed with the current positions.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1433,14 +1431,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
-     *            it is in the middle of a rebalance so it is not yet determined
-     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
-     *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
-     *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
-     *            their fetch positions may also have changed too if more records are returned from the {@link #poll(Duration)}
-     *            call, so when you retry committing you should include only those assigned partitions after the rebalance
-     *            with the current fetch position; otherwise a fatal {@link CommitFailedException} will be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call, so when you retry committing
+     *            you should consider updating the passed in {@code offset} parameter.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1482,14 +1479,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
      *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
      *             consumer is for example no longer part of the group this exception would be thrown.
-     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the commit failed because
-     *            it is in the middle of a rebalance so it is not yet determined
-     *            which partitions would be assigned to the consumer yet. In such cases you can first complete the rebalance
-     *            by calling {@link #poll(Duration)} and retry committing offsets again. NOTE when you retry after the
-     *            rebalance the assigned partitions may have changed, and also for those partitions that are still assigned
-     *            their fetch positions may also have changed too if more records are returned from the {@link #poll(Duration)}
-     *            call, so when you retry committing you should include only those assigned partitions after the rebalance
-     *            with the current fetch position; otherwise a fatal {@link CommitFailedException} will be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call, so when you retry committing
+     *            you should consider updating the passed in {@code offset} parameter.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1582,9 +1578,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Committing offsets: {}", offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
-        } catch (CommitFailedException e) {
-            log.error("Failed to commit offsets asynchronously because they do not belong to dynamically assigned partitions");
-            callback.onComplete(offsets, e);
         } finally {
             release();
         }
