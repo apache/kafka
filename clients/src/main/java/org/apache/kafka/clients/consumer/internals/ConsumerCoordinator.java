@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -438,7 +439,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         invokeCompletedOffsetCommitCallbacks();
 
-        if (subscriptions.partitionsAutoAssigned()) {
+        if (subscriptions.hasAutoAssignedPartitions()) {
             if (protocol == null) {
                 throw new IllegalStateException("User configured " + ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG +
                     " to empty while trying to subscribe for group protocol to auto assign partitions");
@@ -706,7 +707,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
-        if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
+        if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
             if (generation() != Generation.NO_GENERATION) {
                 e = invokePartitionsRevoked(droppedPartitions);
@@ -727,7 +728,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     @Override
     public boolean rejoinNeededOrPending() {
-        if (!subscriptions.partitionsAutoAssigned())
+        if (!subscriptions.hasAutoAssignedPartitions())
             return false;
 
         // we need to rejoin if we performed the assignment and metadata has changed;
@@ -759,14 +760,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata != null) {
-                final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
-                final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                    offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                    leaderAndEpoch);
-
-                log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                // first update the epoch if necessary
                 entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-                this.subscriptions.seekUnvalidated(tp, position);
+
+                // it's possible that the partition is no longer assigned when the response is received,
+                // so we need to ignore seeking if that's the case
+                if (this.subscriptions.isAssigned(tp)) {
+                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                        offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                        leaderAndEpoch);
+
+                    this.subscriptions.seekUnvalidated(tp, position);
+
+                    log.info("Setting offset for partition {} to the committed offset {}", tp, position);
+                } else {
+                    log.info("Ignoring the returned {} since its partition {} is no longer assigned",
+                        offsetAndMetadata, tp);
+                }
             }
         }
         return true;
@@ -986,7 +997,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
-                if (exception instanceof RetriableException) {
+                if (exception instanceof RetriableCommitFailedException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
                         exception);
                     nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
@@ -1066,16 +1077,28 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
-        if (subscriptions.partitionsAutoAssigned()) {
+        if (subscriptions.hasAutoAssignedPartitions()) {
             generation = generationIfStable();
             // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll()
+            // the only thing we can do is fail the commit and let the user rejoin the group in poll().
             if (generation == null) {
                 log.info("Failing OffsetCommit request since the consumer is not part of an active group");
-                return RequestFuture.failure(new CommitFailedException());
+
+                if (rebalanceInProgress()) {
+                    // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
+                    // CommitFailedException to indicate this is not a fatal error
+                    return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                        "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
+                        "by calling poll() and then retry the operation."));
+                } else {
+                    return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
+                        "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
+                        "was kicked out of the group."));
+                }
             }
-        } else
+        } else {
             generation = Generation.NO_GENERATION;
+        }
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
@@ -1148,15 +1171,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                            /* Consumer never tries to commit offset in between join-group and sync-group,
+                            /* Consumer should not try to commit offset in between join-group and sync-group,
                              * and hence on broker-side it is not expected to see a commit offset request
                              * during CompletingRebalance phase; if it ever happens then broker would return
-                             * this error. In this case we should just treat as a fatal CommitFailed exception.
-                             * However, we do not need to reset generations and just request re-join, such that
-                             * if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                             * this error to indicate that we are still in the middle of a rebalance.
+                             * In this case we would throw a RebalanceInProgressException,
+                             * request re-join but do not reset generations. If the callers decide to retry they
+                             * can go ahead and call poll to finish up the rebalance first, and then try commit again.
                              */
                             requestRejoin();
-                            future.raise(new CommitFailedException());
+                            future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                "consumer group is executing a rebalance at the moment. You can try completing the rebalance " +
+                                "by calling poll() and then retry commit again"));
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID
                                 || error == Errors.ILLEGAL_GENERATION) {

@@ -1231,9 +1231,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 client.maybeTriggerWakeup();
 
                 if (includeMetadataInTimeout) {
-                    if (!updateAssignmentMetadataIfNeeded(timer)) {
-                        return ConsumerRecords.empty();
-                    }
+                    // try to update assignment metadata BUT do not need to block on the timer,
+                    // since even if we are 1) in the middle of a rebalance or 2) have partitions
+                    // with unknown starting positions we may still want to return some data
+                    // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
+                    // to never block on completing the rebalance procedure if there's any
+                    updateAssignmentMetadataIfNeeded(time.timer(0L));
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
@@ -1307,12 +1310,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         });
         timer.update(pollTimer.currentTimeMs());
 
-        // after the long poll, we should check whether the group needs to rebalance
-        // prior to returning data so that the group can stabilize faster
-        if (coordinator != null && coordinator.rejoinNeededOrPending()) {
-            return Collections.emptyMap();
-        }
-
         return fetcher.fetchedRecords();
     }
 
@@ -1332,8 +1329,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
-     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             This fatal error can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
+     *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1360,7 +1365,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
+     * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the passed timeout expires.
      * <p>
      * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
@@ -1368,7 +1373,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
+     *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1402,9 +1415,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
-     * i.e. lastProcessedMessageOffset + 1.
+     * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+     * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
-     * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
+     * This is a synchronous commit and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the timeout specified by {@code default.api.timeout.ms} expires
      * (in which case a {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      * <p>
@@ -1414,7 +1428,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param offsets A map of offsets by partition with associated metadata
      * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
      *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-     *             or if there is an active group with the same groupId which is using group management.
+     *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
+     *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call, so when you retry committing
+     *            you should consider updating the passed in {@code offset} parameter.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1435,38 +1458,48 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-    * Commit the specified offsets for the specified list of topics and partitions.
-    * <p>
-    * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
-    * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
-    * should not be used. The committed offset should be the next message your application will consume,
-    * i.e. lastProcessedMessageOffset + 1.
-    * <p>
-    * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
-    * encountered (in which case it is thrown to the caller), or the timeout expires.
-    * <p>
-    * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
-    * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
-    *
-    * @param offsets A map of offsets by partition with associated metadata
-    * @param timeout The maximum amount of time to await completion of the offset commit
-    * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
-    *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
-    *             or if there is an active group with the same groupId which is using group management.
-    * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
-    *             function is called
-    * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
-    *             this function is called
-    * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-    * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-    *             configured groupId. See the exception for more details
-    * @throws java.lang.IllegalArgumentException if the committed offset is negative
-    * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
-    *             is too large or if the topic does not exist).
-    * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
-    *            of the offset commit
-    * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
-    */
+     * Commit the specified offsets for the specified list of topics and partitions.
+     * <p>
+     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
+     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used. The committed offset should be the next message your application will consume,
+     * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+     * then the committed offsets must belong to the currently auto-assigned partitions.
+     * <p>
+     * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
+     * encountered (in which case it is thrown to the caller), or the timeout expires.
+     * <p>
+     * Note that asynchronous offset commits sent previously with the {@link #commitAsync(OffsetCommitCallback)}
+     * (or similar) are guaranteed to have their callbacks invoked prior to completion of this method.
+     *
+     * @param offsets A map of offsets by partition with associated metadata
+     * @param timeout The maximum amount of time to await completion of the offset commit
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException if the commit failed and cannot be retried.
+     *             This can only occur if you are using automatic group management with {@link #subscribe(Collection)},
+     *             or if there is an active group with the same <code>group.id</code> which is using group management. In such cases,
+     *             when you are trying to commit to partitions that are no longer assigned to this consumer because the
+     *             consumer is for example no longer part of the group this exception would be thrown.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if the consumer instance is in the middle of a rebalance
+     *            so it is not yet determined which partitions would be assigned to the consumer. In such cases you can first
+     *            complete the rebalance by calling {@link #poll(Duration)} and commit can be reconsidered afterwards.
+     *            NOTE when you reconsider committing after the rebalance, the assigned partitions may have changed,
+     *            and also for those partitions that are still assigned their fetch positions may have changed too
+     *            if more records are returned from the {@link #poll(Duration)} call, so when you retry committing
+     *            you should consider updating the passed in {@code offset} parameter.
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws java.lang.IllegalArgumentException if the committed offset is negative
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
+     *             is too large or if the topic does not exist).
+     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
+     *            of the offset commit
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
@@ -1521,7 +1554,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
-     * i.e. lastProcessedMessageOffset + 1.
+     * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+     * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
      * (if provided) or discarded.
