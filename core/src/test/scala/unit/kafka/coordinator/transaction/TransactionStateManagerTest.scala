@@ -19,10 +19,9 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.log.Log
+import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool}
-import org.scalatest.Assertions.fail
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -31,13 +30,13 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.scalatest.Assertions.fail
 
-import scala.collection.Map
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.{Map, mutable}
 
 class TransactionStateManagerTest {
 
@@ -523,7 +522,7 @@ class TransactionStateManagerTest {
         EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
           EasyMock.eq((-1).toShort),
           EasyMock.eq(true),
-          EasyMock.eq(false),
+          EasyMock.eq(AppendOrigin.Coordinator),
           EasyMock.eq(recordsByPartition),
           EasyMock.capture(capturedArgument),
           EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
@@ -636,7 +635,7 @@ class TransactionStateManagerTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       internalTopicsAllowed = EasyMock.eq(true),
-      isFromClient = EasyMock.eq(false),
+      origin = EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
