@@ -115,4 +115,14 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   def windowedBy(windows: SessionWindows): SessionWindowedKStream[K, V] =
     new SessionWindowedKStream(inner.windowedBy(windows))
 
+  /**
+   * Create a new [[CogroupedKStream]] from this grouped KStream to allow cogrouping other [[KGroupedStream]] to it.
+   *
+   * @param aggregator an `Aggregator` that computes a new aggregate result
+   * @return an instance of [[CogroupedKStream]]
+   * @see `org.apache.kafka.streams.kstream.KGroupedStream#cogroup`
+   */
+  def cogroup[VR](aggregator: (K, V, VR) => VR): CogroupedKStream[K, VR] =
+    new CogroupedKStream(inner.cogroup(aggregator.asAggregator))
+
 }
