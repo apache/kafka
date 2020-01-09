@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition;
  */
 interface ChangelogRegister {
     /**
-     * Register a state store and it's partition for later restoration.
+     * Register a state store for restoration.
      *
      * @param partition the changelog topic partition to restore
      * @param stateManager the state manager used for restoring (one per task)

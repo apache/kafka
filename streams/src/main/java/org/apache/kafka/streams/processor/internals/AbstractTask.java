@@ -193,7 +193,7 @@ public abstract class AbstractTask implements Task {
             store.init(processorContext, store);
             log.trace("Registered state store {}", store.name());
         }
-        stateMgr.loadCheckpoint();
+        stateMgr.initStoresFromCheckpointedOffsets();
         log.debug("Initialized state stores");
     }
 

@@ -83,8 +83,6 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
-        //
-        // will be used by the changelog reader to determine if restoration is completed, hence public
         private Long offset;
 
         private StateStoreMetadata(final StateStore stateStore) {
@@ -110,6 +108,7 @@ public class ProcessorStateManager implements StateManager {
             this.offset = offset;
         }
 
+        // the offset is exposed to the changelog reader to determine if restoration is completed
         public Long offset() {
             return this.offset;
         }
@@ -166,8 +165,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    // load the checkpointed offsets, initialize the registered stores and then delete the checkpoint file
-    public void loadCheckpoint() {
+    public void initStoresFromCheckpointedOffsets() {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
@@ -304,9 +302,9 @@ public class ProcessorStateManager implements StateManager {
 
             try {
                 restoreCallback.restoreBatch(convertedRecords);
-            } catch (final RuntimeException e) {
+            } catch (final RuntimeException exception) {
                 throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
-                    logPrefix, changelogPartition), e);
+                    logPrefix, changelogPartition), exception);
             }
 
             store.setOffset(batchEndOffset);
@@ -351,16 +349,16 @@ public class ProcessorStateManager implements StateManager {
                 log.trace("Flushing store {}", store.name());
                 try {
                     store.flush();
-                } catch (final RuntimeException e) {
+                } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (e instanceof StreamsException)
-                            firstException = e;
+                        if (exception instanceof StreamsException)
+                            firstException = exception;
                         else
                             firstException = new ProcessorStateException(
-                                format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+                                format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
                     }
-                    log.error("Failed to flush state store {}: ", store.name(), e);
+                    log.error("Failed to flush state store {}: ", store.name(), exception);
                 }
             }
         }
@@ -388,11 +386,11 @@ public class ProcessorStateManager implements StateManager {
                 log.trace("Closing storage engine {}", store.name());
                 try {
                     store.close();
-                } catch (final RuntimeException e) {
+                } catch (final RuntimeException exception) {
                     if (firstException == null) {
-                        firstException = new ProcessorStateException(format("%sFailed to close state store %s", logPrefix, store.name()), e);
+                        firstException = new ProcessorStateException(format("%sFailed to close state store %s", logPrefix, store.name()), exception);
                     }
-                    log.error("Failed to close state store {}: ", store.name(), e);
+                    log.error("Failed to close state store {}: ", store.name(), exception);
                 }
             }
         }
