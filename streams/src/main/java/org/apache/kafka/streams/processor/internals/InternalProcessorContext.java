@@ -50,6 +50,11 @@ public interface InternalProcessorContext extends ProcessorContext {
     void setCurrentNode(ProcessorNode currentNode);
 
     /**
+     * @param threadId the thread-id
+     */
+    void setThreadId(String threadId);
+
+    /**
      * Get the current {@link ProcessorNode}
      */
     ProcessorNode currentNode();
@@ -58,6 +63,11 @@ public interface InternalProcessorContext extends ProcessorContext {
      * Get the thread-global cache
      */
     ThreadCache getCache();
+
+    /**
+     * Get the thread-id
+     */
+    String getThreadId();
 
     /**
      * Mark this context as being initialized

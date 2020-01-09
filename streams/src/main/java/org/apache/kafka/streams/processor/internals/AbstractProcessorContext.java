@@ -45,6 +45,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode currentNode;
     final StateManager stateManager;
+    protected String threadId;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
@@ -206,5 +207,15 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void uninitialize() {
         initialized = false;
+    }
+
+    @Override
+    public void setThreadId(String threadId) {
+        this.threadId = threadId;
+    }
+
+    @Override
+    public String getThreadId() {
+        return this.threadId;
     }
 }

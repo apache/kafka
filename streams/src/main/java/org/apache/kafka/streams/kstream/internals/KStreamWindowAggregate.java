@@ -89,7 +89,9 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             super.init(context);
             internalProcessorContext = (InternalProcessorContext) context;
             metrics = internalProcessorContext.metrics();
-            final String threadId = Thread.currentThread().getName();
+            final String threadId = internalProcessorContext.getThreadId() == null ||  "".equals(internalProcessorContext.getThreadId())
+                ? Thread.currentThread().getName()
+                : internalProcessorContext.getThreadId();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
                 threadId,
                 context.taskId().toString(),
