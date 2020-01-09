@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -302,9 +301,11 @@ public class ProcessorStateManager implements StateManager {
 
             try {
                 restoreCallback.restoreBatch(convertedRecords);
-            } catch (final RuntimeException exception) {
-                throw new ProcessorStateException(format("%sException caught while trying to restore state from %s",
-                    logPrefix, changelogPartition), exception);
+            } catch (final RuntimeException e) {
+                throw new ProcessorStateException(
+                    format("%sException caught while trying to restore state from %s", logPrefix, changelogPartition),
+                    e
+                );
             }
 
             store.setOffset(batchEndOffset);
