@@ -1089,7 +1089,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
         for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }
 
         final String name = new NamedInternal(named).name();
@@ -1155,7 +1155,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                   final String... stateStoreNames) {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
         for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }
 
         final String name = named.orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
@@ -1219,7 +1219,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                       final String... stateStoreNames) {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames can't be a null array");
         for (final String stateStoreName : stateStoreNames) {
-            Objects.requireNonNull(stateStoreName, "stateStoreNames can't be null");
+            Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);

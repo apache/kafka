@@ -301,7 +301,9 @@ public class KStreamImplTest {
     public void shouldNotAllowNullMapperOnMapValuesWithKeyWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.mapValues((ValueMapperWithKey<Object, Object, Object>) null, Named.as("valueMapperWithKey")));
+            () -> testStream.mapValues(
+                (ValueMapperWithKey<Object, Object, Object>) null,
+                Named.as("valueMapperWithKey")));
         assertThat(exception.getMessage(), equalTo("valueMapperWithKey can't be null"));
     }
 
@@ -365,7 +367,9 @@ public class KStreamImplTest {
     public void shouldNotAllowNullMapperOnFlatMapValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.flatMapValues((ValueMapper<Object, Iterable<Object>>) null, Named.as("flatValueMapper")));
+            () -> testStream.flatMapValues(
+                (ValueMapper<Object, Iterable<Object>>) null,
+                Named.as("flatValueMapper")));
         assertThat(exception.getMessage(), equalTo("valueMapper can't be null"));
     }
 
@@ -373,7 +377,9 @@ public class KStreamImplTest {
     public void shouldNotAllowNullMapperOnFlatMapValuesWithKeyWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.flatMapValues((ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null, Named.as("flatValueMapperWithKey")));
+            () -> testStream.flatMapValues(
+                (ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null,
+                Named.as("flatValueMapperWithKey")));
         assertThat(exception.getMessage(), equalTo("valueMapper can't be null"));
     }
 
@@ -598,26 +604,6 @@ public class KStreamImplTest {
             () -> testStream.to((k, v, ctx) -> "topic", null));
         assertThat(exception.getMessage(), equalTo("produced can't be null"));
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherStreamOnJoin() {
@@ -1220,7 +1206,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transform(transformerSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1236,7 +1222,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transform(transformerSupplier, Named.as("transform"), (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1300,7 +1286,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatTransform(flatTransformerSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1316,7 +1302,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatTransform(flatTransformerSupplier, Named.as("flatTransform"), (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1438,9 +1424,8 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues(
-                valueTransformerSupplier,
-                (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+                valueTransformerSupplier, (String) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1450,7 +1435,7 @@ public class KStreamImplTest {
             () -> testStream.transformValues(
                 valueTransformerWithKeySupplier,
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1483,7 +1468,7 @@ public class KStreamImplTest {
                 valueTransformerSupplier,
                 Named.as("valueTransformer"),
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1494,7 +1479,7 @@ public class KStreamImplTest {
                 valueTransformerWithKeySupplier,
                 Named.as("valueTransformerWithKey"),
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1644,7 +1629,7 @@ public class KStreamImplTest {
             () -> testStream.flatTransformValues(
                 flatValueTransformerSupplier,
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1654,7 +1639,7 @@ public class KStreamImplTest {
             () -> testStream.flatTransformValues(
                 flatValueTransformerWithKeySupplier,
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1687,7 +1672,7 @@ public class KStreamImplTest {
                 flatValueTransformerSupplier,
                 Named.as("flatValueTransformer"),
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
@@ -1698,7 +1683,7 @@ public class KStreamImplTest {
                 flatValueTransformerWithKeySupplier,
                 Named.as("flatValueWitKeyTransformer"),
                 (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
     }
 
     @Test
