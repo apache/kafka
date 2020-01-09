@@ -38,6 +38,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -45,17 +46,20 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.RetriableException
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
@@ -143,7 +147,15 @@ object TestUtils extends Logging {
    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    val server = new KafkaServer(config, time)
+    createServer(config, time, None)
+  }
+
+  def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
+    createServer(config, Time.SYSTEM, threadNamePrefix)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
+    val server = new KafkaServer(config, time, threadNamePrefix = threadNamePrefix)
     server.startup()
     server
   }
@@ -551,10 +563,11 @@ object TestUtils extends Logging {
                       trustStoreFile: Option[File],
                       certAlias: String,
                       certCn: String,
-                      saslProperties: Option[Properties]): Properties = {
+                      saslProperties: Option[Properties],
+                      tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
-      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn)
+      props ++= sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias, certCn, tlsProtocol)
 
     if (usesSaslAuthentication(securityProtocol))
       props ++= JaasTestUtils.saslConfigs(saslProperties)
@@ -769,7 +782,7 @@ object TestUtils extends Logging {
                     msg: => String,
                     waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
-      consumer.poll(Duration.ofMillis(50))
+      consumer.poll(Duration.ofMillis(100))
       action()
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
@@ -779,9 +792,20 @@ object TestUtils extends Logging {
                                  msg: => String,
                                  waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
-      val records = consumer.poll(Duration.ofMillis(50))
+      val records = consumer.poll(Duration.ofMillis(100))
       action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
+  def subscribeAndWaitForRecords(topic: String,
+                                 consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records",
+      waitTimeMs)
   }
 
   /**
@@ -899,16 +923,14 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    waitUntilTrue(() =>
-      servers.foldLeft(true) {
-        (result, server) =>
-          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
-          partitionStateOpt match {
-            case None => false
-            case Some(partitionState) =>
-              leader = partitionState.basePartitionState.leader
-              result && Request.isValidBrokerId(leader)
-          }
+    waitUntilTrue(
+      () => servers.forall { server =>
+        server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
+          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
+            leader = partitionState.leader
+            true
+          case _ => false
+        }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
@@ -998,7 +1020,9 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
 
-  def verifyNonDaemonThreadsStatus(threadNamePrefix: String): Unit = {
+  // Note: Call this method in the test itself, rather than the @After method.
+  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
+  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
@@ -1135,12 +1159,19 @@ object TestUtils extends Logging {
   }
 
   def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
-                 certCn: String = SslCertificateCn): Properties = {
+                 certCn: String = SslCertificateCn,
+                 tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
     val trustStore = trustStoreFile.getOrElse {
       throw new Exception("SSL enabled but no trustStoreFile provided")
     }
 
-    val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias, certCn)
+    val sslConfigs = new TestSslUtils.SslConfigsBuilder(mode)
+      .useClientCert(clientCert)
+      .createNewTrustStore(trustStore)
+      .certAlias(certAlias)
+      .cn(certCn)
+      .tlsProtocol(tlsProtocol)
+      .build()
 
     val sslProps = new Properties()
     sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
@@ -1159,6 +1190,15 @@ object TestUtils extends Logging {
       }
     }
     trustManager
+  }
+
+  def waitAndVerifyAcls(expected: Set[AccessControlEntry], authorizer: JAuthorizer, resource: ResourcePattern) = {
+    val newLine = scala.util.Properties.lineSeparator
+
+    val filter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
+      s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
@@ -1410,11 +1450,12 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).mapValues(_.offset)
+
     consumer.assignment.asScala.foreach { topicPartition =>
-      val offset = consumer.committed(topicPartition)
-      if (offset != null)
-        consumer.seek(topicPartition, offset.offset)
+      if (committed.contains(topicPartition))
+        consumer.seek(topicPartition, committed(topicPartition))
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }
@@ -1456,24 +1497,27 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
-  def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(Arrays.asList(topicPartition.topic))
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
+  def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+    waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
+  }
+
+  def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+    waitForLeaderToBecome(client, topicPartition, None)
   }
 
   def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
-    TestUtils.waitUntilTrue(
-      () => currentLeader(client, topicPartition) == leader,
-      s"Expected leader to become $leader", 10000
-    )
+    val topic = topicPartition.topic
+    val partition = topicPartition.partition
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val topicResult = client.describeTopics(Arrays.asList(topic)).all.get.get(topic)
+        val partitionResult = topicResult.partitions.get(partition)
+        Option(partitionResult.leader).map(_.id) == leader
+      } catch {
+        case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      }
+    }, "Timed out waiting for leader metadata")
   }
 
   def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
@@ -1564,6 +1608,16 @@ object TestUtils extends Logging {
     total.toLong
   }
 
+  def meterCount(metricName: String): Long = {
+    Metrics.defaultRegistry.allMetrics.asScala
+      .filterKeys(_.getMBeanName.endsWith(metricName))
+      .values
+      .headOption
+      .getOrElse(fail(s"Unable to find metric $metricName"))
+      .asInstanceOf[Meter]
+      .count
+  }
+
   def clearYammerMetrics(): Unit = {
     for (metricName <- Metrics.defaultRegistry.allMetrics.keySet.asScala)
       Metrics.defaultRegistry.removeMetric(metricName)
@@ -1583,5 +1637,82 @@ object TestUtils extends Logging {
     } finally {
       resource.close()
     }
+  }
+
+  /**
+   * Set broker replication quotas and enable throttling for a set of partitions. This
+   * will override any previous replication quotas, but will leave the throttling status
+   * of other partitions unaffected.
+   */
+  def setReplicationThrottleForPartitions(admin: Admin,
+                                          brokerIds: Seq[Int],
+                                          partitions: Set[TopicPartition],
+                                          throttleBytes: Int): Unit = {
+    throttleAllBrokersReplication(admin, brokerIds, throttleBytes)
+    assignThrottledPartitionReplicas(admin, partitions.map(_ -> brokerIds).toMap)
+  }
+
+  /**
+   * Remove a set of throttled partitions and reset the overall replication quota.
+   */
+  def removeReplicationThrottleForPartitions(admin: Admin,
+                                             brokerIds: Seq[Int],
+                                             partitions: Set[TopicPartition]): Unit = {
+    removePartitionReplicaThrottles(admin, partitions)
+    resetBrokersThrottle(admin, brokerIds)
+  }
+
+  /**
+    * Throttles all replication across the cluster.
+    * @param adminClient is the adminClient to use for making connection with the cluster
+    * @param brokerIds all broker ids in the cluster
+    * @param throttleBytes is the target throttle
+    */
+  def throttleAllBrokersReplication(adminClient: Admin, brokerIds: Seq[Int], throttleBytes: Int): Unit = {
+    val throttleConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    adminClient.incrementalAlterConfigs(
+      brokerIds.map { brokerId =>
+        new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString) -> throttleConfigs
+      }.toMap.asJava
+    ).all().get()
+  }
+
+  def resetBrokersThrottle(adminClient: Admin, brokerIds: Seq[Int]): Unit =
+    throttleAllBrokersReplication(adminClient, brokerIds, Int.MaxValue)
+
+  def assignThrottledPartitionReplicas(adminClient: Admin, allReplicasByPartition: Map[TopicPartition, Seq[Int]]): Unit = {
+    val throttles = allReplicasByPartition.groupBy(_._1.topic()).map {
+      case (topic, replicasByPartition) =>
+        new ConfigResource(ConfigResource.Type.TOPIC, topic) -> Seq(
+          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, formatReplicaThrottles(replicasByPartition)), AlterConfigOp.OpType.SET)
+        ).asJavaCollection
+    }
+    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
+  }
+
+  def removePartitionReplicaThrottles(adminClient: Admin, partitions: Set[TopicPartition]): Unit = {
+    val throttles = partitions.map {
+      tp =>
+        new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()) -> Seq(
+          new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE),
+          new AlterConfigOp(new ConfigEntry(LogConfig.FollowerReplicationThrottledReplicasProp, ""), AlterConfigOp.OpType.DELETE)
+        ).asJavaCollection
+    }.toMap
+    adminClient.incrementalAlterConfigs(throttles.asJava).all().get()
+  }
+
+  def formatReplicaThrottles(moves: Map[TopicPartition, Seq[Int]]): String =
+    moves.flatMap { case (tp, assignment) =>
+      assignment.map(replicaId => s"${tp.partition}:$replicaId")
+    }.mkString(",")
+
+  def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {
+    waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
+      s"There still are ongoing reassignments", pause = pause)
   }
 }

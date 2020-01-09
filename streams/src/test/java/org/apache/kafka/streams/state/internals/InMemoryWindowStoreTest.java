@@ -125,6 +125,7 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testExpiration() {
 
         long currentTime = 0;

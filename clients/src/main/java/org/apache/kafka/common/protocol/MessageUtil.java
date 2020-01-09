@@ -17,21 +17,26 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.utils.Utils;
-
+import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.UUID;
 
 public final class MessageUtil {
+    public static final UUID ZERO_UUID = new UUID(0L, 0L);
+
     /**
-     * Get the length of the UTF8 representation of a string, without allocating
-     * a byte buffer for the string.
+     * Copy a byte buffer into an array.  This will not affect the buffer's
+     * position or mark.
      */
-    public static short serializedUtf8Length(CharSequence input) {
-        int count = Utils.utf8Length(input);
-        if (count > Short.MAX_VALUE) {
-            throw new RuntimeException("String " + input + " is too long to serialize.");
+    public static byte[] byteBufferToArray(ByteBuffer buf) {
+        byte[] arr = new byte[buf.remaining()];
+        int prevPosition = buf.position();
+        try {
+            buf.get(arr);
+        } finally {
+            buf.position(prevPosition);
         }
-        return (short) count;
+        return arr;
     }
 
     public static String deepToString(Iterator<?> iter) {

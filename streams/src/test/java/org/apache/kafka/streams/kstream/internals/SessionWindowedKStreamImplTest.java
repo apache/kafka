@@ -29,12 +29,13 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -55,8 +56,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class SessionWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final Merger<String, String> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + "+" + aggTwo;
     private SessionWindowedKStream<String, String> stream;
@@ -277,21 +276,29 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        stream.reduce(MockReducer.STRING_ADDER,
-                      null);
+        stream.reduce(MockReducer.STRING_ADDER, (Materialized) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+        stream.reduce(MockReducer.STRING_ADDER, (Named) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        stream.count(null);
+        stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null);
     }
 
     private void processData(final TopologyTestDriver driver) {
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "2", 15));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "3", 600));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "1", 600));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 599));
+        final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+        inputTopic.pipeInput("1", "1", 10);
+        inputTopic.pipeInput("1", "2", 15);
+        inputTopic.pipeInput("1", "3", 600);
+        inputTopic.pipeInput("2", "1", 600);
+        inputTopic.pipeInput("2", "2", 599);
     }
 }

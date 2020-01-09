@@ -76,7 +76,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
                                deliveryTimeoutMs: Int = 2 * 60 * 1000,
                                batchSize: Int = 16384,
                                compressionType: String = "none",
-                               maxBlockMs: Long = 60 * 1000L): KafkaProducer[Array[Byte],Array[Byte]] = {
+                               maxBlockMs: Long = 60 * 1000L,
+                               bufferSize: Long = 1024L * 1024L): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createProducer(brokerList,
       compressionType = compressionType,
       securityProtocol = securityProtocol,
@@ -84,7 +85,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       saslProperties = clientSaslProperties,
       lingerMs = lingerMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      maxBlockMs = maxBlockMs)
+      maxBlockMs = maxBlockMs,
+      batchSize = batchSize,
+      bufferSize = bufferSize)
     registerProducer(producer)
   }
 
@@ -381,8 +384,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       }
     }
 
-    val existingAssignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map {
-      case (topicPartition, replicas) => topicPartition.partition -> replicas
+    val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
+      case (topicPartition, assignment) => topicPartition.partition -> assignment
     }
     adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
     // read metadata from a broker and verify the new topic partitions exist

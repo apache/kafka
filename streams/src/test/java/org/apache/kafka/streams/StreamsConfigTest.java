@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,18 +44,22 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
-import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
-import static org.hamcrest.core.IsEqual.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -75,6 +81,31 @@ public class StreamsConfigTest {
         props.put("key.deserializer.encoding", "UTF8");
         props.put("value.deserializer.encoding", "UTF-16");
         streamsConfig = new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testIllegalMetricsRecordingLevel() {
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void testOsDefaultSocketBufferSizes() {
+        props.put(StreamsConfig.SEND_BUFFER_CONFIG, CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND);
+        props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND);
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidSocketSendBufferSize() {
+        props.put(StreamsConfig.SEND_BUFFER_CONFIG, -2);
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidSocketReceiveBufferSize() {
+        props.put(StreamsConfig.RECEIVE_BUFFER_CONFIG, -2);
+        new StreamsConfig(props);
     }
 
     @Test(expected = ConfigException.class)
@@ -450,9 +481,40 @@ public class StreamsConfigTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfNotAtLestOnceOrExactlyOnce() {
+    public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
         new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptBuiltInMetricsVersion0100To24() {
+        // don't use `StreamsConfig.METRICS_0100_TO_24` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.4");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptBuiltInMetricsLatestVersion() {
+        // don't use `StreamsConfig.METRICS_LATEST` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "latest");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldSetDefaultBuiltInMetricsVersionIfNoneIsSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_LATEST));
+    }
+
+    @Test
+    public void shouldThrowIfBuiltInMetricsVersionInvalid() {
+        final String invalidVersion = "0.0.1";
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, invalidVersion);
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThat(
+            exception.getMessage(),
+            containsString("Invalid value " + invalidVersion + " for configuration built.in.metrics.version")
+        );
     }
 
     @Test
@@ -572,7 +634,6 @@ public class StreamsConfigTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -640,6 +701,23 @@ public class StreamsConfigTest {
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
         props.put(TOPOLOGY_OPTIMIZATION, "maybe");
         new StreamsConfig(props);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldLogWarningWhenPartitionGrouperIsUsed() {
+        props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, org.apache.kafka.streams.processor.DefaultPartitionGrouper.class);
+
+        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        new StreamsConfig(props);
+
+        LogCaptureAppender.unregister(appender);
+
+        assertThat(
+            appender.getMessages(),
+            hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG + "` is deprecated and will be removed in 3.0.0 release."));
     }
 
     static class MisconfiguredSerde implements Serde {

@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -32,11 +31,10 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -88,12 +86,13 @@ public class AbstractCoordinatorTest {
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
 
-    private MockClient mockClient;
-    private MockTime mockTime;
     private Node node;
+    private Metrics metrics;
+    private MockTime mockTime;
     private Node coordinatorNode;
-    private ConsumerNetworkClient consumerClient;
+    private MockClient mockClient;
     private DummyCoordinator coordinator;
+    private ConsumerNetworkClient consumerClient;
 
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
@@ -124,7 +123,7 @@ public class AbstractCoordinatorTest {
                                                         retryBackoffMs,
                                                         REQUEST_TIMEOUT_MS,
                                                         HEARTBEAT_INTERVAL_MS);
-        Metrics metrics = new Metrics();
+        metrics = new Metrics(mockTime);
 
         mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
@@ -141,6 +140,91 @@ public class AbstractCoordinatorTest {
                                                 consumerClient,
                                                 metrics,
                                                 mockTime);
+    }
+
+    @Test
+    public void testMetrics() {
+        setupCoordinator();
+
+        assertNotNull(getMetric("heartbeat-response-time-max"));
+        assertNotNull(getMetric("heartbeat-rate"));
+        assertNotNull(getMetric("heartbeat-total"));
+        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+        assertNotNull(getMetric("join-time-avg"));
+        assertNotNull(getMetric("join-time-max"));
+        assertNotNull(getMetric("join-rate"));
+        assertNotNull(getMetric("join-total"));
+        assertNotNull(getMetric("sync-time-avg"));
+        assertNotNull(getMetric("sync-time-max"));
+        assertNotNull(getMetric("sync-rate"));
+        assertNotNull(getMetric("sync-total"));
+        assertNotNull(getMetric("rebalance-latency-avg"));
+        assertNotNull(getMetric("rebalance-latency-max"));
+        assertNotNull(getMetric("rebalance-latency-total"));
+        assertNotNull(getMetric("rebalance-rate-per-hour"));
+        assertNotNull(getMetric("rebalance-total"));
+        assertNotNull(getMetric("last-rebalance-seconds-ago"));
+        assertNotNull(getMetric("failed-rebalance-rate-per-hour"));
+        assertNotNull(getMetric("failed-rebalance-total"));
+
+        metrics.sensor("heartbeat-latency").record(1.0d);
+        metrics.sensor("heartbeat-latency").record(6.0d);
+        metrics.sensor("heartbeat-latency").record(2.0d);
+
+        assertEquals(6.0d, getMetric("heartbeat-response-time-max").metricValue());
+        assertEquals(0.1d, getMetric("heartbeat-rate").metricValue());
+        assertEquals(3.0d, getMetric("heartbeat-total").metricValue());
+
+        assertEquals(-1.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
+        coordinator.heartbeat().sentHeartbeat(mockTime.milliseconds());
+        assertEquals(0.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
+        mockTime.sleep(10 * 1000L);
+        assertEquals(10.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
+
+        metrics.sensor("join-latency").record(1.0d);
+        metrics.sensor("join-latency").record(6.0d);
+        metrics.sensor("join-latency").record(2.0d);
+
+        assertEquals(3.0d, getMetric("join-time-avg").metricValue());
+        assertEquals(6.0d, getMetric("join-time-max").metricValue());
+        assertEquals(0.1d, getMetric("join-rate").metricValue());
+        assertEquals(3.0d, getMetric("join-total").metricValue());
+
+        metrics.sensor("sync-latency").record(1.0d);
+        metrics.sensor("sync-latency").record(6.0d);
+        metrics.sensor("sync-latency").record(2.0d);
+
+        assertEquals(3.0d, getMetric("sync-time-avg").metricValue());
+        assertEquals(6.0d, getMetric("sync-time-max").metricValue());
+        assertEquals(0.1d, getMetric("sync-rate").metricValue());
+        assertEquals(3.0d, getMetric("sync-total").metricValue());
+
+        metrics.sensor("rebalance-latency").record(1.0d);
+        metrics.sensor("rebalance-latency").record(6.0d);
+        metrics.sensor("rebalance-latency").record(2.0d);
+
+        assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
+        assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
+        assertEquals(9.0d, getMetric("rebalance-latency-total").metricValue());
+        assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("rebalance-total").metricValue());
+
+        metrics.sensor("failed-rebalance").record(1.0d);
+        metrics.sensor("failed-rebalance").record(6.0d);
+        metrics.sensor("failed-rebalance").record(2.0d);
+
+        assertEquals(360.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
+        assertEquals(3.0d, getMetric("failed-rebalance-total").metricValue());
+
+        assertEquals(-1.0d, getMetric("last-rebalance-seconds-ago").metricValue());
+        coordinator.setLastRebalanceTime(mockTime.milliseconds());
+        assertEquals(0.0d, getMetric("last-rebalance-seconds-ago").metricValue());
+        mockTime.sleep(10 * 1000L);
+        assertEquals(10.0d, getMetric("last-rebalance-seconds-ago").metricValue());
+    }
+
+    private KafkaMetric getMetric(final String name) {
+        return metrics.metrics().get(metrics.metricName(name, "consumer-coordinator-metrics"));
     }
 
     @Test
@@ -327,7 +411,7 @@ public class AbstractCoordinatorTest {
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.UNKNOWN_MEMBER_ID.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertTrue(coordinator.hasMatchingGenerationId(defaultGeneration));
+        assertTrue(coordinator.hasUnknownGeneration());
     }
 
     @Test
@@ -410,34 +494,6 @@ public class AbstractCoordinatorTest {
         RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
         assertNotNull(leaveGroupFuture);
         assertTrue(leaveGroupFuture.exception() instanceof UnknownMemberIdException);
-    }
-
-    @Test
-    public void testHandleSingleLeaveGroupRequest() {
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-        mockClient.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
-            new ApiVersionsResponse.ApiVersion(ApiKeys.LEAVE_GROUP, (short) 2, (short) 2))));
-
-        LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
-            new MemberResponse()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(memberId)));
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-        mockClient.prepareResponse(body -> {
-            if (body instanceof LeaveGroupRequest) {
-                LeaveGroupRequest request = (LeaveGroupRequest) body;
-                return request.data().memberId().equals(memberId)
-                    && request.data().members().isEmpty();
-            } else {
-                return false;
-            }
-        }, expectedResponse);
-
-        coordinator.ensureActiveGroup();
-        RequestFuture<Void> leaveGroupFuture = coordinator.maybeLeaveGroup("test single leave group");
-        assertTrue(leaveGroupFuture.succeeded());
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {

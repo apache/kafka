@@ -19,6 +19,7 @@
   "name": "DeleteAclsRequest",
   // Version 1 adds the pattern type.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Filters", "type": "[]DeleteAclsFilter", "versions": "0+",
       "about": "The filters to use when deleting ACLs.", "fields": [

@@ -22,11 +22,11 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.EpochEndOffset;
-import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -270,8 +270,14 @@ public class SubscriptionState {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
+        for (TopicPartition tp : assignments) {
+            TopicPartitionState state = this.assignment.stateValue(tp);
+            if (state == null)
+                state = new TopicPartitionState();
+            assignedPartitionStates.put(tp, state);
+        }
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
         assignmentId++;
         this.assignment.set(assignedPartitionStates);
     }
@@ -524,7 +530,12 @@ public class SubscriptionState {
      * @return Returns the current preferred read replica, if it has been set and if it has not expired.
      */
     public synchronized Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
-        return assignedState(tp).preferredReadReplica(timeMs);
+        final TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+        if (topicPartitionState == null) {
+            return Optional.empty();
+        } else {
+            return topicPartitionState.preferredReadReplica(timeMs);
+        }
     }
 
     /**
@@ -667,13 +678,6 @@ public class SubscriptionState {
 
     public synchronized ConsumerRebalanceListener rebalanceListener() {
         return rebalanceListener;
-    }
-
-    private static Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
-        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
-        for (TopicPartition tp : assignments)
-            map.put(tp, new TopicPartitionState());
-        return map;
     }
 
     private static class TopicPartitionState {

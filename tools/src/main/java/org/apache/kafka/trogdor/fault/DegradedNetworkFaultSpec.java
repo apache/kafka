@@ -31,12 +31,15 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
     public static class NodeDegradeSpec {
         private final String networkDevice;
         private final int latencyMs;
+        private final int rateLimitKbit;
 
         public NodeDegradeSpec(
                 @JsonProperty("networkDevice") String networkDevice,
-                @JsonProperty("latencyMs") int latencyMs) {
+                @JsonProperty("latencyMs") Integer latencyMs,
+                @JsonProperty("rateLimitKbit") Integer rateLimitKbit) {
             this.networkDevice = networkDevice == null ? "" : networkDevice;
-            this.latencyMs = latencyMs;
+            this.latencyMs = latencyMs == null ? 0 : latencyMs;
+            this.rateLimitKbit = rateLimitKbit == null ? 0 : rateLimitKbit;
         }
 
         @JsonProperty("networkDevice")
@@ -47,6 +50,20 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
         @JsonProperty("latencyMs")
         public int latencyMs() {
             return latencyMs;
+        }
+
+        @JsonProperty("rateLimitKbit")
+        public int rateLimitKbit() {
+            return rateLimitKbit;
+        }
+
+        @Override
+        public String toString() {
+            return "NodeDegradeSpec{" +
+                    "networkDevice='" + networkDevice + '\'' +
+                    ", latencyMs=" + latencyMs +
+                    ", rateLimitKbit=" + rateLimitKbit +
+                    '}';
         }
     }
 

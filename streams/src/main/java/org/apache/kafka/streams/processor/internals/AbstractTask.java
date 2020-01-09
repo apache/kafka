@@ -17,16 +17,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -34,9 +31,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -63,7 +58,7 @@ public abstract class AbstractTask implements Task {
      * @throws ProcessorStateException if the state manager cannot be created
      */
     AbstractTask(final TaskId id,
-                 final Collection<TopicPartition> partitions,
+                 final Set<TopicPartition> partitions,
                  final ProcessorTopology topology,
                  final Consumer<byte[], byte[]> consumer,
                  final ChangelogReader changelogReader,
@@ -78,7 +73,8 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        this.logPrefix = threadIdPrefix + String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -173,35 +169,17 @@ public abstract class AbstractTask implements Task {
         return sb.toString();
     }
 
-    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
-        return Collections.emptyMap();
-    }
-
-    protected void updateOffsetLimits() {
-        for (final TopicPartition partition : partitions) {
-            try {
-                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                final long offset = metadata != null ? metadata.offset() : 0L;
-                stateMgr.putOffsetLimit(partition, offset);
-
-                if (log.isTraceEnabled()) {
-                    log.trace("Updating store offset limits {} for changelog {}", offset, partition);
-                }
-            } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
-            } catch (final WakeupException e) {
-                throw e;
-            } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
-            }
-        }
-    }
-
     /**
      * Flush all state stores owned by this task
      */
     void flushState() {
-        stateMgr.flush();
+        try {
+            stateMgr.flush();
+        } catch (final ProcessorStateException e) {
+            if (e.getCause() instanceof RecoverableClientException) {
+                throw new TaskMigratedException(this, e);
+            }
+        }
     }
 
     /**
@@ -220,16 +198,14 @@ public abstract class AbstractTask implements Task {
             }
         } catch (final IOException e) {
             throw new StreamsException(
-                String.format("%sFatal error while trying to lock the state directory for task %s",
-                logPrefix, id));
+                String.format("%sFatal error while trying to lock the state directory for task %s", logPrefix, id),
+                e
+            );
         }
         log.trace("Initializing state stores");
 
-        // set initial offset limits
-        updateOffsetLimits();
-
         for (final StateStore store : topology.stateStores()) {
-            log.trace("Initializing store {}", store.name());
+            log.debug("Initializing store {}", store.name());
             processorContext.uninitialize();
             store.init(processorContext, store);
         }
@@ -278,4 +254,5 @@ public abstract class AbstractTask implements Task {
     public Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
     }
+
 }

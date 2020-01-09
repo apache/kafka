@@ -16,338 +16,191 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class SubscriptionInfo {
+    private static final Logger LOG = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
-
-    public static final int LATEST_SUPPORTED_VERSION = 4;
     static final int UNKNOWN = -1;
 
-    private final int usedVersion;
-    private final int latestSupportedVersion;
-    private UUID processId;
-    private Set<TaskId> prevTasks;
-    private Set<TaskId> standbyTasks;
-    private String userEndPoint;
+    private final SubscriptionInfoData data;
+    private Set<TaskId> prevTasksCache = null;
+    private Set<TaskId> standbyTasksCache = null;
 
-    // used for decoding; don't apply version checks
-    private SubscriptionInfo(final int version,
-                             final int latestSupportedVersion) {
-        this.usedVersion = version;
-        this.latestSupportedVersion = latestSupportedVersion;
+    static {
+        // Just statically check to make sure that the generated code always stays in sync with the overall protocol
+        final int subscriptionInfoLatestVersion = SubscriptionInfoData.SCHEMAS.length - 1;
+        if (subscriptionInfoLatestVersion != LATEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException(
+                "streams/src/main/resources/common/message/SubscriptionInfo.json needs to be updated to match the " +
+                    "latest assignment protocol version. SubscriptionInfo only supports up to  ["
+                    + subscriptionInfoLatestVersion + "] but needs to support up to [" + LATEST_SUPPORTED_VERSION + "].");
+        }
     }
 
-    public SubscriptionInfo(final UUID processId,
-                            final Set<TaskId> prevTasks,
-                            final Set<TaskId> standbyTasks,
-                            final String userEndPoint) {
-        this(LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+    private static void validateVersions(final int version, final int latestSupportedVersion) {
+        if (latestSupportedVersion == UNKNOWN && (version < 1 || version > 2)) {
+            throw new IllegalArgumentException(
+                "Only versions 1 and 2 are expected to use an UNKNOWN (-1) latest supported version. " +
+                    "Got " + version + "."
+            );
+        } else if (latestSupportedVersion != UNKNOWN && (version < 1 || version > latestSupportedVersion)) {
+            throw new IllegalArgumentException(
+                "version must be between 1 and " + latestSupportedVersion + "; was: " + version
+            );
+        }
     }
 
     public SubscriptionInfo(final int version,
+                            final int latestSupportedVersion,
                             final UUID processId,
                             final Set<TaskId> prevTasks,
                             final Set<TaskId> standbyTasks,
                             final String userEndPoint) {
-        this(version, LATEST_SUPPORTED_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
-
-        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
-            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
-                + "; was: " + version);
+        validateVersions(version, latestSupportedVersion);
+        final SubscriptionInfoData data = new SubscriptionInfoData();
+        data.setVersion(version);
+        if (version >= 2) {
+            data.setUserEndPoint(userEndPoint == null
+                                     ? new byte[0]
+                                     : userEndPoint.getBytes(StandardCharsets.UTF_8));
         }
+        if (version >= 3) {
+            data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+        data.setProcessId(processId);
+        data.setPrevTasks(prevTasks.stream().map(t -> {
+            final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
+            taskId.setTopicGroupId(t.topicGroupId);
+            taskId.setPartition(t.partition);
+            return taskId;
+        }).collect(Collectors.toList()));
+        data.setStandbyTasks(standbyTasks.stream().map(t -> {
+            final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
+            taskId.setTopicGroupId(t.topicGroupId);
+            taskId.setPartition(t.partition);
+            return taskId;
+        }).collect(Collectors.toList()));
+
+        this.data = data;
     }
 
-    // for testing only; don't apply version checks
-    protected SubscriptionInfo(final int version,
-                               final int latestSupportedVersion,
-                               final UUID processId,
-                               final Set<TaskId> prevTasks,
-                               final Set<TaskId> standbyTasks,
-                               final String userEndPoint) {
-        this.usedVersion = version;
-        this.latestSupportedVersion = latestSupportedVersion;
-        this.processId = processId;
-        this.prevTasks = prevTasks;
-        this.standbyTasks = standbyTasks;
-        this.userEndPoint = userEndPoint;
+    private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
+        validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
+        this.data = subscriptionInfoData;
     }
 
     public int version() {
-        return usedVersion;
+        return data.version();
     }
 
     public int latestSupportedVersion() {
-        return latestSupportedVersion;
+        return data.latestSupportedVersion();
     }
 
     public UUID processId() {
-        return processId;
+        return data.processId();
     }
 
     public Set<TaskId> prevTasks() {
-        return prevTasks;
+        if (prevTasksCache == null) {
+            prevTasksCache = Collections.unmodifiableSet(
+                data.prevTasks()
+                    .stream()
+                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                    .collect(Collectors.toSet())
+            );
+        }
+        return prevTasksCache;
     }
 
     public Set<TaskId> standbyTasks() {
-        return standbyTasks;
+        if (standbyTasksCache == null) {
+            standbyTasksCache = Collections.unmodifiableSet(
+                data.standbyTasks()
+                    .stream()
+                    .map(t -> new TaskId(t.topicGroupId(), t.partition()))
+                    .collect(Collectors.toSet())
+            );
+        }
+        return standbyTasksCache;
     }
 
     public String userEndPoint() {
-        return userEndPoint;
+        return data.userEndPoint() == null || data.userEndPoint().length == 0
+            ? null
+            : new String(data.userEndPoint(), StandardCharsets.UTF_8);
     }
 
     /**
      * @throws TaskAssignmentException if method fails to encode the data
      */
     public ByteBuffer encode() {
-        final ByteBuffer buf;
-
-        switch (usedVersion) {
-            case 1:
-                buf = encodeVersionOne();
-                break;
-            case 2:
-                buf = encodeVersionTwo();
-                break;
-            case 3:
-                buf = encodeVersionThree();
-                break;
-            case 4:
-                buf = encodeVersionFour();
-                break;
-            default:
-                throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
-        }
-
-        buf.rewind();
-        return buf;
-    }
-
-    private ByteBuffer encodeVersionOne() {
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionOneByteLength());
-
-        buf.putInt(1); // version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-
-        return buf;
-    }
-
-    private int getVersionOneByteLength() {
-        return 4 + // version
-               16 + // client ID
-               4 + prevTasks.size() * 8 + // length + prev tasks
-               4 + standbyTasks.size() * 8; // length + standby tasks
-    }
-
-    protected void encodeClientUUID(final ByteBuffer buf) {
-        buf.putLong(processId.getMostSignificantBits());
-        buf.putLong(processId.getLeastSignificantBits());
-    }
-
-    protected void encodeTasks(final ByteBuffer buf,
-                               final Collection<TaskId> taskIds) {
-        buf.putInt(taskIds.size());
-        for (final TaskId id : taskIds) {
-            id.writeTo(buf);
-        }
-    }
-
-    protected byte[] prepareUserEndPoint() {
-        if (userEndPoint == null) {
-            return new byte[0];
+        if (data.version() > LATEST_SUPPORTED_VERSION) {
+            throw new IllegalStateException(
+                "Should never try to encode a SubscriptionInfo with version [" +
+                    data.version() + "] > LATEST_SUPPORTED_VERSION [" + LATEST_SUPPORTED_VERSION + "]"
+            );
         } else {
-            return userEndPoint.getBytes(StandardCharsets.UTF_8);
+            final ObjectSerializationCache cache = new ObjectSerializationCache();
+            final ByteBuffer buffer = ByteBuffer.allocate(data.size(cache, (short) data.version()));
+            final ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
+            data.write(accessor, cache, (short) data.version());
+            buffer.rewind();
+            return buffer;
         }
-    }
-
-    private ByteBuffer encodeVersionTwo() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionTwoByteLength(endPointBytes));
-
-        buf.putInt(2); // version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
-    }
-
-    private int getVersionTwoByteLength(final byte[] endPointBytes) {
-        return 4 + // version
-               16 + // client ID
-               4 + prevTasks.size() * 8 + // length + prev tasks
-               4 + standbyTasks.size() * 8 + // length + standby tasks
-               4 + endPointBytes.length; // length + userEndPoint
-    }
-
-    protected void encodeUserEndPoint(final ByteBuffer buf,
-                                      final byte[] endPointBytes) {
-        if (endPointBytes != null) {
-            buf.putInt(endPointBytes.length);
-            buf.put(endPointBytes);
-        }
-    }
-
-    private ByteBuffer encodeVersionThree() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(3); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
-    }
-
-    private ByteBuffer encodeVersionFour() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(4); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
-    }
-
-    protected int getVersionThreeAndFourByteLength(final byte[] endPointBytes) {
-        return 4 + // used version
-               4 + // latest supported version version
-               16 + // client ID
-               4 + prevTasks.size() * 8 + // length + prev tasks
-               4 + standbyTasks.size() * 8 + // length + standby tasks
-               4 + endPointBytes.length; // length + userEndPoint
     }
 
     /**
      * @throws TaskAssignmentException if method fails to decode the data
      */
     public static SubscriptionInfo decode(final ByteBuffer data) {
-        final SubscriptionInfo subscriptionInfo;
-
-        // ensure we are at the beginning of the ByteBuffer
         data.rewind();
+        final int version = data.getInt();
 
-        final int usedVersion = data.getInt();
-        final int latestSupportedVersion;
-        switch (usedVersion) {
-            case 1:
-                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
-                decodeVersionOneData(subscriptionInfo, data);
-                break;
-            case 2:
-                subscriptionInfo = new SubscriptionInfo(usedVersion, UNKNOWN);
-                decodeVersionTwoData(subscriptionInfo, data);
-                break;
-            case 3:
-            case 4:
-                latestSupportedVersion = data.getInt();
-                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
-                decodeVersionThreeData(subscriptionInfo, data);
-                break;
-            default:
-                latestSupportedVersion = data.getInt();
-                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
-                log.info("Unable to decode subscription data: used version: {}; latest supported version: {}", usedVersion, LATEST_SUPPORTED_VERSION);
+        if (version > LATEST_SUPPORTED_VERSION) {
+            // in this special case, we only rely on the version and latest version,
+            //
+            final int latestSupportedVersion = data.getInt();
+            final SubscriptionInfoData subscriptionInfoData = new SubscriptionInfoData();
+            subscriptionInfoData.setVersion(version);
+            subscriptionInfoData.setLatestSupportedVersion(latestSupportedVersion);
+            LOG.info("Unable to decode subscription data: used version: {}; latest supported version: {}",
+                     version, latestSupportedVersion);
+            return new SubscriptionInfo(subscriptionInfoData);
+        } else {
+            data.rewind();
+            final ByteBufferAccessor accessor = new ByteBufferAccessor(data);
+            final SubscriptionInfoData subscriptionInfoData = new SubscriptionInfoData(accessor, (short) version);
+            return new SubscriptionInfo(subscriptionInfoData);
         }
-
-        return subscriptionInfo;
-    }
-
-    private static void decodeVersionOneData(final SubscriptionInfo subscriptionInfo,
-                                             final ByteBuffer data) {
-        decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data);
-    }
-
-    private static void decodeClientUUID(final SubscriptionInfo subscriptionInfo,
-                                         final ByteBuffer data) {
-        subscriptionInfo.processId = new UUID(data.getLong(), data.getLong());
-    }
-
-    private static void decodeTasks(final SubscriptionInfo subscriptionInfo,
-                                    final ByteBuffer data) {
-        subscriptionInfo.prevTasks = new HashSet<>();
-        final int numPrevTasks = data.getInt();
-        for (int i = 0; i < numPrevTasks; i++) {
-            subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
-        }
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        final int numStandbyTasks = data.getInt();
-        for (int i = 0; i < numStandbyTasks; i++) {
-            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
-        }
-    }
-
-    private static void decodeVersionTwoData(final SubscriptionInfo subscriptionInfo,
-                                             final ByteBuffer data) {
-        decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data);
-        decodeUserEndPoint(subscriptionInfo, data);
-    }
-
-    private static void decodeUserEndPoint(final SubscriptionInfo subscriptionInfo,
-                                           final ByteBuffer data) {
-        final int bytesLength = data.getInt();
-        if (bytesLength != 0) {
-            final byte[] bytes = new byte[bytesLength];
-            data.get(bytes);
-            subscriptionInfo.userEndPoint = new String(bytes, StandardCharsets.UTF_8);
-        }
-    }
-
-    private static void decodeVersionThreeData(final SubscriptionInfo subscriptionInfo,
-                                               final ByteBuffer data) {
-        decodeClientUUID(subscriptionInfo, data);
-        decodeTasks(subscriptionInfo, data);
-        decodeUserEndPoint(subscriptionInfo, data);
     }
 
     @Override
     public int hashCode() {
-        final int hashCode = usedVersion ^ latestSupportedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
-        if (userEndPoint == null) {
-            return hashCode;
-        }
-        return hashCode ^ userEndPoint.hashCode();
+        return data.hashCode();
     }
 
     @Override
     public boolean equals(final Object o) {
         if (o instanceof SubscriptionInfo) {
             final SubscriptionInfo other = (SubscriptionInfo) o;
-            return this.usedVersion == other.usedVersion &&
-                    this.latestSupportedVersion == other.latestSupportedVersion &&
-                    this.processId.equals(other.processId) &&
-                    this.prevTasks.equals(other.prevTasks) &&
-                    this.standbyTasks.equals(other.standbyTasks) &&
-                    this.userEndPoint != null ? this.userEndPoint.equals(other.userEndPoint) : other.userEndPoint == null;
+            return data.equals(other.data);
         } else {
             return false;
         }
@@ -355,11 +208,6 @@ public class SubscriptionInfo {
 
     @Override
     public String toString() {
-        return "[version=" + usedVersion
-            + ", supported version=" + latestSupportedVersion
-            + ", process ID=" + processId
-            + ", prev tasks=" + prevTasks
-            + ", standby tasks=" + standbyTasks
-            + ", user endpoint=" + userEndPoint + "]";
+        return data.toString();
     }
 }

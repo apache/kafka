@@ -49,7 +49,9 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -198,6 +200,58 @@ public class ConsumerCoordinatorTest {
     public void teardown() {
         this.metrics.close();
         this.coordinator.close(time.timer(0));
+    }
+
+    @Test
+    public void testMetrics() {
+        assertNotNull(getMetric("commit-latency-avg"));
+        assertNotNull(getMetric("commit-latency-max"));
+        assertNotNull(getMetric("commit-rate"));
+        assertNotNull(getMetric("commit-total"));
+        assertNotNull(getMetric("partition-revoked-latency-avg"));
+        assertNotNull(getMetric("partition-revoked-latency-max"));
+        assertNotNull(getMetric("partition-assigned-latency-avg"));
+        assertNotNull(getMetric("partition-assigned-latency-max"));
+        assertNotNull(getMetric("partition-lost-latency-avg"));
+        assertNotNull(getMetric("partition-lost-latency-max"));
+        assertNotNull(getMetric("assigned-partitions"));
+
+        metrics.sensor("commit-latency").record(1.0d);
+        metrics.sensor("commit-latency").record(6.0d);
+        metrics.sensor("commit-latency").record(2.0d);
+
+        assertEquals(3.0d, getMetric("commit-latency-avg").metricValue());
+        assertEquals(6.0d, getMetric("commit-latency-max").metricValue());
+        assertEquals(0.1d, getMetric("commit-rate").metricValue());
+        assertEquals(3.0d, getMetric("commit-total").metricValue());
+
+        metrics.sensor("partition-revoked-latency").record(1.0d);
+        metrics.sensor("partition-revoked-latency").record(2.0d);
+        metrics.sensor("partition-assigned-latency").record(1.0d);
+        metrics.sensor("partition-assigned-latency").record(2.0d);
+        metrics.sensor("partition-lost-latency").record(1.0d);
+        metrics.sensor("partition-lost-latency").record(2.0d);
+
+        assertEquals(1.5d, getMetric("partition-revoked-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-revoked-latency-max").metricValue());
+        assertEquals(1.5d, getMetric("partition-assigned-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-assigned-latency-max").metricValue());
+        assertEquals(1.5d, getMetric("partition-lost-latency-avg").metricValue());
+        assertEquals(2.0d, getMetric("partition-lost-latency-max").metricValue());
+
+        assertEquals(0.0d, getMetric("assigned-partitions").metricValue());
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        assertEquals(1.0d, getMetric("assigned-partitions").metricValue());
+        subscriptions.assignFromUser(Utils.mkSet(t1p, t2p));
+        assertEquals(2.0d, getMetric("assigned-partitions").metricValue());
+    }
+
+    private KafkaMetric getMetric(final String name) {
+        return metrics.metrics().get(metrics.metricName(name, "consumer" + groupId + "-coordinator-metrics"));
+    }
+
+    private Sensor getSensor(final String name) {
+        return metrics.sensor(name);
     }
 
     @Test
@@ -397,6 +451,34 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(1, rebalanceListener.lostCount);
         assertEquals(Collections.singleton(t1p), rebalanceListener.lost);
+    }
+
+    @Test
+    public void testUnsubscribeWithValidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(Collections.singletonList(t1p), ByteBuffer.wrap(new byte[0])));
+        coordinator.onJoinComplete(1, "memberId", partitionAssignor.name(), buffer);
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
+    public void testUnsubscribeWithInvalidGeneration() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
+
+        coordinator.onLeavePrepare();
+        assertEquals(1, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
     }
 
     @Test
@@ -933,7 +1015,7 @@ public class ConsumerCoordinatorTest {
         coordinator.maybeLeaveGroup("test maybe leave group");
         assertTrue(received.get());
 
-        AbstractCoordinator.Generation generation = coordinator.generation();
+        AbstractCoordinator.Generation generation = coordinator.generationIfStable();
         assertNull(generation);
     }
 
@@ -1811,7 +1893,7 @@ public class ConsumerCoordinatorTest {
 
         AbstractCoordinator.Generation expectedGeneration = new AbstractCoordinator.Generation(1, consumerId, partitionAssignor.name());
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(expectedGeneration, coordinator.generation());
+        assertEquals(expectedGeneration, coordinator.generationIfStable());
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
 
@@ -1819,7 +1901,7 @@ public class ConsumerCoordinatorTest {
             new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
 
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertEquals(expectedGeneration, coordinator.generation());
+        assertEquals(expectedGeneration, coordinator.generationIfStable());
     }
 
     @Test(expected = KafkaException.class)
@@ -2223,6 +2305,63 @@ public class ConsumerCoordinatorTest {
                 coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback()));
         assertThrows(FencedInstanceIdException.class, () ->
                 coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
+    }
+
+    @Test
+    public void testConsumerRejoinAfterRebalance() throws Exception {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"))) {
+            coordinator.ensureActiveGroup();
+
+            prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
+
+            assertThrows(CommitFailedException.class, () -> coordinator.commitOffsetsSync(
+                singletonMap(t1p, new OffsetAndMetadata(100L)),
+                time.timer(Long.MAX_VALUE)));
+
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            int generationId = 42;
+            String memberId = "consumer-42";
+
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+
+            MockTime time = new MockTime(1);
+
+            // onJoinPrepare will be executed and onJoinComplete will not.
+            boolean res = coordinator.joinGroupIfNeeded(time.timer(2));
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            // SynGroupRequest not responded.
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(generationId, coordinator.generation().generationId);
+            assertEquals(memberId, coordinator.generation().memberId);
+
+            // Imitating heartbeat thread that clears generation data.
+            coordinator.maybeLeaveGroup("Clear generation data.");
+
+            assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
+
+            client.respond(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            // Join future should succeed but generation already cleared so result of join is false.
+            res = coordinator.joinGroupIfNeeded(time.timer(1));
+
+            assertFalse(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+
+            // Retry join should then succeed
+            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+            res = coordinator.joinGroupIfNeeded(time.timer(2));
+
+            assertTrue(res);
+            assertFalse(client.hasPendingResponses());
+            assertFalse(client.hasInFlightRequests());
+        }
     }
 
     private void receiveFencedInstanceIdException() {

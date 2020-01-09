@@ -23,10 +23,9 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.yammer.metrics.core.Gauge
-import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0}
+import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException, InconsistentBrokerMetadataException}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -34,7 +33,6 @@ import kafka.log.{LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.security.auth.Authorizer
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
@@ -48,7 +46,8 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, Node}
+import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
+import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
@@ -154,7 +153,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
 
-
   def clusterId: String = _clusterId
 
   // Visible for testing
@@ -162,28 +160,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
-  newGauge(
-    "BrokerState",
-    new Gauge[Int] {
-      def value = brokerState.currentState
-    }
-  )
-
-  newGauge(
-    "ClusterId",
-    new Gauge[String] {
-      def value = clusterId
-    }
-  )
-
-  newGauge(
-    "yammer-metrics-count",
-    new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
-      }
-    }
-  )
+  newGauge("BrokerState", () => brokerState.currentState)
+  newGauge("ClusterId", () => clusterId)
+  newGauge("yammer-metrics-count", () => com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -293,10 +272,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         transactionCoordinator.startup()
 
         /* Get the authorizer and initialize it if one is specified.*/
-        authorizer = Option(config.authorizerClassName).filter(_.nonEmpty).map { authorizerClassName =>
-          val authZ = CoreUtils.createObject[Authorizer](authorizerClassName)
-          authZ.configure(config.originals())
-          authZ
+        authorizer = config.authorizer
+        authorizer.foreach(_.configure(config.originals))
+        val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
+          case Some(authZ) =>
+            authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
+          case None =>
+            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,
@@ -335,8 +317,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        socketServer.startDataPlaneProcessors()
-        socketServer.startControlPlaneProcessor()
+        socketServer.startControlPlaneProcessor(authorizerFutures)
+        socketServer.startDataPlaneProcessors(authorizerFutures)
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)
         startupComplete.set(true)
@@ -381,7 +363,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     val isZkSecurityEnabled = JaasUtils.isZkSecurityEnabled()
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
-      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but the verification of the JAAS login file failed.")
+      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but the " +
+        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
 
     // make sure chroot path exists
     chrootOption.foreach { chroot =>
@@ -445,7 +428,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.interBrokerListenerName,
           config.saslMechanismInterBrokerProtocol,
           time,
-          config.saslInterBrokerHandshakeRequestEnable)
+          config.saslInterBrokerHandshakeRequestEnable,
+          logContext)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
@@ -524,7 +508,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
               val controlledShutdownApiVersion: Short =
                 if (config.interBrokerProtocolVersion < KAFKA_0_9_0) 0
                 else if (config.interBrokerProtocolVersion < KAFKA_2_2_IV0) 1
-                else 2
+                else if (config.interBrokerProtocolVersion < KAFKA_2_4_IV1) 2
+                else 3
 
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(
                   new ControlledShutdownRequestData()

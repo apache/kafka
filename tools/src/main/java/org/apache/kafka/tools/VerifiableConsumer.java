@@ -536,7 +536,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         parser.addArgument("--group-instance-id")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("GROUP_INSTANCE_ID")
                 .dest("groupInstanceId")
@@ -623,7 +623,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");
-        if (!groupInstanceId.equals("None")) {
+        if (groupInstanceId != null) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
         if(! res.getString("bootstrapServer").isEmpty() ) {

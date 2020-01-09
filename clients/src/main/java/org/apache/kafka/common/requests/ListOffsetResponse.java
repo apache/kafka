@@ -70,7 +70,7 @@ public class ListOffsetResponse extends AbstractResponse {
     // partition level fields
     // This key is only used by ListOffsetResponse v0
     @Deprecated
-    private static final Field.Array OFFSETS = new Field.Array("offsets'", INT64, "A list of offsets.");
+    private static final Field.Array OFFSETS = new Field.Array("offsets", INT64, "A list of offsets.");
     private static final Field.Int64 TIMESTAMP = new Field.Int64("timestamp",
             "The timestamp associated with the returned offset");
     private static final Field.Int64 OFFSET = new Field.Int64("offset",
@@ -170,7 +170,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData(").
-                    append("errorCode: ").append((int) error.code());
+                    append("errorCode: ").append(error.code());
 
             if (offsets == null) {
                 bld.append(", timestamp: ").append(timestamp).

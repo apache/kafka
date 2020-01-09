@@ -60,7 +60,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
 
     @Override
     public List<NamedMeasurable> stats() {
-        List<NamedMeasurable> ms = new ArrayList<NamedMeasurable>(this.percentiles.length);
+        List<NamedMeasurable> ms = new ArrayList<>(this.percentiles.length);
         for (Percentile percentile : this.percentiles) {
             final double pct = percentile.percentile();
             ms.add(new NamedMeasurable(percentile.name(), new Measurable() {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
@@ -48,8 +49,20 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void reset() {
+    public void clear() {
         registered.clear();
+    }
+
+    @Override
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            restoredOffsets.remove(partition);
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return restoredOffsets.isEmpty() && registered.isEmpty();
     }
 
     public boolean wasRegistered(final TopicPartition partition) {
