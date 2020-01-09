@@ -491,8 +491,6 @@ class GroupMetadataManager(brokerId: Int,
             topicPartition -> partitionData
           }.toMap
         } else {
-          // Return offsets for all partitions owned by this consumer group if passed in partition opt is null.
-          // (this only applies to consumers that commit offsets to Kafka.)
           val topicPartitions = topicPartitionsOpt.getOrElse(group.allOffsets.keySet)
 
           topicPartitions.map { topicPartition =>

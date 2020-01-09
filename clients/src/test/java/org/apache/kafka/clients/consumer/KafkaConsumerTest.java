@@ -147,6 +147,8 @@ public class KafkaConsumerTest {
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
 
+    private final boolean waitTransaction = false;
+
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
@@ -2210,6 +2212,7 @@ public class KafkaConsumerTest {
                                                                           time,
                                                                           autoCommitEnabled,
                                                                           autoCommitIntervalMs,
+                                                                          waitTransaction,
                                                                           interceptors);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
