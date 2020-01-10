@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -42,12 +43,15 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -62,6 +66,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -77,6 +82,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -253,6 +259,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private ConsumerGroupMetadata cachedGroupMetadata;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -402,6 +409,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            this.cachedGroupMetadata = new ConsumerGroupMetadata(
+                    "", JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
+
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG));
@@ -632,12 +642,62 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        throwIfNoTransactionManager();
-        throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
-        sender.wakeup();
-        result.await();
+        if (!cachedGroupMetadata.groupId().equals(consumerGroupId)) {
+            // Generally this logic should only be triggered once during first call.
+            log.warn("Cached consumer groupId changed from {} to {}. If the old group id is set, this indicates a problem",
+                cachedGroupMetadata.groupId(), consumerGroupId);
+            cachedGroupMetadata = new ConsumerGroupMetadata(consumerGroupId,
+                JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
+        }
+        sendOffsetsToTransactionInternal(offsets, cachedGroupMetadata, false);
     }
+
+    /**
+     * Sends a list of specified offsets to the consumer group coordinator, and also marks
+     * those offsets as part of the current transaction. These offsets will be considered
+     * committed only if the transaction is committed successfully. The committed offset should
+     * be the next message your application will consume, i.e. lastProcessedMessageOffset + 1.
+     * <p>
+     * This method should be used when you need to batch consumed and produced messages
+     * together, typically in a consume-transform-produce pattern. Thus, the specified
+     * {@code consumerGroupId} should be the same as config parameter {@code group.id} of the used
+     * {@link KafkaConsumer consumer}. Note, that the consumer should have {@code enable.auto.commit=false}
+     * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
+     * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
+     *
+     * This API won't deprecate the existing {@link KafkaProducer#sendOffsetsToTransaction(Map, String) sendOffsets} API as standalone
+     * mode EOS applications are still relying on it. If the broker doesn't support the new underlying transactional API, the call will be automatically
+     * downgraded to ignore consumer metadata, while in the meantime a warning shall be logged.
+     *
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.UnsupportedForMessageFormatException  fatal error indicating the message
+     *         format used for the offsets topic on the broker does not support transactions
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized. See the exception for more details
+     * @throws org.apache.kafka.common.errors.IllegalGenerationException if the passed in consumer metadata has illegal generation
+     * @throws org.apache.kafka.common.errors.UnknownMemberIdException if the passed in consumer metadata has unknown member.id
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if the passed in consumer metadata has a fenced group.instance.id
+     * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
+     *         other unexpected error
+     */
+     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata groupMetadata)
+         throws ProducerFencedException,
+                IllegalGenerationException,
+                UnknownMemberIdException,
+                FencedInstanceIdException {
+         sendOffsetsToTransactionInternal(offsets, groupMetadata, true);
+     }
+
+     private void sendOffsetsToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets, ConsumerGroupMetadata consumerGroupMetadata, boolean enableGroupFencing) {
+         throwIfNoTransactionManager();
+         throwIfProducerClosed();
+         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupMetadata, enableGroupFencing);
+         sender.wakeup();
+         result.await();
+     }
 
     /**
      * Commits the ongoing transaction. This method will flush any unsent records before actually committing the transaction.

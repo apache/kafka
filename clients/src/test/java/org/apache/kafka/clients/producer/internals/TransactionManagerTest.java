@@ -18,10 +18,12 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -82,6 +84,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -823,8 +826,10 @@ public class TransactionManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp1, new OffsetAndMetadata(1));
+
         final String consumerGroupId = "myconsumergroup";
-        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, groupMetadata(consumerGroupId), true);
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
@@ -923,7 +928,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -954,7 +959,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -985,7 +990,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1016,7 +1021,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1186,7 +1191,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1218,7 +1223,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp1, new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(tp1, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1254,7 +1259,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled
@@ -1279,7 +1284,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(tp, new OffsetAndMetadata(39L)), groupMetadata(consumerGroupId), false);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1735,7 +1740,8 @@ public class TransactionManagerTest {
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
-        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), "dummyId"));
+        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
+            Collections.emptyMap(), groupMetadata("dummyId"), false));
     }
 
     @Test
@@ -2141,7 +2147,8 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, groupMetadata(consumerGroupId), false);
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
 
         sender.runOnce();  // send AddOffsetsToTxnResult
@@ -2213,7 +2220,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId), false);
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -2239,7 +2246,7 @@ public class TransactionManagerTest {
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
 
-        transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        transactionManager.sendOffsetsToTransaction(offsets, groupMetadata(consumerGroupId), false);
 
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -2251,6 +2258,56 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isCompleted());
         assertFalse(abortResult.isSuccessful());
         assertTrue(transactionManager.hasFatalError());
+    }
+
+    @Test
+    public void testSendOffsetsWithGroupMetadata() {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(tp1, new OffsetAndMetadata(1));
+        final String consumerGroupId = "myconsumergroup";
+        final String groupInstanceId = "instance";
+        final String memberId = "member";
+        final int generationId = 5;
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId, generationId, memberId, Optional.of(groupInstanceId)), true);
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+
+        sender.runOnce();  // send AddOffsetsToTxnResult
+
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(tp1, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, groupInstanceId, memberId, generationId, txnOffsetCommitResponse);
+
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        sender.runOnce();  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
+        sender.runOnce();  // send find coordinator for group request
+        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        sender.runOnce();  // send TxnOffsetCommitRequest request.
+
+        assertTrue(transactionManager.hasPendingOffsetCommits());  // The TxnOffsetCommit failed.
+        assertFalse(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete successfully.
+
+        txnOffsetCommitResponse.put(tp1, Errors.NONE);
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
+        sender.runOnce();  // Send TxnOffsetCommitRequest again.
+
+        assertTrue(addOffsetsResult.isCompleted());
+        assertTrue(addOffsetsResult.isSuccessful());
     }
 
     @Test
@@ -2863,6 +2920,7 @@ public class TransactionManagerTest {
     private void prepareProduceResponse(Errors error, final long producerId, final short producerEpoch) {
         client.prepareResponse(produceRequestMatcher(producerId, producerEpoch), produceResponse(tp0, 0, error, 0));
     }
+
     private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
@@ -2963,6 +3021,29 @@ public class TransactionManagerTest {
             assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+    }
+
+    private void prepareTxnOffsetCommitResponse(final String consumerGroupId,
+                                                final long producerId,
+                                                final short producerEpoch,
+                                                final String groupInstanceId,
+                                                final String memberId,
+                                                final int generationId,
+                                                Map<TopicPartition, Errors> txnOffsetCommitResponse) {
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
+            assertEquals(groupInstanceId, txnOffsetCommitRequest.data.groupInstanceId());
+            assertEquals(memberId, txnOffsetCommitRequest.data.memberId());
+            assertEquals(generationId, txnOffsetCommitRequest.data.generationId());
+            return true;
+        }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+    }
+
+    private ConsumerGroupMetadata groupMetadata(String consumerGroupId) {
+        return new ConsumerGroupMetadata(consumerGroupId, JoinGroupRequest.UNKNOWN_GENERATION_ID, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty());
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {

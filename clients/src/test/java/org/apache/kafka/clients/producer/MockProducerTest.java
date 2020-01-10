@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -80,8 +79,8 @@ public class MockProducerTest {
     public void testPartitioner() throws Exception {
         PartitionInfo partitionInfo0 = new PartitionInfo(topic, 0, null, null, null);
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
-        Cluster cluster = new Cluster(null, new ArrayList<Node>(0), asList(partitionInfo0, partitionInfo1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
+                Collections.emptySet(), Collections.emptySet());
         MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
@@ -152,7 +151,7 @@ public class MockProducerTest {
     @Test(expected = IllegalStateException.class)
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
         buildMockProducer(true);
-        producer.sendOffsetsToTransaction(null, null);
+        producer.sendOffsetsToTransaction(null, "");
     }
 
     @Test
@@ -160,7 +159,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         try {
-            producer.sendOffsetsToTransaction(null, null);
+            producer.sendOffsetsToTransaction(null, "");
             fail("Should have thrown as producer has no open transaction");
         } catch (IllegalStateException e) { }
     }
@@ -279,7 +278,7 @@ public class MockProducerTest {
         producer.initTransactions();
         producer.fenceProducer();
         try {
-            producer.sendOffsetsToTransaction(null, null);
+            producer.sendOffsetsToTransaction(null, "");
             fail("Should have thrown as producer is fenced off");
         } catch (ProducerFencedException e) { }
     }
@@ -433,7 +432,8 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         try {
-            producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), null);
+            String consumerGroupId = null;
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), consumerGroupId);
             fail("Should have thrown NullPointerException");
         } catch (NullPointerException e) { }
     }
@@ -603,7 +603,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.close();
         try {
-            producer.sendOffsetsToTransaction(null, null);
+            producer.sendOffsetsToTransaction(null, "");
             fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }

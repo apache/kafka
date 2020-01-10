@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
@@ -329,17 +330,18 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                            String consumerGroupId) {
+                                                                            final ConsumerGroupMetadata groupMetadata,
+                                                                            final boolean enableGroupFencing) {
         ensureTransactional();
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction");
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
+        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
+            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, groupMetadata.groupId());
+        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata, enableGroupFencing);
         enqueueRequest(handler);
         return handler.result;
     }
@@ -986,22 +988,28 @@ public class TransactionManager {
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          String consumerGroupId) {
+                                                          ConsumerGroupMetadata groupMetadata,
+                                                          boolean enableGroupFencing) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
                     offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-                .setTransactionalId(transactionalId)
-                .setGroupId(consumerGroupId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
-        );
-        return new TxnOffsetCommitHandler(result, builder);
+
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+                                              .setTransactionalId(transactionalId)
+                                              .setGroupId(groupMetadata.groupId())
+                                              .setProducerId(producerIdAndEpoch.producerId)
+                                              .setProducerEpoch(producerIdAndEpoch.epoch)
+                                              .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits));
+        if (enableGroupFencing) {
+            data.setMemberId(groupMetadata.memberId())
+                .setGenerationId(groupMetadata.generationId())
+                .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null));
+        }
+        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(data);
+        return new TxnOffsetCommitHandler(result, builder, enableGroupFencing);
     }
 
     private TransactionalRequestResult handleCachedTransactionRequestResult(
@@ -1373,12 +1381,18 @@ public class TransactionManager {
     private class AddOffsetsToTxnHandler extends TxnRequestHandler {
         private final AddOffsetsToTxnRequest.Builder builder;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final ConsumerGroupMetadata groupMetadata;
+        private final boolean enableGroupFencing;
 
         private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
-                                       Map<TopicPartition, OffsetAndMetadata> offsets) {
+                                       Map<TopicPartition, OffsetAndMetadata> offsets,
+                                       ConsumerGroupMetadata groupMetadata,
+                                       boolean enableGroupFencing) {
             super("AddOffsetsToTxn");
             this.builder = builder;
             this.offsets = offsets;
+            this.groupMetadata = groupMetadata;
+            this.enableGroupFencing = enableGroupFencing;
         }
 
         @Override
@@ -1400,7 +1414,7 @@ public class TransactionManager {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.consumerGroupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
-                pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata, enableGroupFencing));
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1421,11 +1435,14 @@ public class TransactionManager {
 
     private class TxnOffsetCommitHandler extends TxnRequestHandler {
         private final TxnOffsetCommitRequest.Builder builder;
+        private final boolean enableGroupFencing;
 
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
-                                       TxnOffsetCommitRequest.Builder builder) {
+                                       TxnOffsetCommitRequest.Builder builder,
+                                       boolean enableGroupFencing) {
             super(result);
             this.builder = builder;
+            this.enableGroupFencing = enableGroupFencing;
         }
 
         @Override
@@ -1476,7 +1493,12 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (isFatalException(error)) {
+                } else if (!enableGroupFencing && isGroupFencingException(error)) {
+                    fatalError(new KafkaException("Unexpected group fencing" +
+                        " exception encountered when the group fencing mechanism is not enabled: " + error.message()));
+                    break;
+                }
+                else if (isFatalException(error)) {
                     fatalError(error.exception());
                     break;
                 } else if (isGroupFencingException(error)) {
@@ -1507,7 +1529,7 @@ public class TransactionManager {
 
     private boolean isGroupFencingException(Errors error) {
         return error == Errors.FENCED_INSTANCE_ID
-                || error == Errors.UNKNOWN_MEMBER_ID
-                || error == Errors.ILLEGAL_GENERATION;
+                   || error == Errors.UNKNOWN_MEMBER_ID
+                   || error == Errors.ILLEGAL_GENERATION;
     }
 }
