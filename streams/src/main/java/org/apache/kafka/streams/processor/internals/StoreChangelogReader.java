@@ -82,7 +82,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private class ChangelogMetadata {
+    private static class ChangelogMetadata {
 
         private final TopicPartition changelogPartition;
 

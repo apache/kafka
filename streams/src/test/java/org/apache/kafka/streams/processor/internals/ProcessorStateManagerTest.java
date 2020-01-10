@@ -63,6 +63,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+// TODO K9113: fix tests
 public class ProcessorStateManagerTest {
 
     private final Set<TopicPartition> noPartitions = Collections.emptySet();
@@ -196,7 +197,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            assertTrue(changelogReader.wasRegistered(new TopicPartition(persistentStoreTopicName, 2)));
+            assertTrue(changelogReader.isPartitionRegistered(new TopicPartition(persistentStoreTopicName, 2)));
         } finally {
             stateMgr.close(true);
         }
@@ -220,7 +221,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            assertTrue(changelogReader.wasRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
+            assertTrue(changelogReader.isPartitionRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
         } finally {
             stateMgr.close(true);
         }
@@ -372,9 +373,10 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldIgnoreIrrelevantLoadedCheckpoints() throws IOException {
+        final TopicPartition irrelevantPartition = new TopicPartition("ignoreme", 1234);
         final Map<TopicPartition, Long> offsets = mkMap(
             mkEntry(persistentStorePartition, 99L),
-            mkEntry(new TopicPartition("ignoreme", 1234), 12L)
+            mkEntry(irrelevantPartition, 12L)
         );
         checkpoint.write(offsets);
 
@@ -389,12 +391,8 @@ public class ProcessorStateManagerTest {
             logContext);
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
-        changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
-
-        stateMgr.checkpoint(emptyMap());
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+        assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
+        assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(110L));
     }
 
     @Test
@@ -413,44 +411,15 @@ public class ProcessorStateManagerTest {
             logContext);
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
-        changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
+        final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
+        stateMgr.restore(persistentStorePartition, singletonList(new ConsumerRecord<>("", 0, 110L, bytes, bytes)));
 
-        stateMgr.checkpoint(emptyMap());
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
-    }
-
-    @Test
-    public void shouldIgnoreIrrelevantRestoredCheckpoints() throws IOException {
-        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
-        checkpoint.write(offsets);
-
-        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            noPartitions,
-            AbstractTask.TaskType.ACTIVE,
-            stateDirectory,
-            singletonMap(persistentStoreName, persistentStorePartition.topic()),
-            changelogReader,
-            logContext);
-        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-
-        // should ignore irrelevant topic partitions
-        changelogReader.setRestoredOffsets(mkMap(
-            mkEntry(persistentStorePartition, 110L),
-            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
-        ));
-
-        stateMgr.checkpoint(emptyMap());
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
-        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+        assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(110L));
     }
 
     @Test
     public void shouldOverrideRestoredOffsetsWithProcessedOffsets() throws IOException {
+        final TopicPartition irrelevantPartition = new TopicPartition("ignoreme", 1234);
         final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
         checkpoint.write(offsets);
 
@@ -465,22 +434,17 @@ public class ProcessorStateManagerTest {
             logContext);
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
-        // should ignore irrelevant topic partitions
-        changelogReader.setRestoredOffsets(mkMap(
-            mkEntry(persistentStorePartition, 110L),
-            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
-        ));
+        final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
+        stateMgr.restore(persistentStorePartition, singletonList(new ConsumerRecord<>("", 0, 110L, bytes, bytes)));
 
         // should ignore irrelevant topic partitions
         stateMgr.checkpoint(mkMap(
             mkEntry(persistentStorePartition, 220L),
-            mkEntry(new TopicPartition("ignoreme", 42), 9000L)
+            mkEntry(irrelevantPartition, 9000L)
         ));
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
 
-        // the checkpoint gets incremented to be the log position _after_ the committed offset
-        assertThat(read, equalTo(singletonMap(persistentStorePartition, 221L)));
+        assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
+        assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(220L));
     }
 
     @Test

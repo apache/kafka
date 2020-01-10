@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.AbstractTask;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -311,14 +312,14 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             partitions,
-            false,
+            AbstractTask.TaskType.ACTIVE,
             stateDirectory,
             topology.storeToChangelogTopic(),
             new StoreChangelogReader(
+                streamsConfig,
+                logContext,
                 clientSupplier.restoreConsumer,
-                Duration.ZERO,
-                new MockStateRestoreListener(),
-                new LogContext("test-stream-task ")),
+                new MockStateRestoreListener()),
             logContext);
         final RecordCollector recordCollector = new RecordCollectorImpl(
             taskId,
