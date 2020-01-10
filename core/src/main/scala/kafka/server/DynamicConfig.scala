@@ -57,6 +57,9 @@ object DynamicConfig {
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
     val MaintenanceBrokerListDoc = "A list containing maintenance broker Ids, separated by comma"
 
+    //cluster level only configs
+    val ClusterLevelConfigs = Set(MaintenanceBrokerListProp)
+
     //Definitions
     private val brokerConfigDef = new ConfigDef()
       //round minimum value down, to make it easier for users.
@@ -67,8 +70,6 @@ object DynamicConfig {
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
 
-    //cluster level only configs
-    val ClusterLevelConfigs = Set(MaintenanceBrokerListProp)
     def typeOf(key: String): ConfigDef.Type = {
       val configKey: ConfigDef.ConfigKey = brokerConfigDef.configKeys().get(key)
       if (configKey == null)
