@@ -79,8 +79,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val wildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val clientPrincipal: String
-  val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   protected def authorizerClass: Class[_] = classOf[AclAuthorizer]
@@ -93,8 +91,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val wildcardTopicResource =  new ResourcePattern(TOPIC, wildcard, LITERAL)
   val wildcardGroupResource =  new ResourcePattern(GROUP, wildcard, LITERAL)
 
-  def kafkaPrincipalStr: String = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, kafkaPrincipal).toString
-  def clientPrincipalStr: String = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, clientPrincipal).toString
+  def clientPrincipal: KafkaPrincipal
+  def kafkaPrincipal: KafkaPrincipal
+
+  def kafkaPrincipalStr: String = kafkaPrincipal.toString
+  def clientPrincipalStr: String = clientPrincipal.toString
 
   // Arguments to AclCommand to set ACLs.
   def clusterActionArgs: Array[String] = Array("--authorizer-properties",
