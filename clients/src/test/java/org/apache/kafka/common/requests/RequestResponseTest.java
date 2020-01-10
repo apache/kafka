@@ -70,6 +70,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.EndTxnRequestData;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -1616,11 +1618,21 @@ public class RequestResponseTest {
     }
 
     private EndTxnRequest createEndTxnRequest() {
-        return new EndTxnRequest.Builder("tid", 21L, (short) 42, TransactionResult.COMMIT).build();
+        return new EndTxnRequest.Builder(
+            new EndTxnRequestData()
+                .setTransactionalId("tid")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setCommitted(TransactionResult.COMMIT.id)
+            ).build();
     }
 
     private EndTxnResponse createEndTxnResponse() {
-        return new EndTxnResponse(0, Errors.NONE);
+        return new EndTxnResponse(
+            new EndTxnResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+        );
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {

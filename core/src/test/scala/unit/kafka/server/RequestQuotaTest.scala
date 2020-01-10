@@ -392,7 +392,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
 
         case ApiKeys.END_TXN =>
-          new EndTxnRequest.Builder("test-transactional-id", 1, 0, TransactionResult.forId(false))
+          new EndTxnRequest.Builder(new EndTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setCommitted(false)
+          )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)

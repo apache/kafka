@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -2816,20 +2817,27 @@ public class TransactionManagerTest {
                                        final long pid,
                                        final short epoch,
                                        final boolean shouldDisconnect) {
-        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error), shouldDisconnect);
+        client.prepareResponse(endTxnMatcher(result, pid, epoch),
+                               new EndTxnResponse(new EndTxnResponseData()
+                                                      .setErrorCode(error.code())
+                                                      .setThrottleTimeMs(0)), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.respond(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+        client.respond(endTxnMatcher(result, pid, epoch), new EndTxnResponse(
+            new EndTxnResponseData()
+                .setErrorCode(error.code())
+                .setThrottleTimeMs(0)
+        ));
     }
 
     private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long pid, final short epoch) {
         return body -> {
             EndTxnRequest endTxnRequest = (EndTxnRequest) body;
-            assertEquals(transactionalId, endTxnRequest.transactionalId());
-            assertEquals(pid, endTxnRequest.producerId());
-            assertEquals(epoch, endTxnRequest.producerEpoch());
-            assertEquals(result, endTxnRequest.command());
+            assertEquals(transactionalId, endTxnRequest.data.transactionalId());
+            assertEquals(pid, endTxnRequest.data.producerId());
+            assertEquals(epoch, endTxnRequest.data.producerEpoch());
+            assertEquals(result, endTxnRequest.result());
             return true;
         };
     }

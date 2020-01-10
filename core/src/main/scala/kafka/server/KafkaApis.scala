@@ -49,7 +49,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -1912,26 +1912,33 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
-    val transactionalId = endTxnRequest.transactionalId
+    val transactionalId = endTxnRequest.data.transactionalId
 
     if (authorize(request, WRITE, TRANSACTIONAL_ID, transactionalId)) {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val responseBody = new EndTxnResponse(requestThrottleMs, error)
-          trace(s"Completed ${endTxnRequest.transactionalId}'s EndTxnRequest with command: ${endTxnRequest.command}, errors: $error from client ${request.header.clientId}.")
+          val responseBody = new EndTxnResponse(new EndTxnResponseData()
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(requestThrottleMs))
+          trace(s"Completed ${endTxnRequest.data.transactionalId}'s EndTxnRequest " +
+            s"with committed: ${endTxnRequest.data.committed}, " +
+            s"errors: $error from client ${request.header.clientId}.")
           responseBody
         }
         sendResponseMaybeThrottle(request, createResponse)
       }
 
-      txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId,
-        endTxnRequest.producerId,
-        endTxnRequest.producerEpoch,
-        endTxnRequest.command,
+      txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId,
+        endTxnRequest.data.producerId,
+        endTxnRequest.data.producerEpoch,
+        endTxnRequest.result(),
         sendResponseCallback)
     } else
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new EndTxnResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+        new EndTxnResponse(new EndTxnResponseData()
+            .setErrorCode(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code)
+            .setThrottleTimeMs(requestThrottleMs))
+      )
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
