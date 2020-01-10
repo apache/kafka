@@ -192,7 +192,7 @@ public class MirrorSourceConnectorTest {
 
         List<TopicPartition> sourceTopicPartitions = Arrays.asList(new TopicPartition("topic", 0));
         doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
-        doReturn(Collections.emptyList()).when(connector).findExistingTargetTopicPartitions();
+        doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
         doNothing().when(connector).createTopicPartitions(any(), any(), any());
 
         connector.refreshTopicPartitions();
@@ -210,7 +210,7 @@ public class MirrorSourceConnectorTest {
                 eq(Collections.emptyMap()));
 
         List<TopicPartition> targetTopicPartitions = Arrays.asList(new TopicPartition("source.topic", 0));
-        doReturn(targetTopicPartitions).when(connector).findExistingTargetTopicPartitions();
+        doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
         connector.refreshTopicPartitions();
 
         // once target topic is created, refreshTopicPartitions() will NOT call computeAndCreateTopicPartitions() again

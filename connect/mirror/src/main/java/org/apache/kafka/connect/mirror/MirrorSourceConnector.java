@@ -198,19 +198,30 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     // visible for testing
+    List<TopicPartition> findTargetTopicPartitions()
+            throws InterruptedException, ExecutionException {
+        Set<String> topics = listTopics(targetAdminClient).stream()
+            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+            .collect(Collectors.toSet());
+        return describeTopics(targetAdminClient, topics).stream()
+                .flatMap(MirrorSourceConnector::expandTopicDescription)
+                .collect(Collectors.toList());
+    }
+
+    // visible for testing
     void refreshTopicPartitions()
             throws InterruptedException, ExecutionException {
         knownSourceTopicPartitions = findSourceTopicPartitions();
-        knownTargetTopicPartitions = findExistingTargetTopicPartitions();
-        List<TopicPartition> targetTopicPartitionsUpstream = knownTargetTopicPartitions.stream()
+        knownTargetTopicPartitions = findTargetTopicPartitions();
+        List<TopicPartition> upstreamTargetTopicPartitions = knownTargetTopicPartitions.stream()
                 .map(x -> new TopicPartition(replicationPolicy.upstreamTopic(x.topic()), x.partition()))
                 .collect(Collectors.toList());
 
         Set<TopicPartition> newTopicPartitions = new HashSet<>();
         newTopicPartitions.addAll(knownSourceTopicPartitions);
-        newTopicPartitions.removeAll(targetTopicPartitionsUpstream);
+        newTopicPartitions.removeAll(upstreamTargetTopicPartitions);
         Set<TopicPartition> deadTopicPartitions = new HashSet<>();
-        deadTopicPartitions.addAll(targetTopicPartitionsUpstream);
+        deadTopicPartitions.addAll(upstreamTargetTopicPartitions);
         deadTopicPartitions.removeAll(knownSourceTopicPartitions);
         if (!newTopicPartitions.isEmpty() || !deadTopicPartitions.isEmpty()) {
             log.info("Found {} topic-partitions on {}. {} are new. {} were removed. Previously had {}.",
@@ -225,35 +236,27 @@ public class MirrorSourceConnector extends SourceConnector {
     private void loadTopicPartitions()
             throws InterruptedException, ExecutionException {
         knownSourceTopicPartitions = findSourceTopicPartitions();
-        knownTargetTopicPartitions = findExistingTargetTopicPartitions();
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private void refreshKnownTargetTopics()
             throws InterruptedException, ExecutionException {
-        knownTargetTopicPartitions = findExistingTargetTopicPartitions();
-    }
-
-    // visible for testing
-    List<TopicPartition> findExistingTargetTopicPartitions()
-            throws InterruptedException, ExecutionException {
-        Set<String> topics = listTopics(targetAdminClient).stream()
-            .filter(x -> sourceAndTarget.source().equals(replicationPolicy.topicSource(x)))
-            .collect(Collectors.toSet());
-        return describeTopics(targetAdminClient, topics).stream()
-                .flatMap(MirrorSourceConnector::expandTopicDescription)
-                .collect(Collectors.toList());
+        knownTargetTopicPartitions = findTargetTopicPartitions();
     }
 
     private Set<String> topicsBeingReplicated() {
-        Set<String> knownTargetTopics = knownTargetTopicPartitions.stream()
-                .map(x -> x.topic())
-                .distinct()
-                .collect(Collectors.toSet());
+        Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
         return knownSourceTopicPartitions.stream()
             .map(x -> x.topic())
             .distinct()
             .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
             .collect(Collectors.toSet());
+    }
+
+    private Set<String> toTopics(Collection<TopicPartition> tps) {
+        return tps.stream()
+                .map(x -> x.topic())
+                .collect(Collectors.toSet());
     }
 
     private void syncTopicAcls()
@@ -286,10 +289,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, Long> partitionCounts = knownSourceTopicPartitions.stream()
             .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue()));
-        Set<String> knownTargetTopics = knownTargetTopicPartitions.stream()
-            .map(x -> x.topic())
-            .distinct()
-            .collect(Collectors.toSet());
+        Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
         List<NewTopic> newTopics = partitionCounts.entrySet().stream()
             .filter(x -> !knownTargetTopics.contains(x.getKey()))
             .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
