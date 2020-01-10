@@ -91,6 +91,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private long idleStartTime;
     private boolean commitRequested = false;
+    private State state = State.CREATED;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -162,6 +163,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final StateStore store : topology.globalStateStores()) {
             stateMgr.registerStore(store, null);
         }
+    }
+
+    @Override
+    public State state() {
+        return state;
+    }
+
+    @Override
+    public void transitionTo(final State newState) {
+        State.validateTransition(state, newState);
+        state = newState;
     }
 
     public boolean isEosEnabled() {

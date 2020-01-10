@@ -33,11 +33,13 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -56,7 +58,6 @@ public class TaskManager {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.TaskCreator taskCreator;
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
-    private final StreamsMetadataState streamsMetadataState;
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
@@ -66,14 +67,15 @@ public class TaskManager {
     private boolean restoreConsumerAssignedStandbys = false;
 
     // following information is updated during rebalance phase by the partition assignor
-    private Cluster cluster;
     private Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
+    private Map<TopicPartition, Task> partitionToTask = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> addedActiveTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> addedStandbyTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> revokedActiveTasks = new HashMap<>();
     private Map<TaskId, Set<TopicPartition>> revokedStandbyTasks = new HashMap<>();
+    private Set<Task> tasks = new TreeSet<>(Comparator.comparing(Task::id));
 
     private Consumer<byte[], byte[]> consumer;
 
@@ -87,10 +89,21 @@ public class TaskManager {
                 final Admin adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
+        this(changelogReader, processId, logPrefix, restoreConsumer, taskCreator, standbyTaskCreator, adminClient, active, standby);
+    }
+
+    TaskManager(final ChangelogReader changelogReader,
+                final UUID processId,
+                final String logPrefix,
+                final Consumer<byte[], byte[]> restoreConsumer,
+                final StreamThread.TaskCreator taskCreator,
+                final StreamThread.StandbyTaskCreator standbyTaskCreator,
+                final Admin adminClient,
+                final AssignedStreamsTasks active,
+                final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.streamsMetadataState = streamsMetadataState;
         this.restoreConsumer = restoreConsumer;
         this.taskCreator = taskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
@@ -435,14 +448,6 @@ public class TaskManager {
         this.rebalanceInProgress = rebalanceInProgress;
     }
 
-    public void setClusterMetadata(final Cluster cluster) {
-        this.cluster = cluster;
-    }
-
-    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        this.streamsMetadataState.onChange(partitionsByHostState, cluster);
-    }
-
     public void setPartitionsToTaskId(final Map<TopicPartition, TaskId> partitionsToTaskId) {
         this.partitionsToTaskId = partitionsToTaskId;
     }
@@ -588,7 +593,6 @@ public class TaskManager {
         final StringBuilder builder = new StringBuilder();
         builder.append("TaskManager\n");
         builder.append(indent).append("\tMetadataState:\n");
-        builder.append(streamsMetadataState.toString(indent + "\t\t"));
         builder.append(indent).append("\tActive tasks:\n");
         builder.append(active.toString(indent + "\t\t"));
         builder.append(indent).append("\tStandby tasks:\n");

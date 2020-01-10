@@ -131,6 +131,20 @@ public class AbstractTaskTest {
                                 stateDirectory,
                                 config) {
 
+
+            private State state = State.CREATED;
+
+            @Override
+            public State state() {
+                return state;
+            }
+
+            @Override
+            public void transitionTo(final State newState) {
+                State.validateTransition(state, newState);
+                state = newState;
+            }
+
             @Override
             public void initializeMetadata() {}
 

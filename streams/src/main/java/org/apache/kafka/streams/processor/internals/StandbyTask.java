@@ -34,6 +34,7 @@ import java.util.Set;
  */
 public class StandbyTask extends AbstractTask {
     private final Sensor closeTaskSensor;
+    private State state = State.CREATED;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -58,6 +59,17 @@ public class StandbyTask extends AbstractTask {
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), metrics);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+    }
+
+    @Override
+    public State state() {
+        return state;
+    }
+
+    @Override
+    public void transitionTo(final State newState) {
+        State.validateTransition(state, newState);
+        state = newState;
     }
 
     @Override

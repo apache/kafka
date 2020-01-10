@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
@@ -42,6 +43,7 @@ public final class AssignorConfiguration {
     private final org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper;
     private final String userEndPoint;
     private final TaskManager taskManager;
+    private final StreamsMetadataState streamsMetadataState;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private final StreamsConfig streamsConfig;
@@ -87,22 +89,43 @@ public final class AssignorConfiguration {
             userEndPoint = null;
         }
 
-        final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
-        if (o == null) {
-            final KafkaException fatalException = new KafkaException("TaskManager is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("TaskManager is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            if (!(o instanceof TaskManager)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            taskManager = (TaskManager) o;
         }
 
-        if (!(o instanceof TaskManager)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
+        {
+            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
+            if (o == null) {
+                final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
 
-        taskManager = (TaskManager) o;
+            if (!(o instanceof StreamsMetadataState)) {
+                final KafkaException fatalException = new KafkaException(
+                    String.format("%s is not an instance of %s", o.getClass().getName(), StreamsMetadataState.class.getName())
+                );
+                log.error(fatalException.getMessage(), fatalException);
+                throw fatalException;
+            }
+
+            streamsMetadataState = (StreamsMetadataState) o;
+        }
 
         internalTopicManager = new InternalTopicManager(taskManager.adminClient(), streamsConfig);
 
@@ -129,6 +152,10 @@ public final class AssignorConfiguration {
 
     public TaskManager getTaskManager() {
         return taskManager;
+    }
+
+    public StreamsMetadataState getStreamsMetadataState() {
+        return streamsMetadataState;
     }
 
     public RebalanceProtocol rebalanceProtocol() {

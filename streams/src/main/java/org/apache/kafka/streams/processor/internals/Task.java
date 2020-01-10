@@ -23,9 +23,31 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 
 public interface Task {
+    enum State {
+        CREATED, RESTORING, RUNNING, REVOKED, CLOSED;
+
+
+        static void validateTransition(final State oldState, final State newState) {
+            if (oldState == CREATED && newState == RESTORING ) {
+                return;
+            } else if (oldState == RESTORING && (newState == RESTORING || newState == RUNNING || newState == REVOKED) ) {
+                return;
+            } else if (oldState == RUNNING && (newState == RESTORING || newState == RUNNING || newState == REVOKED)) {
+                return;
+            } else if (oldState == REVOKED && (newState == RESTORING || newState == RUNNING || newState == REVOKED || newState == CLOSED)) {
+                return;
+            } else {
+                throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
+            }
+        }
+    }
+
+    State state();
+    void transitionTo(State newState);
 
     void initializeMetadata();
 
