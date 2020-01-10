@@ -1293,12 +1293,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!pendingTxnOffsetTopicPartitions.isEmpty()) {
                 // just retry
-                future.raise(new PendingOffsetException(
-                    "The following partitions still have pending offsets " +
-                        "which are not cleared on the broker side: " +
-                        pendingTxnOffsetTopicPartitions + ", this could be either" +
-                        "transactional offsets waiting for completion, or " +
-                        "normal offsets waiting for replication after appending to local log"));
+                log.info("The following partitions still have pending offsets " +
+                             "which are not cleared on the broker side: {}" +
+                             ", this could be either" +
+                             "transactional offsets waiting for completion, or " +
+                             "normal offsets waiting for replication after appending to local log", pendingTxnOffsetTopicPartitions);
+                future.raise(new PendingOffsetException("There are pending offsets for the requested topic partitions"));
             } else {
                 future.complete(offsets);
             }

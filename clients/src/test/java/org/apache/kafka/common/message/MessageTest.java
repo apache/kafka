@@ -475,10 +475,14 @@ public final class MessageTest {
             final short finalVersion = version;
             if (version < 2) {
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
-            } else if (version < 7) {
-                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
+
+            if (version < 7) {
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, requireStableData));
+            } else {
+                testAllMessageRoundTripsFromVersion(finalVersion, requireStableData);
             }
         }
 

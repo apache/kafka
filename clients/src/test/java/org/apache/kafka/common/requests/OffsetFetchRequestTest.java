@@ -102,7 +102,7 @@ public class OffsetFetchRequestTest {
     public void testConstructorFailForUnsupportedRequireStable() {
         builder = new OffsetFetchRequest.Builder(groupId, true, null);
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            short finalVersion = version;
+            final short finalVersion = version;
             if (version < 2) {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
             } else {

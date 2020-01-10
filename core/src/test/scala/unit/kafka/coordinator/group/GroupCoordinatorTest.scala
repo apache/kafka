@@ -2188,7 +2188,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testFetchPendingTxnOffsets(): Unit = {
+  def testFetchPendingTxnOffsetsWithAbort(): Unit = {
     val requireStable = true
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
@@ -2203,7 +2203,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, error)
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
     assertEquals(Some(Errors.PENDING_OFFSET), partitionData.get(tp).map(_.error))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(nonExistTp).map(_.offset))
     assertEquals(Some(Errors.NONE), partitionData.get(nonExistTp).map(_.error))
 
     val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
@@ -2214,6 +2214,33 @@ class GroupCoordinatorTest {
     val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
     assertEquals(Errors.NONE, secondReqError)
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
+    assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tp).map(_.error))
+  }
+
+  @Test
+  def testFetchPendingTxnOffsetsWithCommit(): Unit = {
+    val requireStable = true
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(25)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
+
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+    assertEquals(Some(Errors.PENDING_OFFSET), partitionData.get(tp).map(_.error))
+
+    val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+
+    // Validate that the pending commit is committed
+    handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
+
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable, Some(Seq(tp)))
+    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Some(25), secondReqPartitionData.get(tp).map(_.offset))
     assertEquals(Some(Errors.NONE), secondReqPartitionData.get(tp).map(_.error))
   }
 
