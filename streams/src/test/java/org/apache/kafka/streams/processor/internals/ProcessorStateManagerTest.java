@@ -66,6 +66,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+// TODO K9113: fix tests
 public class ProcessorStateManagerTest {
 
     private final String applicationId = "test-application";
