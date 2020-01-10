@@ -2538,7 +2538,6 @@ public class ConsumerCoordinatorTest {
                 time,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                false,
                 null);
     }
 
