@@ -38,10 +38,6 @@ public class MockBatchingStateRestoreListener extends MockStateRestoreListener i
 
     }
 
-    public void resetRestoredBatch() {
-        restoredRecords.clear();
-    }
-
     public Collection<KeyValue<byte[], byte[]>> getRestoredRecords() {
         return restoredRecords;
     }

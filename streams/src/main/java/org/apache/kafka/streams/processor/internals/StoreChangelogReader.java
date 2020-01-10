@@ -84,7 +84,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private static class ChangelogMetadata {
 
-        private final TopicPartition changelogPartition;
+        private final StateStoreMetadata storeMetadata;
 
         private final ProcessorStateManager stateManager;
 
@@ -107,9 +107,9 @@ public class StoreChangelogReader implements ChangelogReader {
         // either due to limit offset (standby) or committed end offset (active)
         private int bufferedLimitIndex;
 
-        private ChangelogMetadata(final TopicPartition changelogPartition, final ProcessorStateManager stateManager) {
+        private ChangelogMetadata(final StateStoreMetadata storeMetadata, final ProcessorStateManager stateManager) {
+            this.storeMetadata = storeMetadata;
             this.stateManager = stateManager;
-            this.changelogPartition = changelogPartition;
             this.changelogState = ChangelogState.REGISTERED;
             this.restoreEndOffset = null;
             this.totalRestored = 0L;
@@ -125,7 +125,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         @Override
         public String toString() {
-            final Long currentOffset = stateManager.changelogOffsets().get(changelogPartition);
+            final Long currentOffset = storeMetadata.offset();
             return changelogState + " " + stateManager.taskType() +
                 " (currentOffset + " + currentOffset + "endOffset " + restoreEndOffset + ", limitOffset " + restoreLimitOffset + ")";
         }
@@ -178,7 +178,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private boolean hasRestoredToEnd(final ChangelogMetadata metadata) {
         final Long endOffset = metadata.restoreEndOffset;
-        final Long currentOffset = metadata.stateManager.storeMetadata(metadata.changelogPartition).offset();
+        final Long currentOffset = metadata.storeMetadata.offset();
         if (endOffset == null) {
             // end offset is not initialized meaning that it is from a standby task,
             // this should never happen since we only call this function for active task in restoring phase
@@ -206,7 +206,7 @@ public class StoreChangelogReader implements ChangelogReader {
             //     and the consumer's position is likely already ahead of that end offset. Then we just need to check
             //     the first record in the remaining buffer and see if that record is no smaller than the end offset.
             try {
-                return restoreConsumer.position(metadata.changelogPartition) >= endOffset;
+                return restoreConsumer.position(metadata.storeMetadata.changelogPartition()) >= endOffset;
             } catch (final TimeoutException e) {
                 // if we cannot get the position of the consumer within timeout, just return false
                 return false;
@@ -260,7 +260,13 @@ public class StoreChangelogReader implements ChangelogReader {
      */
     @Override
     public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
-        final ChangelogMetadata changelogMetadata = new ChangelogMetadata(partition, stateManager);
+        final StateStoreMetadata storeMetadata = stateManager.storeMetadata(partition);
+        if (storeMetadata == null) {
+            throw new IllegalStateException("Cannot find the corresponding state store metadata for changelog " +
+                partition);
+        }
+
+        final ChangelogMetadata changelogMetadata = new ChangelogMetadata(storeMetadata, stateManager);
 
         // initializing limit offset to 0L for standby changelog to effectively disable any restoration until it is updated
         if (state == ChangelogReaderState.STANDBY_UPDATING && stateManager.changelogAsSource(partition)) {
@@ -296,7 +302,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Set<TopicPartition> restoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING)
-            .map(metadata -> metadata.changelogPartition)
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet());
     }
 
@@ -304,7 +310,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
                 metadata.stateManager.taskType() == AbstractTask.TaskType.STANDBY)
-            .map(metadata -> metadata.changelogPartition)
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet());
     }
 
@@ -329,7 +335,7 @@ public class StoreChangelogReader implements ChangelogReader {
     public Set<TopicPartition> completedChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.COMPLETED)
-            .map(metadata -> metadata.changelogPartition)
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet());
     }
 
@@ -364,7 +370,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     final ConsumerRecord<byte[], byte[]> record = iterator.next();
                     if (record.key() == null) {
                         log.warn("Read changelog record with null key from changelog {} at offset {}, " +
-                            "skipping it for restoration", changelogMetadata.changelogPartition, record.offset());
+                            "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
                         iterator.remove();
                     } else {
                         final long offset = record.offset();
@@ -399,14 +405,14 @@ public class StoreChangelogReader implements ChangelogReader {
      */
     private void restoreChangelog(final ChangelogMetadata changelogMetadata) {
         final ProcessorStateManager stateManager = changelogMetadata.stateManager;
-        final TopicPartition partition = changelogMetadata.changelogPartition;
-        final StateStoreMetadata storeMetadata = stateManager.storeMetadata(partition);
-        final String storeName = storeMetadata.stateStore.name();
+        final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
+        final TopicPartition partition = storeMetadata.changelogPartition();
+        final String storeName = storeMetadata.store().name();
         final int numRecords = changelogMetadata.bufferedLimitIndex;
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
-            stateManager.restore(partition, records);
+            stateManager.restore(storeMetadata, records);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
@@ -437,7 +443,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
 
-            pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.changelogPartition));
+            pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.storeMetadata.changelogPartition()));
         }
     }
 
@@ -489,16 +495,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private void updateLimitOffsetsForStandbyChangelogs(final Map<TopicPartition, Long> committedOffsets) {
         for (final ChangelogMetadata metadata : changelogs.values()) {
+            final TopicPartition partition = metadata.storeMetadata.changelogPartition();
             if (metadata.stateManager.taskType() == AbstractTask.TaskType.STANDBY &&
-                metadata.stateManager.changelogAsSource(metadata.changelogPartition) &&
-                committedOffsets.containsKey(metadata.changelogPartition)) {
+                metadata.stateManager.changelogAsSource(partition) &&
+                committedOffsets.containsKey(partition)) {
 
-                final Long newLimit = committedOffsets.get(metadata.changelogPartition);
+                final Long newLimit = committedOffsets.get(partition);
                 final Long previousLimit = metadata.restoreLimitOffset;
 
                 if (previousLimit != null && previousLimit > newLimit) {
                     throw new IllegalStateException("Offset limit should monotonically increase, but was reduced for partition " +
-                        metadata.changelogPartition + ". New limit: " + newLimit + ". Previous limit: " + previousLimit);
+                        partition + ". New limit: " + newLimit + ". Previous limit: " + previousLimit);
                 }
 
                 metadata.restoreLimitOffset = newLimit;
@@ -518,7 +525,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final Set<TopicPartition> newPartitionsToFindCommittedOffset = new HashSet<>();
 
         for (final ChangelogMetadata metadata : newPartitionsToRestore) {
-            final TopicPartition partition = metadata.changelogPartition;
+            final TopicPartition partition = metadata.storeMetadata.changelogPartition();
 
             // TODO K9113: when TaskType.GLOBAL is added we need to modify this
             if (metadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE)
@@ -557,7 +564,7 @@ public class StoreChangelogReader implements ChangelogReader {
             updateLimitOffsetsForStandbyChangelogs(committedOffsets);
 
         // add new partitions to the restore consumer and transit them to restoring state
-        addChangelogsToRestoreConsumer(newPartitionsToRestore.stream().map(metadata -> metadata.changelogPartition)
+        addChangelogsToRestoreConsumer(newPartitionsToRestore.stream().map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet()));
 
         // if it is in the active restoring mode, we immediately pause those standby changelogs
@@ -623,8 +630,8 @@ public class StoreChangelogReader implements ChangelogReader {
         final Set<TopicPartition> newPartitionsWithoutStartOffset = new HashSet<>();
 
         for (final ChangelogMetadata changelogMetadata: newPartitionsToRestore) {
-            final TopicPartition partition = changelogMetadata.changelogPartition;
-            final StateStoreMetadata storeMetadata = changelogMetadata.stateManager.storeMetadata(partition);
+            final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
+            final TopicPartition partition = storeMetadata.changelogPartition();
             final Long currentOffset = storeMetadata.offset();
             final Long endOffset = changelogs.get(partition).restoreEndOffset;
 
@@ -653,8 +660,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // do not trigger restore listener if we are processing standby tasks
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
-                final TopicPartition partition = changelogMetadata.changelogPartition;
-                final String storeName = changelogMetadata.stateManager.storeMetadata(partition).stateStore.name();
+                final TopicPartition partition = changelogMetadata.storeMetadata.changelogPartition();
+                final String storeName = changelogMetadata.storeMetadata.store().name();
 
                 long startOffset = 0L;
                 try {
@@ -702,13 +709,11 @@ public class StoreChangelogReader implements ChangelogReader {
     // for testing only
     public Map<TopicPartition, Long> restoredOffsets() {
         final Map<TopicPartition, Long> restoredOffsets = new HashMap<>();
-        for (final Map.Entry<TopicPartition, ChangelogMetadata> entry : changelogs.entrySet()) {
-            final TopicPartition partition = entry.getKey();
-            final ChangelogMetadata changelogMetadata = entry.getValue();
-            final boolean storeIsPersistent = changelogMetadata.stateManager.storeMetadata(partition).stateStore.persistent();
+        for (final ChangelogMetadata changelogMetadata : changelogs.values()) {
+            final boolean storeIsPersistent = changelogMetadata.storeMetadata.store().persistent();
 
             if (storeIsPersistent) {
-                restoredOffsets.put(entry.getKey(), changelogMetadata.stateManager.storeMetadata(partition).offset());
+                restoredOffsets.put(changelogMetadata.storeMetadata.changelogPartition(), changelogMetadata.storeMetadata.offset());
             }
         }
         return restoredOffsets;

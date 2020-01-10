@@ -66,13 +66,13 @@ public class StoreChangelogReaderTest {
     @Mock(type = MockType.NICE)
     private ProcessorStateManager stateManager;
 
+    private final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader"));
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final LogContext logContext = new LogContext("test-reader ");
-    private final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader"));
     private final StoreChangelogReader changelogReader = new StoreChangelogReader(
         config,
         logContext,

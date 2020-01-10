@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 
 /**
  * See {@link StoreChangelogReader}.
@@ -25,7 +26,7 @@ interface ChangelogRegister {
     /**
      * Register a state store for restoration.
      *
-     * @param partition the changelog topic partition to restore
+     * @param partition the state store's shcangelog partition for restoring
      * @param stateManager the state manager used for restoring (one per task)
      */
     void register(final TopicPartition partition, final ProcessorStateManager stateManager);
