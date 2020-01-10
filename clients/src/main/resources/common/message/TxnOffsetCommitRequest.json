@@ -20,8 +20,9 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 adds the committed leader epoch.
-  "validVersions": "0-2",
-  "flexibleVersions": "none",
+  // Version 3 adds flexible version support
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+",
       "about": "The ID of the transaction." },
