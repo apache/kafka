@@ -505,31 +505,19 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
-  def testRetainTopicOverriddenConfigAfterConsecutiveConfigChange(): Unit = {
+  def testConsecutiveConfigChange(): Unit = {
     val topic2 = "testtopic2"
     val topicProps = new Properties
     topicProps.put(KafkaConfig.MinInSyncReplicasProp, "2")
     TestUtils.createTopic(zkClient, topic2, 1, replicationFactor = numServers, servers, topicProps)
     var log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
-    assertEquals(log.config.overriddenConfigs.size, 1)
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2")
 
     val props = new Properties
-    props.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.toString)
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.toString))
-    // Verify that all broker defaults have been updated
-    servers.foreach { server =>
-      props.asScala.foreach { case (k, v) =>
-        assertEquals(s"Not reconfigured $k", server.config.originals.get(k).toString, v)
-      }
-    }
-
-    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
-    assertEquals(log.config.overriddenConfigs.size, 1) // Verify topic-level config survives
-
-    // Make a second broker-default change
-    props.clear()
-    props.put(KafkaConfig.LogRetentionTimeMillisProp, "604800000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogRetentionTimeMillisProp, "604800000"))
+    props.put(KafkaConfig.MinInSyncReplicasProp, "3")
+    // Make a broker-default config
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MinInSyncReplicasProp, "3"))
     // Verify that all broker defaults have been updated again
     servers.foreach { server =>
       props.asScala.foreach { case (k, v) =>
@@ -538,7 +526,16 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
-    assertEquals(log.config.overriddenConfigs.size, 1) // Verify topic-level config still survives
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2") // Verify topic-level config survives
+
+    // Make a second broker-default change
+    props.clear()
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "604800000")
+    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogRetentionTimeMillisProp, "604800000"))
+    log = servers.head.logManager.getLog(new TopicPartition(topic2, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+    assertTrue(log.config.overriddenConfigs.contains(KafkaConfig.MinInSyncReplicasProp))
+    assertEquals(log.config.originals().get(KafkaConfig.MinInSyncReplicasProp).toString, "2") // Verify topic-level config still survives
   }
 
   @Test
