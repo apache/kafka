@@ -103,14 +103,18 @@ public class OffsetFetchRequestTest {
         builder = new OffsetFetchRequest.Builder(groupId, true, null);
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             short finalVersion = version;
-            if (version <= 6) {
+            if (version < 2) {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
             } else {
                 OffsetFetchRequest request = builder.build(finalVersion);
                 assertEquals(groupId, request.groupId());
-                assertTrue(request.requireStable());
                 assertNull(request.partitions());
                 assertTrue(request.isAllPartitions());
+                if (version < 7) {
+                    assertFalse(request.requireStable());
+                } else {
+                    assertTrue(request.requireStable());
+                }
             }
         }
     }

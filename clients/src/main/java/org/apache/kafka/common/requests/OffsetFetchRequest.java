@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequest
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -32,6 +34,8 @@ import java.util.Map;
 import java.util.Optional;
 
 public class OffsetFetchRequest extends AbstractRequest {
+
+    private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
 
     private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
     public final OffsetFetchRequestData data;
@@ -79,8 +83,14 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
 
             if (data.requireStable() && version < 7) {
-                throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                    "v" + version + ", but we need v7 or newer to request wait transactions.");
+                log.warn("Fallback the requireStable flag to false as broker " +
+                             "only supports OffsetFetchRequest version {}. Need " +
+                             "v7 or newer to enable this feature", version);
+
+                return new OffsetFetchRequest(new OffsetFetchRequestData()
+                    .setGroupId(data.groupId())
+                    .setTopics(data.topics())
+                    .setRequireStable(false), version);
             }
 
             return new OffsetFetchRequest(data, version);
