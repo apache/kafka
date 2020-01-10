@@ -121,7 +121,7 @@ public class StateConsumerTest {
     }
 
 
-    private static class TaskStub implements GlobalTask {
+    private static class TaskStub implements GlobalStateMaintainer {
         private final Map<TopicPartition, Long> partitionOffsets;
         private final Map<TopicPartition, Integer> updatedPartitions = new HashMap<>();
         private boolean flushed;

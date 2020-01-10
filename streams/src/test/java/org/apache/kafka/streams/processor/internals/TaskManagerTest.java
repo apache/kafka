@@ -424,19 +424,6 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldRestoreStateFromChangeLogReader() {
-        EasyMock.expect(active.hasRestoringTasks()).andReturn(true).once();
-        EasyMock.expect(restoreConsumer.assignment()).andReturn(taskId0Partitions).once();
-        expect(changeLogReader.restore(active)).andReturn(taskId0Partitions);
-        active.updateRestored(taskId0Partitions);
-        expectLastCall();
-        replay();
-
-        taskManager.updateNewAndRestoringTasks();
-        verify(changeLogReader, active);
-    }
-
-    @Test
     public void shouldResumeRestoredPartitions() {
         expect(active.allTasksRunning()).andReturn(true).once();
         expect(consumer.assignment()).andReturn(taskId0Partitions);
@@ -472,15 +459,6 @@ public class TaskManagerTest {
     public void shouldReturnFalseWhenOnlyActiveTasksAreRunning() {
         mockAssignStandbyPartitions(1L);
         expect(standby.allTasksRunning()).andReturn(false);
-        replay();
-
-        assertFalse(taskManager.updateNewAndRestoringTasks());
-    }
-
-    @Test
-    public void shouldReturnFalseWhenThereAreStillNonRunningTasks() {
-        expect(active.allTasksRunning()).andReturn(false);
-        EasyMock.expect(changeLogReader.restore(active)).andReturn(Collections.emptySet()).once();
         replay();
 
         assertFalse(taskManager.updateNewAndRestoringTasks());
@@ -627,9 +605,29 @@ public class TaskManagerTest {
         verify(active);
     }
 
+    // TODO K9113: the following three tests needs to be fixed once thread calling restore is cleaned
+    @Test
+    public void shouldRestoreStateFromChangeLogReader() {
+        EasyMock.expect(active.hasRestoringTasks()).andReturn(true).once();
+        EasyMock.expect(restoreConsumer.assignment()).andReturn(taskId0Partitions).once();
+        active.updateRestored(taskId0Partitions);
+        expectLastCall();
+        replay();
+
+        taskManager.updateNewAndRestoringTasks();
+        verify(changeLogReader, active);
+    }
+
+    @Test
+    public void shouldReturnFalseWhenThereAreStillNonRunningTasks() {
+        expect(active.allTasksRunning()).andReturn(false);
+        replay();
+
+        assertFalse(taskManager.updateNewAndRestoringTasks());
+    }
+
     @Test
     public void shouldNotResumeConsumptionUntilAllStoresRestored() {
-        EasyMock.expect(changeLogReader.restore(active)).andReturn(Collections.emptySet()).once();
         expect(active.allTasksRunning()).andReturn(false);
 
         final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
@@ -671,9 +669,6 @@ public class TaskManagerTest {
 
         expectLastCall();
         EasyMock.replay(task);
-
-        EasyMock.expect(restoreConsumer.assignment()).andReturn(taskId0Partitions).once();
-        EasyMock.expect(changeLogReader.restore(active)).andReturn(taskId0Partitions).once();
     }
 
     private void mockSingleActiveTask() {

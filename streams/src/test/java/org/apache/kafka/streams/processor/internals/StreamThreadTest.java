@@ -113,6 +113,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+// TODO K9113: this test needs to be fixed
 public class StreamThreadTest {
 
     private final static String APPLICATION_ID = "stream-thread-test";
@@ -411,6 +412,7 @@ public class StreamThreadTest {
             consumer,
             consumer,
             null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -539,6 +541,7 @@ public class StreamThreadTest {
             consumer,
             consumer,
             null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -573,6 +576,7 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
+            null,
             null,
             taskManager,
             streamsMetrics,
@@ -729,6 +733,7 @@ public class StreamThreadTest {
             consumer,
             consumer,
             null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -762,6 +767,7 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
+            null,
             null,
             taskManager,
             streamsMetrics,
@@ -841,6 +847,7 @@ public class StreamThreadTest {
             mockStreamThreadConsumer,
             mockStreamThreadConsumer,
             null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -875,6 +882,7 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
+            null,
             null,
             taskManager,
             streamsMetrics,
@@ -1793,6 +1801,7 @@ public class StreamThreadTest {
             consumer,
             consumer,
             null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -1831,6 +1840,7 @@ public class StreamThreadTest {
             producer,
             consumer,
             consumer,
+            null,
             null,
             taskManager,
             streamsMetrics,
