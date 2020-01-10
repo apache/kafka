@@ -813,16 +813,19 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
-  def maybeShrinkIsr(): Unit = {
-    // Determine whether to shrink the ISR. Checking before attempting to do so removes the need to
-    // acquire a write lock on leaderIsrUpdateLock in the common case of no change.
-    val shouldShrinkIsr = leaderLogIfLocal match {
+  private def shouldShrinkIsr(): Boolean = {
+    leaderLogIfLocal match {
       case Some(leaderLog) =>
         inReadLock(leaderIsrUpdateLock) {
           getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty
         }
       case None => false
     }
+  }
+
+  def maybeShrinkIsr(): Unit = {
+    // Determine whether to shrink the ISR before attempting to do so. Checking removes the need to
+    // acquire a write lock on leaderIsrUpdateLock in the common case of no change.
     if (shouldShrinkIsr) {
       val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
         leaderLogIfLocal match {
