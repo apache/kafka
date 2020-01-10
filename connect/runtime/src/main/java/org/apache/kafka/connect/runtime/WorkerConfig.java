@@ -129,6 +129,13 @@ public class WorkerConfig extends AbstractConfig {
             + "data to be committed in a future attempt.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
+    public static final String ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG = "error.rest.response.message.detail.enabled";
+    private static final String ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DOC
+            = "Whether detailed responses will be included by the REST exception mapper. It is possible to use this in" +
+            "PCI-DSS environments to assist with complying with security policies.";
+    public static final Boolean ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DEFAULT = true;
+
+
     /**
      * @deprecated As of 1.1.0.
      */
@@ -274,7 +281,9 @@ public class WorkerConfig extends AbstractConfig {
                         Collections.emptyList(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
-                        Importance.LOW, REST_EXTENSION_CLASSES_DOC);
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG, Type.STRING, ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DEFAULT,
+                        Importance.LOW, ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
