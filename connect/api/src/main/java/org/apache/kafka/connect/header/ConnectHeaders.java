@@ -243,7 +243,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Iterator<Header> iterator() {
-        return (headers == null) ? Collections.emptyIterator() :
+        return headers == null ? Collections.emptyIterator() :
             headers.iterator();
     }
 
