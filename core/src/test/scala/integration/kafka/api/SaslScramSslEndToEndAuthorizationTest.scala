@@ -35,7 +35,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipalStr, kafkaPassword)
+    createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
   @Before

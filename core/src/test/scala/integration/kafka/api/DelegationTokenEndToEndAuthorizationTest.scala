@@ -51,15 +51,15 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipalStr, kafkaPassword)
+    createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
 
     // create scram credential for user "scram-user"
-    createScramCredentials(zkConnect, clientPrincipalStr, clientPassword)
-    waitForScramCredentials(clientPrincipalStr)
+    createScramCredentials(zkConnect, clientPrincipal.getName, clientPassword)
+    waitForScramCredentials(clientPrincipal.getName)
 
     //create a token with "scram-user" credentials
     val token = createDelegationToken()
