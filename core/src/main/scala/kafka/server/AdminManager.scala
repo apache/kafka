@@ -176,21 +176,21 @@ class AdminManager(val config: KafkaConfig,
           result.setNumPartitions(assignments.size)
           result.setReplicationFactor(assignments(0).size.toShort)
         }
-        CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
+        CreatePartitionsMetadata(topic.name, assignments.keySet, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
           debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
         case e: ConfigException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
       }).toBuffer
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
@@ -313,12 +313,12 @@ class AdminManager(val config: KafkaConfig,
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
           newPartition.count, newPartitionsAssignment, validateOnly = validateOnly)
-        CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
+        CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
-          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
         case e: ApiException =>
-          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
       }
     }
 
