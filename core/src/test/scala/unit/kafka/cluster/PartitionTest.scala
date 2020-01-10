@@ -945,7 +945,7 @@ class PartitionTest extends AbstractPartitionTest {
       // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
       executor.submit((() => {
         while (!done.get) {
-          partitions.foreach(_.maybeShrinkIsr())
+          partitions.foreach(_.removeFutureLocalReplica(false))
         }
       }): Runnable)
       // Append records to partitions, one partition-per-thread
@@ -1244,6 +1244,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // On initialization, the replica is considered caught up and should not be removed
+    assertFalse(partition.shouldShrinkIsr())
     partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
 
@@ -1256,6 +1257,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(Some(2))
 
+    assertTrue(partition.shouldShrinkIsr())
     partition.maybeShrinkIsr()
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(10L, partition.localLogOrException.highWatermark)
@@ -1331,6 +1333,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
+    assertFalse(partition.shouldShrinkIsr())
     partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
@@ -1390,6 +1393,7 @@ class PartitionTest extends AbstractPartitionTest {
     time.sleep(10001)
 
     // The ISR should not be shrunk because the follower is caught up to the leader's log end
+    assertFalse(partition.shouldShrinkIsr())
     partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
@@ -1441,6 +1445,7 @@ class PartitionTest extends AbstractPartitionTest {
       zkVersion = 1)
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(None)
 
+    assertFalse(partition.shouldShrinkIsr())
     partition.maybeShrinkIsr()
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)

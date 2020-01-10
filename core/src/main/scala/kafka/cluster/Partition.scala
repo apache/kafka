@@ -813,7 +813,8 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
-  private def shouldShrinkIsr(): Boolean = {
+  // Visible for testing.
+  private[cluster] def shouldShrinkIsr(): Boolean = {
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         inReadLock(leaderIsrUpdateLock) {
