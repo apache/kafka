@@ -54,7 +54,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * <p>
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view).
@@ -84,7 +84,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * <p>
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view).
@@ -115,7 +115,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * <p>
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
@@ -161,7 +161,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Count the number of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * <p>
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view)
@@ -209,7 +209,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
@@ -258,7 +258,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
@@ -309,7 +309,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
@@ -370,7 +370,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer) combining via reduce(...)} as it, for example,
      * allows the result to have a different type than the input values.
@@ -433,7 +433,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).
@@ -478,7 +478,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).
@@ -524,7 +524,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).
@@ -584,7 +584,7 @@ public interface SessionWindowedKStream<K, V> {
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Merger)}).

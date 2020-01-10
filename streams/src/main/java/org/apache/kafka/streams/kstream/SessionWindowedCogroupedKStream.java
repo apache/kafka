@@ -55,7 +55,7 @@ public interface SessionWindowedCogroupedKStream<K, V> {
 
     /**
      * Aggregate the values of records in these streams by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view).
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -99,7 +99,7 @@ public interface SessionWindowedCogroupedKStream<K, V> {
 
     /**
      * Aggregate the values of records in these streams by the grouped key and defined sessions.
-     * Note that sessions a generated on a per-key basis and records with different keys create independent sessions.
+     * Note that sessions are generated on a per-key basis and records with different keys create independent sessions.
      * Records with {@code null} key or value are ignored.
      * The result is written into a local {@link SessionStore} (which is basically an ever-updating materialized view).
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
