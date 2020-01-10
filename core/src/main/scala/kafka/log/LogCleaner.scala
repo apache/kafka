@@ -931,11 +931,15 @@ private[log] class Cleaner(val id: Int,
             stats.indexMessagesRead(batch.countOrNull)
           } else {
             for (record <- batch.asScala) {
-              if (record.hasKey && record.offset >= startOffset) {
-                if (map.size < maxDesiredMapSize)
-                  map.put(record.key, record.offset)
-                else
-                  return true
+              if (record.hasKey) {
+                if (record.offset >= startOffset) {
+                  if (map.size < maxDesiredMapSize)
+                    map.put(record.key, record.offset)
+                  else
+                    return true
+                } else {
+                  map.updateLatestOffset(record.offset + 1)
+                }
               }
               stats.indexMessagesRead(1)
             }
