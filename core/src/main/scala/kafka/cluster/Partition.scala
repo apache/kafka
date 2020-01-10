@@ -813,56 +813,52 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
-  private def shouldShrinkIsr(): Boolean = {
-    leaderLogIfLocal match {
+  def maybeShrinkIsr(): Unit = {
+    // Determine whether to shrink the ISR. Checking before attempting to do so removes the need to
+    // acquire a write lock on leaderIsrUpdateLock in the common case of no change.
+    val shouldShrinkIsr = leaderLogIfLocal match {
       case Some(leaderLog) =>
         inReadLock(leaderIsrUpdateLock) {
           getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty
         }
       case None => false
     }
-  }
-
-  private def tryShrinkIsr(): Unit = {
-    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
-      leaderLogIfLocal match {
-        case Some(leaderLog) =>
-          val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-          if (outOfSyncReplicaIds.nonEmpty) {
-            val newInSyncReplicaIds = inSyncReplicaIds -- outOfSyncReplicaIds
-            assert(newInSyncReplicaIds.nonEmpty)
-            info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
-              .format(inSyncReplicaIds.mkString(","),
-                newInSyncReplicaIds.mkString(","),
-                leaderLog.highWatermark,
-                leaderLog.logEndOffset,
-                outOfSyncReplicaIds.map { replicaId =>
-                  s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
-                }.mkString(" ")
+    if (shouldShrinkIsr) {
+      val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
+        leaderLogIfLocal match {
+          case Some(leaderLog) =>
+            val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+            if (outOfSyncReplicaIds.nonEmpty) {
+              val newInSyncReplicaIds = inSyncReplicaIds -- outOfSyncReplicaIds
+              assert(newInSyncReplicaIds.nonEmpty)
+              info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
+                .format(inSyncReplicaIds.mkString(","),
+                  newInSyncReplicaIds.mkString(","),
+                  leaderLog.highWatermark,
+                  leaderLog.logEndOffset,
+                  outOfSyncReplicaIds.map { replicaId =>
+                    s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
+                  }.mkString(" ")
+                )
               )
-            )
 
-            // update ISR in zk and in cache
-            shrinkIsr(newInSyncReplicaIds)
+              // update ISR in zk and in cache
+              shrinkIsr(newInSyncReplicaIds)
 
-            // we may need to increment high watermark since ISR could be down to 1
-            maybeIncrementLeaderHW(leaderLog)
-          } else {
-            false
-          }
+              // we may need to increment high watermark since ISR could be down to 1
+              maybeIncrementLeaderHW(leaderLog)
+            } else {
+              false
+            }
 
-        case None => false // do nothing if no longer leader
+          case None => false // do nothing if no longer leader
+        }
       }
+
+      // some delayed operations may be unblocked after HW changed
+      if (leaderHWIncremented)
+        tryCompleteDelayedRequests()
     }
-
-    // some delayed operations may be unblocked after HW changed
-    if (leaderHWIncremented)
-      tryCompleteDelayedRequests()
-  }
-
-  def maybeShrinkIsr(): Unit = {
-    if (shouldShrinkIsr)
-      tryShrinkIsr
   }
 
   private def isFollowerOutOfSync(replicaId: Int,
