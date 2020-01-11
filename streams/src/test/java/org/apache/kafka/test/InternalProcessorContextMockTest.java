@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -227,7 +229,7 @@ public class InternalProcessorContextMockTest {
                 new KeyValue<>("key2", "value2"),
         };
 
-        for(final KeyValue<K, V> kv: expected) {
+        for (final KeyValue<K, V> kv : expected) {
             mock.forward(kv.key, kv.value);
         }
         equals(expected, capturedForwards(processorContext));
@@ -270,6 +272,23 @@ public class InternalProcessorContextMockTest {
         assertFalse(committed(processorContext));
     }
 
+    @Test
+    public void shouldReturnEmptyTopicByDefault() {
+        final InternalProcessorContext mock = mock();
+
+        assertEquals("", mock.topic());
+    }
+
+    @Test
+    public void shouldUpdateTopic() {
+        final InternalProcessorContext mock = mock();
+
+        final String topic = "my-topic";
+        mock.setRecordContext(new ProcessorRecordContext(0, 0, 0, topic, new RecordHeaders()));
+
+        assertEquals(topic, mock.topic());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
@@ -298,7 +317,7 @@ public class InternalProcessorContextMockTest {
     }
 
     private static InternalProcessorContext mock() {
-        return mock(createProcessorContext());
+        return builder().build();
     }
 
     private static InternalProcessorContext mock(final ProcessorContext processorContext) {
@@ -306,6 +325,6 @@ public class InternalProcessorContextMockTest {
     }
 
     private static InternalProcessorContextMock.Builder builder() {
-        return new InternalProcessorContextMock.Builder(createProcessorContext());
+        return new InternalProcessorContextMock.Builder();
     }
 }

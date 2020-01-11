@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
 
@@ -35,6 +38,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.easymock.EasyMock.capture;
+import static org.easymock.EasyMock.captureBoolean;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -60,6 +64,11 @@ public class InternalProcessorContextMock {
 
         private final Map<String, StateStore> stateStoreMap;
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
+        private RecordContext recordContext;
+
+        public Builder() {
+            this(new MockProcessorContext());
+        }
 
         Builder(final ProcessorContext processorContext) {
             mock = mock(InternalProcessorContext.class);
@@ -67,6 +76,7 @@ public class InternalProcessorContextMock {
 
             stateStoreMap = new HashMap<>();
             stateRestoreCallbackMap = new HashMap<>();
+            recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
 
             applicationId = processorContext.applicationId();
             taskId = processorContext.taskId();
@@ -88,9 +98,28 @@ public class InternalProcessorContextMock {
             schedule();
             forwardKeyValue();
             commit();
+            topic();
+            setRecordContext();
 
             replay(mock);
             return mock;
+        }
+
+        private void setRecordContext() {
+            final Capture<ProcessorRecordContext> recordContextCapture = Capture.newInstance();
+            mock.setRecordContext(capture(recordContextCapture));
+            expectLastCall().andAnswer(() -> {
+                setRecordContext(recordContextCapture.getValue());
+                return null;
+            }).anyTimes();
+        }
+
+        private void setRecordContext(final ProcessorRecordContext recordContext) {
+            this.recordContext = recordContext;
+        }
+
+        private void topic() {
+            expect(mock.topic()).andAnswer(() -> recordContext.topic()).anyTimes();
         }
 
         private void commit() {
@@ -98,7 +127,7 @@ public class InternalProcessorContextMock {
             expectLastCall().andAnswer(() -> {
                 processorContext.commit();
                 return null;
-            });
+            }).anyTimes();
         }
 
         private void forwardKeyValue() {
