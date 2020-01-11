@@ -24,12 +24,12 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
@@ -38,7 +38,6 @@ import java.io.File;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.expect;
@@ -68,6 +67,7 @@ public class InternalProcessorContextMock {
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
         private ProcessorRecordContext recordContext;
         private StreamsConfig config;
+        private ProcessorNode processorNode;
 
         public Builder() {
             this(new MockProcessorContext());
@@ -111,9 +111,28 @@ public class InternalProcessorContextMock {
             appConfigs();
             appConfigsWithPrefix();
             recordContext();
+            setCurrentNode();
+            currentNode();
 
             replay(mock);
             return mock;
+        }
+
+        private void currentNode() {
+            expect(mock.currentNode()).andAnswer(() -> processorNode).anyTimes();
+        }
+
+        private void setCurrentNode() {
+            Capture<ProcessorNode> nodeCapture = Capture.newInstance();
+            mock.setCurrentNode(capture(nodeCapture));
+            expectLastCall().andAnswer(() -> {
+                setCurrentNode(nodeCapture.getValue());
+                return null;
+            }).anyTimes();
+        }
+
+        private void setCurrentNode(ProcessorNode processorNode) {
+            this.processorNode = processorNode;
         }
 
         private void setRecordContext() {

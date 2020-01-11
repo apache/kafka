@@ -411,6 +411,15 @@ public class InternalProcessorContextMockTest {
         assertSame(recordContext, mock.recordContext());
     }
 
+    @Test
+    public void shouldSetCurrentNode() {
+        final InternalProcessorContext mock = mock();
+        final ProcessorNode newNode = new ProcessorNode("new-node");
+        mock.setCurrentNode(newNode);
+
+        assertSame(newNode, mock.currentNode());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
