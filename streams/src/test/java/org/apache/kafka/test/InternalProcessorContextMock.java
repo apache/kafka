@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.Capture;
 
 import java.io.File;
@@ -68,6 +69,7 @@ public class InternalProcessorContextMock {
         private ProcessorRecordContext recordContext;
         private StreamsConfig config;
         private ProcessorNode processorNode;
+        private ThreadCache cache;
 
         public Builder() {
             this(new MockProcessorContext());
@@ -113,9 +115,14 @@ public class InternalProcessorContextMock {
             recordContext();
             setCurrentNode();
             currentNode();
+            getCache();
 
             replay(mock);
             return mock;
+        }
+
+        private void getCache() {
+            expect(mock.getCache()).andAnswer(() -> cache).anyTimes();
         }
 
         private void currentNode() {
@@ -260,6 +267,11 @@ public class InternalProcessorContextMock {
 
         private void applicationId() {
             expect(mock.applicationId()).andReturn(applicationId).anyTimes();
+        }
+
+        public Builder cache(final ThreadCache cache) {
+            this.cache = cache;
+            return this;
         }
 
         public Builder appConfigs(Map<String, Object> config) {

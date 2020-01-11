@@ -19,9 +19,12 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -38,6 +41,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -53,6 +57,7 @@ import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -403,7 +408,7 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldUpdateRecordContext() {
+    public void shouldSetRecordContext() {
         final InternalProcessorContext mock = mock();
         final ProcessorRecordContext recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
         mock.setRecordContext(recordContext);
@@ -418,6 +423,24 @@ public class InternalProcessorContextMockTest {
         mock.setCurrentNode(newNode);
 
         assertSame(newNode, mock.currentNode());
+    }
+
+    @Test
+    public void shouldReturnDefaultCache() {
+        assertNull(mock().getCache());
+    }
+
+    @Test
+    public void shouldUpdateCache() {
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", "");
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 0, streamsMetrics);
+
+        final InternalProcessorContext mock = builder()
+                .cache(cache)
+                .build();
+
+        assertSame(cache, mock.getCache());
     }
 
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
