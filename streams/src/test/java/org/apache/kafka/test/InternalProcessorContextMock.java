@@ -66,7 +66,7 @@ public class InternalProcessorContextMock {
 
         private final Map<String, StateStore> stateStoreMap;
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
-        private RecordContext recordContext;
+        private ProcessorRecordContext recordContext;
         private StreamsConfig config;
 
         public Builder() {
@@ -110,6 +110,7 @@ public class InternalProcessorContextMock {
             timestamp();
             appConfigs();
             appConfigsWithPrefix();
+            recordContext();
 
             replay(mock);
             return mock;
@@ -126,6 +127,10 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+        }
+
+        private void recordContext() {
+            expect(mock.recordContext()).andAnswer(() -> recordContext).anyTimes();
         }
 
         private void appConfigsWithPrefix() {

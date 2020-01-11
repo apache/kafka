@@ -393,6 +393,14 @@ public class InternalProcessorContextMockTest {
         assertEquals(processorContext.appConfigsWithPrefix(prefix), mock.appConfigsWithPrefix(prefix));
     }
 
+    @Test
+    public void shouldReturnDefaultRecordContext() {
+        final InternalProcessorContext mock = mock();
+        final ProcessorRecordContext expected = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
+
+        assertEquals(expected, mock.recordContext());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
