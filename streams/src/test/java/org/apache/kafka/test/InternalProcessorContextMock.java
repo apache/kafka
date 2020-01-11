@@ -65,7 +65,6 @@ public class InternalProcessorContextMock {
         private StreamsMetricsImpl metrics;
 
         private final Map<String, StateStore> stateStoreMap;
-        private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
         private ProcessorRecordContext recordContext;
         private StreamsConfig config;
         private ProcessorNode processorNode;
@@ -80,7 +79,6 @@ public class InternalProcessorContextMock {
             this.processorContext = processorContext;
 
             stateStoreMap = new HashMap<>();
-            stateRestoreCallbackMap = new HashMap<>();
             recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
             appConfigs(null);
 
@@ -116,9 +114,21 @@ public class InternalProcessorContextMock {
             setCurrentNode();
             currentNode();
             getCache();
+            initialize();
+            uninitialize();
 
             replay(mock);
             return mock;
+        }
+
+        private void uninitialize() {
+            mock.uninitialize();
+            expectLastCall().anyTimes();
+        }
+
+        private void initialize() {
+            mock.initialize();
+            expectLastCall().anyTimes();
         }
 
         private void getCache() {
@@ -239,7 +249,6 @@ public class InternalProcessorContextMock {
             expectLastCall()
                     .andAnswer(() -> {
                         stateStoreMap.put(storeCapture.getValue().name(), storeCapture.getValue());
-                        stateRestoreCallbackMap.put(storeCapture.getValue().name(), restoreCallbackCapture.getValue());
                         return null;
                     })
                     .anyTimes();

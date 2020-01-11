@@ -443,6 +443,18 @@ public class InternalProcessorContextMockTest {
         assertSame(cache, mock.getCache());
     }
 
+    @Test
+    public void shouldExpectInitializeCall() {
+        final InternalProcessorContext mock = mock();
+        mock.initialize();
+    }
+
+    @Test
+    public void shouldExpectUninitializeCall() {
+        final InternalProcessorContext mock = mock();
+        mock.uninitialize();
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
