@@ -101,6 +101,7 @@ public class InternalProcessorContextMock {
             topic();
             partition();
             setRecordContext();
+            offset();
 
             replay(mock);
             return mock;
@@ -117,6 +118,10 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+        }
+
+        private void offset() {
+            expect(mock.offset()).andAnswer(() -> recordContext.offset()).anyTimes();
         }
 
         private void partition() {

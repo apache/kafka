@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
@@ -304,6 +306,23 @@ public class InternalProcessorContextMockTest {
         mock.setRecordContext(new ProcessorRecordContext(0, 0, partition, "", new RecordHeaders()));
 
         assertEquals(partition, mock.partition());
+    }
+
+    @Test
+    public void shouldReturnOffset0ByDefault() {
+        final InternalProcessorContext mock = mock();
+
+        assertEquals(0, mock.offset());
+    }
+
+    @Test
+    public void shouldUpdateOffset() {
+        final InternalProcessorContext mock = mock();
+
+        final int offset = 1;
+        mock.setRecordContext(new ProcessorRecordContext(0, offset, 0, "", new RecordHeaders()));
+
+        assertEquals(offset, mock.offset());
     }
 
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
