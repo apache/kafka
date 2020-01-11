@@ -43,7 +43,9 @@ import org.junit.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.samePropertyValuesAs;
@@ -358,6 +360,25 @@ public class InternalProcessorContextMockTest {
         mock.setRecordContext(new ProcessorRecordContext(timestamp, 0, 0, "", new RecordHeaders()));
 
         assertEquals(timestamp, mock.timestamp());
+    }
+
+    @Test
+    public void shouldReturnDefaultAppConfigs() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
+
+        assertEquals(processorContext.appConfigs(), mock.appConfigs());
+    }
+
+    @Test
+    public void shouldUpdateAppConfigs() {
+        final Map<String, Object> appConfigs = new HashMap<>();
+        appConfigs.put("key", "value");
+        final InternalProcessorContext mock = builder()
+                .appConfigs(appConfigs)
+                .build();
+
+        assertSame(appConfigs, mock.appConfigs());
     }
 
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {

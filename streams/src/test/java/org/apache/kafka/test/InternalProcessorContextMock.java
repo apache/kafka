@@ -65,6 +65,7 @@ public class InternalProcessorContextMock {
         private final Map<String, StateStore> stateStoreMap;
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
         private RecordContext recordContext;
+        private Map<String, Object> appConfigs;
 
         public Builder() {
             this(new MockProcessorContext());
@@ -77,6 +78,7 @@ public class InternalProcessorContextMock {
             stateStoreMap = new HashMap<>();
             stateRestoreCallbackMap = new HashMap<>();
             recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
+            appConfigs = processorContext.appConfigs();
 
             applicationId = processorContext.applicationId();
             taskId = processorContext.taskId();
@@ -104,6 +106,7 @@ public class InternalProcessorContextMock {
             offset();
             headers();
             timestamp();
+            appConfigs();
 
             replay(mock);
             return mock;
@@ -120,6 +123,10 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+        }
+
+        private void appConfigs() {
+            expect(mock.appConfigs()).andReturn(appConfigs).anyTimes();
         }
 
         private void timestamp() {
@@ -214,6 +221,11 @@ public class InternalProcessorContextMock {
 
         private void applicationId() {
             expect(mock.applicationId()).andReturn(applicationId).anyTimes();
+        }
+
+        public Builder appConfigs(final Map<String, Object> appConfigs) {
+            this.appConfigs = appConfigs;
+            return this;
         }
 
         public Builder metrics(final StreamsMetricsImpl metrics) {
