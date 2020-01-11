@@ -42,14 +42,13 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -232,39 +231,34 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldForwardKeyValueAndCapture() {
-        final List<KeyValue<String, String>> expected = Arrays.asList(new KeyValue<>("key1", "value1"), new KeyValue<>("key2", "value2"));
+    public void shouldForwardKeyValueToAllAndCapture() {
+        final List<KeyValue<String, String>> keyValuesToForward = Arrays.asList(new KeyValue<>("key1", "value1"), new KeyValue<>("key2", "value2"));
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = mock(processorContext);
+        final MockProcessor<String, String> processor = new MockProcessor<>();
+        final ProcessorNode<String, String> processorNode = new ProcessorNode<>("pn-test", processor, new HashSet<>());
+        processorNode.addChild(processorNode); // add itself as children
 
-        for (final KeyValue<String, String> kv : expected) {
+        final InternalProcessorContext mock = mock(processorContext);
+        mock.setCurrentNode(processorNode);
+        processorNode.init(mock);
+
+        for (final KeyValue<String, String> kv : keyValuesToForward) {
             mock.forward(kv.key, kv.value);
         }
 
         final List<CapturedForward> forwarded = capturedForwards(processorContext);
-        assertEquals(expected.size(), forwarded.size());
-        for (int i = 0; i < expected.size(); i++) {
-            final KeyValue<String, String> kv = expected.get(i);
+        assertEquals(keyValuesToForward.size(), forwarded.size());
+        final To toAll = To.all();
+        for (int i = 0; i < keyValuesToForward.size(); i++) {
+            final KeyValue<String, String> kv = keyValuesToForward.get(i);
             final CapturedForward forward = forwarded.get(i);
+            final To to = To.child(forward.childName()).withTimestamp(forward.timestamp());
 
             assertEquals(kv.key, forward.keyValue().key);
             assertEquals(kv.value, forward.keyValue().value);
+            assertEquals(toAll, to);
+            assertEquals(kv.value, processor.lastValueAndTimestampPerKey.get(kv.key).value());
         }
-    }
-
-    @Test
-    public void shouldForwardKeyValueToAll() {
-        final ProcessorContext processorContext = EasyMock.niceMock(ProcessorContext.class);
-        final Capture<To> toCapture = Capture.newInstance();
-        processorContext.forward(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.capture(toCapture));
-        EasyMock.expectLastCall().once();
-        EasyMock.replay(processorContext);
-
-        final InternalProcessorContext mock = mock(processorContext);
-        mock.forward("", "");
-
-        EasyMock.verify(processorContext);
-        assertEquals(To.all(), toCapture.getValue());
     }
 
     @Test

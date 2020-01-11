@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.easymock.Capture;
@@ -38,6 +39,7 @@ import org.easymock.Capture;
 import java.io.File;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.easymock.EasyMock.capture;
@@ -70,6 +72,7 @@ public class InternalProcessorContextMock {
         private ThreadCache cache;
 
         private final Map<String, StateStore> stateStoreMap;
+        private final ToInternal toInternal;
 
         public Builder() {
             this(new MockProcessorContext());
@@ -80,6 +83,7 @@ public class InternalProcessorContextMock {
             this.processorContext = processorContext;
 
             stateStoreMap = new HashMap<>();
+            toInternal = new ToInternal();
             recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
             appConfigs(null);
 
@@ -102,6 +106,7 @@ public class InternalProcessorContextMock {
             getStateStore();
             schedule();
             forwardKeyValue();
+            forwardKeyValueTo();
             commit();
             topic();
             partition();
@@ -220,7 +225,37 @@ public class InternalProcessorContextMock {
 
             mock.forward(capture(keyCapture), capture(valueCapture));
             expectLastCall().andAnswer(() -> {
-                processorContext.forward(keyCapture.getValue(), valueCapture.getValue(), To.all());
+                mock.forward(keyCapture.getValue(), valueCapture.getValue(), To.all());
+                return null;
+            }).anyTimes();
+        }
+
+        @SuppressWarnings("unchecked")
+        private <K, V> void forwardKeyValueTo() {
+            final Capture<Object> keyCapture = Capture.newInstance();
+            final Capture<Object> valueCapture = Capture.newInstance();
+            final Capture<To> toCapture = Capture.newInstance();
+
+            mock.forward(capture(keyCapture), capture(valueCapture), capture(toCapture));
+            expectLastCall().andAnswer(() -> {
+                final To to = toCapture.getValue();
+                processorContext.forward(keyCapture.getValue(), valueCapture.getValue(), to);
+                toInternal.update(to);
+                if (toInternal.hasTimestamp()) {
+                    setRecordContext(new ProcessorRecordContext(toInternal.timestamp(), mock.offset(), mock.partition(), mock.topic(), mock.headers()));
+                }
+                final ProcessorNode thisNode = processorNode;
+                try {
+                    for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                        if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
+                            processorNode = childNode;
+                            childNode.process(keyCapture.getValue(), valueCapture.getValue());
+                            toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
+                        }
+                    }
+                } finally {
+                    processorNode = thisNode;
+                }
                 return null;
             }).anyTimes();
         }
