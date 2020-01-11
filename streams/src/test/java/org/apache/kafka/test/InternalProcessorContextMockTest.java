@@ -48,6 +48,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,18 +232,24 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public <K, V> void shouldForwardKeyValueAndCapture() {
+    public void shouldForwardKeyValueAndCapture() {
+        final List<KeyValue<String, String>> expected = Arrays.asList(new KeyValue<>("key1", "value1"), new KeyValue<>("key2", "value2"));
         final ProcessorContext processorContext = createProcessorContext();
         final InternalProcessorContext mock = mock(processorContext);
-        @SuppressWarnings("unchecked") final KeyValue<K, V>[] expected = new KeyValue[]{
-                new KeyValue<>("key1", "value1"),
-                new KeyValue<>("key2", "value2"),
-        };
 
-        for (final KeyValue<K, V> kv : expected) {
+        for (final KeyValue<String, String> kv : expected) {
             mock.forward(kv.key, kv.value);
         }
-        equals(expected, capturedForwards(processorContext));
+
+        final List<CapturedForward> forwarded = capturedForwards(processorContext);
+        assertEquals(expected.size(), forwarded.size());
+        for (int i = 0; i < expected.size(); i++) {
+            final KeyValue<String, String> kv = expected.get(i);
+            final CapturedForward forward = forwarded.get(i);
+
+            assertEquals(kv.key, forward.keyValue().key);
+            assertEquals(kv.value, forward.keyValue().value);
+        }
     }
 
     @Test
@@ -417,6 +424,7 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
+    @SuppressWarnings("rawtypes")
     public void shouldSetCurrentNode() {
         final InternalProcessorContext mock = mock();
         final ProcessorNode newNode = new ProcessorNode("new-node");
@@ -453,17 +461,6 @@ public class InternalProcessorContextMockTest {
     public void shouldExpectUninitializeCall() {
         final InternalProcessorContext mock = mock();
         mock.uninitialize();
-    }
-
-    private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
-        assertEquals(expected.length, forwarded.size());
-        for (int i = 0; i < expected.length; i++) {
-            final KeyValue<K, V> kv = expected[i];
-            final CapturedForward forward = forwarded.get(i);
-
-            assertEquals(kv.key, forward.keyValue().key);
-            assertEquals(kv.value, forward.keyValue().value);
-        }
     }
 
     private static ProcessorContext createProcessorContext() {

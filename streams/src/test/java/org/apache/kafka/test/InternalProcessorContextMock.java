@@ -52,6 +52,7 @@ public class InternalProcessorContextMock {
         return new Builder(processorContext());
     }
 
+    @SuppressWarnings("rawtypes")
     public static class Builder {
 
         private InternalProcessorContext mock;
@@ -63,12 +64,12 @@ public class InternalProcessorContextMock {
         private Serde<?> valueSerde;
         private File stateDir;
         private StreamsMetricsImpl metrics;
-
-        private final Map<String, StateStore> stateStoreMap;
         private ProcessorRecordContext recordContext;
         private StreamsConfig config;
         private ProcessorNode processorNode;
         private ThreadCache cache;
+
+        private final Map<String, StateStore> stateStoreMap;
 
         public Builder() {
             this(new MockProcessorContext());
