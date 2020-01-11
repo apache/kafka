@@ -289,6 +289,23 @@ public class InternalProcessorContextMockTest {
         assertEquals(topic, mock.topic());
     }
 
+    @Test
+    public void shouldReturnPartition0ByDefault() {
+        final InternalProcessorContext mock = mock();
+
+        assertEquals(0, mock.partition());
+    }
+
+    @Test
+    public void shouldUpdatePartition() {
+        final InternalProcessorContext mock = mock();
+
+        final int partition = 1;
+        mock.setRecordContext(new ProcessorRecordContext(0, 0, partition, "", new RecordHeaders()));
+
+        assertEquals(partition, mock.partition());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {

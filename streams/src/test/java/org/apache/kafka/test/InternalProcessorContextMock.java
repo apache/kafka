@@ -99,6 +99,7 @@ public class InternalProcessorContextMock {
             forwardKeyValue();
             commit();
             topic();
+            partition();
             setRecordContext();
 
             replay(mock);
@@ -116,6 +117,10 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+        }
+
+        private void partition() {
+            expect(mock.partition()).andAnswer(() -> recordContext.partition()).anyTimes();
         }
 
         private void topic() {
