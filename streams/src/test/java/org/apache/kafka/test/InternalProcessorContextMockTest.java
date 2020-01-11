@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
@@ -399,6 +400,15 @@ public class InternalProcessorContextMockTest {
         final ProcessorRecordContext expected = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
 
         assertEquals(expected, mock.recordContext());
+    }
+
+    @Test
+    public void shouldUpdateRecordContext() {
+        final InternalProcessorContext mock = mock();
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
+        mock.setRecordContext(recordContext);
+
+        assertSame(recordContext, mock.recordContext());
     }
 
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
