@@ -147,8 +147,6 @@ public class KafkaConsumerTest {
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
 
-    private final boolean requireStable = false;
-
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";

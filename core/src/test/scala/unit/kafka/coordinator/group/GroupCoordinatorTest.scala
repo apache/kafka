@@ -2189,7 +2189,6 @@ class GroupCoordinatorTest {
 
   @Test
   def testFetchPendingTxnOffsetsWithAbort(): Unit = {
-    val requireStable = true
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
     val producerId = 1000L
@@ -2219,7 +2218,6 @@ class GroupCoordinatorTest {
 
   @Test
   def testFetchPendingTxnOffsetsWithCommit(): Unit = {
-    val requireStable = true
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(25)
     val producerId = 1000L
@@ -2435,7 +2433,7 @@ class GroupCoordinatorTest {
     val offset2 = offsetAndMetadata(16)
     val offset3 = offsetAndMetadata(17)
 
-    assertEquals((Errors.NONE, Map.empty), groupCoordinator.handleFetchOffsets(groupId))
+    assertEquals((Errors.NONE, Map.empty), groupCoordinator.handleFetchOffsets(groupId, requireStable))
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
       OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp1 -> offset1, tp2 -> offset2, tp3 -> offset3))
@@ -2443,7 +2441,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, commitOffsetResult(tp2))
     assertEquals(Errors.NONE, commitOffsetResult(tp3))
 
-    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId)
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable)
     assertEquals(Errors.NONE, error)
     assertEquals(3, partitionData.size)
     assertTrue(partitionData.forall(_._2.error == Errors.NONE))

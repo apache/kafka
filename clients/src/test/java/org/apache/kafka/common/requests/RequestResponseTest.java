@@ -809,7 +809,7 @@ public class RequestResponseTest {
                 requireStable, Collections.singletonList(new TopicPartition("test11", 1))).toString();
             assertTrue(string.contains("test11"));
             assertTrue(string.contains("group1"));
-            assertTrue(string.contains(requireStable.toString()));
+            assertTrue(string.contains("requireStable=" + requireStable.toString()));
         }
     }
 

@@ -83,7 +83,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
 
             if (data.requireStable() && version < 7) {
-                log.warn("Fallback the requireStable flag to false as broker " +
+                log.info("Fallback the requireStable flag to false as broker " +
                              "only supports OffsetFetchRequest version {}. Need " +
                              "v7 or newer to enable this feature", version);
 

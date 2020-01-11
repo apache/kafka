@@ -43,6 +43,6 @@
         "about": "The partition indexes we would like to fetch offsets for." }
     ]},
     {"name": "RequireStable", "type": "bool", "versions": "7+", "default": "false",
-     "about": "The flag indicating whether we should retry for pending transaction commit completion to get stable offset"}
+     "about": "Whether broker should hold on returning unstable offsets but set a retriable error code for the partition."}
   ]
 }
