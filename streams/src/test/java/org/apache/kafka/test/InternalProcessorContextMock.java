@@ -103,6 +103,7 @@ public class InternalProcessorContextMock {
             setRecordContext();
             offset();
             headers();
+            timestamp();
 
             replay(mock);
             return mock;
@@ -119,6 +120,10 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+        }
+
+        private void timestamp() {
+            expect(mock.timestamp()).andAnswer(() -> recordContext.timestamp()).anyTimes();
         }
 
         private void headers() {

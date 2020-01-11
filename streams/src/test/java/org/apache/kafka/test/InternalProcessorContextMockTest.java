@@ -343,6 +343,23 @@ public class InternalProcessorContextMockTest {
         assertEquals(headers, mock.headers());
     }
 
+    @Test
+    public void shouldReturnTimestamp0ByDefault() {
+        final InternalProcessorContext mock = mock();
+
+        assertEquals(0, mock.timestamp());
+    }
+
+    @Test
+    public void shouldUpdateTimestamp() {
+        final InternalProcessorContext mock = mock();
+
+        final long timestamp = 1;
+        mock.setRecordContext(new ProcessorRecordContext(timestamp, 0, 0, "", new RecordHeaders()));
+
+        assertEquals(timestamp, mock.timestamp());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
