@@ -373,12 +373,24 @@ public class InternalProcessorContextMockTest {
     @Test
     public void shouldUpdateAppConfigs() {
         final Map<String, Object> appConfigs = new HashMap<>();
-        appConfigs.put("key", "value");
+        final String key = "key";
+        final String value = "value";
+        appConfigs.put(key, value);
         final InternalProcessorContext mock = builder()
                 .appConfigs(appConfigs)
                 .build();
 
-        assertSame(appConfigs, mock.appConfigs());
+        assertEquals(value, mock.appConfigs().get(key));
+    }
+
+    @Test
+    public void shouldReturnDefaultAppConfigsWithPrefix() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
+
+        final String prefix = "";
+
+        assertEquals(processorContext.appConfigsWithPrefix(prefix), mock.appConfigsWithPrefix(prefix));
     }
 
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {

@@ -18,6 +18,8 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -36,9 +38,9 @@ import java.io.File;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.captureBoolean;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -65,7 +67,7 @@ public class InternalProcessorContextMock {
         private final Map<String, StateStore> stateStoreMap;
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
         private RecordContext recordContext;
-        private Map<String, Object> appConfigs;
+        private StreamsConfig config;
 
         public Builder() {
             this(new MockProcessorContext());
@@ -78,7 +80,7 @@ public class InternalProcessorContextMock {
             stateStoreMap = new HashMap<>();
             stateRestoreCallbackMap = new HashMap<>();
             recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
-            appConfigs = processorContext.appConfigs();
+            appConfigs(null);
 
             applicationId = processorContext.applicationId();
             taskId = processorContext.taskId();
@@ -107,6 +109,7 @@ public class InternalProcessorContextMock {
             headers();
             timestamp();
             appConfigs();
+            appConfigsWithPrefix();
 
             replay(mock);
             return mock;
@@ -125,8 +128,20 @@ public class InternalProcessorContextMock {
             this.recordContext = recordContext;
         }
 
+        private void appConfigsWithPrefix() {
+            final Capture<String> prefixCapture = Capture.newInstance();
+            expect(mock.appConfigsWithPrefix(capture(prefixCapture)))
+                    .andAnswer(() -> config.originalsWithPrefix(prefixCapture.getValue()))
+                    .anyTimes();
+        }
+
         private void appConfigs() {
-            expect(mock.appConfigs()).andReturn(appConfigs).anyTimes();
+            expect(mock.appConfigs()).andAnswer(() -> {
+                final Map<String, Object> combined = new HashMap<>();
+                combined.putAll(config.originals());
+                combined.putAll(config.values());
+                return combined;
+            }).anyTimes();
         }
 
         private void timestamp() {
@@ -223,8 +238,17 @@ public class InternalProcessorContextMock {
             expect(mock.applicationId()).andReturn(applicationId).anyTimes();
         }
 
-        public Builder appConfigs(final Map<String, Object> appConfigs) {
-            this.appConfigs = appConfigs;
+        public Builder appConfigs(Map<String, Object> config) {
+            if (config == null) {
+                config = new HashMap<>();
+            }
+            if (!config.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+                config.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
+            }
+            if (!config.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+                config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+            }
+            this.config = new QuietStreamsConfig(config);
             return this;
         }
 
