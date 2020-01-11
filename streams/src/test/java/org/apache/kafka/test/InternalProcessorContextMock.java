@@ -51,7 +51,7 @@ import static org.easymock.EasyMock.replay;
 public class InternalProcessorContextMock {
 
     public static Builder builder() {
-        return new Builder(processorContext());
+        return new Builder();
     }
 
     @SuppressWarnings("rawtypes")
@@ -362,9 +362,5 @@ public class InternalProcessorContextMock {
             this.applicationId = applicationId;
             return this;
         }
-    }
-
-    private static ProcessorContext processorContext() {
-        return new MockProcessorContext();
     }
 }

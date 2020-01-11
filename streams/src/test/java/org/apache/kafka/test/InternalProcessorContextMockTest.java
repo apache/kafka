@@ -75,11 +75,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateApplicationId() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
         final String applicationId = "new_application_id";
-        mockBuilder.applicationId(applicationId);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final InternalProcessorContext mock = builder()
+                .applicationId(applicationId)
+                .build();
 
         assertSame(applicationId, mock.applicationId());
     }
@@ -96,11 +95,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateTaskId() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
         final TaskId taskId = new TaskId(23, 3);
-        mockBuilder.taskId(taskId);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final InternalProcessorContext mock = builder()
+                .taskId(taskId)
+                .build();
 
         assertSame(taskId, mock.taskId());
     }
@@ -117,11 +115,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateKeySerde() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
         final Serde<String> keySerde = Serdes.String();
-        mockBuilder.keySerde(keySerde);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final InternalProcessorContext mock = builder()
+                .keySerde(keySerde)
+                .build();
 
         assertSame(keySerde, mock.keySerde());
     }
@@ -138,11 +135,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateValueSerde() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
         final Serde<String> valueSerde = Serdes.String();
-        mockBuilder.valueSerde(valueSerde);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final InternalProcessorContext mock = builder()
+                .valueSerde(valueSerde)
+                .build();
 
         assertSame(valueSerde, mock.valueSerde());
     }
@@ -159,11 +155,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateStateDir() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
         final File stateDir = new File("/");
-        mockBuilder.stateDir(stateDir);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final InternalProcessorContext mock = builder()
+                .stateDir(stateDir)
+                .build();
 
         assertSame(stateDir, mock.stateDir());
     }
@@ -180,13 +175,10 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateMetrics() {
-        final InternalProcessorContextMock.Builder mockBuilder = builder();
-
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(
-                new Metrics(), "client_id", StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG
-        );
-        mockBuilder.metrics(metrics);
-        final InternalProcessorContext mock = mockBuilder.build();
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(), "client_id", StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG);
+        final InternalProcessorContext mock = builder()
+                .metrics(metrics)
+                .build();
 
         assertSame(metrics, mock.metrics());
     }
@@ -262,11 +254,6 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldForwardKeyValueAndUpdateToInternal() {
-        // TODO(pierDipi) Add test
-    }
-
-    @Test
     public void shouldBeCommitted() {
         final ProcessorContext processorContext = createProcessorContext();
         final InternalProcessorContext mock = mock(processorContext);
@@ -278,9 +265,7 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldNotBeCommitted() {
-        final ProcessorContext processorContext = createProcessorContext();
-
-        assertFalse(committed(processorContext));
+        assertFalse(committed(createProcessorContext()));
     }
 
     @Test
