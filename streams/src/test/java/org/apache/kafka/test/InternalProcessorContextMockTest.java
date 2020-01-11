@@ -16,36 +16,45 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.easymock.Capture;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.List;
 
-import static org.apache.kafka.streams.processor.MockProcessorContext.CapturedPunctuator;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.in;
 import static org.hamcrest.Matchers.samePropertyValuesAs;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldReturnDefaultApplicationId() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
         final String applicationId = mock.applicationId();
 
@@ -53,9 +62,20 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
+    public void shouldUpdateApplicationId() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final String applicationId = "new_application_id";
+        mockBuilder.applicationId(applicationId);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(applicationId, mock.applicationId());
+    }
+
+    @Test
     public void shouldReturnDefaultTaskId() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
         final TaskId taskId = mock.taskId();
 
@@ -63,9 +83,20 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
+    public void shouldUpdateTaskId() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final TaskId taskId = new TaskId(23, 3);
+        mockBuilder.taskId(taskId);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(taskId, mock.taskId());
+    }
+
+    @Test
     public void shouldReturnDefaultKeySerde() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
         final Serde<?> keySerde = mock.keySerde();
 
@@ -73,9 +104,20 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
+    public void shouldUpdateKeySerde() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final Serde<String> keySerde = Serdes.String();
+        mockBuilder.keySerde(keySerde);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(keySerde, mock.keySerde());
+    }
+
+    @Test
     public void shouldReturnDefaultValueSerde() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
         final Serde<?> valueSerde = mock.valueSerde();
 
@@ -83,28 +125,63 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
+    public void shouldUpdateValueSerde() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final Serde<String> valueSerde = Serdes.String();
+        mockBuilder.valueSerde(valueSerde);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(valueSerde, mock.valueSerde());
+    }
+
+    @Test
     public void shouldReturnDefaultStateDir() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
         final File stateDir = mock.stateDir();
 
-        assertEquals(processorContext.stateDir(), stateDir);
+        assertSame(processorContext.stateDir(), stateDir);
+    }
+
+    @Test
+    public void shouldUpdateStateDir() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final File stateDir = new File("/");
+        mockBuilder.stateDir(stateDir);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(stateDir, mock.stateDir());
     }
 
     @Test
     public void shouldReturnDefaultMetrics() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
 
-        final StreamsMetricsImpl metrics =  mock.metrics();
+        final StreamsMetricsImpl metrics = mock.metrics();
 
-        assertEquals(processorContext.metrics(), metrics);
+        assertSame(processorContext.metrics(), metrics);
+    }
+
+    @Test
+    public void shouldUpdateMetrics() {
+        final InternalProcessorContextMock.Builder mockBuilder = builder();
+
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(
+                new Metrics(), "client_id", StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG
+        );
+        mockBuilder.metrics(metrics);
+        final InternalProcessorContext mock = mockBuilder.build();
+
+        assertSame(metrics, mock.metrics());
     }
 
     @Test
     public void shouldRegisterAndReturnStore() {
-        final InternalProcessorContext mock = defaultMock();
+        final InternalProcessorContext mock = mock();
         final String storeName = "store_name";
         final StateStore stateStore = new MockKeyValueStore(storeName, false);
         final StateRestoreCallback stateRestoreCallback = new MockRestoreCallback();
@@ -112,37 +189,95 @@ public class InternalProcessorContextMockTest {
         mock.register(stateStore, stateRestoreCallback);
         final StateStore store = mock.getStateStore(storeName);
 
-        assertEquals(stateStore, store);
+        assertSame(stateStore, store);
     }
 
     @Test
-    public void shouldCapturePunctuatorOnSchedule() {
+    public void shouldCapturePunctuatorsOnSchedule() {
         final ProcessorContext processorContext = createProcessorContext();
-        final InternalProcessorContext mock = defaultMock(processorContext);
+        final InternalProcessorContext mock = mock(processorContext);
         final Duration interval = Duration.ofMillis(1);
         final PunctuationType type = PunctuationType.WALL_CLOCK_TIME;
-        final Punctuator punctuator = timestamp -> { };
+        final Punctuator punctuator = timestamp -> {
+        };
 
         final int size = 2;
-        for ( int i = 0; i < size; i++) {
+        for (int i = 0; i < size; i++) {
             final Cancellable cancellable = mock.schedule(interval, type, punctuator);
             assertNotNull(cancellable);
         }
 
-        final List<CapturedPunctuator> punctuatorList = punctuatorList(processorContext);
+        final List<MockProcessorContext.CapturedPunctuator> punctuatorList = punctuatorList(processorContext);
         assertEquals(size, punctuatorList.size());
-        capturedPunctuatorListElementsEqualToDurationTypeAndPunctuator(punctuatorList, interval, type, punctuator);
-    }
 
-    private static void capturedPunctuatorListElementsEqualToDurationTypeAndPunctuator(
-            final List<CapturedPunctuator> punctuatorList,
-            final Duration interval,
-            final PunctuationType type,
-            final Punctuator punctuator) {
-        for ( CapturedPunctuator capturedPunctuator : punctuatorList ) {
-            assertEquals(interval.toMillis(), capturedPunctuator.getIntervalMs());
+        final long millis = interval.toMillis();
+        for (MockProcessorContext.CapturedPunctuator capturedPunctuator : punctuatorList) {
+            assertEquals(millis, capturedPunctuator.getIntervalMs());
             assertEquals(type, capturedPunctuator.getType());
             assertEquals(punctuator, capturedPunctuator.getPunctuator());
+        }
+    }
+
+    @Test
+    public <K, V> void shouldForwardKeyValueAndCapture() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
+        @SuppressWarnings("unchecked") final KeyValue<K, V>[] expected = new KeyValue[]{
+                new KeyValue<>("key1", "value1"),
+                new KeyValue<>("key2", "value2"),
+        };
+
+        for(final KeyValue<K, V> kv: expected) {
+            mock.forward(kv.key, kv.value);
+        }
+        equals(expected, capturedForwards(processorContext));
+    }
+
+    @Test
+    public void shouldForwardKeyValueToAll() {
+        final ProcessorContext processorContext = EasyMock.niceMock(ProcessorContext.class);
+        final Capture<To> toCapture = Capture.newInstance();
+        processorContext.forward(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.capture(toCapture));
+        EasyMock.expectLastCall().once();
+        EasyMock.replay(processorContext);
+
+        final InternalProcessorContext mock = mock(processorContext);
+        mock.forward("", "");
+
+        EasyMock.verify(processorContext);
+        assertEquals(To.all(), toCapture.getValue());
+    }
+
+    @Test
+    public void shouldForwardKeyValueAndUpdateToInternal() {
+        // TODO(pierDipi) Add test
+    }
+
+    @Test
+    public void shouldBeCommitted() {
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
+
+        mock.commit();
+
+        assertTrue(committed(processorContext));
+    }
+
+    @Test
+    public void shouldNotBeCommitted() {
+        final ProcessorContext processorContext = createProcessorContext();
+
+        assertFalse(committed(processorContext));
+    }
+
+    private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
+        assertEquals(expected.length, forwarded.size());
+        for (int i = 0; i < expected.length; i++) {
+            final KeyValue<K, V> kv = expected[i];
+            final CapturedForward forward = forwarded.get(i);
+
+            assertEquals(kv.key, forward.keyValue().key);
+            assertEquals(kv.value, forward.keyValue().value);
         }
     }
 
@@ -150,15 +285,27 @@ public class InternalProcessorContextMockTest {
         return new MockProcessorContext();
     }
 
-    private static List<CapturedPunctuator> punctuatorList(final ProcessorContext processorContext) {
+    private static List<CapturedForward> capturedForwards(final ProcessorContext processorContext) {
+        return ((MockProcessorContext) processorContext).forwarded();
+    }
+
+    private static List<MockProcessorContext.CapturedPunctuator> punctuatorList(final ProcessorContext processorContext) {
         return ((MockProcessorContext) processorContext).scheduledPunctuators();
     }
 
-    private static InternalProcessorContext defaultMock() {
-        return defaultMock(createProcessorContext());
+    private static boolean committed(final ProcessorContext processorContext) {
+        return ((MockProcessorContext) processorContext).committed();
     }
 
-    private static InternalProcessorContext defaultMock(final ProcessorContext processorContext) {
+    private static InternalProcessorContext mock() {
+        return mock(createProcessorContext());
+    }
+
+    private static InternalProcessorContext mock(final ProcessorContext processorContext) {
         return new InternalProcessorContextMock.Builder(processorContext).build();
+    }
+
+    private static InternalProcessorContextMock.Builder builder() {
+        return new InternalProcessorContextMock.Builder(createProcessorContext());
     }
 }

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.easymock.Capture;
@@ -56,6 +57,7 @@ public class InternalProcessorContextMock {
         private Serde<?> valueSerde;
         private File stateDir;
         private StreamsMetricsImpl metrics;
+
         private final Map<String, StateStore> stateStoreMap;
         private final Map<String, StateRestoreCallback> stateRestoreCallbackMap;
 
@@ -84,9 +86,30 @@ public class InternalProcessorContextMock {
             register();
             getStateStore();
             schedule();
+            forwardKeyValue();
+            commit();
 
             replay(mock);
             return mock;
+        }
+
+        private void commit() {
+            mock.commit();
+            expectLastCall().andAnswer(() -> {
+                processorContext.commit();
+                return null;
+            });
+        }
+
+        private void forwardKeyValue() {
+            final Capture<Object> keyCapture = Capture.newInstance();
+            final Capture<Object> valueCapture = Capture.newInstance();
+
+            mock.forward(capture(keyCapture), capture(valueCapture));
+            expectLastCall().andAnswer(() -> {
+                processorContext.forward(keyCapture.getValue(), valueCapture.getValue(), To.all());
+                return null;
+            }).anyTimes();
         }
 
         private void schedule() {
@@ -142,6 +165,36 @@ public class InternalProcessorContextMock {
 
         private void applicationId() {
             expect(mock.applicationId()).andReturn(applicationId).anyTimes();
+        }
+
+        public Builder metrics(final StreamsMetricsImpl metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder stateDir(final File stateDir) {
+            this.stateDir = stateDir;
+            return this;
+        }
+
+        public Builder valueSerde(final Serde<?> valueSerde) {
+            this.valueSerde = valueSerde;
+            return this;
+        }
+
+        public Builder keySerde(final Serde<?> keySerde) {
+            this.keySerde = keySerde;
+            return this;
+        }
+
+        public Builder taskId(final TaskId taskId) {
+            this.taskId = taskId;
+            return this;
+        }
+
+        public Builder applicationId(final String applicationId) {
+            this.applicationId = applicationId;
+            return this;
         }
     }
 
