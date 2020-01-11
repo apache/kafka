@@ -325,6 +325,24 @@ public class InternalProcessorContextMockTest {
         assertEquals(offset, mock.offset());
     }
 
+    @Test
+    public void shouldReturnEmptyHeadersByDefault() {
+        final InternalProcessorContext mock = mock();
+
+        assertEquals(new RecordHeaders(), mock.headers());
+    }
+
+    @Test
+    public void shouldUpdateHeaders() {
+        final InternalProcessorContext mock = mock();
+
+        final Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("header-key", "header-value".getBytes()));
+        mock.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", headers));
+
+        assertEquals(headers, mock.headers());
+    }
+
     private static <K, V> void equals(final KeyValue<K, V>[] expected, final List<CapturedForward> forwarded) {
         assertEquals(expected.length, forwarded.size());
         for (int i = 0; i < expected.length; i++) {
