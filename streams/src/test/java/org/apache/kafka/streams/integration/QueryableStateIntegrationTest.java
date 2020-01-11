@@ -374,7 +374,6 @@ public class QueryableStateIntegrationTest {
 
                     if (store.fetch(key, ofEpochMilli(from), ofEpochMilli(to)) == null) {
                         nullValueKeys.add(key);
-                        continue;
                     }
                 } catch (final InvalidStateStoreException e) {
                     // there must have been at least one rebalance state
