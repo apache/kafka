@@ -318,11 +318,11 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the full fetch response partitions are valid.
      */
-    private String verifyFullFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyFullFetchResponsePartitions(FetchResponse<?> response) {
         StringBuilder bld = new StringBuilder();
-        Set<TopicPartition> omitted =
-            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         Set<TopicPartition> extra =
+            findMissing(response.responseData().keySet(), sessionPartitions.keySet());
+        Set<TopicPartition> omitted =
             findMissing(sessionPartitions.keySet(), response.responseData().keySet());
         if (!omitted.isEmpty()) {
             bld.append("omitted=(").append(Utils.join(omitted, ", ")).append(", ");
@@ -331,7 +331,7 @@ public class FetchSessionHandler {
             bld.append("extra=(").append(Utils.join(extra, ", ")).append(", ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty())) {
-            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", "));
+            bld.append("response=(").append(Utils.join(response.responseData().keySet(), ", ")).append(")");
             return bld.toString();
         }
         return null;
@@ -343,7 +343,7 @@ public class FetchSessionHandler {
      * @param response  The response.
      * @return          True if the incremental fetch response partitions are valid.
      */
-    private String verifyIncrementalFetchResponsePartitions(FetchResponse<?> response) {
+    String verifyIncrementalFetchResponsePartitions(FetchResponse<?> response) {
         Set<TopicPartition> extra =
             findMissing(response.responseData().keySet(), sessionPartitions.keySet());
         if (!extra.isEmpty()) {
@@ -408,7 +408,22 @@ public class FetchSessionHandler {
                 nextMetadata = nextMetadata.nextCloseExisting();
             }
             return false;
-        } else if (nextMetadata.isFull()) {
+        }
+        if (nextMetadata.isFull()) {
+            if (response.responseData().isEmpty() && response.throttleTimeMs() > 0) {
+                // Normally, an empty full fetch response would be invalid.  However, KIP-219
+                // specifies that if the broker wants to throttle the client, it will respond
+                // to a full fetch request with an empty response and a throttleTimeMs
+                // value set.  We don't want to log this with a warning, since it's not an error.
+                // However, the empty full fetch response can't be processed, so it's still appropriate
+                // to return false here.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} sent a empty full fetch response to indicate that this " +
+                        "client should be throttled for {} ms.", node, response.throttleTimeMs());
+                }
+                nextMetadata = FetchMetadata.INITIAL;
+                return false;
+            }
             String problem = verifyFullFetchResponsePartitions(response);
             if (problem != null) {
                 log.info("Node {} sent an invalid full fetch response with {}", node, problem);
@@ -442,9 +457,12 @@ public class FetchSessionHandler {
                 return true;
             } else {
                 // The incremental fetch session was continued by the server.
+                // We don't have to do anything special here to support KIP-219, since an empty incremental
+                // fetch request is perfectly valid.
                 if (log.isDebugEnabled())
-                    log.debug("Node {} sent an incremental fetch response for session {}{}",
-                            node, response.sessionId(), responseDataToLogString(response));
+                    log.debug("Node {} sent an incremental fetch response with throttleTimeMs = {} " +
+                        "for session {}{}", response.throttleTimeMs(), node, response.sessionId(),
+                        responseDataToLogString(response));
                 nextMetadata = nextMetadata.nextIncremental();
                 return true;
             }

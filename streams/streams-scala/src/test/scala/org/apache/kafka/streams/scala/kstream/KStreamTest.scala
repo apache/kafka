@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
   Transformer,
-  TransformerSupplier,
   ValueTransformer,
   ValueTransformerSupplier,
   ValueTransformerWithKey,
@@ -37,8 +36,8 @@ import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
@@ -197,10 +196,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
-        def get(): Transformer[String, String, KeyValue[String, String]] =
-          new TestTransformer
-      })
+      .transform(() => new TestTransformer)
       .to(sinkTopic)
 
     val now = Instant.now()
@@ -232,10 +228,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream = builder.stream[String, String](sourceTopic)
     stream
-      .flatTransform(new TransformerSupplier[String, String, Iterable[KeyValue[String, String]]] {
-        def get(): Transformer[String, String, Iterable[KeyValue[String, String]]] =
-          new TestTransformer
-      })
+      .flatTransform(() => new TestTransformer)
       .to(sinkTopic)
 
     val now = Instant.now()

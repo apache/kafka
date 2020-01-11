@@ -21,7 +21,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
@@ -70,7 +70,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @Test
   def testValidAlterConfigs(): Unit = {
-    client = AdminClient.create(createConfig)
+    client = Admin.create(createConfig)
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
@@ -88,13 +88,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @Test
   def testInvalidAlterConfigs(): Unit = {
-    client = AdminClient.create(createConfig)
+    client = Admin.create(createConfig)
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
   @Test
   def testInvalidAlterConfigsDueToPolicy(): Unit = {
-    client = AdminClient.create(createConfig)
+    client = Admin.create(createConfig)
 
     // Create topics
     val topic1 = "invalid-alter-configs-due-to-policy-topic-1"

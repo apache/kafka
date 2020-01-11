@@ -16,7 +16,6 @@
  */
 package kafka.cluster
 
-import com.yammer.metrics.core.Gauge
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.{Optional, Properties}
 
@@ -218,69 +217,18 @@ class Partition(val topicPartition: TopicPartition,
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
-  newGauge("UnderReplicated",
-    new Gauge[Int] {
-      def value: Int = {
-        if (isUnderReplicated) 1 else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("InSyncReplicasCount",
-    new Gauge[Int] {
-      def value: Int = {
-        if (isLeader) inSyncReplicaIds.size else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("UnderMinIsr",
-    new Gauge[Int] {
-      def value: Int = {
-        if (isUnderMinIsr) 1 else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("AtMinIsr",
-    new Gauge[Int] {
-      def value: Int = {
-        if (isAtMinIsr) 1 else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("ReplicasCount",
-    new Gauge[Int] {
-      def value: Int = {
-        if (isLeader) assignmentState.replicationFactor else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("LastStableOffsetLag",
-    new Gauge[Long] {
-      def value: Long = {
-        log.map(_.lastStableOffsetLag).getOrElse(0)
-      }
-    },
-    tags
-  )
+  newGauge("UnderReplicated", () => if (isUnderReplicated) 1 else 0, tags)
+  newGauge("InSyncReplicasCount", () => if (isLeader) inSyncReplicaIds.size else 0, tags)
+  newGauge("UnderMinIsr", () => if (isUnderMinIsr) 1 else 0, tags)
+  newGauge("AtMinIsr", () => if (isAtMinIsr) 1 else 0, tags)
+  newGauge("ReplicasCount", () => if (isLeader) assignmentState.replicationFactor else 0, tags)
+  newGauge("LastStableOffsetLag", () => log.map(_.lastStableOffsetLag).getOrElse(0), tags)
 
   def isUnderReplicated: Boolean = isLeader && (assignmentState.replicationFactor - inSyncReplicaIds.size) > 0
 
-  def isUnderMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
-  }
+  def isUnderMinIsr: Boolean = leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
 
-  def isAtMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicaIds.size == _.config.minInSyncReplicas }
-  }
+  def isAtMinIsr: Boolean = leaderLogIfLocal.exists { inSyncReplicaIds.size == _.config.minInSyncReplicas }
 
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
@@ -972,7 +920,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -985,7 +933,7 @@ class Partition(val topicPartition: TopicPartition,
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
-          val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient,
+          val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
             interBrokerProtocolVersion)
 
           // we may need to increment high watermark since ISR could be down to 1

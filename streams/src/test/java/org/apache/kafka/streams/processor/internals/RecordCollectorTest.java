@@ -29,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -54,6 +55,7 @@ import java.util.concurrent.Future;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -180,8 +182,7 @@ public class RecordCollectorTest {
         assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
 
-    @SuppressWarnings("unchecked")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
@@ -189,34 +190,105 @@ public class RecordCollectorTest {
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("dropped-records")
         );
-        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
-            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                 throw new KafkaException();
             }
         });
 
-        collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        final StreamsException thrown = assertThrows(StreamsException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
     }
 
-    @SuppressWarnings("unchecked")
-    @Test(expected = RecoverableClientException.class)
+    @Test
+    public void shouldThrowRecoverableExceptionOnProducerFencedException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                throw new KafkaException(new ProducerFencedException("asdf"));
+            }
+        });
+
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
+        assertThat(thrown.getCause().getCause(), instanceOf(ProducerFencedException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionOnUnknownProducerException() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("dropped-records")
+        );
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                throw new KafkaException(new UnknownProducerIdException("asdf"));
+            }
+        });
+
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(KafkaException.class));
+        assertThat(thrown.getCause().getCause(), instanceOf(UnknownProducerIdException.class));
+    }
+
+    @Test
     public void shouldThrowRecoverableExceptionWhenProducerFencedInCallback() {
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
             logContext,
             new DefaultProductionExceptionHandler(),
             new Metrics().sensor("skipped-records"));
-        collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
-            public synchronized Future<RecordMetadata> send(final ProducerRecord record, final Callback callback) {
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
                 callback.onCompletion(null, new ProducerFencedException("asdf"));
                 return null;
             }
         });
 
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(ProducerFencedException.class));
+    }
+
+    @Test
+    public void shouldThrowRecoverableExceptionWhenProducerForgottenInCallback() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            "test",
+            logContext,
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records"));
+        collector.init(new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+            @Override
+            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                callback.onCompletion(null, new UnknownProducerIdException("asdf"));
+                return null;
+            }
+        });
+
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        final RecoverableClientException thrown = assertThrows(RecoverableClientException.class, () ->
+            collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertThat(thrown.getCause(), instanceOf(UnknownProducerIdException.class));
     }
 
     @SuppressWarnings("unchecked")

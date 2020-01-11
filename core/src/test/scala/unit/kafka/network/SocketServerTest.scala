@@ -30,20 +30,23 @@ import javax.net.ssl._
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.SaslAuthenticateRequestData
 import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelState, KafkaChannel, ListenerName, NetworkReceive, NetworkSend, Selector, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.utils.AppInfoParser
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.kafka.test.TestSslUtils
 import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
@@ -61,7 +64,7 @@ class SocketServerTest {
   props.put("socket.send.buffer.bytes", "300000")
   props.put("socket.receive.buffer.bytes", "300000")
   props.put("queued.max.requests", "50")
-  props.put("socket.request.max.bytes", "50")
+  props.put("socket.request.max.bytes", "100")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
@@ -188,6 +191,16 @@ class SocketServerTest {
     serializedBytes
   }
 
+  private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
+    val request = new ApiVersionsRequest.Builder().build(version)
+    val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
+    val buffer = request.serialize(header)
+    buffer.rewind()
+    val bytes = new Array[Byte](buffer.remaining())
+    buffer.get(bytes)
+    bytes
+  }
+
   @Test
   def simpleRequest(): Unit = {
     val plainSocket = connect()
@@ -198,6 +211,56 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
     verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = false)
+  }
+
+
+  private def testClientInformation(version: Short, expectedClientSoftwareName: String,
+                                    expectedClientSoftwareVersion: String): Unit = {
+    val plainSocket = connect()
+    val address = plainSocket.getLocalAddress
+    val clientId = "clientId"
+
+    // Send ApiVersionsRequest - unknown expected
+    sendRequest(plainSocket, apiVersionRequestBytes(clientId, version))
+    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareName)
+    assertEquals(ClientInformation.UNKNOWN_NAME_OR_VERSION, receivedReq.context.clientInformation.softwareVersion)
+
+    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+
+    // Send ProduceRequest - client info expected
+    sendRequest(plainSocket, producerRequestBytes())
+    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+
+    assertEquals(expectedClientSoftwareName, receivedReq.context.clientInformation.softwareName)
+    assertEquals(expectedClientSoftwareVersion, receivedReq.context.clientInformation.softwareVersion)
+
+    server.dataPlaneRequestChannel.sendResponse(new RequestChannel.NoOpResponse(receivedReq))
+
+    // Close the socket
+    plainSocket.setSoLinger(true, 0)
+    plainSocket.close()
+
+    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
+  }
+
+  @Test
+  def testClientInformationWithLatestApiVersionsRequest(): Unit = {
+    testClientInformation(
+      ApiKeys.API_VERSIONS.latestVersion,
+      "apache-kafka-java",
+      AppInfoParser.getVersion
+    )
+  }
+
+  @Test
+  def testClientInformationWithOldestApiVersionsRequest(): Unit = {
+    testClientInformation(
+      ApiKeys.API_VERSIONS.oldestVersion,
+      ClientInformation.UNKNOWN_NAME_OR_VERSION,
+      ClientInformation.UNKNOWN_NAME_OR_VERSION
+    )
   }
 
   @Test
@@ -236,7 +299,7 @@ class SocketServerTest {
       val externalListener = new ListenerName("EXTERNAL")
       val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
-      val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
+      val startFuture = executor.submit((() => testableServer.startDataPlaneProcessors(futures)): Runnable)
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
 
@@ -573,7 +636,7 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
-    // make sure the sockets ar e open
+    // make sure the sockets are open
     server.dataPlaneAcceptors.asScala.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     shutdownServerAndMetrics(server)
@@ -686,7 +749,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
     try {
       overrideServer.startup()
-      val sslContext = SSLContext.getInstance("TLSv1.2")
+      val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
       val sslSocket = socketFactory.createSocket("localhost",
@@ -716,7 +779,16 @@ class SocketServerTest {
   }
 
   @Test
-  def testSaslReauthenticationFailure(): Unit = {
+  def testSaslReauthenticationFailureWithKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(true)
+  }
+
+  @Test
+  def testSaslReauthenticationFailureNoKip152SaslAuthenticate(): Unit = {
+    checkSaslReauthenticationFailure(false)
+  }
+
+  def checkSaslReauthenticationFailure(leverageKip152SaslAuthenticateRequest : Boolean): Unit = {
     shutdownServerAndMetrics(server) // we will use our own instance because we require custom configs
     val username = "admin"
     val password = "admin-secret"
@@ -742,20 +814,27 @@ class SocketServerTest {
       val correlationId = -1
       val clientId = ""
       // send a SASL handshake request
+      val version : Short = if (leverageKip152SaslAuthenticateRequest) ApiKeys.SASL_HANDSHAKE.latestVersion else 0
       val saslHandshakeRequest = new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
-        .build()
+        .build(version)
       val saslHandshakeHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE, saslHandshakeRequest.version, clientId,
         correlationId)
       sendApiRequest(socket, saslHandshakeRequest, saslHandshakeHeader)
       receiveResponse(socket)
 
-      // now send credentials within a SaslAuthenticateRequest
+      // now send credentials
       val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
-      val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
-        .setAuthBytes(authBytes)).build()
-      val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
-        clientId, correlationId)
-      sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      if (leverageKip152SaslAuthenticateRequest) {
+        // send credentials within a SaslAuthenticateRequest
+        val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
+          .setAuthBytes(authBytes)).build()
+        val saslAuthenticateHeader = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateRequest.version,
+          clientId, correlationId)
+        sendApiRequest(socket, saslAuthenticateRequest, saslAuthenticateHeader)
+      } else {
+        // send credentials directly, without a SaslAuthenticateRequest
+        sendRequest(socket, authBytes)
+      }
       receiveResponse(socket)
       assertEquals(1, overrideServer.testableSelector.channels.size)
 
@@ -791,6 +870,15 @@ class SocketServerTest {
   /* Test that we update request metrics if the client closes the connection while the broker response is in flight. */
   @Test
   def testClientDisconnectionUpdatesRequestMetrics(): Unit = {
+    // The way we detect a connection close from the client depends on the response size. If it's small, an
+    // IOException ("Connection reset by peer") is thrown when the Selector reads from the socket. If
+    // it's large, an IOException ("Broken pipe") is thrown when the Selector writes to the socket. We test
+    // both paths to ensure they are handled correctly.
+    checkClientDisconnectionUpdatesRequestMetrics(0)
+    checkClientDisconnectionUpdatesRequestMetrics(550000)
+  }
+
+  private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
@@ -818,15 +906,10 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val expectedTotalTimeCount = totalTimeHistCount() + 1
+      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(responseBufferSize))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
 
-      // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
-      // On Mac OS X, the initial write seems to always succeed and it is able to write up to 102400 bytes on the initial
-      // write. If the buffer is smaller than this, the write is considered complete and the disconnection is not
-      // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
-      // IOException.
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, None, None))
+      val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 

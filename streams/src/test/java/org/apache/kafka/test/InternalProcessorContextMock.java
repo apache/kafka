@@ -95,6 +95,56 @@ public class InternalProcessorContextMock {
             metrics = (StreamsMetricsImpl) processorContext.metrics();
         }
 
+
+        public Builder cache(final ThreadCache cache) {
+            this.cache = cache;
+            return this;
+        }
+
+        public Builder appConfigs(Map<String, Object> config) {
+            if (config == null) {
+                config = new HashMap<>();
+            }
+            if (!config.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+                config.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
+            }
+            if (!config.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+                config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+            }
+            this.config = new QuietStreamsConfig(config);
+            return this;
+        }
+
+        public Builder metrics(final StreamsMetricsImpl metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
+        public Builder stateDir(final File stateDir) {
+            this.stateDir = stateDir;
+            return this;
+        }
+
+        public Builder valueSerde(final Serde<?> valueSerde) {
+            this.valueSerde = valueSerde;
+            return this;
+        }
+
+        public Builder keySerde(final Serde<?> keySerde) {
+            this.keySerde = keySerde;
+            return this;
+        }
+
+        public Builder taskId(final TaskId taskId) {
+            this.taskId = taskId;
+            return this;
+        }
+
+        public Builder applicationId(final String applicationId) {
+            this.applicationId = applicationId;
+            return this;
+        }
+
         public InternalProcessorContext build() {
             applicationId();
             taskId();
@@ -314,53 +364,5 @@ public class InternalProcessorContextMock {
             expect(mock.applicationId()).andReturn(applicationId).anyTimes();
         }
 
-        public Builder cache(final ThreadCache cache) {
-            this.cache = cache;
-            return this;
-        }
-
-        public Builder appConfigs(Map<String, Object> config) {
-            if (config == null) {
-                config = new HashMap<>();
-            }
-            if (!config.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-                config.put(StreamsConfig.APPLICATION_ID_CONFIG, "");
-            }
-            if (!config.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-                config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-            }
-            this.config = new QuietStreamsConfig(config);
-            return this;
-        }
-
-        public Builder metrics(final StreamsMetricsImpl metrics) {
-            this.metrics = metrics;
-            return this;
-        }
-
-        public Builder stateDir(final File stateDir) {
-            this.stateDir = stateDir;
-            return this;
-        }
-
-        public Builder valueSerde(final Serde<?> valueSerde) {
-            this.valueSerde = valueSerde;
-            return this;
-        }
-
-        public Builder keySerde(final Serde<?> keySerde) {
-            this.keySerde = keySerde;
-            return this;
-        }
-
-        public Builder taskId(final TaskId taskId) {
-            this.taskId = taskId;
-            return this;
-        }
-
-        public Builder applicationId(final String applicationId) {
-            this.applicationId = applicationId;
-            return this;
-        }
     }
 }

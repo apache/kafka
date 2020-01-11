@@ -18,7 +18,6 @@ package kafka.controller
 
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
@@ -120,75 +119,16 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
 
-  newGauge(
-    "ActiveControllerCount",
-    new Gauge[Int] {
-      def value = if (isActive) 1 else 0
-    }
-  )
-
-  newGauge(
-    "OfflinePartitionsCount",
-    new Gauge[Int] {
-      def value: Int = offlinePartitionCount
-    }
-  )
-
-  newGauge(
-    "PreferredReplicaImbalanceCount",
-    new Gauge[Int] {
-      def value: Int = preferredReplicaImbalanceCount
-    }
-  )
-
-  newGauge(
-    "ControllerState",
-    new Gauge[Byte] {
-      def value: Byte = state.value
-    }
-  )
-
-  newGauge(
-    "GlobalTopicCount",
-    new Gauge[Int] {
-      def value: Int = globalTopicCount
-    }
-  )
-
-  newGauge(
-    "GlobalPartitionCount",
-    new Gauge[Int] {
-      def value: Int = globalPartitionCount
-    }
-  )
-
-  newGauge(
-    "TopicsToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = topicsToDeleteCount
-    }
-  )
-
-  newGauge(
-    "ReplicasToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = replicasToDeleteCount
-    }
-  )
-
-  newGauge(
-    "TopicsIneligibleToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = ineligibleTopicsToDeleteCount
-    }
-  )
-
-  newGauge(
-    "ReplicasIneligibleToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = ineligibleReplicasToDeleteCount
-    }
-  )
+  newGauge("ActiveControllerCount", () => if (isActive) 1 else 0)
+  newGauge("OfflinePartitionsCount", () => offlinePartitionCount)
+  newGauge("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
+  newGauge("ControllerState", () => state.value)
+  newGauge("GlobalTopicCount", () => globalTopicCount)
+  newGauge("GlobalPartitionCount", () => globalPartitionCount)
+  newGauge("TopicsToDeleteCount", () => topicsToDeleteCount)
+  newGauge("ReplicasToDeleteCount", () => replicasToDeleteCount)
+  newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
+  newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
 
   /**
    * Returns true if this broker is the current controller.
@@ -1081,14 +1021,16 @@ class KafkaController(val config: KafkaConfig,
           val UpdateLeaderAndIsrResult(finishedUpdates, _) =
             zkClient.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch, controllerContext.epochZkVersion)
 
-          finishedUpdates.headOption.map {
-            case (partition, Right(leaderAndIsr)) =>
-              finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
+          finishedUpdates.get(partition) match {
+            case Some(Right(leaderAndIsr)) =>
+              val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, epoch)
+              controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+              finalLeaderIsrAndControllerEpoch = Some(leaderIsrAndControllerEpoch)
               info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
               true
-            case (_, Left(e)) =>
-              throw e
-          }.getOrElse(false)
+            case Some(Left(e)) => throw e
+            case None => false
+          }
         case None =>
           throw new IllegalStateException(s"Cannot update leader epoch for partition $partition as " +
             "leaderAndIsr path is empty. This could mean we somehow tried to reassign a partition that doesn't exist")
@@ -1105,8 +1047,6 @@ class KafkaController(val config: KafkaConfig,
       }.map { tp =>
         (tp, controllerContext.partitionReplicaAssignment(tp) )
       }.toMap.groupBy { case (_, assignedReplicas) => assignedReplicas.head }
-
-    debug(s"Preferred replicas by broker $preferredReplicasForTopicsByBrokers")
 
     // for each broker, check if a preferred replica election needs to be triggered
     preferredReplicasForTopicsByBrokers.foreach { case (leaderBroker, topicPartitionsForBroker) =>
@@ -1510,7 +1450,10 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processPartitionModifications(topic: String): Unit = {
-    def restorePartitionReplicaAssignment(topic: String, newPartitionReplicaAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
+    def restorePartitionReplicaAssignment(
+      topic: String,
+      newPartitionReplicaAssignment: Map[TopicPartition, ReplicaAssignment]
+    ): Unit = {
       info("Restoring the partition replica assignment for topic %s".format(topic))
 
       val existingPartitions = zkClient.getChildren(TopicPartitionsZNode.path(topic))
@@ -1526,11 +1469,12 @@ class KafkaController(val config: KafkaConfig,
     }
 
     if (!isActive) return
-    val partitionReplicaAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic))
+    val partitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic))
     val partitionsToBeAdded = partitionReplicaAssignment.filter { case (topicPartition, _) =>
       controllerContext.partitionReplicaAssignment(topicPartition).isEmpty
     }
-    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic))
+
+    if (topicDeletionManager.isTopicQueuedUpForDeletion(topic)) {
       if (partitionsToBeAdded.nonEmpty) {
         warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
           .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
@@ -1540,14 +1484,12 @@ class KafkaController(val config: KafkaConfig,
         // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
         info("Ignoring partition change during topic deletion as no new partitions are added")
       }
-    else {
-      if (partitionsToBeAdded.nonEmpty) {
-        info(s"New partitions to be added $partitionsToBeAdded")
-        partitionsToBeAdded.foreach { case (topicPartition, assignedReplicas) =>
-          controllerContext.updatePartitionReplicaAssignment(topicPartition, assignedReplicas)
-        }
-        onNewPartitionCreation(partitionsToBeAdded.keySet)
+    } else if (partitionsToBeAdded.nonEmpty) {
+      info(s"New partitions to be added $partitionsToBeAdded")
+      partitionsToBeAdded.foreach { case (topicPartition, assignedReplicas) =>
+        controllerContext.updatePartitionFullReplicaAssignment(topicPartition, assignedReplicas)
       }
+      onNewPartitionCreation(partitionsToBeAdded.keySet)
     }
   }
 

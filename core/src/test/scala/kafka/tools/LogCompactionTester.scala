@@ -26,8 +26,8 @@ import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.utils._
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
@@ -138,7 +138,7 @@ object LogCompactionTester {
   def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
     val adminConfig = new Properties
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val adminClient = admin.AdminClient.create(adminConfig)
+    val adminClient = Admin.create(adminConfig)
 
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)

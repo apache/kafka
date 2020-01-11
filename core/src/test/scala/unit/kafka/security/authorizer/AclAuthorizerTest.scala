@@ -25,13 +25,14 @@ import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.auth.Resource
 import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipal}
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
@@ -388,7 +389,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       }
     }
     try {
-      val future = executor.submit(CoreUtils.runnable(aclAuthorizer3.configure(config.originals)))
+      val future = executor.submit((() => aclAuthorizer3.configure(config.originals)): Runnable)
       configureSemaphore.acquire()
       val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
       val acls = Set(new AccessControlEntry(user1.toString, "host-1", READ, DENY))
@@ -832,7 +833,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
+      securityProtocol, ClientInformation.EMPTY)
   }
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {

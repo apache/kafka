@@ -16,18 +16,24 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.net.InetAddress;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.network.ChannelMetadataRegistry;
+import org.apache.kafka.common.network.ClientInformation;
+import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
@@ -37,8 +43,10 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -53,7 +61,8 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
             invocation.<ByteBuffer>getArgument(0).putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
@@ -68,7 +77,8 @@ public class SaslServerAuthenticatorTest {
         TransportLayer transportLayer = mock(TransportLayer.class);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(SCRAM_SHA_256.mechanismName()));
-        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer, SCRAM_SHA_256.mechanismName());
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
@@ -92,7 +102,54 @@ public class SaslServerAuthenticatorTest {
         verify(transportLayer, times(2)).read(any(ByteBuffer.class));
     }
 
-    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer, String mechanism) throws IOException {
+    @Test
+    public void testOldestApiVersionsRequest() throws IOException {
+        testApiVersionsRequest(ApiKeys.API_VERSIONS.oldestVersion(),
+            ClientInformation.UNKNOWN_NAME_OR_VERSION, ClientInformation.UNKNOWN_NAME_OR_VERSION);
+    }
+
+    @Test
+    public void testLatestApiVersionsRequest() throws IOException {
+        testApiVersionsRequest(ApiKeys.API_VERSIONS.latestVersion(),
+            "apache-kafka-java", AppInfoParser.getVersion());
+    }
+
+    public void testApiVersionsRequest(short version, String expectedSoftwareName,
+                                       String expectedSoftwareVersion) throws IOException {
+        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
+        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+            Collections.singletonList(SCRAM_SHA_256.mechanismName()));
+        ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
+        SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
+            SCRAM_SHA_256.mechanismName(), metadataRegistry);
+
+        final RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "clientId", 0);
+        final Struct headerStruct = header.toStruct();
+
+        final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
+        final Struct requestStruct = request.data.toStruct(version);
+
+        when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
+
+        when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
+            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf() + requestStruct.sizeOf());
+            return 4;
+        }).then(invocation -> {
+            headerStruct.writeTo(invocation.getArgument(0));
+            requestStruct.writeTo(invocation.getArgument(0));
+            return headerStruct.sizeOf() + requestStruct.sizeOf();
+        });
+
+        authenticator.authenticate();
+
+        assertEquals(expectedSoftwareName, metadataRegistry.clientInformation().softwareName());
+        assertEquals(expectedSoftwareVersion, metadataRegistry.clientInformation().softwareVersion());
+
+        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+    }
+
+    private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer,
+                                                       String mechanism, ChannelMetadataRegistry metadataRegistry) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
@@ -101,7 +158,8 @@ public class SaslServerAuthenticatorTest {
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, Collections.emptyMap(), Time.SYSTEM);
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, Collections.emptyMap(),
+                metadataRegistry, Time.SYSTEM);
     }
 
 }

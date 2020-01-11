@@ -22,7 +22,7 @@ import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions, PartitionReassignment}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
@@ -67,7 +67,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000")
-    JAdminClient.create(props)
+    Admin.create(props)
   }
 
   def getRandomLogDirAssignment(brokerId: Int): String = {
@@ -668,9 +668,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val sameMoveTp = new TopicPartition("orders", 2)
 
     // Throttle to ensure we minimize race conditions and test flakiness
-    throttle(Seq("orders"), throttleSettingForSeconds(10), Map(
-      sameMoveTp -> Seq(0, 1, 2)
-    ))
+    throttle(Seq("orders"), throttleSettingForSeconds(10), Set(sameMoveTp))
 
     servers.foreach(_.shutdown())
     adminClient.close()
@@ -751,6 +749,39 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def testProduceAndConsumeWithReassignmentInProgress(): Unit = {
+    startBrokers(Seq(100, 101))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100)), servers = servers)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 100 * 1000)
+
+    TestUtils.setReplicationThrottleForPartitions(adminClient, Seq(101), Set(tp0), throttleBytes = 1)
+
+    adminClient.alterPartitionReassignments(
+      Map(reassignmentEntry(tp0, Seq(100, 101))).asJava
+    ).all().get()
+
+    awaitReassignmentInProgress(tp0)
+
+    produceMessages(tp0.topic, 500, acks = -1, valueLength = 64)
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
+    try {
+      consumer.assign(Seq(tp0).asJava)
+      pollUntilAtLeastNumRecords(consumer, numRecords = 1000)
+    } finally {
+      consumer.close()
+    }
+
+    assertTrue(isAssignmentInProgress(tp0))
+
+    TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp0))
+
+    waitForAllReassignmentsToComplete()
+    assertEquals(Seq(100, 101), zkClient.getReplicasForPartition(tp0))
+  }
+
+  @Test
   def shouldListMovingPartitionsThroughApi(): Unit = {
     startBrokers(Seq(100, 101))
     adminClient = createAdminClient(servers)
@@ -767,10 +798,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertTrue(adminClient.listPartitionReassignments().reassignments().get().isEmpty)
 
     // Throttle to ensure we minimize race conditions and test flakiness
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101),
-      tp2 -> Seq(100, 101)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0, tp2))
+
     adminClient.alterPartitionReassignments(
       Map(reassignmentEntry(tp0, Seq(101)),
           reassignmentEntry(tp2, Seq(101))).asJava
@@ -797,10 +826,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to ensure we minimize race conditions and test flakiness
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101, 102),
-      tp1 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0, tp1))
 
     adminClient.alterPartitionReassignments(
       Map(reassignmentEntry(tp0, Seq(100, 101, 102)),
@@ -845,10 +871,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     // Throttle to avoid race conditions
     val throttleSetting = throttleSettingForSeconds(10)
-    throttle(Seq(topicName), throttleSetting, Map(
-      tp0 -> Seq(100, 101, 102),
-      tp1 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq(topicName), throttleSetting, Set(tp0, tp1))
 
     // API reassignment to 101 for both partitions
     adminClient.alterPartitionReassignments(
@@ -903,11 +926,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to avoid race conditions
-    throttle(Seq("A", "B"), throttleSettingForSeconds(10), Map(
-      tpA0 -> Seq(100, 101, 102),
-      tpA1 -> Seq(100, 101, 102),
-      tpB0 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq("A", "B"), throttleSettingForSeconds(10), Set(tpA0, tpA1, tpB0))
 
     // 1. znode reassignment to 101 for TP A-0, A-1
     val topicJson = executeAssignmentJson(Seq(
@@ -950,9 +969,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     adminClient = createAdminClient(servers)
     createTopic(zkClient, topicName, Map(tp0.partition() -> Seq(100, 101)), servers = servers)
     // Throttle to ensure we minimize race conditions and test flakiness
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0))
 
     // move to [102, 101]
     adminClient.alterPartitionReassignments(
@@ -981,10 +998,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to avoid race conditions
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101),
-      tp1 -> Seq(100, 101)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0, tp1))
 
     val move = Map(
       tp0 -> Seq(101),
@@ -1025,12 +1039,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to avoid race conditions
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101, 102),
-      tp1 -> Seq(100, 101, 102),
-      tp2 -> Seq(100, 101, 102),
-      tp3 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0, tp1, tp2, tp3))
 
     // API reassignment to 101 for tp0 and tp1
     adminClient.alterPartitionReassignments(
@@ -1080,11 +1089,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to avoid race conditions
-    throttle(Seq("A", "B"), throttleSettingForSeconds(10), Map(
-      tpA0 -> Seq(100, 101, 102),
-      tpA1 -> Seq(100, 101, 102),
-      tpB0 -> Seq(100, 101, 102)
-    ))
+    throttle(Seq("A", "B"), throttleSettingForSeconds(10), Set(tpA0, tpA1, tpB0))
 
     adminClient.alterPartitionReassignments(Map(reassignmentEntry(tpA0, Seq(101))).asJava).all().get()
     val apiReassignmentsInProgress1 = adminClient.listPartitionReassignments().reassignments().get()
@@ -1145,10 +1150,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       servers = servers)
 
     // Throttle to avoid race conditions
-    throttle(Seq(topicName), throttleSettingForSeconds(10), Map(
-      tp0 -> Seq(100, 101),
-      tp1 -> Seq(100, 101)
-    ))
+    throttle(Seq(topicName), throttleSettingForSeconds(10), Set(tp0, tp1))
 
     // Alter `topicName` partition reassignment
     adminClient.alterPartitionReassignments(
@@ -1228,6 +1230,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", pause = pause)
   }
 
+  def awaitReassignmentInProgress(topicPartition: TopicPartition): Unit = {
+    waitUntilTrue(() => isAssignmentInProgress(topicPartition),
+      "Timed out waiting for expected reassignment to begin")
+  }
+
+  def isAssignmentInProgress(topicPartition: TopicPartition): Boolean = {
+    val reassignments = adminClient.listPartitionReassignments().reassignments().get()
+    reassignments.asScala.get(topicPartition).isDefined
+  }
+
   def waitForAllReassignmentsToComplete(pause: Long = 100L): Unit = {
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments", pause = pause)
@@ -1263,13 +1275,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ThrottleSetting(throttle.toString, messagesPerSecond * secondsDuration, messageSize)
   }
 
-  def throttle(topics: Seq[String], throttle: ThrottleSetting, replicasToThrottle: Map[TopicPartition, Seq[Int]]): Unit = {
+  def throttle(topics: Seq[String], throttle: ThrottleSetting, partitions: Set[TopicPartition]): Unit = {
     val messagesPerTopic = throttle.numMessages / topics.size
     for (topic <- topics) {
       produceMessages(topic, numMessages = messagesPerTopic, acks = 0, valueLength = throttle.messageSizeBytes)
     }
-    TestUtils.throttleAllBrokersReplication(adminClient, brokerIds, throttle.throttleBytes.toInt)
-    TestUtils.assignThrottledPartitionReplicas(adminClient, replicasToThrottle)
+    TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, partitions, throttle.throttleBytes.toInt)
   }
 
   private def produceMessages(topic: String, numMessages: Int, acks: Int, valueLength: Int): Unit = {

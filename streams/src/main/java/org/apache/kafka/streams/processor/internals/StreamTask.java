@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -177,8 +178,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
-        processorContext = processorContextImpl;
+        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, streamsMetrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -517,6 +517,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         } catch (final CommitFailedException | ProducerFencedException | UnknownProducerIdException error) {
             throw new TaskMigratedException(this, error);
+        } catch (final RebalanceInProgressException error) {
+            // commitSync throws this error and can be ignored (since EOS is not enabled, even if the task crashed
+            // immediately after this commit, we would just reprocess those records again)
+            log.info("Committing failed with a non-fatal error: {}, " +
+                "we can ignore this since commit may succeed still",  error.toString());
         }
 
         commitNeeded = false;

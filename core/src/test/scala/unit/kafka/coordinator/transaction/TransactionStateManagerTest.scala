@@ -22,10 +22,9 @@ import java.util.concurrent.locks.ReentrantLock
 
 import javax.management.ObjectName
 import kafka.api.KAFKA_2_4_IV1
-import kafka.log.Log
+import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool}
-import org.scalatest.Assertions.fail
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -35,13 +34,13 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
-import org.easymock.{Capture, EasyMock, IAnswer}
+import org.scalatest.Assertions.fail
 
-import scala.collection.Map
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.{Map, mutable}
 
 class TransactionStateManagerTest {
 
@@ -469,6 +468,63 @@ class TransactionStateManagerTest {
     verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
+  @Test
+  def testSuccessfulReimmigration(): Unit = {
+    txnMetadata1.state = PrepareCommit
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
+    val startOffset = 0L
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    // immigrate partition at epoch 0
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertEquals(0, transactionManager.leavingPartitions.size)
+
+    // Re-immigrate partition at epoch 1. This should be successful even though we didn't get to emigrate the partition.
+    prepareTxnLog(topicPartition, 0, records)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _, _) => ())
+    assertEquals(0, transactionManager.loadingPartitions.size)
+    assertEquals(0, transactionManager.leavingPartitions.size)
+    assertTrue(transactionManager.transactionMetadataCache.get(partitionId).isDefined)
+    assertEquals(1, transactionManager.transactionMetadataCache.get(partitionId).get.coordinatorEpoch)
+  }
+
+  @Test
+  def testLoadTransactionMetadataWithCorruptedLog(): Unit = {
+    // Simulate a case where startOffset < endOffset but log is empty. This could theoretically happen
+    // when all the records are expired and the active segment is truncated or when the partition
+    // is accidentally corrupted.
+    val startOffset = 0L
+    val endOffset = 10L
+
+    val logMock: Log = EasyMock.mock(classOf[Log])
+    EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
+    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
+    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
+      maxLength = EasyMock.anyInt(),
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true))
+    ).andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
+    EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
+
+    EasyMock.replay(logMock)
+    EasyMock.replay(replicaManager)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _, _) => ())
+
+    // let the time advance to trigger the background thread loading
+    scheduler.tick()
+
+    EasyMock.verify(logMock)
+    EasyMock.verify(replicaManager)
+    assertEquals(0, transactionManager.loadingPartitions.size)
+  }
+
   private def verifyMetadataDoesExistAndIsUsable(transactionalId: String): Unit = {
     transactionManager.getTransactionState(transactionalId) match {
       case Left(_) => fail("shouldn't have been any errors")
@@ -503,20 +559,14 @@ class TransactionStateManagerTest {
         EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
           EasyMock.eq((-1).toShort),
           EasyMock.eq(true),
-          EasyMock.eq(false),
+          EasyMock.eq(AppendOrigin.Coordinator),
           EasyMock.eq(recordsByPartition),
           EasyMock.capture(capturedArgument),
           EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
           EasyMock.anyObject()
-        )).andAnswer(new IAnswer[Unit] {
-          override def answer(): Unit = {
-            capturedArgument.getValue.apply(
-              Map(partition ->
-                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-              )
-            )
-          }
-        })
+        )).andAnswer(() => capturedArgument.getValue.apply(
+          Map(partition -> new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+        )
       case _ => // shouldn't append
     }
 
@@ -615,18 +665,14 @@ class TransactionStateManagerTest {
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.anyShort(),
       internalTopicsAllowed = EasyMock.eq(true),
-      isFromClient = EasyMock.eq(false),
+      origin = EasyMock.eq(AppendOrigin.Coordinator),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
       EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = capturedArgument.getValue.apply(
-          Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-          )
-        )
-      }
+    ).andAnswer(() => capturedArgument.getValue.apply(
+      Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
+        new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
       .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))

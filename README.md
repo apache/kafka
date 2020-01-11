@@ -69,7 +69,7 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task with one of the Scala versions available (2.11.x, 2.12.x or 2.13.x) ###
+### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
 *Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
@@ -169,7 +169,7 @@ You can run checkstyle using:
     ./gradlew checkstyleMain checkstyleTest
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
-subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
+subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
