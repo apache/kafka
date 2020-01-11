@@ -2342,7 +2342,7 @@ public class ConsumerCoordinatorTest {
         final ConsumerGroupMetadata groupMetadata = coordinator.groupMetadata();
         assertNotNull(groupMetadata);
         assertEquals(groupId, groupMetadata.groupId());
-        assertEquals(JoinGroupResponse.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
         assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
         assertFalse(groupMetadata.groupInstanceId().isPresent());
 
