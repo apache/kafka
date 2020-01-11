@@ -84,7 +84,7 @@ public class InternalProcessorContextMock {
 
             stateStoreMap = new HashMap<>();
             toInternal = new ToInternal();
-            recordContext = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
+            recordContext = new ProcessorRecordContext(-1L, -1L, -1, null, new RecordHeaders());
             appConfigs(null);
 
             applicationId = processorContext.applicationId();

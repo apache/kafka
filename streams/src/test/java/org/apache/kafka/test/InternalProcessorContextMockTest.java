@@ -284,10 +284,8 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldReturnEmptyTopicByDefault() {
-        final InternalProcessorContext mock = mock();
-
-        assertEquals("", mock.topic());
+    public void shouldReturnNullTopicByDefault() {
+        assertNull(mock().topic());
     }
 
     @Test
@@ -301,10 +299,8 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldReturnPartition0ByDefault() {
-        final InternalProcessorContext mock = mock();
-
-        assertEquals(0, mock.partition());
+    public void shouldReturnNegativePartitionByDefault() {
+        assertTrue(mock().partition() < 0);
     }
 
     @Test
@@ -318,10 +314,8 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldReturnOffset0ByDefault() {
-        final InternalProcessorContext mock = mock();
-
-        assertEquals(0, mock.offset());
+    public void shouldReturnNegativeOffsetByDefault() {
+        assertTrue(mock().offset() < 0);
     }
 
     @Test
@@ -336,9 +330,7 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldReturnEmptyHeadersByDefault() {
-        final InternalProcessorContext mock = mock();
-
-        assertEquals(new RecordHeaders(), mock.headers());
+        assertEquals(new RecordHeaders(), mock().headers());
     }
 
     @Test
@@ -353,10 +345,8 @@ public class InternalProcessorContextMockTest {
     }
 
     @Test
-    public void shouldReturnTimestamp0ByDefault() {
-        final InternalProcessorContext mock = mock();
-
-        assertEquals(0, mock.timestamp());
+    public void shouldReturnNegativeTimestampByDefault() {
+        assertTrue(mock().timestamp() < 0);
     }
 
     @Test
@@ -398,14 +388,6 @@ public class InternalProcessorContextMockTest {
         final String prefix = "";
 
         assertEquals(processorContext.appConfigsWithPrefix(prefix), mock.appConfigsWithPrefix(prefix));
-    }
-
-    @Test
-    public void shouldReturnDefaultRecordContext() {
-        final InternalProcessorContext mock = mock();
-        final ProcessorRecordContext expected = new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders());
-
-        assertEquals(expected, mock.recordContext());
     }
 
     @Test
