@@ -1231,6 +1231,42 @@ public class ConsumerCoordinatorTest {
         assertEquals(new HashSet<>(Arrays.asList(tp1, tp2)), subscriptions.assignedPartitions());
     }
 
+    /**
+     * Verifies that subscription change updates SubscriptionState correctly even after JoinGroup failures
+     * that don't re-invoke onJoinPrepare.
+     */
+    @Test
+    public void testSubscriptionChangeWithAuthorizationFailure() {
+        final String consumerId = "consumer";
+
+        // Subscribe to two topics of which only one is authorized and verify that metadata failure is propagated.
+        subscriptions.subscribe(Utils.mkSet(topic1, topic2), rebalanceListener);
+        client.prepareMetadataUpdate(TestUtils.metadataUpdateWith("kafka-cluster", 1,
+                Collections.singletonMap(topic2, Errors.TOPIC_AUTHORIZATION_FAILED), singletonMap(topic1, 1)));
+        assertThrows(TopicAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
+
+        client.respond(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // Fail the first JoinGroup request
+        client.prepareResponse(joinGroupLeaderResponse(0, consumerId, Collections.emptyMap(),
+                Errors.GROUP_AUTHORIZATION_FAILED));
+        assertThrows(GroupAuthorizationException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
+
+        // Change subscription to include only the authorized topic. Complete rebalance and check that
+        // references to topic2 have been removed from SubscriptionState.
+        subscriptions.subscribe(Utils.mkSet(topic1), rebalanceListener);
+
+        Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic1));
+        partitionAssignor.prepare(singletonMap(consumerId, Arrays.asList(t1p)));
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        assertEquals(singleton(topic1), coordinator.subscriptions().subscription());
+        assertEquals(singleton(topic1), coordinator.subscriptions().groupSubscription());
+    }
+
     @Test
     public void testWakeupFromAssignmentCallback() {
         final String topic = "topic1";
