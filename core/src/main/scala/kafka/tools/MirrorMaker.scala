@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
-import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.consumer._
@@ -190,16 +189,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     setName(threadName)
 
-    private def toBaseConsumerRecord(record: ConsumerRecord[Array[Byte], Array[Byte]]): BaseConsumerRecord =
-      BaseConsumerRecord(record.topic,
-        record.partition,
-        record.offset,
-        record.timestamp,
-        record.timestampType,
-        record.key,
-        record.value,
-        record.headers)
-
     override def run(): Unit = {
       info(s"Starting mirror maker thread $threadName")
       try {
@@ -215,7 +204,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               } else {
                 trace("Sending message with null value and offset %d.".format(data.offset))
               }
-              val records = messageHandler.handle(toBaseConsumerRecord(data))
+              val records = messageHandler.handle(data)
               records.asScala.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
@@ -412,11 +401,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
    * If message.handler.args is specified. A constructor that takes in a String as argument must exist.
    */
   trait MirrorMakerMessageHandler {
-    def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
+    def handle(record: ConsumerRecord[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
-    override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
+    override def handle(record: ConsumerRecord[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
     }
