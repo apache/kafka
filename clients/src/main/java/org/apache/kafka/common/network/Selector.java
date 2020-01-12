@@ -425,7 +425,7 @@ public class Selector implements Selectable, AutoCloseable {
      * This requires additional buffers to be maintained as we are reading from network, since the data on the wire is encrypted
      * we won't be able to read exact no.of bytes as kafka protocol requires. We read as many bytes as we can, up to SSLEngine's
      * application buffer size. This means we might be reading additional bytes than the requested size.
-     * If there is no further data to read from socketChannel selector won't invoke that channel and we've have additional bytes
+     * If there is no further data to read from socketChannel selector won't invoke that channel and we have additional bytes
      * in the buffer. To overcome this issue we added "keysWithBufferedRead" map which tracks channels which have data in the SSL
      * buffers. If there are channels with buffered data that can by processed, we set "timeout" to 0 and process the data even
      * if there is no more data to read from the socket.

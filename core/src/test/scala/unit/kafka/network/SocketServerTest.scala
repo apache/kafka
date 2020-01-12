@@ -590,7 +590,7 @@ class SocketServerTest {
 
       socket.close()
       proxyServer.serverConnSocket.close()
-      TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "Client socket not closed")
+      TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "Client socket not closed", waitTimeMs = 10000)
 
       processRequestNoOpResponse(server.dataPlaneRequestChannel, request1)
       val channel = openOrClosingChannel(request1, server).getOrElse(throw new IllegalStateException("Channel closed too early"))
@@ -1398,7 +1398,7 @@ class SocketServerTest {
 
         // Step 4: Process buffered data. if `responseRequiredIndex>=0`, the channel should be failed and removed when
         // attempting to send response. Otherwise, the channel should be removed when all completed buffers are processed.
-        // Channel should be closed and remvoved even if there is a partial buffered request when `hasIncomplete=true`
+        // Channel should be closed and removed even if there is a partial buffered request when `hasIncomplete=true`
         val numRequests = if (responseRequiredIndex >= 0) responseRequiredIndex + 1 else numComplete
         (0 until numRequests).foreach { i =>
           val request = receiveRequest(testableServer.dataPlaneRequestChannel)

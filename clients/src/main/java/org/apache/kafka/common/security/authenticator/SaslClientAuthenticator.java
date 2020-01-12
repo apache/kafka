@@ -602,15 +602,15 @@ public class SaslClientAuthenticator implements Authenticator {
         }
 
         /**
-         * Return the (always non-null but possibly empty) NetworkReceive responses that
-         * arrived during re-authentication that are unrelated to re-authentication, if
-         * any. These correspond to requests sent prior to the beginning of
-         * re-authentication; the requests were made when the channel was successfully
-         * authenticated, and the responses arrived during the re-authentication
+         * Return the (always non-null but possibly empty) NetworkReceive response that
+         * arrived during re-authentication that is unrelated to re-authentication, if
+         * any. This corresponds to a request sent prior to the beginning of
+         * re-authentication; the request was made when the channel was successfully
+         * authenticated, and the response arrived during the re-authentication
          * process.
          * 
-         * @return the (always non-null but possibly empty) NetworkReceive responses
-         *         that arrived during re-authentication that are unrelated to
+         * @return the (always non-null but possibly empty) NetworkReceive response
+         *         that arrived during re-authentication that is unrelated to
          *         re-authentication, if any
          */
         public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
