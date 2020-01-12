@@ -342,6 +342,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             final StreamTask task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task);
+                task.transitionTo(Task.State.RUNNING);
                 it.remove();
                 // Note that because we add back all restored partitions at the top of this loop, clearing them from
                 // restoredPartitions here doesn't really matter. We do it anyway as it is the correct thing to do,
