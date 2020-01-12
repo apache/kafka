@@ -275,12 +275,14 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateTopic() {
-        final InternalProcessorContext mock = mock();
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
 
         final String topic = "my-topic";
         mock.setRecordContext(new ProcessorRecordContext(0, 0, 0, topic, new RecordHeaders()));
 
         assertEquals(topic, mock.topic());
+        assertEquals(topic, processorContext.topic());
     }
 
     @Test
@@ -290,12 +292,14 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdatePartition() {
-        final InternalProcessorContext mock = mock();
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
 
         final int partition = 1;
         mock.setRecordContext(new ProcessorRecordContext(0, 0, partition, "", new RecordHeaders()));
 
         assertEquals(partition, mock.partition());
+        assertEquals(partition, processorContext.partition());
     }
 
     @Test
@@ -305,12 +309,14 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateOffset() {
-        final InternalProcessorContext mock = mock();
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
 
         final int offset = 1;
         mock.setRecordContext(new ProcessorRecordContext(0, offset, 0, "", new RecordHeaders()));
 
         assertEquals(offset, mock.offset());
+        assertEquals(offset, processorContext.offset());
     }
 
     @Test
@@ -320,13 +326,15 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateHeaders() {
-        final InternalProcessorContext mock = mock();
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
 
         final Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("header-key", "header-value".getBytes()));
         mock.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", headers));
 
         assertEquals(headers, mock.headers());
+        assertEquals(headers, processorContext.headers());
     }
 
     @Test
@@ -336,12 +344,14 @@ public class InternalProcessorContextMockTest {
 
     @Test
     public void shouldUpdateTimestamp() {
-        final InternalProcessorContext mock = mock();
+        final ProcessorContext processorContext = createProcessorContext();
+        final InternalProcessorContext mock = mock(processorContext);
 
         final long timestamp = 1;
         mock.setRecordContext(new ProcessorRecordContext(timestamp, 0, 0, "", new RecordHeaders()));
 
         assertEquals(timestamp, mock.timestamp());
+        assertEquals(timestamp, processorContext.timestamp());
     }
 
     @Test
@@ -445,7 +455,7 @@ public class InternalProcessorContextMockTest {
     }
 
     private static InternalProcessorContext mock(final ProcessorContext processorContext) {
-        return new InternalProcessorContextMock.Builder(processorContext).build();
+        return new InternalProcessorContextMock.Builder((MockProcessorContext) processorContext).build();
     }
 
     private static InternalProcessorContextMock.Builder builder() {

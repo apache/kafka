@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.easymock.Capture;
 
 import java.io.File;
@@ -58,7 +59,7 @@ public class InternalProcessorContextMock {
     public static class Builder {
 
         private InternalProcessorContext mock;
-        private ProcessorContext processorContext;
+        private MockProcessorContext processorContext;
 
         private String applicationId;
         private TaskId taskId;
@@ -78,13 +79,13 @@ public class InternalProcessorContextMock {
             this(new MockProcessorContext());
         }
 
-        Builder(final ProcessorContext processorContext) {
+        public Builder(final MockProcessorContext processorContext) {
             mock = mock(InternalProcessorContext.class);
             this.processorContext = processorContext;
 
             stateStoreMap = new HashMap<>();
             toInternal = new ToInternal();
-            recordContext = new ProcessorRecordContext(-1L, -1L, -1, null, new RecordHeaders());
+            setRecordContext(new ProcessorRecordContext(-1L, -1L, -1, null, new RecordHeaders()));
             appConfigs(null);
 
             applicationId = processorContext.applicationId();
@@ -172,6 +173,7 @@ public class InternalProcessorContextMock {
             getCache();
             initialize();
             uninitialize();
+            this.metrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
 
             replay(mock);
             return mock;
@@ -219,6 +221,13 @@ public class InternalProcessorContextMock {
 
         private void setRecordContext(final ProcessorRecordContext recordContext) {
             this.recordContext = recordContext;
+            processorContext.setRecordMetadata(
+                    recordContext.topic(),
+                    recordContext.partition(),
+                    recordContext.offset(),
+                    recordContext.headers(),
+                    recordContext.timestamp()
+            );
         }
 
         private void recordContext() {
