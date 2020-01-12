@@ -1933,7 +1933,7 @@ class SocketServerTest {
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None
 
-    executor.submit(CoreUtils.runnable {
+    executor.submit((() => {
       try {
         clientConnSocket = serverSocket.accept()
         val serverOut = serverConnSocket.getOutputStream
@@ -1951,15 +1951,15 @@ class SocketServerTest {
       } finally {
         clientConnSocket.close()
       }
-    })
+    }): Runnable)
 
-    executor.submit(CoreUtils.runnable {
+    executor.submit((() => {
       var b: Int = -1
       val serverIn = serverConnSocket.getInputStream
       while ({b = serverIn.read(); b != -1}) {
         clientConnSocket.getOutputStream.write(b)
       }
-    })
+    }): Runnable)
 
     def enableBuffering(buffer: ByteBuffer): Unit = this.buffer = Some(buffer)
 
