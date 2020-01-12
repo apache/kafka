@@ -1356,7 +1356,7 @@ public class Fetcher<K, V> implements Closeable {
         clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
     }
 
-    // Visibilty for testing
+    // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }
