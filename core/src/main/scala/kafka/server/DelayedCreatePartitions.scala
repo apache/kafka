@@ -26,7 +26,7 @@ import scala.collection._
 /**
   * The create metadata maintained by the delayed create topic or create partitions operations.
   */
-case class CreatePartitionsMetadata(topic: String, replicaAssignments: Map[Int, Seq[Int]], error: ApiError)
+case class CreatePartitionsMetadata(topic: String, partitions: Set[Int], error: ApiError)
 
 /**
   * A delayed create topic or create partitions operation that is stored in the topic purgatory.
@@ -46,7 +46,7 @@ class DelayedCreatePartitions(delayMs: Long,
     trace(s"Trying to complete operation for $createMetadata")
 
     val leaderlessPartitionCount = createMetadata.filter(_.error.isSuccess).foldLeft(0) { case (topicCounter, metadata) =>
-      topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
+      topicCounter + missingLeaderCount(metadata.topic, metadata.partitions)
     }
 
     if (leaderlessPartitionCount == 0) {
@@ -65,7 +65,7 @@ class DelayedCreatePartitions(delayMs: Long,
     trace(s"Completing operation for $createMetadata")
     val results = createMetadata.map { metadata =>
       // ignore topics that already have errors
-      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet) > 0)
+      if (metadata.error.isSuccess && missingLeaderCount(metadata.topic, metadata.partitions) > 0)
         (metadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
       else
         (metadata.topic, metadata.error)
