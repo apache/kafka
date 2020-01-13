@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
@@ -27,6 +31,9 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 
 import org.junit.Test;
+
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.TASK_TOPIC_PARTITIONS;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
@@ -111,5 +118,56 @@ public class MirrorSourceConnectorTest {
             .anyMatch(x -> x.name().equals("name-1")));
         assertFalse("should not replicate blacklisted properties", targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")));
+    }
+
+    @Test
+    public void testMirrorSourceConnectorTaskConfig() {
+        List<TopicPartition> knownTopicPartitions = new ArrayList<>();
+
+        // topic `t0` has 8 partitions
+        knownTopicPartitions.add(new TopicPartition("t0", 0));
+        knownTopicPartitions.add(new TopicPartition("t0", 1));
+        knownTopicPartitions.add(new TopicPartition("t0", 2));
+        knownTopicPartitions.add(new TopicPartition("t0", 3));
+        knownTopicPartitions.add(new TopicPartition("t0", 4));
+        knownTopicPartitions.add(new TopicPartition("t0", 5));
+        knownTopicPartitions.add(new TopicPartition("t0", 6));
+        knownTopicPartitions.add(new TopicPartition("t0", 7));
+
+        // topic `t1` has 2 partitions
+        knownTopicPartitions.add(new TopicPartition("t1", 0));
+        knownTopicPartitions.add(new TopicPartition("t1", 1));
+
+        // topic `t2` has 2 partitions
+        knownTopicPartitions.add(new TopicPartition("t2", 0));
+        knownTopicPartitions.add(new TopicPartition("t2", 1));
+
+        // MirrorConnectorConfig example for test
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "ConnectorName");
+        props.put("connector.class", "ConnectorClass");
+        props.put("source.cluster.alias", "source1");
+        props.put("target.cluster.alias", "target2");
+        MirrorConnectorConfig config = new MirrorConnectorConfig(props);
+
+        // MirrorSourceConnector as minimum to run taskConfig()
+        MirrorSourceConnector connector = new MirrorSourceConnector(knownTopicPartitions, config);
+
+        // distribute the topic-partition to 3 tasks by round-robin
+        List<Map<String, String>> output = connector.taskConfigs(3);
+
+        // the expected assignments over 3 tasks:
+        // t1 -> [t0p0, t0p3, t0p6, t1p1]
+        // t2 -> [t0p1, t0p4, t0p7, t2p0]
+        // t3 -> [t0p2, t0p5, t1p0, t2p1]
+
+        Map<String, String> t1 = output.get(0);
+        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS));
+
+        Map<String, String> t2 = output.get(1);
+        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS));
+
+        Map<String, String> t3 = output.get(2);
+        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS));
     }
 }
