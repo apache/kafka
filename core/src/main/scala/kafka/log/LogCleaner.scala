@@ -867,6 +867,11 @@ private[log] class Cleaner(val id: Int,
                                   stats: CleanerStats): Unit = {
     map.clear()
     val dirty = log.logSegments(start, end).toBuffer
+    val nextSegmentStartOffsets : mutable.Buffer[Long] = if (dirty.nonEmpty) {
+      dirty.tail.map(logSegment => logSegment.baseOffset) :+ end
+    } else {
+      mutable.Buffer.empty
+    }
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
 
     val transactionMetadata = new CleanedTransactionMetadata
@@ -876,10 +881,10 @@ private[log] class Cleaner(val id: Int,
     // Add all the cleanable dirty segments. We must take at least map.slots * load_factor,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var full = false
-    for (segment <- dirty if !full) {
+    for ( (segment, nextSegmentStartOffset) <- dirty.zip(nextSegmentStartOffsets) if !full) {
       checkDone(log.topicPartition)
 
-      full = buildOffsetMapForSegment(log.topicPartition, segment, map, start, log.config.maxMessageSize,
+      full = buildOffsetMapForSegment(log.topicPartition, segment, map, start, nextSegmentStartOffset, log.config.maxMessageSize,
         transactionMetadata, stats)
       if (full)
         debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
@@ -900,11 +905,13 @@ private[log] class Cleaner(val id: Int,
                                        segment: LogSegment,
                                        map: OffsetMap,
                                        startOffset: Long,
+                                       nextSegmentStartOffset: Long,
                                        maxLogMessageSize: Int,
                                        transactionMetadata: CleanedTransactionMetadata,
                                        stats: CleanerStats): Boolean = {
     var position = segment.offsetIndex.lookup(startOffset).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
+    var lastOffsetInSegment = -1L
     while (position < segment.log.sizeInBytes) {
       checkDone(topicPartition)
       readBuffer.clear()
@@ -920,6 +927,7 @@ private[log] class Cleaner(val id: Int,
 
       val startPosition = position
       for (batch <- records.batches.asScala) {
+        lastOffsetInSegment = batch.lastOffset
         if (batch.isControlBatch) {
           transactionMetadata.onControlBatchRead(batch)
           stats.indexMessagesRead(1)
@@ -931,15 +939,11 @@ private[log] class Cleaner(val id: Int,
             stats.indexMessagesRead(batch.countOrNull)
           } else {
             for (record <- batch.asScala) {
-              if (record.hasKey) {
-                if (record.offset >= startOffset) {
-                  if (map.size < maxDesiredMapSize)
-                    map.put(record.key, record.offset)
-                  else
-                    return true
-                } else {
-                  map.updateLatestOffset(record.offset + 1)
-                }
+              if (record.hasKey && record.offset >= startOffset) {
+                if (map.size < maxDesiredMapSize)
+                  map.put(record.key, record.offset)
+                else
+                  return true
               }
               stats.indexMessagesRead(1)
             }
@@ -957,6 +961,12 @@ private[log] class Cleaner(val id: Int,
       if(position == startPosition)
         growBuffersOrFail(segment.log, position, maxLogMessageSize, records)
     }
+
+    // check for missing offsets at the end of logSegment
+    if (lastOffsetInSegment < nextSegmentStartOffset - 1L) {
+      map.updateLatestOffset(nextSegmentStartOffset - 1L)
+    }
+
     restoreBuffers()
     false
   }
