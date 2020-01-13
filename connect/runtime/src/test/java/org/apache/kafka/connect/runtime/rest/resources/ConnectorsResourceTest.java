@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.HardenedConnectExceptionMapper;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
@@ -84,6 +85,14 @@ public class ConnectorsResourceTest {
     static {
         CONNECTOR_CONFIG.put("name", CONNECTOR_NAME);
         CONNECTOR_CONFIG.put("sample_config", "test_config");
+    }
+
+
+    private static final Map<String, String> CONNECTOR_CONFIG_WITH_ERROR_SUPPRESSION = new HashMap<>();
+    static {
+        CONNECTOR_CONFIG_WITH_ERROR_SUPPRESSION.put("name", CONNECTOR_NAME);
+        CONNECTOR_CONFIG_WITH_ERROR_SUPPRESSION.put("sample_config", "test_config");
+        CONNECTOR_CONFIG_WITH_ERROR_SUPPRESSION.put(WorkerConfig.ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG, "true");
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_CONTROL_SEQUENCES = new HashMap<>();
@@ -215,6 +224,26 @@ public class ConnectorsResourceTest {
         PowerMock.verifyAll();
 
 
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testErrorSuppression() throws Throwable {
+        CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME));
+        String malformedJSON = "{ I am mal:formed JSON }";
+
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+
+        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
+        expectAndCallbackNotLeaderException(cb);
+        // Should forward request
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors?forward=false"), EasyMock.eq("POST"), malformedJSON, EasyMock.<TypeReference>anyObject(), EasyMock.anyObject(WorkerConfig.class)))
+                .andReturn(new RestClient.HttpResponse<>(500, new HashMap<String, String>(), HardenedConnectExceptionMapper.SUPPRESSED_EXCEPTION_MESSAGE));
+
+        PowerMock.replayAll();
+
+        connectorsResource.destroyConnector(CONNECTOR_NAME, FORWARD);
+
+        PowerMock.verifyAll();
     }
 
     @Test(expected = AlreadyExistsException.class)

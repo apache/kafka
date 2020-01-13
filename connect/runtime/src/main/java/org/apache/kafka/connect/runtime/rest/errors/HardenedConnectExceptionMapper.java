@@ -28,8 +28,10 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ExceptionMapper;
 
+// KAFKA-12345 -- Suppress detailed responses for security-sensitive (PCI-DSS) environments
 public class HardenedConnectExceptionMapper implements ExceptionMapper<Exception> {
     private static final Logger log = LoggerFactory.getLogger(HardenedConnectExceptionMapper.class);
+    public static final String SUPPRESSED_EXCEPTION_MESSAGE = "Detailed exception information has been suppressed. Please see logs.";
 
     @Context
     private UriInfo uriInfo;
@@ -38,26 +40,22 @@ public class HardenedConnectExceptionMapper implements ExceptionMapper<Exception
     public Response toResponse(Exception exception) {
         log.debug("Uncaught exception in REST call to /{}", uriInfo.getPath(), exception);
 
-        // KAFKA-12345 -- Suppress detailed responses for security-sensitive (PCI-DSS) environments
-        String exceptionMessage = "Detailed exception information has been suppressed. Please see logs.";
-
         if (exception instanceof ConnectRestException) {
             ConnectRestException restException = (ConnectRestException) exception;
-            exceptionMessage = restException.getMessage();
             return Response.status(restException.statusCode())
-                    .entity(new ErrorMessage(restException.errorCode(), exceptionMessage))
+                    .entity(new ErrorMessage(restException.errorCode(), SUPPRESSED_EXCEPTION_MESSAGE))
                     .build();
         }
 
         if (exception instanceof NotFoundException) {
             return Response.status(Response.Status.NOT_FOUND)
-                    .entity(new ErrorMessage(Response.Status.NOT_FOUND.getStatusCode(), exceptionMessage))
+                    .entity(new ErrorMessage(Response.Status.NOT_FOUND.getStatusCode(), SUPPRESSED_EXCEPTION_MESSAGE))
                     .build();
         }
 
         if (exception instanceof AlreadyExistsException) {
             return Response.status(Response.Status.CONFLICT)
-                    .entity(new ErrorMessage(Response.Status.CONFLICT.getStatusCode(), exceptionMessage))
+                    .entity(new ErrorMessage(Response.Status.CONFLICT.getStatusCode(), SUPPRESSED_EXCEPTION_MESSAGE))
                     .build();
         }
 
@@ -73,7 +71,7 @@ public class HardenedConnectExceptionMapper implements ExceptionMapper<Exception
             statusCode = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
         }
         return Response.status(statusCode)
-                .entity(new ErrorMessage(statusCode, exceptionMessage))
+                .entity(new ErrorMessage(statusCode, SUPPRESSED_EXCEPTION_MESSAGE))
                 .build();
     }
 }

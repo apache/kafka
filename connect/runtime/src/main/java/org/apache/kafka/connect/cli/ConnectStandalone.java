@@ -58,7 +58,7 @@ public class ConnectStandalone {
     public static void main(String[] args) throws Exception {
 
         if (args.length < 2) {
-            log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
+                log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
             Exit.exit(1);
         }
 

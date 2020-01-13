@@ -282,7 +282,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
                         Importance.LOW, REST_EXTENSION_CLASSES_DOC)
-                .define(ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG, Type.STRING, ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DEFAULT,
+                .define(ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_CONFIG, Type.BOOLEAN, ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DEFAULT,
                         Importance.LOW, ERROR_REST_RESPONSE_MESSAGE_DETAIL_ENABLED_DOC);
     }
 
