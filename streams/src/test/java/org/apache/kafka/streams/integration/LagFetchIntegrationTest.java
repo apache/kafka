@@ -256,10 +256,10 @@ public class LagFetchIntegrationTest {
             assertThat(offsetLagInfoMap.size(), equalTo(1));
             assertThat(offsetLagInfoMap.keySet(), equalTo(mkSet(stateStoreName)));
             assertThat(offsetLagInfoMap.get(stateStoreName).size(), equalTo(1));
-            LagInfo lagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
-            assertThat(lagInfo.currentOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.offsetLag(), equalTo(0L));
+            final LagInfo zeroLagInfo = offsetLagInfoMap.get(stateStoreName).get(0);
+            assertThat(zeroLagInfo.currentOffsetPosition(), equalTo(5L));
+            assertThat(zeroLagInfo.endOffsetPosition(), equalTo(5L));
+            assertThat(zeroLagInfo.offsetLag(), equalTo(0L));
 
             // Kill instance, delete state to force restoration.
             assertThat("Streams instance did not close within timeout", streams.close(Duration.ofSeconds(60)));
@@ -292,16 +292,12 @@ public class LagFetchIntegrationTest {
             restartedStreams.start();
             TestUtils.waitForCondition(() -> restartedStreams.allLocalStorePartitionLags().get(stateStoreName).get(0).offsetLag() == 0,
                 "Standby should eventually catchup and have zero lag.");
-            lagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
-            assertThat(lagInfo.currentOffsetPosition(), equalTo(0L));
-            assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.offsetLag(), equalTo(5L));
+            final LagInfo fullLagInfo = restoreStartLagInfo.get(stateStoreName).get(0);
+            assertThat(fullLagInfo.currentOffsetPosition(), equalTo(0L));
+            assertThat(fullLagInfo.endOffsetPosition(), equalTo(5L));
+            assertThat(fullLagInfo.offsetLag(), equalTo(5L));
 
-            lagInfo = restoreEndLagInfo.get(stateStoreName).get(0);
-            assertThat(lagInfo.currentOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
-            assertThat(lagInfo.offsetLag(), equalTo(0L));
-
+            assertThat(zeroLagInfo, equalTo(restoreEndLagInfo.get(stateStoreName).get(0)));
         } finally {
             streams.close();
         }
