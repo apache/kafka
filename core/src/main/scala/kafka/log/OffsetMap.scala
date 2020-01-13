@@ -92,6 +92,8 @@ object CompactionStrategy extends Enumeration {
  */
 @nonthreadsafe
 class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extends OffsetMap with Logging {
+  private val longByteSize: Int = 8
+
   private val bytes = ByteBuffer.allocate(memory)
   
   /* the hash algorithm instance to use, default is MD5 */
@@ -121,7 +123,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * This evaluates to the number of bytes in the hash plus 8 bytes for the offset
    * and, if applicable, another 8 bytes for non-offset compact strategy (set in the init method).
    */
-  var bytesPerEntry = hashSize + 8
+  var bytesPerEntry = hashSize + longByteSize
 
   /**
    * The maximum number of entries this map can contain
@@ -161,7 +163,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     }
 
     info(s"Compaction strategy set to '${this.compactionStrategy}'")
-    this.bytesPerEntry = hashSize + 8 + (if (this.compactionStrategy == CompactionStrategy.OFFSET) 0 else 8)
+    this.bytesPerEntry = hashSize + longByteSize + (if (this.compactionStrategy == CompactionStrategy.OFFSET) 0 else longByteSize)
     this.slots = memory / bytesPerEntry
   }
   
@@ -191,7 +193,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
         // we found an existing entry, overwrite it and return (size does not change)
         if (this.compactionStrategy != CompactionStrategy.OFFSET) {
           // read previous value by skipping offset
-          bytes.position(bytes.position() + 8)
+          bytes.position(bytes.position() + longByteSize)
           val foundVersion = bytes.getLong()
           if (foundVersion > currVersion) {
             // map already holding latest record
@@ -199,7 +201,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
           }
 
           // reset the position to start of offset
-          bytes.position(bytes.position() - 16)
+          bytes.position(bytes.position() - (2*longByteSize))
         }
 
         // we found an existing entry, overwrite it and return (size does not change)
@@ -231,7 +233,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * Check that there is no entry at the given position
    */
   private def isEmpty(position: Int): Boolean = 
-    bytes.getLong(position) == 0 && bytes.getLong(position + 8) == 0 && bytes.getLong(position + 16) == 0
+    bytes.getLong(position) == 0 && bytes.getLong(position + longByteSize) == 0 && bytes.getLong(position + (2*longByteSize)) == 0
 
   /**
    * Checks to see whether to retain the record or not
@@ -275,7 +277,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
       -1L
     else {
       // for non-offset based strategy skipping offset
-      bytes.position(bytes.position() + 8)
+      bytes.position(bytes.position() + longByteSize)
       bytes.getLong()
     }
   }
