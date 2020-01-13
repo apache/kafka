@@ -25,7 +25,7 @@ import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
 import kafka.security.auth.Resource
 import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipal}
 import kafka.server.{Defaults, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.acl._
