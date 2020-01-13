@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -102,6 +103,7 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpecBuilder resetAllExternalTopicsOption;
     private static OptionSpec helpOption;
     private static OptionSpec versionOption;
     private static OptionSpecBuilder executeOption;
@@ -183,12 +185,15 @@ public class StreamsResetter {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
             Collections.singleton(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
+
+        final ConsumerGroupDescription consumerGroupDescription = describeResult.describedGroups().get(groupId).get();
+
         final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+            new ArrayList<>(consumerGroupDescription.members());
         if (!members.isEmpty()) {
             throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                    + "and has following members: " + members + ". "
-                    + "Make sure to stop all running application instances before running the reset tool.");
+                + "and has following members: " + members + ". "
+                + "Make sure to stop all running application instances before running the reset tool.");
         }
     }
 
@@ -236,6 +241,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
+        resetAllExternalTopicsOption = optionParser.accepts("reset-all-external-topics", "Reset tool such that when enabled, delete offsets for all involved topics");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
@@ -297,6 +303,7 @@ public class StreamsResetter {
 
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+        final boolean resetAllExternalTopics = options.has(resetAllExternalTopicsOption);
         int topicNotFound = EXIT_CODE_SUCCESS;
 
         final List<String> notFoundInputTopics = new ArrayList<>();
@@ -304,7 +311,7 @@ public class StreamsResetter {
 
         final String groupId = options.valueOf(applicationIdOption);
 
-        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+        if (inputTopics.size() == 0 && intermediateTopics.size() == 0 && !resetAllExternalTopics) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return EXIT_CODE_SUCCESS;
         }
@@ -351,7 +358,7 @@ public class StreamsResetter {
 
         // Return early if there are no topics to reset (the consumer will raise an error if we
         // try to poll with an empty subscription)
-        if (topicsToSubscribe.isEmpty()) {
+        if (topicsToSubscribe.isEmpty() && !resetAllExternalTopics) {
             return topicNotFound;
         }
 
@@ -363,10 +370,11 @@ public class StreamsResetter {
         try (final KafkaConsumer<byte[], byte[]> client =
                  new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
 
-            final Collection<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
+            final List<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
                     .flatMap(Collection::stream)
                     .map(info -> new TopicPartition(info.topic(), info.partition()))
                     .collect(Collectors.toList());
+
             client.assign(partitions);
 
             final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
@@ -381,6 +389,21 @@ public class StreamsResetter {
                 } else {
                     System.err.println("Skipping invalid partition: " + p);
                 }
+            }
+
+            if(resetAllExternalTopics) {
+                final Set<String> externalTopics = allTopics.stream()
+                    .filter(topic -> !isInputTopic(topic) && !isIntermediateTopic(topic))
+                    .collect(Collectors.toSet());
+
+                final List<TopicPartition> externalPartitions = externalTopics.stream().map(client::partitionsFor)
+                    .flatMap(Collection::stream)
+                    .map(info -> new TopicPartition(info.topic(), info.partition()))
+                    .collect(Collectors.toList());
+
+                client.assign(externalPartitions);
+                inputTopicPartitions.addAll(externalPartitions);
+                partitions.addAll(externalPartitions);
             }
 
             maybeReset(groupId, client, inputTopicPartitions);
