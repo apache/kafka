@@ -107,23 +107,38 @@ class ZookeeperTlsTest(ProduceConsumeValidateTest):
         # Make sure the ZooKeeper command line is able to talk to a TLS-enabled ZooKeeepr quorum
         # Test both create() and query(), each of which leverages the ZooKeeper command line
         path="/foo"
-        value="{\"bar\": 0}" # must be
+        value="{\"bar\": 0}"
         self.zk.create(path, value=value)
         if self.zk.query(path) != value:
             raise Exception("Error creating and then querying a znode using the CLI with a TLS-enabled ZooKeeper quorum")
 
-        # now enable ZK SASL authentication, but don't take advantage of it in Kafka yet
+        #
+        # Test zookeeper.set.acl with just TLS mutual authentication (no SASL)
+        #
+        # Step 1: run migration tool
+        self.zk.zookeeper_migration(self.zk.nodes[0], "secure")
+        # Step 2: restart brokers with zookeeper.set.acl=true and acls (with TLS but no SASL)
+        self.kafka.zk_set_acl = True
+        self.kafka.restart_cluster()
+        self.perform_produce_consume_validation()
+
+        #
+        # Test zookeeper.set.acl with both SASL and TLS mutual authentication
+        #
+        # Step 1: remove ACLs created previously
+        self.kafka.zk_set_acl = False
+        self.kafka.restart_cluster()
+        self.zk.zookeeper_migration(self.zk.nodes[0], "unsecure")
+        # Step 2: enable ZK SASL authentication, but don't take advantage of it in Kafka yet
         self.zk.zk_sasl = True
         self.kafka.start_minikdc_if_necessary(self.zk.zk_principals)
         self.zk.restart_cluster()
         # bounce a Kafka broker to force it to leverage Zookeeper -- a simple sanity check
         self.kafka.stop_node(self.kafka.nodes[0])
         self.kafka.start_node(self.kafka.nodes[0])
-
-        # run migration tool
+        # Step 3: run migration tool
         self.zk.zookeeper_migration(self.zk.nodes[0], "secure")
-
-        # restart brokers with zookeeper.set.acl=true and acls
+        # Step 4: restart brokers with zookeeper.set.acl=true and acls (with both TLS and SASL)
         self.kafka.zk_set_acl = True
         self.kafka.restart_cluster()
         self.perform_produce_consume_validation()

@@ -63,6 +63,7 @@ object ZkSecurityMigrator extends Logging {
   val usageMessage = ("ZooKeeper Migration Tool Help. This tool updates the ACLs of "
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
+  val tlsConfigFileOption = "zk-tls-config-file"
 
   def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
@@ -70,14 +71,24 @@ object ZkSecurityMigrator extends Logging {
 
     CommandLineUtils.printHelpAndExitIfNeeded(opts, usageMessage)
 
-    if (jaasFile == null) {
-     val errorMsg = "No JAAS configuration file has been specified. Please make sure that you have set " +
-       "the system property %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-     System.out.println("ERROR: %s".format(errorMsg))
-     throw new IllegalArgumentException("Incorrect configuration")
+    // Must have either SASL or TLS mutual authentication enabled to use this tool.
+    // Instantiate the client config we will use so that we take into account config provided via the CLI option
+    // and system properties passed via -D parameters if no CLI option is given.
+    val zkClientConfig = createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile).getOrElse(new ZKClientConfig())
+    // For TLS client authentication to be enabled the client must (at a minimum) configure itself as being secure
+    // with both a client connection socket and a key store location explicitly set.
+    val tlsClientAuthEnabled = zkClientConfig.getBoolean(KafkaConfig.ZkClientSecureProp) &&
+      zkClientConfig.getProperty(KafkaConfig.ZkClientCnxnSocketProp) != null &&
+      zkClientConfig.getProperty(KafkaConfig.ZkSslKeyStoreLocationProp) != null
+    if (jaasFile == null && !tlsClientAuthEnabled) {
+      val errorMsg = "No JAAS configuration file and has been specified and no TLS client certificate has been specified. Please make sure that you have set " +
+        "the system property %s or provide a ZooKeeper client TLS configuration via --%s <filename> identifying at least %s, %s, and %s".format(JaasUtils.JAVA_LOGIN_CONFIG_PARAM,
+          tlsConfigFileOption, KafkaConfig.ZkClientSecureProp, KafkaConfig.ZkClientCnxnSocketProp, KafkaConfig.ZkSslKeyStoreLocationProp)
+      System.out.println("ERROR: %s".format(errorMsg))
+      throw new IllegalArgumentException("Incorrect configuration")
     }
 
-    if (!JaasUtils.isZkSecurityEnabled()) {
+    if (!tlsClientAuthEnabled && !JaasUtils.isZkSecurityEnabled()) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
       System.out.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
@@ -97,7 +108,7 @@ object ZkSecurityMigrator extends Logging {
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile))
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = Some(zkClientConfig))
     val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run(enablePathCheck)
@@ -129,7 +140,7 @@ object ZkSecurityMigrator extends Logging {
     zkClientConfig
   }
 
-  private[admin] def createZkClientConfigFromOption(options: OptionSet, option: ArgumentAcceptingOptionSpec[String]) : Option[ZKClientConfig] =
+  private def createZkClientConfigFromOption(options: OptionSet, option: ArgumentAcceptingOptionSpec[String]) : Option[ZKClientConfig] =
     if (!options.has(option))
       None
     else
@@ -147,7 +158,7 @@ object ZkSecurityMigrator extends Logging {
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
     val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
       "before migration. If not, exit the command.")
-    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+    val zkTlsConfigFile = parser.accepts(tlsConfigFileOption,
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         KafkaConfig.ZkSslProps.mkString(", ") + " are ignored.")
       .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
