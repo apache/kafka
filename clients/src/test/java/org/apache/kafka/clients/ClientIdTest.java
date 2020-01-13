@@ -49,6 +49,11 @@ public class ClientIdTest {
     }
 
     @Test
+    public void testNullUserAgent() {
+        assertEquals("Java-kafka-client-1/" + version, ClientId.newBuilder().setUserAgent(null).build());
+    }
+
+    @Test
     public void testSequencedUserAgent() {
         assertEquals("test-1", ClientId.newBuilder().setUserAgent("test-%d").build());
         assertEquals("test-2", ClientId.newBuilder().setUserAgent("test-%d").build());
