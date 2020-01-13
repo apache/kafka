@@ -102,7 +102,7 @@ object ConfigCommand extends Config {
 
   private def processCommandWithZk(zkConnectString: String, opts: ConfigCommandOptions): Unit = {
     val zkClient = KafkaZkClient(zkConnectString, JaasUtils.isZkSecurityEnabled, 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = ZkSecurityMigrator.createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile))
+      Int.MaxValue, Time.SYSTEM)
     val adminZkClient = new AdminZkClient(zkClient)
     try {
       if (opts.options.has(opts.alterOpt))
@@ -585,10 +585,6 @@ object ConfigCommand extends Config {
     val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
       .withRequiredArg
       .ofType(classOf[String])
-    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
-      "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslProps.mkString(", ") + " are ignored.")
-      .withOptionalArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 
     private val entityFlags = List((topic, ConfigType.Topic),
