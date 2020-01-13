@@ -303,7 +303,7 @@ public final class ProducerBatch {
         return batches;
     }
 
-    public boolean completed() {
+    boolean completed() {
         return produceFuture.completed();
     }
 
@@ -321,7 +321,7 @@ public final class ProducerBatch {
         }
     }
 
-    private void addChildrenProducerBatch(final ProducerBatch batch) {
+    private synchronized void addChildrenProducerBatch(final ProducerBatch batch) {
         if (childrenProducerBatch == null) {
             childrenProducerBatch = new ArrayList<>();
         }
@@ -329,7 +329,7 @@ public final class ProducerBatch {
         childrenProducerBatch.add(batch);
     }
 
-    private List<ProducerBatch> getChildrenProducerBatch() {
+    private synchronized List<ProducerBatch> getChildrenProducerBatch() {
         if (childrenProducerBatch == null) {
             return Collections.emptyList();
         }

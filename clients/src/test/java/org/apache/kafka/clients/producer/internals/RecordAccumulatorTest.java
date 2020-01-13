@@ -438,21 +438,25 @@ public class RecordAccumulatorTest {
     public void testAwaitFlushCompleteShouldWaitForSplittedBatch() throws Exception {
         int expectedSplittedBatches = 2;
         int batchSize = 1025;
-        boolean isSplittedBatch = true;
-        boolean isNonSplittedBatch = false;
         TopicPartition topicPartition = new TopicPartition("test", 0);
         MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128),
                 CompressionType.NONE, TimestampType.CREATE_TIME, 128);
-        ProduceRequestResult splittedBatchResult = mock(ProduceRequestResult.class);
         ProduceRequestResult originalBatchResult = mock(ProduceRequestResult.class);
-        ProducerBatch splittedBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, isSplittedBatch,
-                splittedBatchResult, new ArrayList<>());
+        ProduceRequestResult firstSplitBatchResult = mock(ProduceRequestResult.class);
+        ProduceRequestResult secondSplitBatchResult = mock(ProduceRequestResult.class);
+        ProducerBatch secondSplitBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, true,
+                secondSplitBatchResult, new ArrayList<>());
+        List<ProducerBatch> grandChildrenProducerBatch = new ArrayList<>();
+        grandChildrenProducerBatch.add(secondSplitBatch);
+        ProducerBatch firstSplitBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, true,
+                firstSplitBatchResult, grandChildrenProducerBatch);
         List<ProducerBatch> childrenProducerBatch = new ArrayList<>();
-        childrenProducerBatch.add(splittedBatch);
-        ProducerBatch originalBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, isNonSplittedBatch,
+        childrenProducerBatch.add(firstSplitBatch);
+        ProducerBatch originalBatch = new ProducerBatch(topicPartition, memoryRecordsBuilder, 0, false,
                 originalBatchResult, childrenProducerBatch);
         IncompleteBatches incompleteBatches = new IncompleteBatches();
-        incompleteBatches.add(splittedBatch);
+        incompleteBatches.add(secondSplitBatch);
+        incompleteBatches.add(firstSplitBatch);
         incompleteBatches.add(originalBatch);
         RecordAccumulator accumulator = createTestRecordAccumulator(3200,
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
@@ -461,7 +465,8 @@ public class RecordAccumulatorTest {
         accumulator.awaitFlushCompletion();
 
         verify(originalBatchResult).await();
-        verify(splittedBatchResult, VerificationModeFactory.times(expectedSplittedBatches)).await();
+        verify(firstSplitBatchResult, VerificationModeFactory.times(expectedSplittedBatches)).await();
+        verify(secondSplitBatchResult, VerificationModeFactory.times(expectedSplittedBatches)).await();
     }
 
     @Test
