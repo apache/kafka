@@ -23,7 +23,7 @@
   //
   // Version 3 adds the member.id, group.instance.id and generation.id.
   "validVersions": "0-3",
-  "flexibleVersions": "none",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+",
       "about": "The ID of the transaction." },
