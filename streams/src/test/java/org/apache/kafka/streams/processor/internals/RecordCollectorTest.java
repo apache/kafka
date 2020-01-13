@@ -164,6 +164,32 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldUpdateOffsetsUponCompletion() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            taskId,
+            streamsConfig,
+            logContext,
+            streamsMetrics,
+            consumer,
+            id -> new MockProducer<>(cluster, false, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer)
+        );
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 2, null, stringSerializer, stringSerializer);
+
+        assertEquals(Collections.emptyMap(), offsets);
+
+        collector.flush();
+
+        assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 0)));
+        assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 1)));
+        assertEquals((Long) 0L, offsets.get(new TopicPartition(topic, 2)));
+    }
+
+    @Test
     public void shouldThrowStreamsExceptionOnSendFatalException() {
         final KafkaException exception = new KafkaException();
         final RecordCollector collector = new RecordCollectorImpl(
