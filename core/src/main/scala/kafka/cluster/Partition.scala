@@ -27,6 +27,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.common.errors._
@@ -872,12 +873,11 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private[cluster] def needsShrinkIsr(): Boolean = {
-    leaderLogIfLocal match {
-      case Some(leaderLog) =>
+    if (isLeader) {
         val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
         outOfSyncReplicaIds.nonEmpty
-      case None =>
-        false
+    } else {
+      false
     }
   }
 
@@ -1199,10 +1199,6 @@ class Partition(val topicPartition: TopicPartition,
         info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
     }
   }
-
-  private[cluster] def inReadLock[T](lock: ReadWriteLock)(fun: => T): T = CoreUtils.inReadLock(lock)(fun)
-
-  private[cluster] def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = CoreUtils.inWriteLock(lock)(fun)
 
   override def equals(that: Any): Boolean = that match {
     case other: Partition => partitionId == other.partitionId && topic == other.topic

@@ -18,8 +18,7 @@
 package kafka.cluster
 
 import java.util.Properties
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.locks.ReadWriteLock
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ArrayBlockingQueue, Executors, Future, TimeUnit}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Assert.assertTrue
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
@@ -64,8 +63,6 @@ class PartitionLockTest extends Logging {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val executorService = Executors.newFixedThreadPool(numReplicaFetchers + numProducers + 1)
 
-  val writeLockCount = new AtomicInteger()
-  val readLockCount = new AtomicInteger()
   val metrics = new Metrics
   val appendSensor = metrics.sensor("append-latency")
   val appendLatencyAvg = metrics.metricName("append-latency-avg", "partition-lock-test")
@@ -111,8 +108,6 @@ class PartitionLockTest extends Logging {
 
     verifyMetrics(expectLockContention = false)
     assertTrue(s"Test took too long to run:$timeMs", timeMs < numRecordsPerProducer * appendDelayMs + 1000)
-    assertEquals(0, writeLockCount.get())
-    assertTrue(readLockCount.get() > 0)
   }
 
   /**
@@ -130,8 +125,6 @@ class PartitionLockTest extends Logging {
     future.get(30, TimeUnit.SECONDS)
 
     verifyMetrics(expectLockContention = false)
-    assertEquals(0, writeLockCount.get())
-    assertTrue(readLockCount.get() > 0)
   }
 
   /**
@@ -149,8 +142,6 @@ class PartitionLockTest extends Logging {
     future.get(30, TimeUnit.SECONDS)
 
     verifyMetrics(expectLockContention = true)
-    assertTrue(writeLockCount.get() > 0)
-    assertTrue(readLockCount.get() > 0)
   }
 
   private def verifyMetrics(expectLockContention : Boolean): Unit = {
@@ -180,46 +171,40 @@ class PartitionLockTest extends Logging {
     val totalRecords = numRecordsPerProducer * numProducers
     val futures = new ArrayBuffer[Future[_]]()
 
-    (0 until numProducers).foreach(_ => {
-      futures += executorService.submit(new Runnable {
-        override def run(): Unit = {
-          try {
-            append(partition, numRecordsPerProducer, followerQueues)
-          } catch {
-            case e: Throwable =>
-              PartitionLockTest.this.error("Exception during append", e)
-              throw e
-          }
+    (0 until numProducers).foreach { _ =>
+      futures += executorService.submit((() => {
+        try {
+          append(partition, numRecordsPerProducer, followerQueues)
+        } catch {
+          case e: Throwable =>
+            PartitionLockTest.this.error("Exception during append", e)
+            throw e
         }
-      })
-    })
-    (1 to numReplicaFetchers).foreach(i => {
-      futures += executorService.submit(new Runnable {
-        override def run(): Unit = {
-          try {
-            updateFollowerFetchState(partition, i, totalRecords, followerQueues(i -1))
-          } catch {
-            case e: Throwable =>
-              PartitionLockTest.this.error("Exception during updateFollowerFetchState", e)
-              throw e
-          }
+      }): Runnable)
+    }
+    (1 to numReplicaFetchers).foreach { i =>
+      futures += executorService.submit((() => {
+        try {
+          updateFollowerFetchState(partition, i, totalRecords, followerQueues(i -1))
+        } catch {
+          case e: Throwable =>
+            PartitionLockTest.this.error("Exception during updateFollowerFetchState", e)
+            throw e
         }
-      })
-    })
+      }): Runnable)
+    }
     futures.foreach(_.get())
   }
 
   private def scheduleShrinkIsr(activeFlag: AtomicBoolean, mockTimeSleepMs: Long): Future[_] = {
-    executorService.submit(new Runnable {
-      override def run(): Unit = {
-        while (activeFlag.get) {
-          if (mockTimeSleepMs > 0)
-            mockTime.sleep(mockTimeSleepMs)
-          partition.maybeShrinkIsr()
-          Thread.sleep(1) // just to avoid tight loop
-        }
+    executorService.submit((() => {
+      while (activeFlag.get) {
+        if (mockTimeSleepMs > 0)
+          mockTime.sleep(mockTimeSleepMs)
+        partition.maybeShrinkIsr()
+        Thread.sleep(1) // just to avoid tight loop
       }
-    })
+    }): Runnable)
   }
 
   private def setupPartitionWithMocks(logManager: LogManager, logConfig: LogConfig): Partition = {
@@ -270,16 +255,6 @@ class PartitionLockTest extends Logging {
         val log = super.createLog(replicaId, isNew, isFutureReplica, offsetCheckpoints)
         new SlowLog(log, mockTime, appendDelayMs)
       }
-
-      override def inReadLock[T](lock: ReadWriteLock)(fun: => T): T = {
-        readLockCount.incrementAndGet()
-        super.inReadLock(lock)(fun)
-      }
-
-      override def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = {
-        writeLockCount.incrementAndGet()
-        super.inWriteLock(lock)(fun)
-      }
     }
     when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
@@ -303,8 +278,6 @@ class PartitionLockTest extends Logging {
       .setReplicas(replicas)
       .setIsNew(true), 0, offsetCheckpoints))
 
-    readLockCount.set(0)
-    writeLockCount.set(0)
     partition
   }
 
@@ -318,14 +291,14 @@ class PartitionLockTest extends Logging {
   }
 
   private def append(partition: Partition, numRecords: Int, followerQueues: Seq[ArrayBlockingQueue[MemoryRecords]]): Unit = {
-    (0 until numRecords).foreach(_ => {
+    (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
       val startNs = System.nanoTime
       partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0)
       appendSensor.record(System.nanoTime - startNs)
       followerQueues.foreach(_.put(batch))
-    })
+    }
   }
 
   private def updateFollowerFetchState(partition: Partition, followerId: Int, numRecords: Int, followerQueue: ArrayBlockingQueue[MemoryRecords]): Unit = {
