@@ -547,7 +547,7 @@ object ConfigCommand extends Config {
       .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val allOpt = parser.accepts("all", "List all configs for the given entity")
+    val allOpt = parser.accepts("all", "List all configs for the given entity (includes static configuration when the entity type is brokers)")
 
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
             .withRequiredArg
