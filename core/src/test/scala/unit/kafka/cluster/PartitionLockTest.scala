@@ -19,7 +19,7 @@ package kafka.cluster
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ArrayBlockingQueue, Executors, Future, TimeUnit}
+import java.util.concurrent._
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.log._
@@ -27,18 +27,15 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.common.metrics.stats.{Avg, Max}
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.assertTrue
+import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * Verifies that slow appends to log don't block request threads processing replica fetch requests.
@@ -53,23 +50,13 @@ class PartitionLockTest extends Logging {
   val numReplicaFetchers = 2
   val numProducers = 3
   val numRecordsPerProducer = 5
-  // Use artificially large delays to enable automated testing of locking delays
-  val appendDelayMs = 300
-  val isrCheckDelayMs = 10
-  val isrUpdateDelayMs = 50
 
-  val mockTime = new MockTime()
+  val mockTime = new MockTime() // Used for check to shrink ISR
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val executorService = Executors.newFixedThreadPool(numReplicaFetchers + numProducers + 1)
-
-  val metrics = new Metrics
-  val appendSensor = metrics.sensor("append-latency")
-  val appendLatencyAvg = metrics.metricName("append-latency-avg", "partition-lock-test")
-  val appendLatencyMax = metrics.metricName("append-latency-max", "partition-lock-test")
-  val updateFollowerFetchStateSensor = metrics.sensor("replica-updateFollowerFetchState-latency")
-  val updateFollowerFetchStateLatencyAvg = metrics.metricName("replica-updateFollowerFetchState-latency-avg", "partition-lock-test")
-  val updateFollowerFetchStateLatencyMax = metrics.metricName("replica-updateFollowerFetchState-latency-max", "partition-lock-test")
+  val appendSemaphore = new Semaphore(0)
+  val shrinkIsrSemaphore = new Semaphore(0)
 
   var logManager: LogManager = _
   var partition: Partition = _
@@ -77,11 +64,6 @@ class PartitionLockTest extends Logging {
 
   @Before
   def setUp(): Unit = {
-    appendSensor.add(appendLatencyAvg, new Avg())
-    appendSensor.add(appendLatencyMax, new Max())
-    updateFollowerFetchStateSensor.add(updateFollowerFetchStateLatencyAvg, new Avg())
-    updateFollowerFetchStateSensor.add(updateFollowerFetchStateLatencyMax, new Max())
-
     val logConfig = new LogConfig(new Properties)
     logManager = TestUtils.createLogManager(Seq(logDir), logConfig, CleanerConfig(enableCleaner = false), mockTime)
     partition = setupPartitionWithMocks(logManager, logConfig)
@@ -90,7 +72,6 @@ class PartitionLockTest extends Logging {
   @After
   def tearDown(): Unit = {
     executorService.shutdownNow()
-    metrics.close()
     logManager.liveLogDirs.foreach(Utils.delete)
     Utils.delete(tmpDir)
   }
@@ -101,13 +82,7 @@ class PartitionLockTest extends Logging {
    */
   @Test
   def testNoLockContentionWithoutIsrUpdate(): Unit = {
-    val startMs = System.currentTimeMillis
-
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendDelayMs)
-    val timeMs = System.currentTimeMillis - startMs
-
-    verifyMetrics(expectLockContention = false)
-    assertTrue(s"Test took too long to run:$timeMs", timeMs < numRecordsPerProducer * appendDelayMs + 1000)
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, None)
   }
 
   /**
@@ -120,11 +95,9 @@ class PartitionLockTest extends Logging {
     val active = new AtomicBoolean(true)
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 0)
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendDelayMs)
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, None)
     active.set(false)
-    future.get(30, TimeUnit.SECONDS)
-
-    verifyMetrics(expectLockContention = false)
+    future.get(15, TimeUnit.SECONDS)
   }
 
   /**
@@ -137,42 +110,20 @@ class PartitionLockTest extends Logging {
     val active = new AtomicBoolean(true)
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 10000)
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendDelayMs)
+    TestUtils.waitUntilTrue(() => shrinkIsrSemaphore.hasQueuedThreads, "shrinkIsr not invoked")
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, Some(shrinkIsrSemaphore))
     active.set(false)
-    future.get(30, TimeUnit.SECONDS)
-
-    verifyMetrics(expectLockContention = true)
+    future.get(15, TimeUnit.SECONDS)
   }
 
-  private def verifyMetrics(expectLockContention : Boolean): Unit = {
-    def metricValue(metricName: MetricName): Double = {
-      val nanos = metrics.metric(metricName).metricValue.asInstanceOf[Double]
-      nanos / TimeUnit.MILLISECONDS.toNanos(1)
-    }
-
-    val appendAvg = metricValue(appendLatencyAvg)
-    val appendMax = metricValue(appendLatencyMax)
-    val updateFollowerFetchStateAvg = metricValue(updateFollowerFetchStateLatencyAvg)
-    val updateFollowerFetchStateMax = metricValue(updateFollowerFetchStateLatencyMax)
-    val metricsValues = s"appendAvg=$appendAvg appendMax=$appendMax updateFollowerFetchStateAvg=$updateFollowerFetchStateAvg updateFollowerFetchStateMax=$updateFollowerFetchStateMax"
-    info(s"Metrics: $metricsValues")
-    val errorMessage = s"Unexpected metrics: $metricsValues"
-
-    val toleranceMs = if (expectLockContention) (appendDelayMs + isrUpdateDelayMs) * 2 else 200
-    assertTrue(errorMessage, appendAvg < appendDelayMs + toleranceMs)
-    assertTrue(errorMessage, appendMax < appendDelayMs + toleranceMs + 500)
-    assertTrue(errorMessage, updateFollowerFetchStateAvg <= isrCheckDelayMs + toleranceMs)
-    assertTrue(errorMessage, updateFollowerFetchStateMax <= isrCheckDelayMs + toleranceMs + 500)
-  }
-
-  private def concurrentProduceFetch(numProducers: Int, numReplicaFetchers: Int, numRecords: Int, appendDelayMs: Long): Unit = {
+  private def concurrentProduceFetch(numProducers: Int,
+                                     numReplicaFetchers: Int,
+                                     numRecords: Int,
+                                     contentionSemaphore: Option[Semaphore]): Unit = {
     val followerQueues = (0 until numReplicaFetchers).map(_ => new ArrayBlockingQueue[MemoryRecords](2))
 
-    val totalRecords = numRecordsPerProducer * numProducers
-    val futures = new ArrayBuffer[Future[_]]()
-
-    (0 until numProducers).foreach { _ =>
-      futures += executorService.submit((() => {
+    val appendFutures = (0 until numProducers).map { _ =>
+      executorService.submit((() => {
         try {
           append(partition, numRecordsPerProducer, followerQueues)
         } catch {
@@ -182,10 +133,10 @@ class PartitionLockTest extends Logging {
         }
       }): Runnable)
     }
-    (1 to numReplicaFetchers).foreach { i =>
-      futures += executorService.submit((() => {
+    def updateFollower(index: Int, numRecords: Int): Future[_] = {
+      executorService.submit((() => {
         try {
-          updateFollowerFetchState(partition, i, totalRecords, followerQueues(i -1))
+          updateFollowerFetchState(partition, index, numRecords, followerQueues(index - 1))
         } catch {
           case e: Throwable =>
             PartitionLockTest.this.error("Exception during updateFollowerFetchState", e)
@@ -193,7 +144,30 @@ class PartitionLockTest extends Logging {
         }
       }): Runnable)
     }
-    futures.foreach(_.get())
+    val stateUpdateFutures = (1 to numReplicaFetchers).map { i =>
+      updateFollower(i, numProducers * numRecordsPerProducer - 1)
+    }
+
+    // Release sufficient append permits to complete all except one append. Verify that
+    // follower state update completes even though an update is in progress. Then release
+    // the permit for the final append and verify follower update for the last append.
+    appendSemaphore.release(numProducers * numRecordsPerProducer - 1)
+
+    // If a semaphore that triggers contention is present, verify that state update futures
+    // haven't completed. Then release the semaphore to enable all threads to continue.
+    contentionSemaphore match {
+      case Some(semaphore) =>
+        assertFalse(stateUpdateFutures.exists(_.isDone))
+        semaphore.release()
+      case None =>
+    }
+
+    stateUpdateFutures.foreach(_.get(15, TimeUnit.SECONDS))
+    appendSemaphore.release(1)
+    (1 to numReplicaFetchers).map { i =>
+      updateFollower(i, 1).get(15, TimeUnit.SECONDS)
+    }
+    appendFutures.foreach(_.get(15, TimeUnit.SECONDS))
   }
 
   private def scheduleShrinkIsr(activeFlag: AtomicBoolean, mockTimeSleepMs: Long): Future[_] = {
@@ -227,33 +201,14 @@ class PartitionLockTest extends Logging {
       metadataCache,
       logManager) {
 
-      override def needsExpandIsr(followerReplica: Replica): Boolean = {
-        if (isrCheckDelayMs > 0)
-          Thread.sleep(isrCheckDelayMs)
-        super.needsExpandIsr(followerReplica)
-      }
-
-      override def needsShrinkIsr(): Boolean = {
-        if (isrCheckDelayMs > 0)
-          Thread.sleep(isrCheckDelayMs)
-        super.needsShrinkIsr()
-      }
-
-      override def getOutOfSyncReplicas(maxLagMs: Long): Set[Int] = {
-        if (isrCheckDelayMs > 0)
-          Thread.sleep(isrCheckDelayMs)
-        super.getOutOfSyncReplicas(maxLagMs)
-      }
-
-      override def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
-        if (isrUpdateDelayMs > 0)
-          Thread.sleep(isrUpdateDelayMs)
-        super.maybeUpdateIsrAndVersion(isr, zkVersionOpt)
+      override def shrinkIsr(newIsr: Set[Int]): Unit = {
+        shrinkIsrSemaphore.acquire()
+        super.shrinkIsr(newIsr)
       }
 
       override def createLog(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
         val log = super.createLog(replicaId, isNew, isFutureReplica, offsetCheckpoints)
-        new SlowLog(log, mockTime, appendDelayMs)
+        new SlowLog(log, mockTime, appendSemaphore)
       }
     }
     when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
@@ -294,20 +249,16 @@ class PartitionLockTest extends Logging {
     (0 until numRecords).foreach { _ =>
       val batch = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes)))
-      val startNs = System.nanoTime
       partition.appendRecordsToLeader(batch, origin = AppendOrigin.Client, requiredAcks = 0)
-      appendSensor.record(System.nanoTime - startNs)
       followerQueues.foreach(_.put(batch))
     }
   }
 
   private def updateFollowerFetchState(partition: Partition, followerId: Int, numRecords: Int, followerQueue: ArrayBlockingQueue[MemoryRecords]): Unit = {
     (1 to numRecords).foreach { i =>
-      val batch = followerQueue.poll(5, TimeUnit.SECONDS)
+      val batch = followerQueue.poll(15, TimeUnit.SECONDS)
       if (batch == null)
         throw new RuntimeException(s"Timed out waiting for next batch $i")
-      Thread.sleep(5) // Leave a delay between leader append and ISR update to allow expand/shrink ISR in tests
-      val startNs = System.nanoTime
       partition.updateFollowerFetchState(
         followerId,
         followerFetchOffsetMetadata = LogOffsetMetadata(i),
@@ -315,11 +266,10 @@ class PartitionLockTest extends Logging {
         followerFetchTimeMs = mockTime.milliseconds(),
         leaderEndOffset = partition.localLogOrException.logEndOffset,
         lastSentHighwatermark = partition.localLogOrException.highWatermark)
-      updateFollowerFetchStateSensor.record(System.nanoTime - startNs)
     }
   }
 
-  private class SlowLog(log: Log, mockTime: MockTime, appendDelayMs: Long) extends Log(
+  private class SlowLog(log: Log, mockTime: MockTime, appendSemaphore: Semaphore) extends Log(
     log.dir,
     log.config,
     log.logStartOffset,
@@ -334,9 +284,9 @@ class PartitionLockTest extends Logging {
     new LogDirFailureChannel(1)) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin, interBrokerProtocolVersion: ApiVersion): LogAppendInfo = {
-      if (appendDelayMs > 0)
-        Thread.sleep(appendDelayMs)
-      super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, interBrokerProtocolVersion)
+      appendSemaphore.acquire()
+      appendInfo
     }
   }
 }

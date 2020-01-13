@@ -1182,7 +1182,7 @@ class Partition(val topicPartition: TopicPartition,
     maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
   }
 
-  private def shrinkIsr(newIsr: Set[Int]): Unit = {
+  private[cluster] def shrinkIsr(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
     val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
     maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
