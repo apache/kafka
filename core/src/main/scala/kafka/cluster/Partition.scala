@@ -16,7 +16,7 @@
  */
 package kafka.cluster
 
-import java.util.concurrent.locks.{ReadWriteLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.{Optional, Properties}
 
 import kafka.api.{ApiVersion, LeaderAndIsr, Request}
@@ -184,7 +184,8 @@ case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
  * 3) Various other operations like leader changes are processed while holding the ISR write lock.
  *    This can introduce delays in produce and replica fetch requests, but these operations are typically
  *    infrequent.
- * 4) HW updates are synchronized using ISR read lock.
+ * 4) HW updates are synchronized using ISR read lock. @Log lock is acquired during the update with
+ *    locking order Partition lock -> Log lock.
  */
 class Partition(val topicPartition: TopicPartition,
                 val replicaLagTimeMaxMs: Long,
@@ -692,7 +693,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private[cluster] def needsExpandIsr(followerReplica: Replica): Boolean = {
+  private def needsExpandIsr(followerReplica: Replica): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
       val leaderHighwatermark = leaderLog.highWatermark
       !inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)
@@ -872,10 +873,10 @@ class Partition(val topicPartition: TopicPartition,
       tryCompleteDelayedRequests()
   }
 
-  private[cluster] def needsShrinkIsr(): Boolean = {
+  private def needsShrinkIsr(): Boolean = {
     if (isLeader) {
-        val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-        outOfSyncReplicaIds.nonEmpty
+      val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+      outOfSyncReplicaIds.nonEmpty
     } else {
       false
     }

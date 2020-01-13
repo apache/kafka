@@ -82,7 +82,7 @@ class PartitionLockTest extends Logging {
    */
   @Test
   def testNoLockContentionWithoutIsrUpdate(): Unit = {
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, None)
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendSemaphore, None)
   }
 
   /**
@@ -95,7 +95,7 @@ class PartitionLockTest extends Logging {
     val active = new AtomicBoolean(true)
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 0)
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, None)
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendSemaphore, None)
     active.set(false)
     future.get(15, TimeUnit.SECONDS)
   }
@@ -111,7 +111,7 @@ class PartitionLockTest extends Logging {
 
     val future = scheduleShrinkIsr(active, mockTimeSleepMs = 10000)
     TestUtils.waitUntilTrue(() => shrinkIsrSemaphore.hasQueuedThreads, "shrinkIsr not invoked")
-    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, Some(shrinkIsrSemaphore))
+    concurrentProduceFetch(numProducers, numReplicaFetchers, numRecordsPerProducer, appendSemaphore, Some(shrinkIsrSemaphore))
     active.set(false)
     future.get(15, TimeUnit.SECONDS)
   }
@@ -119,7 +119,8 @@ class PartitionLockTest extends Logging {
   private def concurrentProduceFetch(numProducers: Int,
                                      numReplicaFetchers: Int,
                                      numRecords: Int,
-                                     contentionSemaphore: Option[Semaphore]): Unit = {
+                                     appendSemaphore: Semaphore,
+                                     shrinkIsrSemaphore: Option[Semaphore]): Unit = {
     val followerQueues = (0 until numReplicaFetchers).map(_ => new ArrayBlockingQueue[MemoryRecords](2))
 
     val appendFutures = (0 until numProducers).map { _ =>
@@ -155,11 +156,9 @@ class PartitionLockTest extends Logging {
 
     // If a semaphore that triggers contention is present, verify that state update futures
     // haven't completed. Then release the semaphore to enable all threads to continue.
-    contentionSemaphore match {
-      case Some(semaphore) =>
+    shrinkIsrSemaphore.foreach { semaphore =>
         assertFalse(stateUpdateFutures.exists(_.isDone))
         semaphore.release()
-      case None =>
     }
 
     stateUpdateFutures.foreach(_.get(15, TimeUnit.SECONDS))
