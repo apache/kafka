@@ -35,6 +35,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Seq, Set, mutable}
 import scala.util.control.ControlThrowable
 
@@ -867,10 +868,10 @@ private[log] class Cleaner(val id: Int,
                                   stats: CleanerStats): Unit = {
     map.clear()
     val dirty = log.logSegments(start, end).toBuffer
-    val nextSegmentStartOffsets : mutable.Buffer[Long] = if (dirty.nonEmpty) {
-      dirty.tail.map(logSegment => logSegment.baseOffset) :+ end
-    } else {
-      mutable.Buffer.empty
+    val nextSegmentStartOffsets = new ListBuffer[Long]
+    if (dirty.nonEmpty) {
+      for (nextSegment <- dirty.tail) nextSegmentStartOffsets.append(nextSegment.baseOffset)
+      nextSegmentStartOffsets.append(end)
     }
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
 
