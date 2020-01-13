@@ -53,12 +53,19 @@ public class ClientId {
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
+    private static final String JAVA_VERSION = javaVersion();
+
     public static Builder newBuilder() {
         return new Builder();
     }
 
     static void resetSequence() {
         CONSUMER_CLIENT_ID_SEQUENCE.set(1);
+    }
+
+    private static String javaVersion() {
+      PrivilegedAction<String> pa = () -> System.getProperty("java.version");
+      return AccessController.doPrivileged(pa);
     }
 
     public static class Builder {
@@ -86,19 +93,15 @@ public class ClientId {
         }
 
         private String defaultUserAgent() {
-            PrivilegedAction<String> pa = () -> System.getProperty("java.version");
-            String version = AccessController.doPrivileged(pa);
-            return "Java-kafka-client-%d/" + version;
+            return "Java-kafka-client-%d/" + JAVA_VERSION;
         }
 
         private String groupRebalanceUserAgent() {
             GroupRebalanceConfig rebalanceConfig = this.groupRebalanceConfig.get();
 
             if (rebalanceConfig.groupId != null && !rebalanceConfig.groupId.isEmpty()) {
-                PrivilegedAction<String> pa = () -> System.getProperty("java.version");
-                String version = AccessController.doPrivileged(pa);
                 return "Java-kafka-client-" + rebalanceConfig.groupId + "-"
-                      + rebalanceConfig.groupInstanceId.orElse("%d") + "/" + version;
+                      + rebalanceConfig.groupInstanceId.orElse("%d") + "/" + JAVA_VERSION;
             }
 
             return defaultUserAgent();
