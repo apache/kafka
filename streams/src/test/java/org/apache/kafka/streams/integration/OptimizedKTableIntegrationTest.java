@@ -196,7 +196,7 @@ public class OptimizedKTableIntegrationTest {
         assertThat(restoreStartOffset.get(), is(anyOf(greaterThan(0L), equalTo(-1L))));
 
         // Assert that either restore was unnecessary or we restored to the last offset before we closed the kafkaStreams
-        assertThat(restoreEndOffset.get(), is(anyOf(equalTo(batch1NumMessages - 1), equalTo(-1L))));
+        assertThat(restoreEndOffset.get(), is(anyOf(equalTo(batch1NumMessages - 1L), equalTo(-1L))));
 
         // Assert that the current value in store reflects all messages being processed
         assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));

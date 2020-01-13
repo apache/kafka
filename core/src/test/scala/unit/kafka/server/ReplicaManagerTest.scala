@@ -24,7 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Optional, Properties}
 
 import kafka.api.Request
-import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
+import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -134,7 +134,7 @@ class ReplicaManagerTest {
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
-        isFromClient = true,
+        origin = AppendOrigin.Client,
         entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord("first message".getBytes))),
         responseCallback = callback)
@@ -342,7 +342,8 @@ class ReplicaManagerTest {
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
       val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
-      appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch, isFromClient = false)
+      appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch,
+        origin = AppendOrigin.Coordinator)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
@@ -419,7 +420,8 @@ class ReplicaManagerTest {
       // now abort the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
-      appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch, isFromClient = false)
+      appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch,
+        origin = AppendOrigin.Coordinator)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // fetch as follower to advance the high watermark
@@ -1183,7 +1185,7 @@ class ReplicaManagerTest {
       timeout = 10,
       requiredAcks = -1,
       internalTopicsAllowed = false,
-      isFromClient = true,
+      origin = AppendOrigin.Client,
       entriesPerPartition = Map(topicPartition -> records),
       responseCallback = callback
     )
@@ -1396,7 +1398,7 @@ class ReplicaManagerTest {
   private def appendRecords(replicaManager: ReplicaManager,
                             partition: TopicPartition,
                             records: MemoryRecords,
-                            isFromClient: Boolean = true,
+                            origin: AppendOrigin = AppendOrigin.Client,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -1409,7 +1411,7 @@ class ReplicaManagerTest {
       timeout = 1000,
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
-      isFromClient = isFromClient,
+      origin = origin,
       entriesPerPartition = Map(partition -> records),
       responseCallback = appendCallback)
 

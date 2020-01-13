@@ -58,8 +58,10 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreatePartitionsResponseData;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
@@ -138,6 +140,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -911,12 +914,20 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            Map<String, ApiError> m = new HashMap<>();
-            m.put("my_topic", ApiError.NONE);
-            m.put("other_topic", ApiError.fromThrowable(new InvalidTopicException("some detailed reason")));
+            List<CreatePartitionsTopicResult> createPartitionsResult = new LinkedList<>();
+            createPartitionsResult.add(new CreatePartitionsTopicResult()
+                    .setName("my_topic")
+                    .setErrorCode(Errors.NONE.code()));
+            createPartitionsResult.add(new CreatePartitionsTopicResult()
+                    .setName("other_topic")
+                    .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
+                    .setErrorMessage("some detailed reason"));
+            CreatePartitionsResponseData data = new CreatePartitionsResponseData()
+                    .setThrottleTimeMs(42)
+                    .setResults(createPartitionsResult);
 
             // Test a call where one filter has an error.
-            env.kafkaClient().prepareResponse(new CreatePartitionsResponse(0, m));
+            env.kafkaClient().prepareResponse(new CreatePartitionsResponse(data));
 
             Map<String, NewPartitions> counts = new HashMap<>();
             counts.put("my_topic", NewPartitions.increaseTo(3));

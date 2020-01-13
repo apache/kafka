@@ -97,18 +97,11 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
             if (dir.exists()) {
                 final String[] list = dir.list();
                 if (list != null) {
-                    final long[] segmentIds = new long[list.length];
-                    for (int i = 0; i < list.length; i++) {
-                        segmentIds[i] = segmentIdFromSegmentName(list[i], dir);
-                    }
-
-                    // open segments in the id order
-                    Arrays.sort(segmentIds);
-                    for (final long segmentId : segmentIds) {
-                        if (segmentId >= 0) {
-                            getOrCreateSegment(segmentId, context);
-                        }
-                    }
+                    Arrays.stream(list)
+                            .map(segment -> segmentIdFromSegmentName(segment, dir))
+                            .sorted() // open segments in the id order
+                            .filter(segmentId -> segmentId >= 0)
+                            .forEach(segmentId -> getOrCreateSegment(segmentId, context));
                 }
             } else {
                 if (!dir.mkdir()) {

@@ -54,7 +54,7 @@ public class ValueToKey<R extends ConnectRecord<R>> implements Transformation<R>
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         fields = config.getList(FIELDS_CONFIG);
-        valueToKeySchemaCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        valueToKeySchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override

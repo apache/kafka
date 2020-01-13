@@ -26,17 +26,16 @@ import org.apache.kafka.common.metrics.stats.Max;
 import java.util.concurrent.TimeUnit;
 
 public class KafkaConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
+    private final Metrics metrics;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
-
         String metricGroupName = metricGrpPrefix + "-metrics";
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
