@@ -100,8 +100,9 @@ public class OffsetFetchRequestTest {
 
     @Test
     public void testConstructorFailForUnsupportedRequireStable() {
-        builder = new OffsetFetchRequest.Builder(groupId, true, null);
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            // The builder needs to be initialized every cycle as the internal data `requireStable` flag is flipped.
+            builder = new OffsetFetchRequest.Builder(groupId, true, null);
             final short finalVersion = version;
             if (version < 2) {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));

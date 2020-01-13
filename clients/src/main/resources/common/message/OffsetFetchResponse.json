@@ -29,7 +29,7 @@
   //
   // Version 6 is the first flexible version.
   //
-  // Version 7 adds PendingTransaction as new error response on partition level.
+  // Version 7 adds pending offset commit as new error response on partition level.
   "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [

@@ -450,17 +450,17 @@ public final class MessageTest {
         String groupId = "groupId";
         String topicName = "topic";
 
+        List<OffsetFetchRequestTopic> topics = Collections.singletonList(
+            new OffsetFetchRequestTopic()
+                .setName(topicName)
+                .setPartitionIndexes(Collections.singletonList(5)));
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setTopics(new ArrayList<>())
                                      .setGroupId(groupId));
 
         testAllMessageRoundTrips(new OffsetFetchRequestData()
                                      .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetFetchRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitionIndexes(Collections.singletonList(5))))
-        );
+                                     .setTopics(topics));
 
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
@@ -468,7 +468,7 @@ public final class MessageTest {
 
         OffsetFetchRequestData requireStableData = new OffsetFetchRequestData()
                                                        .setGroupId(groupId)
-                                                       .setTopics(null)
+                                                       .setTopics(topics)
                                                        .setRequireStable(true);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {

@@ -29,7 +29,7 @@
   //
   // Version 6 is the first flexible version.
   //
-  // Version 7 is adding the wait for transaction flag.
+  // Version 7 is adding the require stable flag.
   "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [

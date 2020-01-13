@@ -602,15 +602,20 @@ class GroupMetadataTest {
   }
 
   @Test
-  def testHasPendingOffsets(): Unit = {
+  def testHasPendingNonTxnOffsets(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val offset = offsetAndMetadata(37)
-    val producerId = 5
 
     group.prepareOffsetCommit(Map(partition -> offset))
     assertTrue(group.hasPendingOffsetCommitsForTopicPartition(partition))
+  }
 
+  @Test
+  def testHasPendingTxnOffsets(): Unit = {
     val txnPartition = new TopicPartition("foo", 1)
+    val offset = offsetAndMetadata(37)
+    val producerId = 5
+
     group.prepareTxnOffsetCommit(producerId, Map(txnPartition -> offset))
     assertTrue(group.hasPendingOffsetCommitsForTopicPartition(txnPartition))
 

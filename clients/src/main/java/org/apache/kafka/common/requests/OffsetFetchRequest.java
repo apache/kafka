@@ -87,10 +87,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                              "only supports OffsetFetchRequest version {}. Need " +
                              "v7 or newer to enable this feature", version);
 
-                return new OffsetFetchRequest(new OffsetFetchRequestData()
-                    .setGroupId(data.groupId())
-                    .setTopics(data.topics())
-                    .setRequireStable(false), version);
+                return new OffsetFetchRequest(data.setRequireStable(false), version);
             }
 
             return new OffsetFetchRequest(data, version);
