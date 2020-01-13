@@ -170,7 +170,7 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-Counts-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 
     @Test
@@ -215,6 +215,6 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 }

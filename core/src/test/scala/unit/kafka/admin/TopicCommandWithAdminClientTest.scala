@@ -91,14 +91,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
-    val finishTime = System.currentTimeMillis() + timeout
-    var result = false
-    while (System.currentTimeMillis() < finishTime && !result) {
-      val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
-      result = topics.contains(topicName)
-      Thread.sleep(100)
-    }
-    assertTrue(s"Topic $topicName has not been created within the given $timeout time", result)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topicName, partition = 0, timeout)
   }
 
   @Before
