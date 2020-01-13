@@ -194,6 +194,7 @@ public class KerberosLogin extends AbstractLogin {
                         Thread.sleep(nextRefresh - now);
                     } catch (InterruptedException ie) {
                         log.warn("[Principal={}]: TGT renewal thread has been interrupted and will exit.", principal);
+                        Thread.currentThread().interrupt();
                         return;
                     }
                 } else {
@@ -219,6 +220,7 @@ public class KerberosLogin extends AbstractLogin {
                                     Thread.sleep(10 * 1000);
                                 } catch (InterruptedException ie) {
                                     log.error("[Principal={}]: Interrupted while renewing TGT, exiting Login thread", principal);
+                                    Thread.currentThread().interrupt();
                                     return;
                                 }
                             } else {
@@ -243,6 +245,7 @@ public class KerberosLogin extends AbstractLogin {
                                     Thread.sleep(10 * 1000);
                                 } catch (InterruptedException e) {
                                     log.error("[Principal={}]: Interrupted during login retry after LoginException:", principal, le);
+                                    Thread.currentThread().interrupt();
                                     throw le;
                                 }
                             } else {
@@ -262,7 +265,7 @@ public class KerberosLogin extends AbstractLogin {
 
     @Override
     public void close() {
-        if ((t != null) && (t.isAlive())) {
+        if (t != null) {
             t.interrupt();
             try {
                 t.join();

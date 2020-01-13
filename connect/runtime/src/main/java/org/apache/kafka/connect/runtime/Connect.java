@@ -80,6 +80,7 @@ public class Connect {
             stopLatch.await();
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Kafka Connect to shutdown");
+            Thread.currentThread().interrupt();
         }
     }
 

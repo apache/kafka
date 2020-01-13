@@ -261,7 +261,7 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 throw new ConnectException("Error while attempting to create/find topic(s) '" + topicNameList + "'", e);
             } catch (InterruptedException e) {
-                Thread.interrupted();
+                Thread.currentThread().interrupt();
                 throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + topicNameList + "'", e);
             }
         }
