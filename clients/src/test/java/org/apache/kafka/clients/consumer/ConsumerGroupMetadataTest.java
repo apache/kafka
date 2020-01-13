@@ -16,22 +16,29 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.errors.RetriableException;
+import org.junit.Test;
 
-public class RetriableCommitFailedException extends RetriableException {
+import java.util.Optional;
 
-    private static final long serialVersionUID = 1L;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-    public RetriableCommitFailedException(Throwable t) {
-        super("Offset commit failed with a retriable exception. You should retry committing " +
-                "the latest consumed offsets.", t);
-    }
+public class ConsumerGroupMetadataTest {
 
-    public RetriableCommitFailedException(String message) {
-        super(message);
-    }
+    @Test
+    public void testAssignmentConstructor() {
+        String groupId = "group";
+        String memberId = "member";
+        int generationId = 2;
+        String groupInstanceId = "instance";
 
-    public RetriableCommitFailedException(String message, Throwable t) {
-        super(message, t);
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId,
+            generationId, memberId, Optional.of(groupInstanceId));
+
+        assertEquals(groupId, groupMetadata.groupId());
+        assertEquals(generationId, groupMetadata.generationId());
+        assertEquals(memberId, groupMetadata.memberId());
+        assertTrue(groupMetadata.groupInstanceId().isPresent());
+        assertEquals(groupInstanceId, groupMetadata.groupInstanceId().get());
     }
 }

@@ -27,7 +27,6 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -48,6 +47,11 @@ import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
+import org.apache.kafka.common.message.CreatePartitionsResponseData;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
@@ -66,6 +70,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.EndTxnRequestData;
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -123,7 +129,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
@@ -1613,11 +1618,21 @@ public class RequestResponseTest {
     }
 
     private EndTxnRequest createEndTxnRequest() {
-        return new EndTxnRequest.Builder("tid", 21L, (short) 42, TransactionResult.COMMIT).build();
+        return new EndTxnRequest.Builder(
+            new EndTxnRequestData()
+                .setTransactionalId("tid")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setCommitted(TransactionResult.COMMIT.id)
+            ).build();
     }
 
     private EndTxnResponse createEndTxnResponse() {
-        return new EndTxnResponse(0, Errors.NONE);
+        return new EndTxnResponse(
+            new EndTxnResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+        );
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
@@ -1760,25 +1775,61 @@ public class RequestResponseTest {
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest() {
-        Map<String, PartitionDetails> assignments = new HashMap<>();
-        assignments.put("my_topic", new PartitionDetails(3));
-        assignments.put("my_other_topic", new PartitionDetails(3));
-        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+        List<CreatePartitionsTopic> topics = new LinkedList<>();
+        topics.add(new CreatePartitionsTopic()
+                .setName("my_topic")
+                .setCount(3)
+        );
+        topics.add(new CreatePartitionsTopic()
+                .setName("my_other_topic")
+                .setCount(3)
+        );
+
+        CreatePartitionsRequestData data = new CreatePartitionsRequestData()
+                .setTimeoutMs(0)
+                .setValidateOnly(false)
+                .setTopics(topics);
+        return new CreatePartitionsRequest(data, (short) 0);
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
-        Map<String, PartitionDetails> assignments = new HashMap<>();
-        assignments.put("my_topic", new PartitionDetails(3, asList(asList(2))));
-        assignments.put("my_other_topic", new PartitionDetails(3, asList(asList(2, 3), asList(3, 1))));
-        return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
+        List<CreatePartitionsTopic> topics = new LinkedList<>();
+        CreatePartitionsAssignment myTopicAssignment = new CreatePartitionsAssignment()
+                .setBrokerIds(Collections.singletonList(2));
+        topics.add(new CreatePartitionsTopic()
+                .setName("my_topic")
+                .setCount(3)
+                .setAssignments(Collections.singletonList(myTopicAssignment))
+        );
+
+        topics.add(new CreatePartitionsTopic()
+                .setName("my_other_topic")
+                .setCount(3)
+                .setAssignments(asList(
+                    new CreatePartitionsAssignment().setBrokerIds(asList(2, 3)),
+                    new CreatePartitionsAssignment().setBrokerIds(asList(3, 1))
+                ))
+        );
+
+        CreatePartitionsRequestData data = new CreatePartitionsRequestData()
+                .setTimeoutMs(0)
+                .setValidateOnly(false)
+                .setTopics(topics);
+        return new CreatePartitionsRequest(data, (short) 0);
     }
 
     private CreatePartitionsResponse createCreatePartitionsResponse() {
-        Map<String, ApiError> results = new HashMap<>();
-        results.put("my_topic", ApiError.fromThrowable(
-                new InvalidReplicaAssignmentException("The assigned brokers included an unknown broker")));
-        results.put("my_topic", ApiError.NONE);
-        return new CreatePartitionsResponse(42, results);
+        List<CreatePartitionsTopicResult> results = new LinkedList<>();
+        results.add(new CreatePartitionsTopicResult()
+                .setName("my_topic")
+                .setErrorCode(Errors.INVALID_REPLICA_ASSIGNMENT.code()));
+        results.add(new CreatePartitionsTopicResult()
+                .setName("my_topic")
+                .setErrorCode(Errors.NONE.code()));
+        CreatePartitionsResponseData data = new CreatePartitionsResponseData()
+                .setThrottleTimeMs(42)
+                .setResults(results);
+        return new CreatePartitionsResponse(data);
     }
 
     private CreateDelegationTokenRequest createCreateTokenRequest() {

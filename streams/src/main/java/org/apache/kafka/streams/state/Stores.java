@@ -355,10 +355,9 @@ public final class Stores {
      * Create a persistent {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriodMs length ot time to retain data in the store (cannot be negative)
-     *                          (note that the retention period must be at least long enough to contain the
-     *                          windowed data's entire life cycle, from window-start through window-end,
-     *                          and for the entire grace period)
+     * @param retentionPeriodMs length of time to retain data in the store (cannot be negative)
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentSessionStore(String, Duration)} instead
      */
@@ -376,10 +375,9 @@ public final class Stores {
      * Create a persistent {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
-     *                          Note that the retention period must be at least long enough to contain the
-     *                          windowed data's entire life cycle, from window-start through window-end,
-     *                          and for the entire grace period.
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
     @SuppressWarnings("deprecation") // removing #persistentSessionStore(String name, long retentionPeriodMs) will fix this
@@ -394,9 +392,8 @@ public final class Stores {
      *
      * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
-     *                          Note that the retention period must be at least long enough to contain the
-     *                          windowed data's entire life cycle, from window-start through window-end,
-     *                          and for the entire grace period.
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
     public static SessionBytesStoreSupplier inMemorySessionStore(final String name, final Duration retentionPeriod) {

@@ -111,7 +111,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
 
-    private enum MemberState {
+    protected enum MemberState {
         UNJOINED,    // the client is not part of a group
         REBALANCING, // the client has begun rebalancing
         STABLE,      // the client has joined and is sending heartbeats
@@ -130,11 +130,12 @@ public abstract class AbstractCoordinator implements Closeable {
     private MemberState state = MemberState.UNJOINED;
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
+    private RequestFuture<Void> findCoordinatorFuture = null;
+    volatile private RuntimeException findCoordinatorException = null;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
 
-    private RequestFuture<Void> findCoordinatorFuture = null;
 
     /**
      * Initialize the coordination manager.
@@ -226,6 +227,11 @@ public abstract class AbstractCoordinator implements Closeable {
             return true;
 
         do {
+            if (findCoordinatorException != null && !(findCoordinatorException instanceof RetriableException)) {
+                final RuntimeException fatalException = findCoordinatorException;
+                findCoordinatorException = null;
+                throw fatalException;
+            }
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, timer);
 
@@ -258,8 +264,20 @@ public abstract class AbstractCoordinator implements Closeable {
             if (node == null) {
                 log.debug("No broker available to send FindCoordinator request");
                 return RequestFuture.noBrokersAvailable();
-            } else
+            } else {
                 findCoordinatorFuture = sendFindCoordinatorRequest(node);
+                // remember the exception even after the future is cleared so that
+                // it can still be thrown by the ensureCoordinatorReady caller
+                findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                    @Override
+                    public void onSuccess(Void value) {} // do nothing
+
+                    @Override
+                    public void onFailure(RuntimeException e) {
+                        findCoordinatorException = e;
+                    }
+                });
+            }
         }
         return findCoordinatorFuture;
     }
@@ -436,9 +454,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 resetJoinGroupFuture();
                 final RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
-                        exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException ||
-                        exception instanceof MemberIdRequiredException)
+                    exception instanceof RebalanceInProgressException ||
+                    exception instanceof IllegalGenerationException ||
+                    exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
@@ -840,6 +858,10 @@ public abstract class AbstractCoordinator implements Closeable {
         if (this.state != MemberState.STABLE)
             return null;
         return generation;
+    }
+
+    protected synchronized boolean rebalanceInProgress() {
+        return this.state == MemberState.REBALANCING;
     }
 
     protected synchronized String memberId() {

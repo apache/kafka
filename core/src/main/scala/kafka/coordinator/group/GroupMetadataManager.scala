@@ -28,6 +28,7 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
@@ -313,7 +314,7 @@ class GroupMetadataManager(brokerId: Int,
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
-      isFromClient = false,
+      origin = AppendOrigin.Coordinator,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback)
@@ -555,22 +556,28 @@ class GroupMetadataManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        var currOffset = log.logStartOffset
-
-        // buffer may not be needed if records are read from memory
-        var buffer = ByteBuffer.allocate(0)
-
-        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < logEndOffset && !shuttingDown.get()) {
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
+
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
+        var currOffset = log.logStartOffset
+
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
+        while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
             isolation = FetchLogEnd,
             minOneMessage = true)
+
+          readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
@@ -822,7 +829,7 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
-                partition.appendRecordsToLeader(records, isFromClient = false)
+                partition.appendRecordsToLeader(records, origin = AppendOrigin.Coordinator, requiredAcks = 0)
 
                 offsetsRemoved += removedOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +
