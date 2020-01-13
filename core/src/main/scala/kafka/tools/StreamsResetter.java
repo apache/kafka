@@ -102,6 +102,7 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpecBuilder resetAllExternalTopicsOption;
     private static OptionSpec helpOption;
     private static OptionSpec versionOption;
     private static OptionSpecBuilder executeOption;
@@ -140,6 +141,7 @@ public class StreamsResetter {
             parseArguments(args);
 
             final boolean dryRun = options.has(dryRunOption);
+            final boolean resetAllExternalTopics = options.has(resetAllExternalTopicsOption);
 
             final String groupId = options.valueOf(applicationIdOption);
             final Properties properties = new Properties();
@@ -149,7 +151,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
             adminClient = Admin.create(properties);
-            validateNoActiveConsumers(groupId, adminClient);
+            final List<MemberDescription> members = validateNoActiveConsumers(groupId, adminClient);
 
             allTopics.clear();
             allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -160,7 +162,7 @@ public class StreamsResetter {
 
             final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
             consumerConfig.putAll(properties);
-            exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
+            exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun, resetAllExternalTopics, members);
             maybeDeleteInternalTopics(adminClient, dryRun);
 
         } catch (final Throwable e) {
@@ -176,8 +178,8 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private void validateNoActiveConsumers(final String groupId,
-                                           final Admin adminClient)
+    private List<MemberDescription> validateNoActiveConsumers(final String groupId,
+                                                              final Admin adminClient)
         throws ExecutionException, InterruptedException {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
@@ -190,6 +192,7 @@ public class StreamsResetter {
                     + "and has following members: " + members + ". "
                     + "Make sure to stop all running application instances before running the reset tool.");
         }
+        return members;
     }
 
     private void parseArguments(final String[] args) {
@@ -238,6 +241,7 @@ public class StreamsResetter {
             .describedAs("file name");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
+        resetAllExternalTopicsOption = optionParser.accepts("reset-all-external-topics", "Reset tool such that when enabled, delete offsets for all involved topics");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
         versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
 
@@ -292,7 +296,9 @@ public class StreamsResetter {
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
-                                                                    final boolean dryRun)
+                                                                    final boolean dryRun,
+                                                                    final boolean resetAllExternalTopics,
+                                                                    final List<MemberDescription> members)
         throws IOException, ParseException {
 
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
@@ -380,6 +386,14 @@ public class StreamsResetter {
                     intermediateTopicPartitions.add(p);
                 } else {
                     System.err.println("Skipping invalid partition: " + p);
+                }
+            }
+
+            if(resetAllExternalTopics) {
+                for (final MemberDescription member : members) {
+                    final Collection<TopicPartition> externalPartition = member.assignment().topicPartitions();
+                    client.assign(externalPartition);
+                    inputTopicPartitions.addAll(externalPartition);
                 }
             }
 
