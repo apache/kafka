@@ -390,9 +390,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Runtime.getRuntime.addShutdownHook(new KafkaThread("minikdc-shutdown-hook", false) {
-      miniKdc.stop()
-    })
+    Runtime.getRuntime.addShutdownHook(new KafkaThread("minikdc-shutdown-hook", () => miniKdc.stop(), false))
   }
 
   val OrgName = "org.name"
