@@ -25,7 +25,7 @@
         while it is in the middle of a rebalance for those partitions still owned by the consumer; in addition
         <code>Consumer#commitSync</code> now may throw a non-fatal <code>RebalanceInProgressException</code> to notify
         users of such an event, in order to distinguish from the fatal <code>CommitFailedException</code> and allow
-        users to complete the ongoing rebalance and then reconsider committing offsets.</li>
+        users to complete the ongoing rebalance and then reattempt committing offsets for those still-owned partitions.</li>
     <li>For improved resiliency in typical network environments, the default value of
         <code>zookeeper.session.timeout.ms</code> has been increased from 6s to 18s and
         <code>replica.lag.time.max.ms</code> from 10s to 30s.</li>
