@@ -21,6 +21,7 @@ import java.io._
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.{HashMap, Properties, Random}
 
@@ -823,7 +824,7 @@ class SocketServerTest {
       receiveResponse(socket)
 
       // now send credentials
-      val authBytes = "admin\u0000admin\u0000admin-secret".getBytes("UTF-8")
+      val authBytes = "admin\u0000admin\u0000admin-secret".getBytes(StandardCharsets.UTF_8)
       if (leverageKip152SaslAuthenticateRequest) {
         // send credentials within a SaslAuthenticateRequest
         val saslAuthenticateRequest = new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData()
