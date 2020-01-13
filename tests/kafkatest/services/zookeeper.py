@@ -152,7 +152,6 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
     # the use of ZooKeeper ACLs.
     #
     def zookeeper_migration(self, node, zk_acl):
-        SecurityConfig.ZK_CLIENT_MUTUAL_AUTH_CONFIG_PATH
         la_migra_cmd = "export KAFKA_OPTS=\"%s\";" % \
                        self.security_system_properties if self.security_config.zk_sasl else ""
         la_migra_cmd += "%s --zookeeper.acl=%s --zookeeper.connect=%s %s" % \
