@@ -18,6 +18,7 @@
 package org.apache.kafka.common.utils;
 
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Objects;
 
@@ -25,7 +26,11 @@ import java.util.Objects;
  * An iterator that cycles through the {@code Iterator} of a {@code Collection}
  * indefinitely. Useful for tasks such as round-robin load balancing. This class
  * does not provide thread-safe access. This {@code Iterator} supports
- * {@code null} elements in the underlying {@code Collection}.
+ * {@code null} elements in the underlying {@code Collection}. This
+ * {@code Iterator} does not support any modification to the underlying
+ * {@code Collection} after it has been wrapped by this class. Changing the
+ * underlying {@code Collection} may cause a
+ * {@link ConcurrentModificationException} or some other undefined behavior.
  */
 public class CircularIterator<T> implements Iterator<T> {
 
@@ -53,6 +58,12 @@ public class CircularIterator<T> implements Iterator<T> {
         }
     }
 
+    /**
+     * Returns true since the iteration will forever cycle through the provided
+     * {@code Collection}.
+     *
+     * @return Always true
+     */
     @Override
     public boolean hasNext() {
         if (this.hasPeek) {
@@ -61,7 +72,7 @@ public class CircularIterator<T> implements Iterator<T> {
         if (!this.iterator.hasNext()) {
             this.iterator = this.iterable.iterator();
         }
-        return this.iterator.hasNext();
+        return true;
     }
 
     @Override
