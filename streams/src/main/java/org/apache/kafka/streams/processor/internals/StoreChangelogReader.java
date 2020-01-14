@@ -82,7 +82,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private static class ChangelogMetadata {
+    static class ChangelogMetadata {
 
         private final StateStoreMetadata storeMetadata;
 
@@ -127,7 +127,24 @@ public class StoreChangelogReader implements ChangelogReader {
         public String toString() {
             final Long currentOffset = storeMetadata.offset();
             return changelogState + " " + stateManager.taskType() +
-                " (currentOffset + " + currentOffset + "endOffset " + restoreEndOffset + ", limitOffset " + restoreLimitOffset + ")";
+                " (currentOffset " + currentOffset + ", endOffset " + restoreEndOffset + ", limitOffset " + restoreLimitOffset + ")";
+        }
+
+        // for testing only below
+        ChangelogState state() {
+            return changelogState;
+        }
+
+        long totalRestored() {
+            return totalRestored;
+        }
+
+        Long endOffset() {
+            return restoreEndOffset;
+        }
+
+        Long limitOffset() {
+            return restoreLimitOffset;
         }
     }
 
@@ -269,7 +286,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final ChangelogMetadata changelogMetadata = new ChangelogMetadata(storeMetadata, stateManager);
 
         // initializing limit offset to 0L for standby changelog to effectively disable any restoration until it is updated
-        if (state == ChangelogReaderState.STANDBY_UPDATING && stateManager.changelogAsSource(partition)) {
+        if (stateManager.taskType() == AbstractTask.TaskType.STANDBY && stateManager.changelogAsSource(partition)) {
             changelogMetadata.restoreLimitOffset = 0L;
         }
 
@@ -442,6 +459,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 partition, storeName, changelogMetadata.totalRestored);
 
             stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+
+            changelogMetadata.changelogState = ChangelogState.COMPLETED;
 
             pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.storeMetadata.changelogPartition()));
         }
@@ -717,5 +736,10 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
         return restoredOffsets;
+    }
+
+    // for testing only
+    ChangelogMetadata changelogMetadata(final TopicPartition partition) {
+        return changelogs.get(partition);
     }
 }
