@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.SecurityProviderCreator;
@@ -26,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.Security;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class SecurityUtils {
@@ -34,18 +36,27 @@ public class SecurityUtils {
 
     private static final Map<String, ResourceType> NAME_TO_RESOURCE_TYPES;
     private static final Map<String, AclOperation> NAME_TO_OPERATIONS;
+    private static final Map<String, AclPermissionType> NAME_TO_PERMISSION_TYPES;
 
     static {
         NAME_TO_RESOURCE_TYPES = new HashMap<>(ResourceType.values().length);
         NAME_TO_OPERATIONS = new HashMap<>(AclOperation.values().length);
+        NAME_TO_PERMISSION_TYPES = new HashMap<>(AclPermissionType.values().length);
 
         for (ResourceType resourceType : ResourceType.values()) {
             String resourceTypeName = toPascalCase(resourceType.name());
             NAME_TO_RESOURCE_TYPES.put(resourceTypeName, resourceType);
+            NAME_TO_RESOURCE_TYPES.put(resourceTypeName.toUpperCase(Locale.ROOT), resourceType);
         }
         for (AclOperation operation : AclOperation.values()) {
             String operationName = toPascalCase(operation.name());
             NAME_TO_OPERATIONS.put(operationName, operation);
+            NAME_TO_OPERATIONS.put(operationName.toUpperCase(Locale.ROOT), operation);
+        }
+        for (AclPermissionType permissionType : AclPermissionType.values()) {
+            String permissionName  = toPascalCase(permissionType.name());
+            NAME_TO_PERMISSION_TYPES.put(permissionName, permissionType);
+            NAME_TO_PERMISSION_TYPES.put(permissionName.toUpperCase(Locale.ROOT), permissionType);
         }
     }
 
@@ -86,13 +97,38 @@ public class SecurityUtils {
     }
 
     public static ResourceType resourceType(String name) {
-        ResourceType resourceType = NAME_TO_RESOURCE_TYPES.get(name);
-        return resourceType == null ? ResourceType.UNKNOWN : resourceType;
+        return valueFromMap(NAME_TO_RESOURCE_TYPES, name, ResourceType.UNKNOWN);
     }
 
     public static AclOperation operation(String name) {
-        AclOperation operation = NAME_TO_OPERATIONS.get(name);
-        return operation == null ? AclOperation.UNKNOWN : operation;
+        return valueFromMap(NAME_TO_OPERATIONS, name, AclOperation.UNKNOWN);
+    }
+
+    public static AclPermissionType permissionType(String name) {
+        return valueFromMap(NAME_TO_PERMISSION_TYPES, name, AclPermissionType.UNKNOWN);
+    }
+
+    // We use Pascal-case to store these values, so lookup using provided key first to avoid
+    // case conversion for the common case. For backward compatibility, also perform
+    // case-insensitive look up (without underscores) by converting the key to upper-case.
+    private static <T> T valueFromMap(Map<String, T> map, String key, T unknown) {
+        T value = map.get(key);
+        if (value == null) {
+            value = map.get(key.toUpperCase(Locale.ROOT));
+        }
+        return value == null ? unknown : value;
+    }
+
+    public static String resourceTypeName(ResourceType resourceType) {
+        return toPascalCase(resourceType.name());
+    }
+
+    public static String operationName(AclOperation operation) {
+        return toPascalCase(operation.name());
+    }
+
+    public static String permissionTypeName(AclPermissionType permissionType) {
+        return toPascalCase(permissionType.name());
     }
 
     private static String toPascalCase(String name) {

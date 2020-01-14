@@ -25,7 +25,7 @@ import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AuthorizerUtils.WildcardHost
+import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
