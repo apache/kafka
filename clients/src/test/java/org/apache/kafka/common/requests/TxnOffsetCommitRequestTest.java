@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
@@ -34,7 +33,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
@@ -106,27 +104,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             assertEquals(errorsMap, response.errors());
             assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
-        }
-    }
-
-    @Test
-    public void testRequestVersionCompatibilityFailBuild() {
-        for (short version = 0; version <= 2; version++) {
-            final short finalVersion = version;
-            assertThrows(UnsupportedVersionException.class, () -> new TxnOffsetCommitRequest.Builder(
-                new TxnOffsetCommitRequestData()
-                    .setGroupInstanceId("groupInstanceId")
-            ).build(finalVersion));
-
-            assertThrows(UnsupportedVersionException.class, () -> new TxnOffsetCommitRequest.Builder(
-                new TxnOffsetCommitRequestData()
-                    .setMemberId("memberId")
-            ).build(finalVersion));
-
-            assertThrows(UnsupportedVersionException.class, () -> new TxnOffsetCommitRequest.Builder(
-                new TxnOffsetCommitRequestData()
-                    .setGenerationId(1)
-            ).build(finalVersion));
         }
     }
 }
