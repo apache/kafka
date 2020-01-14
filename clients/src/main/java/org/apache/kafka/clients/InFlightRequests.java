@@ -31,7 +31,7 @@ final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
-    private int inFlightRequestCount = 0;
+    private volatile int inFlightRequestCount = 0;
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
@@ -113,7 +113,8 @@ final class InFlightRequests {
      * Return true if there is no in-flight request directed at the given node and false otherwise
      */
     public boolean isEmpty(String node) {
-        return count(node) == 0;
+        Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
+        return queue == null || queue.isEmpty();
     }
 
     /**
