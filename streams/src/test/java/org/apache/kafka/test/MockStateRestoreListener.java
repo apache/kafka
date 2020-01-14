@@ -67,7 +67,6 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
         storeNameCalledStates.put(RESTORE_BATCH, storeName);
         restoredBatchOffset = batchEndOffset;
         numBatchRestored = numRestored;
-
     }
 
     @Override

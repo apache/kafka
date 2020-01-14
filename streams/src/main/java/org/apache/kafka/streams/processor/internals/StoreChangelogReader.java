@@ -20,11 +20,13 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -49,6 +51,7 @@ import java.util.stream.Collectors;
  * The reader also maintains the source of truth for restoration state: only active tasks restoring changelog could
  * be completed, while standby tasks updating changelog would always be in restoring state after being initialized.
  */
+// TODO K9113: we need to consider how to handle InvalidOffsetException for consumer#poll / position
 public class StoreChangelogReader implements ChangelogReader {
 
     enum ChangelogState {
@@ -230,14 +233,15 @@ public class StoreChangelogReader implements ChangelogReader {
             //  2) if not all the buffered records have been applied, then it means we are restricted by the end offset,
             //     and the consumer's position is likely already ahead of that end offset. Then we just need to check
             //     the first record in the remaining buffer and see if that record is no smaller than the end offset.
+            final TopicPartition partition = metadata.storeMetadata.changelogPartition();
             try {
-                return restoreConsumer.position(metadata.storeMetadata.changelogPartition()) >= endOffset;
+                return restoreConsumer.position(partition) >= endOffset;
             } catch (final TimeoutException e) {
                 // if we cannot get the position of the consumer within timeout, just return false
                 return false;
             } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
-                    " of " + metadata.storeMetadata.changelogPartition(), e);
+                    " of " + partition, e);
             }
         } else {
             return metadata.bufferedRecords.get(0).offset() >= endOffset;
@@ -392,7 +396,16 @@ public class StoreChangelogReader implements ChangelogReader {
 
         final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
         if (!restoringChangelogs.isEmpty()) {
-            final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+            final ConsumerRecords<byte[], byte[]> polledRecords;
+
+            try {
+                polledRecords = restoreConsumer.poll(pollTime);
+            } catch (FencedInstanceIdException e) {
+                // when the consumer gets fenced, all its tasks should be migrated
+                throw new TaskMigratedException("Restore consumer get fenced by instance-id polling records.", e);
+            } catch (KafkaException e) {
+                throw new StreamsException("Restore consumer get unexpected error polling records.", e);
+            }
 
             for (final TopicPartition partition : polledRecords.partitions()) {
                 final ChangelogMetadata changelogMetadata = restoringChangelogByPartition(partition);
@@ -459,6 +472,9 @@ public class StoreChangelogReader implements ChangelogReader {
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
                 partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
 
+            changelogMetadata.bufferedLimitIndex = 0;
+            changelogMetadata.totalRestored += numRecords;
+
             // do not trigger restore listener if we are processing standby tasks
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
                 try {
@@ -467,9 +483,6 @@ public class StoreChangelogReader implements ChangelogReader {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
-
-            changelogMetadata.bufferedLimitIndex = 0;
-            changelogMetadata.totalRestored += numRecords;
         }
 
         // we should check even if there's nothing restored, but do not check completed if we are processing standby tasks
@@ -477,15 +490,14 @@ public class StoreChangelogReader implements ChangelogReader {
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
+            changelogMetadata.changelogState = ChangelogState.COMPLETED;
+            pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
+
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
             } catch (Exception e) {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
-
-            changelogMetadata.changelogState = ChangelogState.COMPLETED;
-
-            pauseChangelogsFromRestoreConsumer(Collections.singleton(changelogMetadata.storeMetadata.changelogPartition()));
         }
     }
 
