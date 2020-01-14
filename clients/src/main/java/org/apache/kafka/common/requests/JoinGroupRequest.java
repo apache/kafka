@@ -124,8 +124,8 @@ public class JoinGroupRequest extends AbstractRequest {
                 .setErrorCode(Errors.forException(e).code())
                 .setGenerationId(UNKNOWN_GENERATION_ID)
                 .setProtocolName(UNKNOWN_PROTOCOL)
-                .setLeader(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-                .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                .setLeader(UNKNOWN_MEMBER_ID)
+                .setMemberId(UNKNOWN_MEMBER_ID)
                 .setMembers(Collections.emptyList()));
     }
 
