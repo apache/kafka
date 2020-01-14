@@ -23,7 +23,6 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The set of requests which have been sent or are being sent but haven't yet received a response
@@ -32,8 +31,7 @@ final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
-    /** Thread safe total number of in flight requests. */
-    private final AtomicInteger inFlightRequestCount = new AtomicInteger(0);
+    private int inFlightRequestCount = 0;
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
@@ -44,13 +42,10 @@ final class InFlightRequests {
      */
     public void add(NetworkClient.InFlightRequest request) {
         String destination = request.destination;
-        Deque<NetworkClient.InFlightRequest> reqs = this.requests.get(destination);
-        if (reqs == null) {
-            reqs = new ArrayDeque<>();
-            this.requests.put(destination, reqs);
-        }
+        Deque<NetworkClient.InFlightRequest> reqs =
+                this.requests.computeIfAbsent(destination, k -> new ArrayDeque<>());
         reqs.addFirst(request);
-        inFlightRequestCount.incrementAndGet();
+        inFlightRequestCount++;
     }
 
     /**
@@ -58,8 +53,9 @@ final class InFlightRequests {
      */
     private Deque<NetworkClient.InFlightRequest> requestQueue(String node) {
         Deque<NetworkClient.InFlightRequest> reqs = requests.get(node);
-        if (reqs == null || reqs.isEmpty())
+        if (reqs == null || reqs.isEmpty()) {
             throw new IllegalStateException("There are no in-flight requests for node " + node);
+        }
         return reqs;
     }
 
@@ -68,7 +64,7 @@ final class InFlightRequests {
      */
     public NetworkClient.InFlightRequest completeNext(String node) {
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollLast();
-        inFlightRequestCount.decrementAndGet();
+        inFlightRequestCount--;
         return inFlightRequest;
     }
 
@@ -87,7 +83,7 @@ final class InFlightRequests {
      */
     public NetworkClient.InFlightRequest completeLastSent(String node) {
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollFirst();
-        inFlightRequestCount.decrementAndGet();
+        inFlightRequestCount--;
         return inFlightRequest;
     }
 
@@ -117,15 +113,14 @@ final class InFlightRequests {
      * Return true if there is no in-flight request directed at the given node and false otherwise
      */
     public boolean isEmpty(String node) {
-        Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
-        return queue == null || queue.isEmpty();
+        return count(node) == 0;
     }
 
     /**
      * Count all in-flight requests for all nodes. This method is thread safe, but may lag the actual count.
      */
     public int count() {
-        return inFlightRequestCount.get();
+        return inFlightRequestCount;
     }
 
     /**
@@ -133,8 +128,9 @@ final class InFlightRequests {
      */
     public boolean isEmpty() {
         for (Deque<NetworkClient.InFlightRequest> deque : this.requests.values()) {
-            if (!deque.isEmpty())
+            if (!deque.isEmpty()) {
                 return false;
+            }
         }
         return true;
     }
@@ -151,16 +147,17 @@ final class InFlightRequests {
             return Collections.emptyList();
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
-            inFlightRequestCount.getAndAdd(-clearedRequests.size());
+            inFlightRequestCount -= clearedRequests.size();
             return () -> clearedRequests.descendingIterator();
         }
     }
 
     private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
         for (NetworkClient.InFlightRequest request : deque) {
-            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
-            if (timeSinceSend > request.requestTimeoutMs)
+            long timeSinceSend = Math.max(0L, now - request.sendTimeMs);
+            if (timeSinceSend > request.requestTimeoutMs) {
                 return true;
+            }
         }
         return false;
     }
@@ -176,8 +173,9 @@ final class InFlightRequests {
         for (Map.Entry<String, Deque<NetworkClient.InFlightRequest>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
             Deque<NetworkClient.InFlightRequest> deque = requestEntry.getValue();
-            if (hasExpiredRequest(now, deque))
+            if (hasExpiredRequest(now, deque)) {
                 nodeIds.add(nodeId);
+            }
         }
         return nodeIds;
     }
