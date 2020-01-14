@@ -20,14 +20,16 @@ package kafka
 import java.io.{File, PrintWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardOpenOption}
-import javax.imageio.ImageIO
+import java.util.Properties
 
+import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.jfree.chart.plot.PlotOrientation
@@ -107,6 +109,14 @@ object ReplicationQuotasTestRig {
         .map(c => createServer(KafkaConfig.fromProps(c)))
     }
 
+    def createAdminClient(servers: Seq[KafkaServer]): Admin = {
+      val props = new Properties()
+      props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+      props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000")
+      AdminClient.create(props)
+    }
+
+
     override def tearDown(): Unit = {
       TestUtils.shutdownServers(servers)
       super.tearDown()
@@ -125,6 +135,7 @@ object ReplicationQuotasTestRig {
       val replicas = (0 to config.partitions).map(partition => partition -> Seq(nextReplicaRoundRobin())).toMap
 
       startBrokers(brokers)
+      val adminClient = createAdminClient(servers)
       createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
@@ -136,11 +147,12 @@ object ReplicationQuotasTestRig {
       }
 
       println("Starting Reassignment")
-      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
+      val newAssignment = ReassignPartitionsCommand.generateAssignment(adminClient, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkClient, None,
-        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(adminClient,
+        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8),
+        Throttle(config.throttle), 10000L)
 
       //Await completion
       waitForReassignmentToComplete()
