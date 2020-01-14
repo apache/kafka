@@ -235,6 +235,9 @@ public class StoreChangelogReader implements ChangelogReader {
             } catch (final TimeoutException e) {
                 // if we cannot get the position of the consumer within timeout, just return false
                 return false;
+            } catch (final KafkaException e) {
+                throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
+                    " of " + metadata.storeMetadata.changelogPartition(), e);
             }
         } else {
             return metadata.bufferedRecords.get(0).offset() >= endOffset;
@@ -331,6 +334,14 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
+    private Set<TopicPartition> activeRestoringChangelogs() {
+        return changelogs.values().stream()
+            .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
+                metadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE)
+            .map(metadata -> metadata.storeMetadata.changelogPartition())
+            .collect(Collectors.toSet());
+    }
+
     private Set<TopicPartition> standbyRestoringChangelogs() {
         return changelogs.values().stream()
             .filter(metadata -> metadata.changelogState == ChangelogState.RESTORING &&
@@ -369,6 +380,10 @@ public class StoreChangelogReader implements ChangelogReader {
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     public void restore() {
         initializeChangelogs(registeredChangelogs());
+
+        if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
+            throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
+        }
 
         if (allChangelogsCompleted()) {
             log.info("Finished restoring all changelogs {}", changelogs.keySet());
@@ -449,7 +464,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 try {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (Exception e) {
-                    System.out.println(e);
+                    throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             }
 
@@ -462,7 +477,11 @@ public class StoreChangelogReader implements ChangelogReader {
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
-            stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+            try {
+                stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
+            } catch (Exception e) {
+                throw new StreamsException("State restore listener failed on restore completed", e);
+            }
 
             changelogMetadata.changelogState = ChangelogState.COMPLETED;
 
@@ -600,13 +619,13 @@ public class StoreChangelogReader implements ChangelogReader {
         addChangelogsToRestoreConsumer(newPartitionsToRestore.stream().map(metadata -> metadata.storeMetadata.changelogPartition())
             .collect(Collectors.toSet()));
 
+        newPartitionsToRestore.forEach(metadata -> metadata.changelogState = ChangelogState.RESTORING);
+
         // if it is in the active restoring mode, we immediately pause those standby changelogs
         // here we just blindly pause all (including the existing and newly added)
         if (state == ChangelogReaderState.ACTIVE_RESTORING) {
             pauseChangelogsFromRestoreConsumer(standbyRestoringChangelogs());
         }
-
-        newPartitionsToRestore.forEach(metadata -> metadata.changelogState = ChangelogState.RESTORING);
 
         // prepare newly added partitions of the restore consumer by setting their starting position
         prepareChangelogs(newPartitionsToRestore);
@@ -701,9 +720,16 @@ public class StoreChangelogReader implements ChangelogReader {
                     startOffset = restoreConsumer.position(partition);
                 } catch (final TimeoutException e) {
                     // if we cannot find the starting position at the beginning, just use the default 0L
+                } catch (final KafkaException e) {
+                    throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
+                        " of " + partition, e);
                 }
 
-                stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
+                try {
+                    stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
+                } catch (Exception e) {
+                    throw new StreamsException("State restore listener failed on batch restored", e);
+                }
             }
         }
     }
@@ -726,7 +752,11 @@ public class StoreChangelogReader implements ChangelogReader {
         }
         changelogs.clear();
 
-        restoreConsumer.unsubscribe();
+        try {
+            restoreConsumer.unsubscribe();
+        } catch (KafkaException e) {
+            throw new StreamsException("Restore consumer get unexpected error unsubscribing", e);
+        }
     }
 
     @Override

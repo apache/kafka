@@ -48,8 +48,10 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     }
 
     @Override
-    public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                               final long startingOffset, final long endingOffset) {
+    public void onRestoreStart(final TopicPartition topicPartition,
+                               final String storeName,
+                               final long startingOffset,
+                               final long endingOffset) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_START, storeName);
         restoreStartOffset = startingOffset;
@@ -57,8 +59,10 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     }
 
     @Override
-    public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                                final long batchEndOffset, final long numRestored) {
+    public void onBatchRestored(final TopicPartition topicPartition,
+                                final String storeName,
+                                final long batchEndOffset,
+                                final long numRestored) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_BATCH, storeName);
         restoredBatchOffset = batchEndOffset;
@@ -67,7 +71,8 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     }
 
     @Override
-    public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
+    public void onRestoreEnd(final TopicPartition topicPartition,
+                             final String storeName,
                              final long totalRestored) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_END, storeName);
