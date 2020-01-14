@@ -1476,11 +1476,10 @@ public class TransactionManager {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
-                } else if (isFatalException(error)) {
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                        || error == Errors.INVALID_PRODUCER_EPOCH
+                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                     fatalError(error.exception());
-                    break;
-                } else if (isGroupFencingException(error)) {
-                    abortableError(error.exception());
                     break;
                 } else {
                     fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
@@ -1497,17 +1496,5 @@ public class TransactionManager {
                 reenqueue();
             }
         }
-    }
-
-    private boolean isFatalException(Errors error) {
-        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                || error == Errors.INVALID_PRODUCER_EPOCH
-                || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
-    }
-
-    private boolean isGroupFencingException(Errors error) {
-        return error == Errors.FENCED_INSTANCE_ID
-                || error == Errors.UNKNOWN_MEMBER_ID
-                || error == Errors.ILLEGAL_GENERATION;
     }
 }
