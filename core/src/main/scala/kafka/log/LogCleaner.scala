@@ -912,7 +912,6 @@ private[log] class Cleaner(val id: Int,
                                        stats: CleanerStats): Boolean = {
     var position = segment.offsetIndex.lookup(startOffset).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
-    var lastOffsetInSegment = -1L
     while (position < segment.log.sizeInBytes) {
       checkDone(topicPartition)
       readBuffer.clear()
@@ -928,7 +927,6 @@ private[log] class Cleaner(val id: Int,
 
       val startPosition = position
       for (batch <- records.batches.asScala) {
-        lastOffsetInSegment = batch.lastOffset
         if (batch.isControlBatch) {
           transactionMetadata.onControlBatchRead(batch)
           stats.indexMessagesRead(1)
@@ -963,10 +961,8 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(segment.log, position, maxLogMessageSize, records)
     }
 
-    // check for missing offsets at the end of logSegment
-    if (lastOffsetInSegment < nextSegmentStartOffset - 1L) {
-      map.updateLatestOffset(nextSegmentStartOffset - 1L)
-    }
+    // In the case of offsets gap, fast forward to latest expected offset in this segment.
+    map.updateLatestOffset(nextSegmentStartOffset - 1L)
 
     restoreBuffers()
     false
