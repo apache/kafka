@@ -2041,7 +2041,7 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
-        client.prepareResponse(offsetFetchResponse(t1p, Errors.PENDING_OFFSET, "", -1L));
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.UNSTABLE_OFFSET_COMMIT, "", -1L));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));

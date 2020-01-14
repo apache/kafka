@@ -17,13 +17,13 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Exception thrown when there are pending offsets for the requested topic partitions.
+ * Exception thrown when there are unstable offsets for the requested topic partitions.
  */
-public class PendingOffsetException extends RetriableException {
+public class UnstableOffsetCommitException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public PendingOffsetException(String message) {
+    public UnstableOffsetCommitException(String message) {
         super(message);
     }
 }

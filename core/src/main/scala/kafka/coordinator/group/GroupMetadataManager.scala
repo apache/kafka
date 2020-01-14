@@ -496,7 +496,7 @@ class GroupMetadataManager(brokerId: Int,
           topicPartitions.map { topicPartition =>
             if (requireStable && group.hasPendingOffsetCommitsForTopicPartition(topicPartition)) {
               topicPartition -> new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                Optional.empty(), "", Errors.PENDING_OFFSET)
+                Optional.empty(), "", Errors.UNSTABLE_OFFSET_COMMIT)
             } else {
               val partitionData = group.offset(topicPartition) match {
                 case None =>

@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.PendingOffsetException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1253,7 +1253,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
-            Set<TopicPartition> pendingTxnOffsetTopicPartitions = new HashSet<>();
+            Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
@@ -1269,8 +1269,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             unauthorizedTopics = new HashSet<>();
                         }
                         unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.PENDING_OFFSET) {
-                        pendingTxnOffsetTopicPartitions.add(tp);
+                    } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
+                        unstableTxnOffsetTopicPartitions.add(tp);
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
                             tp + ": " + error.message()));
@@ -1288,14 +1288,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             if (unauthorizedTopics != null) {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
-            } else if (!pendingTxnOffsetTopicPartitions.isEmpty()) {
+            } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // just retry
-                log.info("The following partitions still have pending offsets " +
+                log.info("The following partitions still have unstable offsets " +
                              "which are not cleared on the broker side: {}" +
                              ", this could be either" +
                              "transactional offsets waiting for completion, or " +
-                             "normal offsets waiting for replication after appending to local log", pendingTxnOffsetTopicPartitions);
-                future.raise(new PendingOffsetException("There are pending offsets for the requested topic partitions"));
+                             "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
+                future.raise(new UnstableOffsetCommitException("There are unstable offsets for the requested topic partitions"));
             } else {
                 future.complete(offsets);
             }
