@@ -446,7 +446,11 @@ public class StoreChangelogReader implements ChangelogReader {
 
             // do not trigger restore listener if we are processing standby tasks
             if (changelogMetadata.stateManager.taskType() == AbstractTask.TaskType.ACTIVE) {
-                stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
+                try {
+                    stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
+                } catch (Exception e) {
+                    System.out.println(e);
+                }
             }
 
             changelogMetadata.bufferedLimitIndex = 0;
