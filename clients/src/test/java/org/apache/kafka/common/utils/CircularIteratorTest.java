@@ -70,4 +70,24 @@ public class CircularIteratorTest {
         assertEquals("A", it.next());
         assertTrue(it.hasNext());
     }
+
+    @Test()
+    public void testPeekCollectionNullValue() {
+        final CircularIterator<String> it = new CircularIterator<>(Arrays.asList("A", null, "C"));
+
+        assertTrue(it.hasNext());
+        assertEquals("A", it.peek());
+        assertTrue(it.hasNext());
+        assertEquals("A", it.next());
+
+        assertTrue(it.hasNext());
+        assertEquals(null, it.peek());
+        assertTrue(it.hasNext());
+        assertEquals(null, it.peek());
+        assertTrue(it.hasNext());
+        assertEquals(null, it.next());
+
+        assertTrue(it.hasNext());
+        assertEquals("C", it.next());
+    }
 }

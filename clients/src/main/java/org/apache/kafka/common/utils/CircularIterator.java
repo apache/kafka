@@ -22,14 +22,17 @@ import java.util.Iterator;
 import java.util.Objects;
 
 /**
- * An iterator that cycles through the Iterator of a Collection indefinitely.
- * Useful for tasks such as round-robin load balancing.
+ * An iterator that cycles through the {@code Iterator} of a {@code Collection}
+ * indefinitely. Useful for tasks such as round-robin load balancing. This class
+ * does not provide thread-safe access. This {@code Iterator} supports
+ * {@code null} elements in the underlying {@code Collection}.
  */
 public class CircularIterator<T> implements Iterator<T> {
 
     private final Iterable<T> iterable;
     private Iterator<T> iterator;
     private T peek;
+    private boolean hasPeek;
 
     /**
      * Create a new instance of a CircularIterator. The ordering of this
@@ -44,6 +47,7 @@ public class CircularIterator<T> implements Iterator<T> {
         this.iterable = Objects.requireNonNull(col);
         this.iterator = col.iterator();
         this.peek = null;
+        this.hasPeek = false;
         if (col.isEmpty()) {
             throw new IllegalArgumentException("CircularIterator can only be used on non-empty lists");
         }
@@ -51,7 +55,7 @@ public class CircularIterator<T> implements Iterator<T> {
 
     @Override
     public boolean hasNext() {
-        if (this.peek != null) {
+        if (this.hasPeek) {
             return true;
         }
         if (!this.iterator.hasNext()) {
@@ -63,18 +67,28 @@ public class CircularIterator<T> implements Iterator<T> {
     @Override
     public T next() {
         final T nextValue;
-        if (this.peek != null) {
+        if (this.hasPeek) {
             nextValue = this.peek;
             this.peek = null;
+            this.hasPeek = false;
         } else {
             nextValue = this.iterator.next();
         }
         return nextValue;
     }
 
+    /**
+     * Peek at the next value in the Iterator. Calling this method multiple
+     * times will return the same element without advancing this Iterator. The
+     * value returned by this method will be the next item returned by
+     * {@code next()}.
+     *
+     * @return The next value in this {@code Iterator}
+     */
     public T peek() {
-        if (this.peek == null) {
+        if (!this.hasPeek) {
             this.peek = next();
+            this.hasPeek = true;
         }
         return this.peek;
     }
