@@ -736,19 +736,6 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     // for testing only
-    public Map<TopicPartition, Long> restoredOffsets() {
-        final Map<TopicPartition, Long> restoredOffsets = new HashMap<>();
-        for (final ChangelogMetadata changelogMetadata : changelogs.values()) {
-            final boolean storeIsPersistent = changelogMetadata.storeMetadata.store().persistent();
-
-            if (storeIsPersistent) {
-                restoredOffsets.put(changelogMetadata.storeMetadata.changelogPartition(), changelogMetadata.storeMetadata.offset());
-            }
-        }
-        return restoredOffsets;
-    }
-
-    // for testing only
     ChangelogMetadata changelogMetadata(final TopicPartition partition) {
         return changelogs.get(partition);
     }

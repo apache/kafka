@@ -135,6 +135,7 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(topicPartition).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(topicPartition).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(topicPartition).totalRestored());
+        assertEquals(Collections.singleton(topicPartition), changelogReader.completedChangelogs());
         assertNull(changelogReader.changelogMetadata(topicPartition).limitOffset());
         assertEquals(10L, consumer.position(topicPartition));
         assertEquals(Collections.singleton(topicPartition), consumer.paused());
@@ -164,6 +165,7 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(topicPartition).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(topicPartition).endOffset());
         assertEquals(0L, changelogReader.changelogMetadata(topicPartition).totalRestored());
+        assertTrue(changelogReader.completedChangelogs().isEmpty());
         assertNull(changelogReader.changelogMetadata(topicPartition).limitOffset());
         assertEquals(6L, consumer.position(topicPartition));
         assertEquals(Collections.emptySet(), consumer.paused());
@@ -188,6 +190,7 @@ public class StoreChangelogReaderTest {
         assertEquals(3L, changelogReader.changelogMetadata(topicPartition).totalRestored());
         assertEquals(2, changelogReader.changelogMetadata(topicPartition).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(topicPartition).bufferedLimitIndex());
+        assertEquals(Collections.singleton(topicPartition), changelogReader.completedChangelogs());
         assertEquals(12L, consumer.position(topicPartition));
         assertEquals(Collections.singleton(topicPartition), consumer.paused());
         assertEquals(topicPartition, callback.restoreTopicPartition);
@@ -254,6 +257,7 @@ public class StoreChangelogReaderTest {
         changelogReader.restore();
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(topicPartition).state());
+        assertTrue(changelogReader.completedChangelogs().isEmpty());
         assertEquals(10L, (long) changelogReader.changelogMetadata(topicPartition).endOffset());
         assertNull(changelogReader.changelogMetadata(topicPartition).limitOffset());
 
@@ -263,6 +267,7 @@ public class StoreChangelogReaderTest {
         assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(topicPartition).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(topicPartition).endOffset());
         assertNull(changelogReader.changelogMetadata(topicPartition).limitOffset());
+        assertEquals(Collections.singleton(topicPartition), changelogReader.completedChangelogs());
         assertEquals(10L, consumer.position(topicPartition));
     }
 
@@ -561,48 +566,6 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldReturnRestoredOffsetsForPersistentStores() {
-        setupConsumer(10, topicPartition);
-        changelogReader.register(topicPartition, activeStateManager);
-
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-
-        final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
-        assertThat(restoredOffsets, equalTo(Collections.singletonMap(topicPartition, 10L)));
-    }
-
-    @Test
-    public void shouldNotReturnRestoredOffsetsForNonPersistentStore() {
-        setupConsumer(10, topicPartition);
-        changelogReader.register(topicPartition, activeStateManager);
-
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-        final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
-        assertThat(restoredOffsets, equalTo(Collections.emptyMap()));
-    }
-
-    @Test
-    public void shouldIgnoreNullKeysWhenRestoring() {
-        assignPartition(3, topicPartition);
-        final byte[] bytes = new byte[0];
-        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 0, bytes, bytes));
-        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 1, null, bytes));
-        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 2, bytes, bytes));
-        consumer.assign(Collections.singletonList(topicPartition));
-        changelogReader.register(topicPartition, activeStateManager);
-
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-
-        assertThat(callback.restored, CoreMatchers.equalTo(asList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
-    }
-
-    @Test
     public void shouldCompleteImmediatelyWhenEndOffsetIs0() {
         final Collection<TopicPartition> expected = Collections.singleton(topicPartition);
         setupConsumer(0, topicPartition);
@@ -613,39 +576,6 @@ public class StoreChangelogReaderTest {
 
         changelogReader.restore();
         //assertThat(restored, equalTo(expected));
-    }
-
-    @Test
-    public void shouldRestorePartitionsRegisteredPostInitialization() {
-        final MockRestoreCallback callbackTwo = new MockRestoreCallback();
-
-        setupConsumer(1, topicPartition);
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 10L));
-        changelogReader.register(topicPartition, activeStateManager);
-
-
-        final TopicPartition postInitialization = new TopicPartition("other", 0);
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        expect(active.restoringTaskFor(postInitialization)).andStubReturn(task);
-        replay(active, task);
-
-        changelogReader.restore();
-        //assertTrue();
-
-        addRecords(9, topicPartition, 1);
-
-        setupConsumer(3, postInitialization);
-        consumer.updateBeginningOffsets(Collections.singletonMap(postInitialization, 0L));
-        consumer.updateEndOffsets(Collections.singletonMap(postInitialization, 3L));
-
-        changelogReader.register(topicPartition, activeStateManager);
-
-        final Collection<TopicPartition> expected = Utils.mkSet(topicPartition, postInitialization);
-        consumer.assign(expected);
-
-        //assertThat(changelogReader.restore(), equalTo(expected));
-        assertThat(callback.restored.size(), equalTo(10));
-        assertThat(callbackTwo.restored.size(), equalTo(3));
     }
 
     @Test
@@ -759,43 +689,6 @@ public class StoreChangelogReaderTest {
 
         changelogReader.restore();
         assertThat(callback.restored.size(), equalTo(10));
-    }
-
-    @Test
-    public void shouldRestoreUpToOffsetLimit() {
-        setupConsumer(10, topicPartition);
-        changelogReader.register(topicPartition, activeStateManager);
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-
-        assertThat(callback.restored.size(), equalTo(3));
-        assertAllCallbackStatesExecuted(callback, "storeName1");
-        assertCorrectOffsetsReportedByListener(callback, 2L, 4L, 3L);
-    }
-
-    @Test
-    public void shouldNotRestoreIfCheckpointIsEqualToOffsetLimit() {
-        setupConsumer(10, topicPartition);
-        changelogReader.register(topicPartition, activeStateManager);
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-
-        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
-        assertThat(callback.restored.size(), equalTo(0));
-    }
-
-    @Test
-    public void shouldNotRestoreIfCheckpointIsGreaterThanOffsetLimit() {
-        setupConsumer(10, topicPartition);
-        changelogReader.register(topicPartition, activeStateManager);
-        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
-        replay(active, task);
-        changelogReader.restore();
-
-        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
-        assertThat(callback.restored.size(), equalTo(0));
     }
 
     private void setupConsumer(final long messages,
