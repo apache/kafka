@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -76,9 +77,9 @@ public interface Selectable {
     List<Send> completedSends();
 
     /**
-     * The list of receives that completed on the last {@link #poll(long) poll()} call.
+     * The collection of receives that completed on the last {@link #poll(long) poll()} call.
      */
-    List<NetworkReceive> completedReceives();
+    Collection<NetworkReceive> completedReceives();
 
     /**
      * The connections that finished disconnecting on the last {@link #poll(long) poll()}

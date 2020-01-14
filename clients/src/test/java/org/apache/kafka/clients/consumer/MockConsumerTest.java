@@ -30,6 +30,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 
 public class MockConsumerTest {
     
@@ -86,13 +87,14 @@ public class MockConsumerTest {
         assertEquals(2L, consumer.position(tp));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
+        assertNull(consumer.groupMetadata());
     }
 
     @Test
     public void testConsumerRecordsIsEmptyWhenReturningNoRecords() {
         TopicPartition partition = new TopicPartition("test", 0);
         consumer.assign(Collections.singleton(partition));
-        consumer.addRecord(new ConsumerRecord<String, String>("test", 0, 0, null, null));
+        consumer.addRecord(new ConsumerRecord<>("test", 0, 0, null, null));
         consumer.updateEndOffsets(Collections.singletonMap(partition, 1L));
         consumer.seekToEnd(Collections.singleton(partition));
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));

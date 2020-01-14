@@ -66,7 +66,7 @@ class ReplicaStateMachineTest {
       SecurityProtocol.PLAINTEXT)
     val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
     controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     assertEquals(None, controllerContext.replicaStates.get(replica))
     replicaStateMachine.startup()
     assertEquals(OnlineReplica, replicaState(replica))
@@ -74,7 +74,7 @@ class ReplicaStateMachineTest {
 
   @Test
   def testStartupOfflinePartition(): Unit = {
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     assertEquals(None, controllerContext.replicaStates.get(replica))
     replicaStateMachine.startup()
     assertEquals(OfflineReplica, replicaState(replica))
@@ -88,7 +88,7 @@ class ReplicaStateMachineTest {
       SecurityProtocol.PLAINTEXT)
     val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
     controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(shutdownBrokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(shutdownBrokerId)))
     assertEquals(None, controllerContext.replicaStates.get(offlineReplica))
     replicaStateMachine.startup()
     assertEquals(OfflineReplica, replicaState(offlineReplica))
@@ -138,7 +138,7 @@ class ReplicaStateMachineTest {
   @Test
   def testNewReplicaToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, NewReplica)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
     assertEquals(OnlineReplica, replicaState(replica))
   }
@@ -189,7 +189,7 @@ class ReplicaStateMachineTest {
   @Test
   def testOnlineReplicaToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, OnlineReplica)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
@@ -207,7 +207,7 @@ class ReplicaStateMachineTest {
     val otherBrokerId = brokerId + 1
     val replicaIds = List(brokerId, otherBrokerId)
     controllerContext.putReplicaState(replica, OnlineReplica)
-    controllerContext.updatePartitionReplicaAssignment(partition, replicaIds)
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicaIds))
     val leaderAndIsr = LeaderAndIsr(brokerId, replicaIds)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -262,7 +262,7 @@ class ReplicaStateMachineTest {
   @Test
   def testOfflineReplicaToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, OfflineReplica)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
@@ -336,7 +336,7 @@ class ReplicaStateMachineTest {
   @Test
   def testReplicaDeletionSuccessfulToNonexistentReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, ReplicaDeletionSuccessful)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     replicaStateMachine.handleStateChanges(replicas, NonExistentReplica)
     assertEquals(Seq.empty, controllerContext.partitionReplicaAssignment(partition))
     assertEquals(None, controllerContext.replicaStates.get(replica))
@@ -380,7 +380,7 @@ class ReplicaStateMachineTest {
   @Test
   def testReplicaDeletionIneligibleToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, ReplicaDeletionIneligible)
-    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())

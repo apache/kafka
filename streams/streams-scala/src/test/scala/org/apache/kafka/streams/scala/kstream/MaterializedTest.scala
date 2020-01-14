@@ -25,8 +25,8 @@ import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala._
 import org.apache.kafka.streams.state.Stores
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class MaterializedTest extends FlatSpec with Matchers {

@@ -652,9 +652,9 @@ public class SslTransportLayerTest {
         // Read the message from socket with only one poll()
         selector.poll(1000L);
 
-        List<NetworkReceive> receiveList = selector.completedReceives();
+        Collection<NetworkReceive> receiveList = selector.completedReceives();
         assertEquals(1, receiveList.size());
-        assertEquals(message, new String(Utils.toArray(receiveList.get(0).payload())));
+        assertEquals(message, new String(Utils.toArray(receiveList.iterator().next().payload())));
     }
 
     /**
@@ -737,7 +737,6 @@ public class SslTransportLayerTest {
             public boolean conditionMet() {
                 try {
                     selector.poll(100L);
-                    assertEquals(0, selector.numStagedReceives(channel));
                 } catch (IOException e) {
                     return false;
                 }

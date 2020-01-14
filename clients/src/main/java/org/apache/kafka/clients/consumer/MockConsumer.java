@@ -558,6 +558,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public ConsumerGroupMetadata groupMetadata() {
+        return null;
+    }
+
+    @Override
     public void close(Duration timeout) {
         close();
     }
