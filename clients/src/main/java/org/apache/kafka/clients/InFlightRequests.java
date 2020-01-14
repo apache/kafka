@@ -25,12 +25,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The set of requests which have been sent or are being sent but haven't yet received a response
+ * The set of requests which have been sent, or are being sent, but have not yet
+ * received a response. This class is not thread-safe as it pertains to
+ * modification of internal data structures, however, the {@link #count()}
+ * method will return a relatively accurate value even when accessed in a
+ * multi-threaded way.
  */
 final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
     private final Map<String, Deque<NetworkClient.InFlightRequest>> requests = new HashMap<>();
+
+    // Will only be modified by a single thread, but may be accessed by many
+    // threads. Value cannot be modified in place or FindBugs warning will be
+    // generated. Only legal to set the value, not modify it.
     private volatile int inFlightRequestCount = 0;
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
@@ -41,9 +49,10 @@ final class InFlightRequests {
      * Add the given request to the queue for the connection it was directed to
      */
     public void add(NetworkClient.InFlightRequest request) {
+        final int count = inFlightRequestCount;
         String destination = request.destination;
         this.requests.computeIfAbsent(destination, d -> new ArrayDeque<>()).addFirst(request);
-        inFlightRequestCount++;
+        inFlightRequestCount = count + 1;
     }
 
     /**
@@ -61,8 +70,9 @@ final class InFlightRequests {
      * Get the oldest request (the one that will be completed next) for the given node
      */
     public NetworkClient.InFlightRequest completeNext(String node) {
+        final int count = inFlightRequestCount;
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollLast();
-        inFlightRequestCount--;
+        inFlightRequestCount = count - 1;
         return inFlightRequest;
     }
 
@@ -80,8 +90,9 @@ final class InFlightRequests {
      * @return The request
      */
     public NetworkClient.InFlightRequest completeLastSent(String node) {
+        final int count = inFlightRequestCount;
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollFirst();
-        inFlightRequestCount--;
+        inFlightRequestCount = count - 1;
         return inFlightRequest;
     }
 
@@ -146,7 +157,8 @@ final class InFlightRequests {
             return Collections.emptyList();
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
-            inFlightRequestCount -= clearedRequests.size();
+            final int count = inFlightRequestCount;
+            inFlightRequestCount = count - clearedRequests.size();
             return () -> clearedRequests.descendingIterator();
         }
     }
