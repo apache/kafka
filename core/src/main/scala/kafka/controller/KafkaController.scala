@@ -1569,8 +1569,8 @@ class KafkaController(val config: KafkaConfig,
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
       reassignments.foreach { case (tp, targetReplicas) =>
-        val errorMessage = targetReplicas.flatMap(validateReplicas(tp, _))
-        errorMessage match {
+        val maybeApiError = targetReplicas.flatMap(validateReplicas(tp, _))
+        maybeApiError match {
           case None =>
             maybeBuildReassignment(tp, targetReplicas) match {
               case Some(context) => partitionsToReassign.put(tp, context)
@@ -1592,10 +1592,16 @@ class KafkaController(val config: KafkaConfig,
 
   private def validateReplicas(topicPartition: TopicPartition, replicas: Seq[Int]): Option[ApiError] = {
     val replicaSet = replicas.toSet
-    if (replicas.isEmpty || replicas.size != replicaSet.size)
+    if (replicas.isEmpty)
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
-          s"Invalid replica list in partition reassignment: $replicas"))
-    else if (replicas.exists(_ < 0))
+          s"Empty replica list specified in partition reassignment."))
+    else if (replicas.size != replicaSet.size) {
+      val duplicateIds = replicas.groupBy(identity).collect {
+        case (replicaId, groupedReplicaIds) if groupedReplicaIds.size > 1 => replicaId
+      }
+      Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+          s"Duplicate replica ids ($duplicateIds) in partition reassignment replica list: $replicas"))
+    } else if (replicas.exists(_ < 0))
       Some(new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
           s"Invalid broker id in replica list: $replicas"))
     else {
