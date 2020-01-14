@@ -101,7 +101,7 @@ public class StoreChangelogReader implements ChangelogReader {
         private Long restoreLimitOffset;
 
         // buffer records polled by the restore consumer;
-        private List<ConsumerRecord<byte[], byte[]>> bufferedRecords;
+        private final List<ConsumerRecord<byte[], byte[]>> bufferedRecords;
 
         // the limit index (exclusive) inside the buffered records beyond which should not be used to restore
         // either due to limit offset (standby) or committed end offset (active)
@@ -145,6 +145,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
         Long limitOffset() {
             return restoreLimitOffset;
+        }
+
+        List<ConsumerRecord<byte[], byte[]>> bufferedRecords() {
+            return bufferedRecords;
+        }
+
+        int bufferedLimitIndex() {
+            return bufferedLimitIndex;
         }
     }
 
@@ -388,21 +396,13 @@ public class StoreChangelogReader implements ChangelogReader {
                     if (record.key() == null) {
                         log.warn("Read changelog record with null key from changelog {} at offset {}, " +
                             "skipping it for restoration", changelogMetadata.storeMetadata.changelogPartition(), record.offset());
-                        iterator.remove();
                     } else {
+                        changelogMetadata.bufferedRecords.add(record);
                         final long offset = record.offset();
                         if (offset < limitOffset)
-                            changelogMetadata.bufferedLimitIndex++;
+                            changelogMetadata.bufferedLimitIndex = changelogMetadata.bufferedRecords.size();
                     }
                 }
-
-                // this is an optimization: if there's no buffered records so far, then we can reuse
-                // the array list from the consumer and save the array-copy; we expect this would be
-                // the common case and hence worth optimizing
-                if (changelogMetadata.bufferedRecords.isEmpty())
-                    changelogMetadata.bufferedRecords = records;
-                else
-                    changelogMetadata.bufferedRecords.addAll(records);
             }
 
             for (final TopicPartition partition: restoringChangelogs) {
@@ -528,6 +528,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
 
                 metadata.restoreLimitOffset = newLimit;
+
+                // update the limit index for buffered records
+                while (metadata.bufferedLimitIndex < metadata.bufferedRecords.size() &&
+                    metadata.bufferedRecords.get(metadata.bufferedLimitIndex).offset() < metadata.restoreLimitOffset)
+                    metadata.bufferedLimitIndex++;
             }
         }
     }
@@ -566,6 +571,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 committedOffsets.get(partition) : Long.MAX_VALUE;
 
             if (endOffset != null && committedOffset != null) {
+                if (changelogMetadata.restoreEndOffset != null)
+                    throw new IllegalStateException("End offset for " + partition +
+                        " should only be initialized once. Existing value: " + changelogMetadata.restoreEndOffset +
+                        ", new value: (" + endOffset + ", " + committedOffset + ")");
+
                 changelogMetadata.restoreEndOffset = Math.min(endOffset, committedOffset);
 
                 log.debug("End offset for changelog {} initialized as {}.", partition, changelogMetadata.restoreEndOffset);
