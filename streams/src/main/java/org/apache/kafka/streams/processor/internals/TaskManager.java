@@ -377,6 +377,18 @@ public class TaskManager {
         consumer.pause(consumer.assignment());
     }
 
+    List<StreamTask> allStreamsTasks() {
+        return active.allTasks();
+    }
+
+    Set<TaskId> restoringTaskIds() {
+        return active.restoringTaskIds();
+    }
+
+    List<StandbyTask> allStandbyTasks() {
+        return standby.allTasks();
+    }
+
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition

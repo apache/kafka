@@ -195,7 +195,7 @@ public class StandbyTask extends AbstractTask {
         return remainingRecords;
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointedOffsets() {
         return Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 

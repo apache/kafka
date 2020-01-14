@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -255,4 +256,7 @@ public abstract class AbstractTask implements Task {
         return stateMgr.changelogPartitions();
     }
 
+    public Map<TopicPartition, Long> restoredOffsets() {
+        return stateMgr.changelogReader().restoredOffsets();
+    }
 }
