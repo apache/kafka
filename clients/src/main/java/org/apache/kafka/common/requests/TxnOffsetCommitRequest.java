@@ -53,18 +53,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            if (data.groupInstanceId() != null && version < 3) {
-                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
-                                                          version + " does not support usage of config group.instance.id.");
-            }
-            if (!data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && version < 3) {
-                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
-                                                          version + " does not support usage of member.id.");
-            }
-            if (data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID && version < 3) {
-                throw new UnsupportedVersionException("The broker txn offset commit protocol version " +
-                                                          version + " does not support usage of generation.id.");
-            }
             return new TxnOffsetCommitRequest(data, version);
         }
 
